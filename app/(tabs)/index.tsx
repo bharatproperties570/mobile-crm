@@ -8,6 +8,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useDepartment } from "../context/DepartmentContext";
 import api from "../services/api";
 import { getActivities } from "../services/activities.service";
+import { getDashboardStats, DashboardStats } from "../services/dashboard.service";
 import { extractTotal } from "../services/api.helpers";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -29,6 +30,7 @@ function KPICard({ label, value, icon, color }: { label: string; value: string |
 export default function MissionControlScreen() {
     const { currentDept, config } = useDepartment();
     const router = useRouter();
+    const [dashboardData, setDashboardData] = useState<DashboardStats | null>(null);
     const [stats, setStats] = useState<any>({});
     const [activities, setActivities] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -36,14 +38,15 @@ export default function MissionControlScreen() {
 
     const fetchData = useCallback(async () => {
         try {
-            const [l, d, p, i, co, b, a] = await Promise.allSettled([
+            const [l, d, p, i, co, b, a, ds] = await Promise.allSettled([
                 api.get("/leads"),
                 api.get("/deals"),
                 api.get("/projects"),
                 api.get("/inventory"),
                 api.get("/companies"),
                 api.get("/bookings"),
-                getActivities({ status: 'Pending', limit: 3 })
+                getActivities({ status: 'Pending', limit: 3 }),
+                getDashboardStats()
             ]);
 
             const getCount = (res: PromiseSettledResult<any>) => (res.status === "fulfilled" ? extractTotal(res.value) : 0);
@@ -61,6 +64,10 @@ export default function MissionControlScreen() {
                 const actData = a.value?.data ?? a.value?.records ?? [];
                 setActivities(Array.isArray(actData) ? actData : []);
             }
+
+            if (ds.status === "fulfilled" && ds.value.data) {
+                setDashboardData(ds.value.data);
+            }
         } catch (e) {
             console.error("Mission Control fetch error:", e);
         }
@@ -76,15 +83,59 @@ export default function MissionControlScreen() {
 
     const renderSalesDashboard = () => (
         <View>
-            <View style={styles.grid}>
-                <KPICard label="Total Leads" value={stats.leads || 0} icon="people" color="#3B82F6" />
-                <KPICard label="Active Deals" value={stats.deals || 0} icon="handshake" color="#10B981" />
-                <KPICard label="Projects" value={stats.projects || 0} icon="construct" color="#A855F7" />
+            {/* Activity Monitor */}
+            <View style={styles.monitorContainer}>
+                <Text style={styles.sectionHeader}>Activity Monitor</Text>
+                <View style={styles.monitorGrid}>
+                    <TouchableOpacity style={[styles.monitorTile, { borderColor: "#FEE2E2" }]} onPress={() => router.push({ pathname: "/(tabs)/activities", params: { filter: "Overdue" } })}>
+                        <Text style={[styles.monitorValue, { color: "#EF4444" }]}>{dashboardData?.activities.overdue || 0}</Text>
+                        <Text style={styles.monitorLabel}>Overdue</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={[styles.monitorTile, { borderColor: "#FEF3C7" }]} onPress={() => router.push({ pathname: "/(tabs)/activities", params: { filter: "Today" } })}>
+                        <Text style={[styles.monitorValue, { color: "#F59E0B" }]}>{dashboardData?.activities.today || 0}</Text>
+                        <Text style={styles.monitorLabel}>Today</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={[styles.monitorTile, { borderColor: "#E0E7FF" }]} onPress={() => router.push({ pathname: "/(tabs)/activities", params: { filter: "Upcoming" } })}>
+                        <Text style={[styles.monitorValue, { color: "#6366F1" }]}>{dashboardData?.activities.upcoming || 0}</Text>
+                        <Text style={styles.monitorLabel}>Upcoming</Text>
+                    </TouchableOpacity>
+                </View>
             </View>
 
-            <TouchableOpacity style={[styles.actionBtn, { backgroundColor: "#3B82F6" }]} onPress={() => router.push("/add-lead")}>
-                <Ionicons name="add-circle" size={24} color="#fff" />
-                <Text style={styles.actionBtnText}>Capture New Lead</Text>
+            {/* Pipeline Stages */}
+            <View style={styles.pipelineContainer}>
+                <View style={styles.pipeHeaderRow}>
+                    <Text style={styles.sectionHeader}>Lead Pipeline</Text>
+                    <Text style={styles.pipeTotal}>Total: {stats.leads || 0}</Text>
+                </View>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pipeScroll}>
+                    {dashboardData?.leads.map((item, idx) => (
+                        <View key={idx} style={styles.pipeStage}>
+                            <Text style={styles.pipeVal}>{item.count}</Text>
+                            <Text style={styles.pipeLab}>{item.status}</Text>
+                        </View>
+                    ))}
+                </ScrollView>
+            </View>
+
+            <View style={styles.pipelineContainer}>
+                <View style={styles.pipeHeaderRow}>
+                    <Text style={styles.sectionHeader}>Deal Funnel</Text>
+                    <Text style={styles.pipeTotal}>Active: {stats.deals || 0}</Text>
+                </View>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pipeScroll}>
+                    {dashboardData?.deals.map((item, idx) => (
+                        <View key={idx} style={[styles.pipeStage, { backgroundColor: "#ECFDF5" }]}>
+                            <Text style={[styles.pipeVal, { color: "#059669" }]}>{item.count}</Text>
+                            <Text style={styles.pipeLab}>{item.stage}</Text>
+                        </View>
+                    ))}
+                </ScrollView>
+            </View>
+
+            <TouchableOpacity style={[styles.actionBtn, { backgroundColor: "#2563EB" }]} onPress={() => router.push("/add-lead")}>
+                <Ionicons name="sparkles" size={20} color="#fff" />
+                <Text style={styles.actionBtnText}>New Lead Entry</Text>
             </TouchableOpacity>
         </View>
     );
@@ -210,4 +261,25 @@ const styles = StyleSheet.create({
     emptyText: { textAlign: "center", color: "#CBD5E1", fontSize: 13, marginVertical: 20 },
     systemNote: { marginTop: 30, padding: 20, backgroundColor: "#EEF2FF", borderRadius: 16 },
     systemNoteText: { fontSize: 12, color: "#4F46E5", fontWeight: "600", textAlign: "center", lineHeight: 18 },
+
+    // New Dashboard 2.0 Styles
+    monitorContainer: { marginBottom: 20 },
+    sectionHeader: { fontSize: 13, fontWeight: "900", color: "#64748B", marginBottom: 12, textTransform: "uppercase", letterSpacing: 0.5 },
+    monitorGrid: { flexDirection: "row", gap: 10 },
+    monitorTile: {
+        flex: 1, backgroundColor: "#fff", padding: 12, borderRadius: 16, borderLeftWidth: 4,
+        shadowColor: "#000", shadowOpacity: 0.03, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }
+    },
+    monitorValue: { fontSize: 20, fontWeight: "900", marginBottom: 2 },
+    monitorLabel: { fontSize: 10, fontWeight: "700", color: "#94A3B8" },
+    pipelineContainer: { marginBottom: 24, backgroundColor: "#fff", padding: 16, borderRadius: 20, borderWidth: 1, borderColor: "#F1F5F9" },
+    pipeHeaderRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 },
+    pipeTotal: { fontSize: 12, fontWeight: "700", color: "#64748B" },
+    pipeScroll: { gap: 12, paddingRight: 10 },
+    pipeStage: {
+        backgroundColor: "#F0F9FF", paddingHorizontal: 16, paddingVertical: 12, borderRadius: 12,
+        minWidth: 90, alignItems: "center"
+    },
+    pipeVal: { fontSize: 18, fontWeight: "900", color: "#0284C7" },
+    pipeLab: { fontSize: 10, fontWeight: "700", color: "#64748B", marginTop: 2 },
 });
