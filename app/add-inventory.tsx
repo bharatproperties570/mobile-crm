@@ -848,32 +848,68 @@ export default function AddInventoryScreen() {
                         <SectionHeader title="Location" icon="📍" />
                         <View style={styles.card}>
                             <Field label="Country">
-                                <SelectButton value={form.address.country} placeholder="Select Country"
-                                    options={countries.map(c => ({ label: c.lookup_value, value: c._id }))}
-                                    onSelect={setAddress("country")} />
+                                <TouchableOpacity
+                                    activeOpacity={0.7}
+                                    style={styles.selector}
+                                    onPress={() => setActiveLocDropdown('country')}
+                                >
+                                    <Text style={[styles.selectorText, !form.address.country && { color: COLORS.textMuted }]}>
+                                        {countries.find(c => c._id === form.address.country)?.lookup_value || "Select Country"}
+                                    </Text>
+                                    <View style={{ transform: [{ rotate: activeLocDropdown === 'country' ? '180deg' : '0deg' }] }}>
+                                        <Ionicons name="chevron-down-outline" size={18} color={COLORS.textSecondary} />
+                                    </View>
+                                </TouchableOpacity>
                             </Field>
 
                             <View style={{ flexDirection: 'row', gap: 10 }}>
                                 <View style={{ flex: 1 }}>
                                     <Field label="State">
-                                        <SelectButton value={form.address.state} placeholder="Select State"
-                                            options={states.map(s => ({ label: s.lookup_value, value: s._id }))}
-                                            onSelect={setAddress("state")} />
+                                        <TouchableOpacity
+                                            activeOpacity={0.7}
+                                            style={styles.selector}
+                                            onPress={() => form.address.country && setActiveLocDropdown('state')}
+                                        >
+                                            <Text style={[styles.selectorText, !form.address.state && { color: COLORS.textMuted }]}>
+                                                {states.find(s => s._id === form.address.state)?.lookup_value || "Select State"}
+                                            </Text>
+                                            <View style={{ transform: [{ rotate: activeLocDropdown === 'state' ? '180deg' : '0deg' }] }}>
+                                                <Ionicons name="chevron-down-outline" size={18} color={COLORS.textSecondary} />
+                                            </View>
+                                        </TouchableOpacity>
                                     </Field>
                                 </View>
                                 <View style={{ flex: 1 }}>
                                     <Field label="City">
-                                        <SelectButton value={form.address.city} placeholder="Select City"
-                                            options={cities.map(c => ({ label: c.lookup_value, value: c._id }))}
-                                            onSelect={setAddress("city")} />
+                                        <TouchableOpacity
+                                            activeOpacity={0.7}
+                                            style={styles.selector}
+                                            onPress={() => form.address.state && setActiveLocDropdown('city')}
+                                        >
+                                            <Text style={[styles.selectorText, !form.address.city && { color: COLORS.textMuted }]}>
+                                                {cities.find(c => c._id === form.address.city)?.lookup_value || "Select City"}
+                                            </Text>
+                                            <View style={{ transform: [{ rotate: activeLocDropdown === 'city' ? '180deg' : '0deg' }] }}>
+                                                <Ionicons name="chevron-down-outline" size={18} color={COLORS.textSecondary} />
+                                            </View>
+                                        </TouchableOpacity>
                                     </Field>
                                 </View>
                             </View>
 
                             <Field label="Location">
-                                <SelectButton value={form.address.location} placeholder="Select Location"
-                                    options={locations.map(l => ({ label: l.lookup_value, value: l._id }))}
-                                    onSelect={setAddress("location")} />
+                                <TouchableOpacity
+                                    activeOpacity={0.7}
+                                    style={styles.selector}
+                                    onPress={() => form.address.city && setActiveLocDropdown('location')}
+                                >
+                                    <Text style={[styles.selectorText, !form.address.location && { color: COLORS.textMuted }]}>
+                                        {locations.find(l => l._id === form.address.location)?.lookup_value || "Select Location"}
+                                    </Text>
+                                    <View style={{ transform: [{ rotate: activeLocDropdown === 'location' ? '180deg' : '0deg' }] }}>
+                                        <Ionicons name="chevron-down-outline" size={18} color={COLORS.textSecondary} />
+                                    </View>
+                                </TouchableOpacity>
                             </Field>
 
                             <Field label="House No.">
@@ -1080,6 +1116,38 @@ export default function AddInventoryScreen() {
                     options={projects.map(p => ({ label: p.name, value: p.name }))}
                     placeholder="Search Project"
                     onSelect={(val) => setForm(f => ({ ...f, projectName: val, projectId: projects.find(p => p.name === val)?._id || "", block: "", size: "" }))}
+                />
+
+                <SearchableDropdown
+                    visible={activeLocDropdown === 'country'}
+                    onClose={() => setActiveLocDropdown(null)}
+                    options={countries.map(c => ({ label: c.lookup_value, value: c._id }))}
+                    placeholder="Search Country"
+                    onSelect={setAddress('country')}
+                />
+
+                <SearchableDropdown
+                    visible={activeLocDropdown === 'state'}
+                    onClose={() => setActiveLocDropdown(null)}
+                    options={states.map(s => ({ label: s.lookup_value, value: s._id }))}
+                    placeholder="Search State"
+                    onSelect={setAddress('state')}
+                />
+
+                <SearchableDropdown
+                    visible={activeLocDropdown === 'city'}
+                    onClose={() => setActiveLocDropdown(null)}
+                    options={cities.map(c => ({ label: c.lookup_value, value: c._id }))}
+                    placeholder="Search City"
+                    onSelect={setAddress('city')}
+                />
+
+                <SearchableDropdown
+                    visible={activeLocDropdown === 'location'}
+                    onClose={() => setActiveLocDropdown(null)}
+                    options={locations.map(l => ({ label: l.lookup_value, value: l._id }))}
+                    placeholder="Search Location"
+                    onSelect={setAddress('location')}
                 />
             </KeyboardAvoidingView>
         </SafeAreaView>
