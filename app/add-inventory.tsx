@@ -468,16 +468,32 @@ export default function AddInventoryScreen() {
 
     useEffect(() => {
         const fetchBT = async () => {
-            if (!form.builtupDetail) { setBtLookups([]); return; }
+            if (!form.subCategory) { setBtLookups([]); return; }
             try {
-                const pt = builtupDetailLookups.find(opt => opt.value === form.builtupDetail);
-                if (!pt?._id) { setBtLookups([]); return; }
-                const btRes = await api.get("/lookups", { params: { lookup_type: 'BuiltupType', parent_lookup_id: pt._id, limit: 1000 } });
-                setBtLookups((btRes.data?.data || []).map((bt: any) => ({ label: bt.lookup_value, value: bt.lookup_value })));
+                // 1. Get SubCategory ID
+                const scRes = await api.get("/lookups", { params: { lookup_type: 'SubCategory', lookup_value: form.subCategory } });
+                const scId = scRes.data?.data?.[0]?._id;
+                if (!scId) { setBtLookups([]); return; }
+
+                // 2. Get PropertyTypes (Built-up Details) under this SubCategory
+                const ptRes = await api.get("/lookups", { params: { lookup_type: 'PropertyType', parent_lookup_id: scId } });
+                const ptIds = (ptRes.data?.data || []).map((pt: any) => pt._id);
+                if (ptIds.length === 0) { setBtLookups([]); return; }
+
+                // 3. Get all BuiltupTypes under all found PropertyTypes
+                const btPromises = ptIds.map((id: string) =>
+                    api.get("/lookups", { params: { lookup_type: 'BuiltupType', parent_lookup_id: id, limit: 1000 } })
+                );
+                const btResponses = await Promise.all(btPromises);
+                const allBTs = btResponses.flatMap(res => res.data?.data || []);
+
+                // 4. Set unique BuiltupTypes
+                const uniqueBTs = Array.from(new Map(allBTs.map(item => [item.lookup_value, item])).values());
+                setBtLookups(uniqueBTs.map((bt: any) => ({ label: bt.lookup_value, value: bt.lookup_value })));
             } catch (e) { console.error("BT fetch failed", e); }
         };
         fetchBT();
-    }, [form.builtupDetail, builtupDetailLookups]);
+    }, [form.subCategory]);
 
 
     useEffect(() => {
@@ -552,11 +568,6 @@ export default function AddInventoryScreen() {
                 return;
             }
         } else if (step === 1) {
-            if (!form.builtupDetail) {
-                triggerShake();
-                Alert.alert("Missing Fields", "Please select a Built-up Detail (e.g., Flat, Villa, Plot).");
-                return;
-            }
             if (form.builtupDetails.some(d => !d.floor)) {
                 triggerShake();
                 Alert.alert("Missing Fields", "Please specify the floor for all rows in the dimensions section.");
@@ -684,13 +695,8 @@ export default function AddInventoryScreen() {
                     <FadeInView key="step1" delay={100}>
                         <SectionHeader title="Builtup Details" icon="📐" />
                         <View style={styles.card}>
-                            <Field label="Built-up Detail" required>
-                                <SelectButton value={form.builtupDetail} placeholder="Select Sub Category first" options={builtupDetailLookups}
-                                    onSelect={(val) => setForm(f => ({ ...f, builtupDetail: val, builtupType: "" }))} />
-                            </Field>
-
                             <Field label="Built-up Type">
-                                <SelectButton value={form.builtupType} placeholder="Select Built-up Detail first" options={btLookups} onSelect={set("builtupType")} />
+                                <SelectButton value={form.builtupType} placeholder="Select Sub Category first" options={btLookups} onSelect={set("builtupType")} />
                             </Field>
 
                             <View style={{ marginTop: 12 }}>
