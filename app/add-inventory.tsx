@@ -61,10 +61,9 @@ function Field({ label, required, children }: { label: string; required?: boolea
 }
 
 function Input({
-    value, onChangeText, placeholder, keyboardType, multiline, numberOfLines, editable = true, label,
+    value, onChangeText, placeholder, keyboardType, multiline, numberOfLines, editable = true, label, leftIcon
 }: {
-    value: string; onChangeText: (t: string) => void; placeholder?: string;
-    keyboardType?: any; multiline?: boolean; numberOfLines?: number; editable?: boolean; label?: string;
+    value: string; onChangeText: (t: string) => void; placeholder?: string; keyboardType?: any; multiline?: boolean; numberOfLines?: number; editable?: boolean; label?: string; leftIcon?: React.ReactNode;
 }) {
     const [isFocused, setIsFocused] = useState(false);
     const animatedIsFocused = useRef(new Animated.Value(value ? 1 : 0)).current;
@@ -79,7 +78,7 @@ function Input({
 
     const labelStyle = {
         position: 'absolute' as const,
-        left: 16,
+        left: leftIcon ? 44 : 16,
         top: animatedIsFocused.interpolate({
             inputRange: [0, 1],
             outputRange: [14, -10],
@@ -98,26 +97,29 @@ function Input({
     };
 
     return (
-        <View style={[styles.inputContainer, multiline && { height: 'auto' }]}>
+        <View style={[styles.inputContainer, multiline && { height: 'auto' }, isFocused && styles.inputContainerFocused]}>
             {label && <Animated.Text style={labelStyle}>{label}</Animated.Text>}
-            <TextInput
-                style={[
-                    styles.input,
-                    multiline && { height: 100, textAlignVertical: "top", paddingTop: 12 },
-                    isFocused && styles.inputFocused,
-                    !editable && styles.inputDisabled
-                ]}
-                value={value}
-                onChangeText={onChangeText}
-                placeholder={isFocused ? "" : placeholder}
-                placeholderTextColor={COLORS.textMuted}
-                keyboardType={keyboardType ?? "default"}
-                multiline={multiline}
-                numberOfLines={numberOfLines}
-                editable={editable}
-                onFocus={() => setIsFocused(true)}
-                onBlur={() => setIsFocused(false)}
-            />
+            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                {leftIcon && <View style={{ marginLeft: 16, marginRight: -8 }}>{leftIcon}</View>}
+                <TextInput
+                    style={[
+                        styles.input,
+                        multiline && { height: 100, textAlignVertical: "top", paddingTop: 12 },
+                        !editable && styles.inputDisabled,
+                        { flex: 1 }
+                    ]}
+                    value={value}
+                    onChangeText={onChangeText}
+                    placeholder={isFocused ? "" : placeholder}
+                    placeholderTextColor={COLORS.textMuted}
+                    keyboardType={keyboardType ?? "default"}
+                    multiline={multiline}
+                    numberOfLines={numberOfLines}
+                    editable={editable}
+                    onFocus={() => setIsFocused(true)}
+                    onBlur={() => setIsFocused(false)}
+                />
+            </View>
         </View>
     );
 }
@@ -525,8 +527,13 @@ export default function AddInventoryScreen() {
             name: selectedOwner.name,
             mobile: selectedOwner.mobile,
             role: linkData.role,
-            relationship: linkData.role === 'Property Owner' ? 'Owner' : linkData.relationship
+            relationship: linkData.role === 'Property Owner' ? 'Owner' : (linkData.relationship || 'Associate')
         };
+        // Check if already linked
+        if (form.owners.some(o => o.id === newLink.id)) {
+            Alert.alert("Already Linked", `${newLink.name} is already added.`);
+            return;
+        }
         setForm(f => ({ ...f, owners: [newLink, ...f.owners] }));
         setSelectedOwner(null);
         setOwnerSearch("");
@@ -617,14 +624,18 @@ export default function AddInventoryScreen() {
 
                 address: {
                     ...form.address,
-                    // Sending IDs where possible
                     country: form.address.country,
                     state: form.address.state,
                     city: form.address.city,
                     location: form.address.location,
                 },
 
-                owners: form.owners.map(o => o.id).filter(Boolean),
+                // Split owners and associates for backend schema
+                owners: form.owners.filter(o => o.role === 'Property Owner').map(o => o.id),
+                associates: form.owners.filter(o => o.role === 'Associate').map(o => ({
+                    contact: o.id,
+                    relationship: o.relationship
+                })),
             };
 
             const finalPayload: any = { ...payload };
@@ -923,90 +934,158 @@ export default function AddInventoryScreen() {
             case 3: // Owner & Assignment
                 return (
                     <FadeInView key="step3" delay={100}>
-                        <SectionHeader title="Owner" icon="👤" />
+                        <SectionHeader title="Owner & Associates" icon="👥" />
                         <View style={styles.card}>
                             {!selectedOwner ? (
                                 <View>
-                                    <Input
-                                        label="Search Owner"
-                                        value={ownerSearch}
-                                        onChangeText={setOwnerSearch}
-                                        placeholder="Search by name or mobile..."
-                                    />
-                                    {searching && <ActivityIndicator color={COLORS.primary} style={{ marginTop: 10 }} />}
+                                    <Text style={{ fontSize: 13, color: COLORS.textSecondary, marginBottom: 12 }}>
+                                        Search and link contacts as owners or associates for this property.
+                                    </Text>
+                                    <View style={{ position: 'relative' }}>
+                                        <Input
+                                            label="Search Contacts"
+                                            value={ownerSearch}
+                                            onChangeText={setOwnerSearch}
+                                            placeholder="Find by name or phone..."
+                                            leftIcon={<Ionicons name="search-outline" size={20} color={COLORS.textSecondary} />}
+                                        />
+                                        {searching && (
+                                            <ActivityIndicator
+                                                color={COLORS.primary}
+                                                style={{ position: 'absolute', right: 16, top: 40 }}
+                                            />
+                                        )}
+                                    </View>
+
                                     {searchResults.length > 0 && (
-                                        <View style={styles.searchResults}>
-                                            {searchResults.map((item: any) => (
-                                                <TouchableOpacity
-                                                    key={item.id}
-                                                    style={styles.searchResultItem}
-                                                    onPress={() => {
-                                                        setSelectedOwner(item);
-                                                        setSearchResults([]);
-                                                        setOwnerSearch("");
-                                                    }}
-                                                >
-                                                    <Text style={styles.searchResultName}>{item.name}</Text>
-                                                    <Text style={styles.searchResultMobile}>{item.mobile}</Text>
-                                                </TouchableOpacity>
-                                            ))}
+                                        <View style={[styles.searchResults, { marginTop: 4 }]}>
+                                            <FlatList
+                                                data={searchResults}
+                                                keyExtractor={(item) => item.id}
+                                                renderItem={({ item }) => (
+                                                    <TouchableOpacity
+                                                        style={styles.searchResultItem}
+                                                        onPress={() => {
+                                                            setSelectedOwner(item);
+                                                            setSearchResults([]);
+                                                            setOwnerSearch("");
+                                                        }}
+                                                    >
+                                                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                                            <View style={{
+                                                                width: 40, height: 40, borderRadius: 20,
+                                                                backgroundColor: COLORS.bg, justifyContent: 'center', alignItems: 'center',
+                                                                marginRight: 12
+                                                            }}>
+                                                                <Text style={{ fontWeight: '700', color: COLORS.primary }}>
+                                                                    {(item.name || "C").charAt(0).toUpperCase()}
+                                                                </Text>
+                                                            </View>
+                                                            <View>
+                                                                <Text style={styles.searchResultName}>{item.name}</Text>
+                                                                <Text style={styles.searchResultMobile}>{item.mobile}</Text>
+                                                            </View>
+                                                        </View>
+                                                    </TouchableOpacity>
+                                                )}
+                                                style={{ maxHeight: 250 }}
+                                            />
                                         </View>
                                     )}
                                 </View>
                             ) : (
                                 <View style={styles.linkContainer}>
-                                    <View style={styles.selectedOwnerInfo}>
-                                        <Text style={styles.linkName}>{selectedOwner.name}</Text>
-                                        <Text style={styles.linkMobile}>{selectedOwner.mobile}</Text>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 20 }}>
+                                        <View style={{
+                                            width: 50, height: 50, borderRadius: 25,
+                                            backgroundColor: COLORS.primary, justifyContent: 'center', alignItems: 'center',
+                                            marginRight: 15
+                                        }}>
+                                            <Text style={{ color: '#fff', fontSize: 20, fontWeight: '700' }}>
+                                                {selectedOwner.name.charAt(0).toUpperCase()}
+                                            </Text>
+                                        </View>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={styles.linkName}>{selectedOwner.name}</Text>
+                                            <Text style={styles.linkMobile}>{selectedOwner.mobile}</Text>
+                                        </View>
                                     </View>
 
-                                    <View style={{ marginTop: 16 }}>
-                                        <Field label="Role">
+                                    <View style={{ backgroundColor: '#fff', padding: 16, borderRadius: 12, borderWidth: 1, borderColor: COLORS.border }}>
+                                        <Field label="Assignment Role">
                                             <SelectButton value={linkData.role} placeholder="Select Role"
                                                 options={['Property Owner', 'Associate'].map(v => ({ label: v, value: v }))}
                                                 onSelect={(v) => setLinkData(d => ({ ...d, role: v }))} />
                                         </Field>
 
                                         {linkData.role === 'Associate' && (
-                                            <Field label="Relationship">
+                                            <Field label="Relationship (Optional)">
                                                 <SelectButton value={linkData.relationship} placeholder="Select Relationship"
                                                     options={['Husband', 'Wife', 'Father', 'Mother', 'Brother', 'Sister', 'Son', 'Daughter', 'Partner', 'Broker', 'Other'].map(v => ({ label: v, value: v }))}
                                                     onSelect={(v) => setLinkData(d => ({ ...d, relationship: v }))} />
                                             </Field>
                                         )}
 
-                                        <TouchableOpacity style={styles.linkBtn} onPress={handleLinkOwner}>
-                                            <Text style={styles.linkBtnText}>Link Person</Text>
+                                        <TouchableOpacity style={[styles.linkBtn, { marginTop: 12 }]} onPress={handleLinkOwner}>
+                                            <Text style={styles.linkBtnText}>Finish & Link</Text>
                                         </TouchableOpacity>
 
                                         <TouchableOpacity
-                                            style={{ marginTop: 12, alignItems: 'center' }}
+                                            style={{ marginTop: 16, alignItems: 'center' }}
                                             onPress={() => setSelectedOwner(null)}
                                         >
-                                            <Text style={{ color: COLORS.error, fontWeight: '600' }}>Cancel</Text>
+                                            <Text style={{ color: COLORS.error, fontWeight: '600' }}>Choose different person</Text>
                                         </TouchableOpacity>
                                     </View>
                                 </View>
                             )}
 
                             {form.owners.length > 0 && (
-                                <View style={{ marginTop: 24, borderTopWidth: 1, borderTopColor: COLORS.border, paddingTop: 16 }}>
-                                    <Text style={{ fontSize: 14, fontWeight: '700', color: COLORS.textSecondary, marginBottom: 12 }}>Linked People</Text>
+                                <View style={{ marginTop: 24, borderTopWidth: 1, borderTopColor: COLORS.border, paddingTop: 20 }}>
+                                    <Text style={{ fontSize: 14, fontWeight: '700', color: COLORS.textSecondary, marginBottom: 16 }}>Linked Contacts</Text>
                                     {form.owners.map((owner, idx) => (
                                         <View key={`${owner.id}-${idx}`} style={{
                                             flexDirection: 'row',
                                             alignItems: 'center',
-                                            justifyContent: 'space-between',
-                                            backgroundColor: COLORS.bg,
-                                            padding: 12,
-                                            borderRadius: 12,
-                                            marginBottom: 8
+                                            backgroundColor: '#f8fafc',
+                                            padding: 14,
+                                            borderRadius: 16,
+                                            marginBottom: 10,
+                                            borderWidth: 1,
+                                            borderColor: COLORS.border
                                         }}>
-                                            <View>
-                                                <Text style={{ fontWeight: '600', color: COLORS.textPrimary }}>{owner.name}</Text>
-                                                <Text style={{ fontSize: 12, color: COLORS.textSecondary }}>{owner.role} {owner.relationship ? `(${owner.relationship})` : ''}</Text>
+                                            <View style={{
+                                                width: 44, height: 44, borderRadius: 22,
+                                                backgroundColor: owner.role === 'Property Owner' ? '#eff6ff' : '#f1f5f9',
+                                                justifyContent: 'center', alignItems: 'center',
+                                                marginRight: 12
+                                            }}>
+                                                <Ionicons
+                                                    name={owner.role === 'Property Owner' ? "business-outline" : "person-outline"}
+                                                    size={22}
+                                                    color={owner.role === 'Property Owner' ? COLORS.primary : COLORS.textSecondary}
+                                                />
                                             </View>
-                                            <TouchableOpacity onPress={() => setForm(f => ({ ...f, owners: f.owners.filter((_, i) => i !== idx) }))}>
+                                            <View style={{ flex: 1 }}>
+                                                <Text style={{ fontWeight: '700', fontSize: 16, color: COLORS.textPrimary }}>{owner.name}</Text>
+                                                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
+                                                    <View style={{
+                                                        backgroundColor: owner.role === 'Property Owner' ? '#dbeafe' : '#e2e8f0',
+                                                        paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, marginRight: 8
+                                                    }}>
+                                                        <Text style={{ fontSize: 10, fontWeight: '800', color: owner.role === 'Property Owner' ? '#1e40af' : '#475569', textTransform: 'uppercase' }}>
+                                                            {owner.role === 'Property Owner' ? 'Owner' : 'Associate'}
+                                                        </Text>
+                                                    </View>
+                                                    {owner.relationship && (
+                                                        <Text style={{ fontSize: 12, color: COLORS.textSecondary }}>• {owner.relationship}</Text>
+                                                    )}
+                                                </View>
+                                            </View>
+                                            <TouchableOpacity
+                                                onPress={() => setForm(f => ({ ...f, owners: f.owners.filter((_, i) => i !== idx) }))}
+                                                style={{ padding: 8 }}
+                                            >
                                                 <Ionicons name="trash-outline" size={20} color={COLORS.error} />
                                             </TouchableOpacity>
                                         </View>
@@ -1266,18 +1345,16 @@ const styles = StyleSheet.create({
     field: { marginBottom: SPACING.field },
     fieldLabel: { fontSize: 14, fontWeight: "600", color: COLORS.textSecondary, marginBottom: 6 },
     required: { color: COLORS.error },
-    inputContainer: { marginBottom: 20, marginTop: 10 },
-    input: {
+    inputContainer: {
+        position: 'relative',
         height: SPACING.inputHeight,
+        marginBottom: 18,
         backgroundColor: COLORS.inputBg,
         borderRadius: 14,
-        paddingHorizontal: 16,
-        fontSize: 16,
-        color: COLORS.textPrimary,
         borderWidth: 1,
-        borderColor: "transparent",
+        borderColor: 'rgba(226, 232, 240, 0.8)',
     },
-    inputFocused: {
+    inputContainerFocused: {
         backgroundColor: COLORS.cardBg,
         borderColor: COLORS.primary,
         ...Platform.select({
@@ -1285,10 +1362,20 @@ const styles = StyleSheet.create({
                 shadowColor: COLORS.primary,
                 shadowOffset: { width: 0, height: 4 },
                 shadowOpacity: 0.1,
-                shadowRadius: 12
+                shadowRadius: 10
             },
             android: { elevation: 4 },
         }),
+    },
+    input: {
+        flex: 1,
+        height: '100%',
+        paddingHorizontal: 16,
+        fontSize: 16,
+        color: COLORS.textPrimary,
+    },
+    inputFocused: {
+        // Handled by inputContainerFocused
     },
     inputDisabled: { opacity: 0.5, backgroundColor: "#F1F5F9" },
 
