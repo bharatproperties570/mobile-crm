@@ -219,7 +219,9 @@ function SearchableDropdown({
     visible: boolean; onClose: () => void; options: { label: string, value: string }[]; onSelect: (v: string) => void; placeholder: string;
 }) {
     const [search, setSearch] = useState("");
-    const filtered = options.filter(o => o.label.toLowerCase().includes(search.toLowerCase()));
+    const filtered = (options || []).filter(o =>
+        o?.label?.toString().toLowerCase().includes(search.toLowerCase())
+    );
 
     return (
         <Modal visible={visible} animationType="slide" transparent={true} onRequestClose={onClose}>
