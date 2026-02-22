@@ -1012,6 +1012,40 @@ export default function AddInventoryScreen() {
                                 </View>
                             )}
                         </View>
+
+                        <SectionHeader title="System Assignment" icon="⚙️" />
+                        <View style={styles.card}>
+                            <Field label="Team">
+                                <SelectButton
+                                    value={form.team}
+                                    placeholder="Select Team"
+                                    options={teams}
+                                    onSelect={(val) => setForm(f => ({ ...f, team: val, assignedTo: "" }))}
+                                />
+                            </Field>
+
+                            <Field label="Assigned To">
+                                <SelectButton
+                                    value={form.assignedTo}
+                                    placeholder={form.team ? "Select User" : "Select Team first"}
+                                    options={users.filter(u => !form.team || u.team === form.team)}
+                                    onSelect={set("assignedTo")}
+                                />
+                            </Field>
+
+                            <Field label="Visible To">
+                                <SelectButton
+                                    value={form.visibleTo}
+                                    placeholder="Select Visibility"
+                                    options={[
+                                        { label: 'Everyone', value: 'Everyone' },
+                                        { label: 'Team Only', value: 'Team Only' },
+                                        { label: 'Me Only', value: 'Me Only' }
+                                    ]}
+                                    onSelect={set("visibleTo")}
+                                />
+                            </Field>
+                        </View>
                     </FadeInView>
                 );
             default: return null;
