@@ -32,7 +32,7 @@ const SPACING = {
     inputHeight: 52,
 };
 
-const FORM_STEPS = ["Basic Info", "Builtup & Specs", "Status & Furnishing", "Location & Ownership"];
+const FORM_STEPS = ["Basic Info", "Builtup & Furnishing", "Location", "Owner & Assignment"];
 
 // ─── Reusable Components ──────────────────────────────────────────────────────
 
@@ -570,15 +570,15 @@ export default function AddInventoryScreen() {
                 return;
             }
         } else if (step === 1) {
-            if (form.builtupDetails.some(d => !d.floor)) {
+            if (form.builtupDetails.some(d => !d.floor) || !form.possessionStatus || !form.furnishType) {
                 triggerShake();
-                Alert.alert("Missing Fields", "Please specify the floor for all rows in the dimensions section.");
+                Alert.alert("Missing Fields", "Please ensure Floor dimensions are set, and choose Possession/Furnish status.");
                 return;
             }
         } else if (step === 2) {
-            if (!form.possessionStatus || !form.furnishType) {
+            if (!form.address.city || !form.address.location) {
                 triggerShake();
-                Alert.alert("Missing Fields", "Please select Possession Status and Furnish Type.");
+                Alert.alert("Missing Location", "Please select both City and Location.");
                 return;
             }
         }
@@ -586,9 +586,9 @@ export default function AddInventoryScreen() {
     };
 
     const handleSave = async () => {
-        // Validation for Step 3 (Final Check)
-        if (!form.address.city || !form.address.location) {
-            Alert.alert("Missing Location", "Please select both City and Location in the address section.");
+        // Validation for the entire form before final submission
+        if (!form.projectName || !form.unitNo || !form.address.city || !form.address.location) {
+            Alert.alert("Incomplete Form", "Base details (Project, Unit No) and Location (City, Location) are required.");
             return;
         }
 
@@ -648,7 +648,7 @@ export default function AddInventoryScreen() {
 
     const renderStepContent = () => {
         switch (step) {
-            case 0: // Basic Info
+            case 0: // Basic Info & Orientation
                 return (
                     <FadeInView key="step0" delay={100}>
                         <SectionHeader title="Basic Unit Details" icon="🏢" />
@@ -713,7 +713,7 @@ export default function AddInventoryScreen() {
                         </View>
                     </FadeInView>
                 );
-            case 1: // Builtup & Specs
+            case 1: // Builtup & Furnishing
                 return (
                     <FadeInView key="step1" delay={100}>
                         <SectionHeader title="Builtup Details" icon="📐" />
@@ -788,12 +788,8 @@ export default function AddInventoryScreen() {
                                 ))}
                             </View>
                         </View>
-                    </FadeInView>
-                );
-            case 2: // Status & Furnishing
-                return (
-                    <FadeInView key="step2" delay={100}>
-                        <SectionHeader title="Furnishing & Dates" icon="🛋️" />
+
+                        <SectionHeader title="Furnishing" icon="🛋️" />
                         <View style={styles.card}>
                             <Field label="Occupation Date">
                                 <TouchableOpacity
@@ -844,9 +840,9 @@ export default function AddInventoryScreen() {
                         </View>
                     </FadeInView>
                 );
-            case 3: // Location & Ownership
+            case 2: // Location
                 return (
-                    <FadeInView key="step3" delay={100}>
+                    <FadeInView key="step2" delay={100}>
                         <SectionHeader title="Location" icon="📍" />
                         <View style={styles.card}>
                             <Field label="Country">
@@ -922,8 +918,12 @@ export default function AddInventoryScreen() {
                                 <Input label="Area/Sector" value={form.address.area} onChangeText={setAddress("area")} />
                             </Field>
                         </View>
-
-                        <SectionHeader title="Owner Assignment" icon="👤" />
+                    </FadeInView>
+                );
+            case 3: // Owner & Assignment
+                return (
+                    <FadeInView key="step3" delay={100}>
+                        <SectionHeader title="Owner" icon="👤" />
                         <View style={styles.card}>
                             {!selectedOwner ? (
                                 <View>
