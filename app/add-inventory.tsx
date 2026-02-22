@@ -786,7 +786,7 @@ export default function AddInventoryScreen() {
                                 ))}
                             </View>
                         </View>
-                    </FadeInView >
+                    </FadeInView>
                 );
             case 2: // Status & Furnishing
                 return (
