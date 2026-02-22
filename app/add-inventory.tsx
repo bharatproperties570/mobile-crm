@@ -388,7 +388,7 @@ export default function AddInventoryScreen() {
     const [tehsils, setTehsils] = useState<any[]>([]);
     const [postOffices, setPostOffices] = useState<any[]>([]);
 
-    const [activeLocDropdown, setActiveLocDropdown] = useState<string | null>(null);
+    const [activeLocDropdown, setActiveLocDropdown] = useState<'country' | 'state' | 'city' | 'location' | 'team' | 'assignedTo' | null>(null);
     const [builtupDetailLookups, setBuiltupDetailLookups] = useState<any[]>([]);
     const [btLookups, setBtLookups] = useState<any[]>([]);
 
@@ -548,8 +548,8 @@ export default function AddInventoryScreen() {
                 load("/system-settings/property_config", (data) => setPropertyConfig(data.value || data)),
                 load("/system-settings/master_fields", (data) => setMasterFields(data.value || data)),
                 load("/projects?limit=100", setProjects),
-                load("/lookups?lookup_type=Team&limit=100", (data) =>
-                    setTeams(data.map((t: any) => ({ label: t.lookup_value, value: t._id })))
+                load("/teams?limit=100", (data) =>
+                    setTeams(data.map((t: any) => ({ label: t.name, value: t._id })))
                 ),
                 load("/users?limit=1000", (data) =>
                     setUsers(data.map((u: any) => ({ label: u.name || u.fullName, value: u._id, team: u.team })))
@@ -1016,21 +1016,33 @@ export default function AddInventoryScreen() {
                         <SectionHeader title="System Assignment" icon="⚙️" />
                         <View style={styles.card}>
                             <Field label="Team">
-                                <SelectButton
-                                    value={form.team}
-                                    placeholder="Select Team"
-                                    options={teams}
-                                    onSelect={(val) => setForm(f => ({ ...f, team: val, assignedTo: "" }))}
-                                />
+                                <TouchableOpacity
+                                    activeOpacity={0.7}
+                                    style={styles.selector}
+                                    onPress={() => setActiveLocDropdown('team')}
+                                >
+                                    <Text style={[styles.selectorText, !form.team && { color: COLORS.textMuted }]}>
+                                        {teams.find(t => t.value === form.team)?.label || "Select Team"}
+                                    </Text>
+                                    <View style={{ transform: [{ rotate: activeLocDropdown === 'team' ? '180deg' : '0deg' }] }}>
+                                        <Ionicons name="chevron-down-outline" size={18} color={COLORS.textSecondary} />
+                                    </View>
+                                </TouchableOpacity>
                             </Field>
 
                             <Field label="Assigned To">
-                                <SelectButton
-                                    value={form.assignedTo}
-                                    placeholder={form.team ? "Select User" : "Select Team first"}
-                                    options={users.filter(u => !form.team || u.team === form.team)}
-                                    onSelect={set("assignedTo")}
-                                />
+                                <TouchableOpacity
+                                    activeOpacity={0.7}
+                                    style={styles.selector}
+                                    onPress={() => setActiveLocDropdown('assignedTo')}
+                                >
+                                    <Text style={[styles.selectorText, !form.assignedTo && { color: COLORS.textMuted }]}>
+                                        {users.find(u => u.value === form.assignedTo)?.label || "Select User"}
+                                    </Text>
+                                    <View style={{ transform: [{ rotate: activeLocDropdown === 'assignedTo' ? '180deg' : '0deg' }] }}>
+                                        <Ionicons name="chevron-down-outline" size={18} color={COLORS.textSecondary} />
+                                    </View>
+                                </TouchableOpacity>
                             </Field>
 
                             <Field label="Visible To">
@@ -1182,6 +1194,22 @@ export default function AddInventoryScreen() {
                     options={locations.map(l => ({ label: l.lookup_value, value: l._id }))}
                     placeholder="Search Location"
                     onSelect={setAddress('location')}
+                />
+
+                <SearchableDropdown
+                    visible={activeLocDropdown === 'team'}
+                    onClose={() => setActiveLocDropdown(null)}
+                    options={teams}
+                    placeholder="Search Team"
+                    onSelect={(val) => setForm(f => ({ ...f, team: val, assignedTo: "" }))}
+                />
+
+                <SearchableDropdown
+                    visible={activeLocDropdown === 'assignedTo'}
+                    onClose={() => setActiveLocDropdown(null)}
+                    options={users.filter(u => !form.team || u.team === form.team)}
+                    placeholder="Search User"
+                    onSelect={(val) => setForm(f => ({ ...f, assignedTo: val }))}
                 />
             </KeyboardAvoidingView>
         </SafeAreaView>
