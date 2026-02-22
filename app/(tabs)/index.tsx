@@ -88,15 +88,15 @@ export default function MissionControlScreen() {
                 <Text style={styles.sectionHeader}>Activity Monitor</Text>
                 <View style={styles.monitorGrid}>
                     <TouchableOpacity style={[styles.monitorTile, { borderColor: "#FEE2E2" }]} onPress={() => router.push({ pathname: "/(tabs)/activities", params: { filter: "Overdue" } })}>
-                        <Text style={[styles.monitorValue, { color: "#EF4444" }]}>{dashboardData?.activities.overdue || 0}</Text>
+                        <Text style={[styles.monitorValue, { color: "#EF4444" }]}>{dashboardData?.activities?.overdue || 0}</Text>
                         <Text style={styles.monitorLabel}>Overdue</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={[styles.monitorTile, { borderColor: "#FEF3C7" }]} onPress={() => router.push({ pathname: "/(tabs)/activities", params: { filter: "Today" } })}>
-                        <Text style={[styles.monitorValue, { color: "#F59E0B" }]}>{dashboardData?.activities.today || 0}</Text>
+                        <Text style={[styles.monitorValue, { color: "#F59E0B" }]}>{dashboardData?.activities?.today || 0}</Text>
                         <Text style={styles.monitorLabel}>Today</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={[styles.monitorTile, { borderColor: "#E0E7FF" }]} onPress={() => router.push({ pathname: "/(tabs)/activities", params: { filter: "Upcoming" } })}>
-                        <Text style={[styles.monitorValue, { color: "#6366F1" }]}>{dashboardData?.activities.upcoming || 0}</Text>
+                        <Text style={[styles.monitorValue, { color: "#6366F1" }]}>{dashboardData?.activities?.upcoming || 0}</Text>
                         <Text style={styles.monitorLabel}>Upcoming</Text>
                     </TouchableOpacity>
                 </View>
@@ -109,7 +109,7 @@ export default function MissionControlScreen() {
                     <Text style={styles.pipeTotal}>Total: {stats.leads || 0}</Text>
                 </View>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pipeScroll}>
-                    {dashboardData?.leads.map((item, idx) => (
+                    {dashboardData?.leads?.map((item, idx) => (
                         <View key={idx} style={styles.pipeStage}>
                             <Text style={styles.pipeVal}>{item.count}</Text>
                             <Text style={styles.pipeLab}>{item.status}</Text>
@@ -124,7 +124,7 @@ export default function MissionControlScreen() {
                     <Text style={styles.pipeTotal}>Active: {stats.deals || 0}</Text>
                 </View>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pipeScroll}>
-                    {dashboardData?.deals.map((item, idx) => (
+                    {dashboardData?.deals?.map((item, idx) => (
                         <View key={idx} style={[styles.pipeStage, { backgroundColor: "#ECFDF5" }]}>
                             <Text style={[styles.pipeVal, { color: "#059669" }]}>{item.count}</Text>
                             <Text style={styles.pipeLab}>{item.stage}</Text>

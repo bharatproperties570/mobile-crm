@@ -114,6 +114,15 @@ function DealCard({
         </View>
     );
 
+    const dealTypeStr = resolveName(deal.intent || deal.dealType || deal.transactionType || "Sell").toUpperCase();
+
+    // CRM Business Rule: Scoring Engine Colors
+    const score = deal.score || (deal as any).dealScore || 0;
+    let typeColor = "#64748B"; // cold (0-30), default
+    if (score >= 81) typeColor = "#7C3AED"; // superHot
+    else if (score >= 61) typeColor = "#EF4444"; // hot
+    else if (score >= 31) typeColor = "#F59E0B"; // warm
+
     return (
         <Swipeable
             renderRightActions={renderRightActions}
@@ -128,7 +137,11 @@ function DealCard({
                 onLongPress={onLongPress}
                 activeOpacity={0.85}
             >
-                <View style={[styles.cardAccent, { backgroundColor: color }]} />
+                <View style={[styles.cardAccent, { backgroundColor: typeColor }]}>
+                    <View style={styles.verticalTextContainer}>
+                        <Text style={styles.verticalText}>{dealTypeStr || "DEAL"}</Text>
+                    </View>
+                </View>
                 <View style={styles.cardContent}>
                     <View style={styles.cardTop}>
                         <View style={{ flex: 1 }}>
@@ -549,7 +562,9 @@ const styles = StyleSheet.create({
         backgroundColor: "#fff", borderRadius: 16, marginBottom: 12, flexDirection: "row", overflow: "hidden",
         shadowColor: "#000", shadowOpacity: 0.06, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 3,
     },
-    cardAccent: { width: 4 },
+    cardAccent: { width: 22, justifyContent: "center", alignItems: "center" },
+    verticalTextContainer: { width: 120, transform: [{ rotate: "-90deg" }], alignItems: "center", justifyContent: "center" },
+    verticalText: { color: "#fff", fontSize: 10, fontWeight: "900", letterSpacing: 2, textAlign: "center" },
     cardContent: { flex: 1, padding: 16 },
     cardTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 },
     headerTitleRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", flex: 1 },

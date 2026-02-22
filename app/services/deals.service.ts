@@ -36,14 +36,14 @@ export interface Deal {
     sizeUnit?: string;
     floor?: number | string;
     corner?: string;
-    intent?: string;
+    intent?: string | { lookup_value: string };
     quotePrice?: number;
     ratePrice?: number;
     pricingMode?: string;
     dealProbability?: number | string;
     pricingNature?: { negotiable?: boolean; fixed?: boolean };
-    transactionType?: string;
-    dealType?: string;
+    transactionType?: string | { lookup_value: string };
+    dealType?: string | { lookup_value: string };
     commission?: {
         brokeragePercent?: number | string;
         expectedAmount?: number;
@@ -59,6 +59,7 @@ export interface Deal {
     };
     source?: string;
     team?: string;
+    score?: number;
 }
 
 export const getDeals = async (params?: Record<string, string>) => {

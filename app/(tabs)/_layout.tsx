@@ -54,63 +54,63 @@ export default function TabsLayout() {
                 <Tabs.Screen
                     name="leads"
                     options={{
-                        href: isVisible('leads') ? undefined : null,
+                        href: isVisible('leads') ? '/(tabs)/leads' : null,
                         tabBarIcon: ({ focused }) => <TabIcon icon="👥" label="Leads" focused={focused} color={config.color} />,
                     }}
                 />
                 <Tabs.Screen
                     name="contacts"
                     options={{
-                        href: isVisible('contacts') ? undefined : null,
+                        href: isVisible('contacts') ? '/(tabs)/contacts' : null,
                         tabBarIcon: ({ focused }) => <TabIcon icon="📋" label="Contacts" focused={focused} color={config.color} />,
                     }}
                 />
                 <Tabs.Screen
                     name="deals"
                     options={{
-                        href: isVisible('deals') ? undefined : null,
+                        href: isVisible('deals') ? '/(tabs)/deals' : null,
                         tabBarIcon: ({ focused }) => <TabIcon icon="🤝" label="Deals" focused={focused} color={config.color} />,
                     }}
                 />
                 <Tabs.Screen
                     name="companies"
                     options={{
-                        href: isVisible('companies') ? undefined : null,
+                        href: isVisible('companies') ? '/(tabs)/companies' : null,
                         tabBarIcon: ({ focused }) => <TabIcon icon="🏗️" label="Company" focused={focused} color={config.color} />,
                     }}
                 />
                 <Tabs.Screen
                     name="projects"
                     options={{
-                        href: isVisible('projects') ? undefined : null,
+                        href: isVisible('projects') ? '/(tabs)/projects' : null,
                         tabBarIcon: ({ focused }) => <TabIcon icon="🏟️" label="Project" focused={focused} color={config.color} />,
                     }}
                 />
                 <Tabs.Screen
                     name="inventory"
                     options={{
-                        href: isVisible('inventory') ? undefined : null,
+                        href: isVisible('inventory') ? '/(tabs)/inventory' : null,
                         tabBarIcon: ({ focused }) => <TabIcon icon="📦" label="Inventory" focused={focused} color={config.color} />,
                     }}
                 />
                 <Tabs.Screen
                     name="bookings"
                     options={{
-                        href: isVisible('bookings') ? undefined : null,
+                        href: isVisible('bookings') ? '/(tabs)/bookings' : null,
                         tabBarIcon: ({ focused }) => <TabIcon icon="📝" label="Booking" focused={focused} color={config.color} />,
                     }}
                 />
                 <Tabs.Screen
                     name="accounts"
                     options={{
-                        href: isVisible('accounts') ? undefined : null,
+                        href: isVisible('accounts') ? '/(tabs)/accounts' : null,
                         tabBarIcon: ({ focused }) => <TabIcon icon="💰" label="Account" focused={focused} color={config.color} />,
                     }}
                 />
                 <Tabs.Screen
                     name="marketing"
                     options={{
-                        href: isVisible('marketing') ? undefined : null,
+                        href: isVisible('marketing') ? '/(tabs)/marketing' : null,
                         tabBarIcon: ({ focused }) => <TabIcon icon="📢" label="Marketing" focused={focused} color={config.color} />,
                     }}
                 />

@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from "react";
 import {
     View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity,
-    ActivityIndicator, Alert, Switch, Modal, FlatList, SafeAreaView
+    ActivityIndicator, Alert, Switch, Modal, FlatList, SafeAreaView, Platform
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
 import { getTeams, getTeamMembers } from "./services/teams.service";
 import { getLeadById, addLead, updateLead, checkDuplicates } from "./services/leads.service";
 import { getLookups } from "./services/lookups.service";
@@ -12,10 +13,39 @@ import { getProjects } from "./services/projects.service";
 import api from "./services/api";
 
 const LEAD_LOOKUP_TYPES = [
-    "Requirement", "Property Type", "Sub Type", "Unit Type",
+    "Requirement", "Category", "SubCategory", "PropertyType",
     "Budget", "Facing", "Direction", "Status", "Campaign",
     "Sub Campaign", "Source", "SubSource"
 ];
+
+const BUDGET_VALUES = [
+    { value: 500000, label: "5 Lakh" },
+    { value: 2500000, label: "25 Lakh" },
+    { value: 5000000, label: "50 Lakh" },
+    { value: 7500000, label: "75 Lakh" },
+    { value: 10000000, label: "1 Crore" },
+    { value: 15000000, label: "1.5 Crore" },
+    { value: 20000000, label: "2 Crore" },
+    { value: 25000000, label: "2.5 Crore" },
+    { value: 30000000, label: "3 Crore" },
+    { value: 35000000, label: "3.5 Crore" },
+    { value: 40000000, label: "4 Crore" },
+    { value: 45000000, label: "4.5 Crore" },
+    { value: 50000000, label: "5 Crore" },
+    { value: 55000000, label: "5.5 Crore" },
+    { value: 60000000, label: "6 Crore" },
+    { value: 70000000, label: "7 Crore" },
+    { value: 80000000, label: "8 Crore" },
+    { value: 90000000, label: "9 Crore" },
+    { value: 100000000, label: "10 Crore" },
+    { value: 200000000, label: "20 Crore" },
+    { value: 300000000, label: "30 Crore" },
+    { value: 500000000, label: "50 Crore" },
+    { value: 750000000, label: "75 Crore" },
+    { value: 1000000000, label: "100 Crore" }
+];
+
+const GOOGLE_API_KEY = "AIzaSyBd2gdMJVt5C_tgYqWoRbBiatzmevYdB9U";
 
 // --- Constants & Helpers ---
 const FORM_STEPS = ["Requirement", "Location", "Contact", "System"];
@@ -55,7 +85,7 @@ export default function AddLeadScreen() {
         email: "",
 
         // Requirement
-        requirement: "",
+        requirement: "Buy",
         purpose: "End Use",
         nri: false,
         propertyType: [], // Category
@@ -80,7 +110,12 @@ export default function AddLeadScreen() {
         locCity: "",
         locArea: "",
         locPinCode: "",
+        locRange: 5, // km
         projectName: [], // Multi
+        projectTowers: [], // Specific towers
+        propertyNo: "", // Single/Start
+        propertyNoEnd: "", // End for range
+        unitSelectionMode: "Single", // Single, Multiple, Range
 
         // System / Assignment
         status: "",
@@ -140,7 +175,7 @@ export default function AddLeadScreen() {
                         lastName: l.lastName || "",
                         mobile: l.mobile || "",
                         email: l.email || "",
-                        requirement: l.requirement?._id || l.requirement || "",
+                        requirement: l.requirement?.lookup_value || l.requirement || "Buy",
                         purpose: l.purpose || "End Use",
                         nri: !!l.nri,
                         propertyType: Array.isArray(l.propertyType) ? l.propertyType.map((v: any) => v._id || v) : (l.propertyType ? [l.propertyType._id || l.propertyType] : []),
@@ -204,6 +239,13 @@ export default function AddLeadScreen() {
         return () => clearTimeout(delayDebounce);
     }, [formData.firstName, formData.mobile]);
 
+    const getLookupId = (type: string, value: string) => {
+        const list = lookups[type];
+        if (!Array.isArray(list)) return null;
+        const item = list.find((l: any) => l.lookup_value === value);
+        return item?._id || value;
+    };
+
     const handleSave = async () => {
         if (!formData.firstName || !formData.mobile) {
             Alert.alert("Error", "First Name and Mobile Number are required");
@@ -216,11 +258,23 @@ export default function AddLeadScreen() {
 
         setIsSaving(true);
         try {
-            const res = id ? await updateLead(id, formData) : await addLead(formData);
+            const payload = {
+                ...formData,
+                requirement: getLookupId("Requirement", formData.requirement),
+                // Map projectTowers to locBlock for backend schema alignment
+                locBlock: formData.projectTowers,
+                budgetMin: formData.budgetMin ? Number(formData.budgetMin) : undefined,
+                budgetMax: formData.budgetMax ? Number(formData.budgetMax) : undefined,
+                areaMin: formData.areaMin ? Number(formData.areaMin) : undefined,
+                areaMax: formData.areaMax ? Number(formData.areaMax) : undefined,
+            };
+
+            // Remove mobile-only ui state
+            delete (payload as any).projectTowers;
+
+            const res = id ? await updateLead(id, payload) : await addLead(payload);
             if (res.success || res.status === 200 || res.data) {
-                Alert.alert("Success", id ? "Lead updated successfully" : "Lead added successfully", [
-                    { text: "OK", onPress: () => router.back() }
-                ]);
+                router.replace("/(tabs)/leads");
             } else {
                 throw new Error(res.message || "Failed to save lead");
             }
@@ -287,10 +341,30 @@ export default function AddLeadScreen() {
         let list = lookups[type];
         if (!Array.isArray(list)) return null;
 
-        // Filter by parent IDs
         if (parentIds && parentIds.length > 0) {
-            list = list.filter(item => parentIds.includes(item.parent_lookup_id) || parentIds.includes(item.parent_lookup_value));
+            const pIds = parentIds.map(id => String(id));
+
+            // Find names of parents for hierarchy fallback
+            const parentValues: string[] = [];
+            Object.values(lookups).flat().forEach((l: any) => {
+                if (pIds.includes(String(l._id))) {
+                    parentValues.push(l.lookup_value);
+                }
+            });
+
+            list = list.filter(item => {
+                // Backend relationship match
+                return (
+                    pIds.includes(String(item.parent_lookup_id)) ||
+                    pIds.includes(String(item.parent_lookup_value)) ||
+                    parentValues.includes(item.parent_lookup_value)
+                );
+            });
+        } else {
+            return <Text style={styles.hintText}>Select parent field first</Text>;
         }
+
+        if (list.length === 0) return <Text style={styles.hintText}>No options found for selection</Text>;
 
         return (
             <View style={styles.chipGroup}>
@@ -313,7 +387,7 @@ export default function AddLeadScreen() {
                 })}
             </View>
         );
-    }
+    };
 
     const renderStepContent = () => {
         switch (step) {
@@ -323,19 +397,62 @@ export default function AddLeadScreen() {
                         <SectionTitle title="Requirement Details" icon="📋" />
 
                         <FormLabel label="Requirement" required />
-                        {renderSingleSelect("Requirement", "requirement")}
+                        <View style={styles.chipRow}>
+                            {["Buy", "Rent", "Lease"].map(r => (
+                                <TouchableOpacity
+                                    key={r}
+                                    style={[styles.chip, formData.requirement === r && styles.chipActive]}
+                                    onPress={() => setFormData({ ...formData, requirement: r })}
+                                >
+                                    <Text style={[styles.chipText, formData.requirement === r && styles.chipTextActive]}>{r}</Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
 
                         <FormLabel label="Category" />
-                        {renderMultiSelect("Property Type", "propertyType")}
+                        {renderMultiSelect("Category", "propertyType")}
 
                         <FormLabel label="Sub Category" />
-                        {renderDependentMultiSelect("Sub Type", "subType", formData.propertyType)}
+                        {renderDependentMultiSelect("SubCategory", "subType", formData.propertyType)}
 
                         <FormLabel label="Size Type" />
-                        {renderMultiSelect("Unit Type", "unitType")}
+                        {renderDependentMultiSelect("PropertyType", "unitType", formData.subType)}
 
                         <FormLabel label="Budget Range" />
-                        {renderSingleSelect("Budget", "budget")}
+                        <View style={styles.budgetRow}>
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.subLabel}>Min Budget</Text>
+                                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.budgetScroll}>
+                                    {BUDGET_VALUES.map((opt) => (
+                                        <TouchableOpacity
+                                            key={`min-${opt.value}`}
+                                            style={[styles.budgetChip, formData.budgetMin === String(opt.value) && styles.chipActive]}
+                                            onPress={() => setFormData({ ...formData, budgetMin: String(opt.value) })}
+                                        >
+                                            <Text style={[styles.budgetChipText, formData.budgetMin === String(opt.value) && styles.chipTextActive]}>{opt.label}</Text>
+                                        </TouchableOpacity>
+                                    ))}
+                                </ScrollView>
+                            </View>
+                        </View>
+                        <View style={[styles.budgetRow, { marginTop: 10 }]}>
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.subLabel}>Max Budget</Text>
+                                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.budgetScroll}>
+                                    {BUDGET_VALUES
+                                        .filter(opt => !formData.budgetMin || opt.value > Number(formData.budgetMin))
+                                        .map((opt) => (
+                                            <TouchableOpacity
+                                                key={`max-${opt.value}`}
+                                                style={[styles.budgetChip, formData.budgetMax === String(opt.value) && styles.chipActive]}
+                                                onPress={() => setFormData({ ...formData, budgetMax: String(opt.value) })}
+                                            >
+                                                <Text style={[styles.budgetChipText, formData.budgetMax === String(opt.value) && styles.chipTextActive]}>{opt.label}</Text>
+                                            </TouchableOpacity>
+                                        ))}
+                                </ScrollView>
+                            </View>
+                        </View>
 
                         <FormLabel label="Area Range" />
                         <View style={styles.row}>
@@ -368,10 +485,61 @@ export default function AddLeadScreen() {
             case 1: // Location
                 return (
                     <View style={styles.stepContainer}>
-                        <SectionTitle title="Location & Project" icon="📍" />
+                        <SectionTitle title="Location & Range" icon="📍" />
 
                         <FormLabel label="Search Location" />
-                        <TextInput style={styles.input} placeholder="Area, sector or city..." value={formData.searchLocation} onChangeText={v => setFormData({ ...formData, searchLocation: v })} />
+                        <View style={styles.googleSearchContainer}>
+                            <GooglePlacesAutocomplete
+                                placeholder="Area, sector or city..."
+                                onPress={(data, details) => {
+                                    if (details) {
+                                        const locObj = {
+                                            searchLocation: data.description,
+                                            locCity: details?.address_components?.find((c: any) => c.types.includes("locality"))?.long_name || "",
+                                            locArea: details?.address_components?.find((c: any) => c.types.includes("sublocality"))?.long_name || ""
+                                        };
+                                        setFormData((prev: any) => ({ ...prev, ...locObj }));
+                                    }
+                                }}
+                                query={{
+                                    key: GOOGLE_API_KEY,
+                                    language: "en",
+                                    components: "country:in",
+                                }}
+                                styles={{
+                                    textInput: styles.input,
+                                    container: { flex: 0 },
+                                    listView: { backgroundColor: "#ffffff", borderRadius: 10, marginTop: 5, elevation: 5, zIndex: 1000 }
+                                }}
+                                fetchDetails={true}
+                                enablePoweredByContainer={false}
+                                textInputProps={{
+                                    value: formData.searchLocation,
+                                    onChangeText: (v: string) => setFormData((prev: any) => ({ ...prev, searchLocation: v }))
+                                }}
+                            />
+                        </View>
+
+                        <View style={styles.rangeBox}>
+                            <View style={styles.rowAlign}>
+                                <Text style={styles.label}>Location Range ({formData.locRange} km)</Text>
+                                <Text style={styles.rangeValue}>{formData.locRange === 100 ? "100+ km" : `${formData.locRange} km`}</Text>
+                            </View>
+                            {/* Simple alternative to Slider if not installed: custom numeric buttons or text input */}
+                            <View style={styles.chipRow}>
+                                {[1, 5, 10, 25, 50, 100].map(r => (
+                                    <TouchableOpacity
+                                        key={r}
+                                        style={[styles.chip, formData.locRange === r && styles.chipActive]}
+                                        onPress={() => setFormData({ ...formData, locRange: r })}
+                                    >
+                                        <Text style={[styles.chipText, formData.locRange === r && styles.chipTextActive]}>{r === 100 ? "100+" : r}km</Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </View>
+                        </View>
+
+                        <SectionTitle title="Project & Unit Selection" icon="🏗️" />
 
                         <FormLabel label="Select Projects" />
                         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.projectScroll}>
@@ -389,17 +557,96 @@ export default function AddLeadScreen() {
                             })}
                         </ScrollView>
 
-                        <View style={styles.row}>
-                            <View style={{ flex: 1 }}>
-                                <FormLabel label="City" />
-                                <TextInput style={styles.input} value={formData.locCity} onChangeText={v => setFormData({ ...formData, locCity: v })} />
+                        {formData.projectName.length > 0 && (
+                            <View>
+                                <FormLabel label="Select Towers/Blocks" />
+                                <View style={styles.chipGroup}>
+                                    {projects
+                                        .filter(p => formData.projectName.includes(p.name))
+                                        .flatMap(p => (p.blocks || []).map((b: any) => ({ projectId: p._id, projectName: p.name, block: typeof b === 'string' ? b : b.name })))
+                                        .map((item, idx) => {
+                                            const key = `${item.projectName}-${item.block}`;
+                                            const active = formData.projectTowers.includes(key);
+                                            return (
+                                                <TouchableOpacity
+                                                    key={`${idx}-${item.block}`}
+                                                    style={[styles.chip, active && styles.chipActive]}
+                                                    onPress={() => {
+                                                        const newList = active
+                                                            ? formData.projectTowers.filter((t: string) => t !== key)
+                                                            : [...formData.projectTowers, key];
+                                                        setFormData((prev: any) => ({ ...prev, projectTowers: newList }));
+                                                    }}
+                                                >
+                                                    <Text style={[styles.chipText, active && styles.chipTextActive]}>{item.block} ({item.projectName})</Text>
+                                                </TouchableOpacity>
+                                            );
+                                        })
+                                    }
+                                </View>
+
+                                <FormLabel label="Unit Selection Mode" />
+                                <View style={styles.selectionModeRow}>
+                                    {["Single", "Multiple", "Range"].map(mode => (
+                                        <TouchableOpacity
+                                            key={mode}
+                                            style={[styles.modeBtn, formData.unitSelectionMode === mode && styles.modeBtnActive]}
+                                            onPress={() => setFormData({ ...formData, unitSelectionMode: mode })}
+                                        >
+                                            <Text style={[styles.modeBtnText, formData.unitSelectionMode === mode && styles.modeBtnTextActive]}>{mode}</Text>
+                                        </TouchableOpacity>
+                                    ))}
+                                </View>
+
+                                {formData.unitSelectionMode === "Single" && (
+                                    <View>
+                                        <FormLabel label="Unit Number" />
+                                        <TextInput
+                                            style={styles.input}
+                                            placeholder="e.g. 101"
+                                            value={formData.propertyNo}
+                                            onChangeText={v => setFormData({ ...formData, propertyNo: v })}
+                                        />
+                                    </View>
+                                )}
+
+                                {formData.unitSelectionMode === "Multiple" && (
+                                    <View>
+                                        <FormLabel label="Unit Numbers (Comma separated)" />
+                                        <TextInput
+                                            style={styles.input}
+                                            placeholder="e.g. 101, 102, 205"
+                                            value={formData.propertyNo}
+                                            onChangeText={v => setFormData({ ...formData, propertyNo: v })}
+                                        />
+                                    </View>
+                                )}
+
+                                {formData.unitSelectionMode === "Range" && (
+                                    <View style={styles.row}>
+                                        <View style={{ flex: 1 }}>
+                                            <FormLabel label="Start Unit" />
+                                            <TextInput
+                                                style={styles.input}
+                                                placeholder="e.g. 1"
+                                                value={formData.propertyNo}
+                                                onChangeText={v => setFormData({ ...formData, propertyNo: v })}
+                                            />
+                                        </View>
+                                        <View style={{ width: 10 }} />
+                                        <View style={{ flex: 1 }}>
+                                            <FormLabel label="End Unit" />
+                                            <TextInput
+                                                style={styles.input}
+                                                placeholder="e.g. 10"
+                                                value={formData.propertyNoEnd}
+                                                onChangeText={v => setFormData({ ...formData, propertyNoEnd: v })}
+                                            />
+                                        </View>
+                                    </View>
+                                )}
                             </View>
-                            <View style={{ width: 10 }} />
-                            <View style={{ flex: 1 }}>
-                                <FormLabel label="Area" />
-                                <TextInput style={styles.input} value={formData.locArea} onChangeText={v => setFormData({ ...formData, locArea: v })} />
-                            </View>
-                        </View>
+                        )}
                     </View>
                 );
             case 2: // Contact
@@ -480,7 +727,13 @@ export default function AddLeadScreen() {
         <SafeAreaView style={styles.container}>
             <View style={styles.header}>
                 <TouchableOpacity
-                    onPress={() => router.back()}
+                    onPress={() => {
+                        if (router.canGoBack()) {
+                            router.back();
+                        } else {
+                            router.replace("/(tabs)/leads");
+                        }
+                    }}
                     hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
                 >
                     <Ionicons name="arrow-back" size={24} color="#1E3A8A" />
@@ -564,12 +817,39 @@ const styles = StyleSheet.create({
     chipText: { fontSize: 12, color: "#64748B", fontWeight: "600" },
     chipTextActive: { color: "#fff" },
     row: { flexDirection: "row" },
-    projectScroll: { marginVertical: 8 },
-    projectCard: { width: 130, padding: 10, backgroundColor: "#fff", borderRadius: 10, borderWidth: 1, borderColor: "#E2E8F0", marginRight: 10 },
+    projectScroll: { marginBottom: 15 },
+    projectCard: {
+        padding: 12, borderRadius: 12, borderWidth: 1, borderColor: "#E2E8F0",
+        marginRight: 10, width: 140, backgroundColor: "#fff"
+    },
     projectCardActive: { borderColor: "#1E3A8A", backgroundColor: "#EFF6FF" },
-    projectText: { fontSize: 13, fontWeight: "700", color: "#1E293B" },
+    projectText: { fontWeight: "700", color: "#1E293B", fontSize: 13 },
     projectTextActive: { color: "#1E3A8A" },
-    projectSub: { fontSize: 10, color: "#94A3B8", marginTop: 2 },
+    projectSub: { fontSize: 11, color: "#64748B", marginTop: 2 },
+    budgetRow: { marginBottom: 10 },
+    subLabel: { fontSize: 12, color: "#64748B", marginBottom: 5, fontWeight: "600" },
+    budgetScroll: { paddingVertical: 5 },
+    budgetChip: {
+        paddingVertical: 8, paddingHorizontal: 12, borderRadius: 20,
+        backgroundColor: "#F1F5F9", marginRight: 8, borderWidth: 1, borderColor: "#E2E8F0"
+    },
+    budgetChipText: { fontSize: 12, color: "#475569", fontWeight: "600" },
+    googleSearchContainer: { zIndex: 10, marginBottom: 15 },
+    rangeBox: {
+        backgroundColor: "#F8FAFC", padding: 15, borderRadius: 12,
+        borderWidth: 1, borderColor: "#E2E8F0", marginBottom: 20
+    },
+    rangeValue: { fontSize: 14, fontWeight: "700", color: "#1E3A8A" },
+    chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+    selectionModeRow: { flexDirection: "row", gap: 10, marginBottom: 15 },
+    modeBtn: {
+        flex: 1, paddingVertical: 10, borderRadius: 8, borderWidth: 1,
+        borderColor: "#E2E8F0", backgroundColor: "#fff", alignItems: "center"
+    },
+    modeBtnActive: { borderColor: "#1E3A8A", backgroundColor: "#EFF6FF" },
+    modeBtnText: { fontSize: 13, color: "#64748B", fontWeight: "600" },
+    modeBtnTextActive: { color: "#1E3A8A" },
+    hintText: { fontSize: 12, color: "#94A3B8", fontStyle: "italic", marginBottom: 10 },
     footer: { position: "absolute", bottom: 0, left: 0, right: 0, padding: 16, backgroundColor: "#fff", borderTopWidth: 1, borderTopColor: "#F1F5F9", flexDirection: "row", gap: 10 },
     nextBtn: { flex: 1, backgroundColor: "#1E3A8A", height: 50, borderRadius: 12, justifyContent: "center", alignItems: "center" },
     nextBtnText: { color: "#fff", fontSize: 16, fontWeight: "700" },

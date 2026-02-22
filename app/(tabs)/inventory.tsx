@@ -126,6 +126,14 @@ export default function InventoryScreen() {
                     }
                 />
             )}
+
+            <TouchableOpacity
+                style={styles.fab}
+                onPress={() => router.push("/add-inventory")}
+                activeOpacity={0.8}
+            >
+                <Ionicons name="add" size={30} color="#fff" />
+            </TouchableOpacity>
         </View>
     );
 }
@@ -163,5 +171,12 @@ const styles = StyleSheet.create({
     intentBadge: { backgroundColor: "#F1F5F9", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
     intentText: { fontSize: 10, fontWeight: "700", color: "#475569" },
     empty: { alignItems: "center", marginTop: 100 },
-    emptyText: { marginTop: 16, fontSize: 16, color: "#94A3B8", fontWeight: "600" }
+    emptyText: { marginTop: 16, fontSize: 16, color: "#94A3B8", fontWeight: "600" },
+    fab: {
+        position: 'absolute', right: 20, bottom: 20,
+        backgroundColor: '#1E40AF', width: 60, height: 60,
+        borderRadius: 30, justifyContent: 'center', alignItems: 'center',
+        shadowColor: '#1E40AF', shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3, shadowRadius: 8, elevation: 6
+    }
 });

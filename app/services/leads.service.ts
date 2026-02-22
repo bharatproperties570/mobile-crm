@@ -27,6 +27,11 @@ export interface Lead {
     unitType?: ({ _id: string; lookup_value: string } | string)[];
     propertyType?: ({ _id: string; lookup_value: string } | string)[];
     tags?: string[];
+    locRange?: number;
+    projectTowers?: string[];
+    propertyNo?: string;
+    propertyNoEnd?: string;
+    unitSelectionMode?: string;
 }
 
 export function leadName(lead: Lead): string {

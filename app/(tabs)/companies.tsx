@@ -121,7 +121,7 @@ export default function CompaniesScreen() {
                     renderItem={({ item }) => (
                         <CompanyCard
                             company={item}
-                            onPress={() => { }} // Detail view can be added later
+                            onPress={() => router.push(`/company/${item._id}`)}
                         />
                     )}
                     contentContainerStyle={styles.list}
@@ -134,6 +134,14 @@ export default function CompaniesScreen() {
                     }
                 />
             )}
+
+            <TouchableOpacity
+                style={styles.fab}
+                onPress={() => router.push("/add-company")}
+                activeOpacity={0.8}
+            >
+                <Ionicons name="add" size={30} color="#fff" />
+            </TouchableOpacity>
         </View>
     );
 }
@@ -181,5 +189,11 @@ const styles = StyleSheet.create({
     },
     preferredText: { fontSize: 10, fontWeight: "800", color: "#D97706" },
     empty: { alignItems: "center", marginTop: 100 },
-    emptyText: { marginTop: 16, fontSize: 16, color: "#94A3B8", fontWeight: "600" }
+    emptyText: { marginTop: 16, fontSize: 16, color: "#94A3B8", fontWeight: "600" },
+    fab: {
+        position: "absolute", bottom: 24, right: 24,
+        width: 60, height: 60, borderRadius: 30, backgroundColor: "#1E3A8A",
+        justifyContent: "center", alignItems: "center",
+        shadowColor: "#1E3A8A", shadowOpacity: 0.4, shadowRadius: 10, shadowOffset: { width: 0, height: 5 }, elevation: 5
+    }
 });
