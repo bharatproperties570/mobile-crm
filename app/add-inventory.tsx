@@ -688,6 +688,27 @@ export default function AddInventoryScreen() {
                                 <Input label="Unit Number" value={form.unitNo} onChangeText={set("unitNo")} placeholder="e.g. 101" />
                             </Field>
                         </View>
+
+                        <SectionHeader title="Orientation" icon="🧭" />
+                        <View style={styles.card}>
+                            <Field label="Direction">
+                                <SelectButton value={form.direction} placeholder="Select Direction"
+                                    options={(masterFields.directions || []).map((v: string) => ({ label: v, value: v }))}
+                                    onSelect={set("direction")} />
+                            </Field>
+
+                            <Field label="Facing">
+                                <SelectButton value={form.facing} placeholder="Select Facing"
+                                    options={(masterFields.facings || []).map((v: string) => ({ label: v, value: v }))}
+                                    onSelect={set("facing")} />
+                            </Field>
+
+                            <Field label="Road Width">
+                                <SelectButton value={form.roadWidth} placeholder="Select Road Width"
+                                    options={(masterFields.roadWidths || []).map((v: string) => ({ label: v, value: v }))}
+                                    onSelect={set("roadWidth")} />
+                            </Field>
+                        </View>
                     </FadeInView>
                 );
             case 1: // Builtup & Specs
@@ -765,28 +786,7 @@ export default function AddInventoryScreen() {
                                 ))}
                             </View>
                         </View>
-
-                        <SectionHeader title="Orientation & Features" icon="🧭" />
-                        <View style={styles.card}>
-                            <Field label="Direction">
-                                <SelectButton value={form.direction} placeholder="Select Direction"
-                                    options={(masterFields.directions || []).map((v: string) => ({ label: v, value: v }))}
-                                    onSelect={set("direction")} />
-                            </Field>
-
-                            <Field label="Facing">
-                                <SelectButton value={form.facing} placeholder="Select Facing"
-                                    options={(masterFields.facings || []).map((v: string) => ({ label: v, value: v }))}
-                                    onSelect={set("facing")} />
-                            </Field>
-
-                            <Field label="Road Width">
-                                <SelectButton value={form.roadWidth} placeholder="Select Road Width"
-                                    options={(masterFields.roadWidths || []).map((v: string) => ({ label: v, value: v }))}
-                                    onSelect={set("roadWidth")} />
-                            </Field>
-                        </View>
-                    </FadeInView>
+                    </FadeInView >
                 );
             case 2: // Status & Furnishing
                 return (
