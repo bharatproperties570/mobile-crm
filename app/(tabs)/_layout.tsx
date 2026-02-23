@@ -1,129 +1,157 @@
 import { Tabs } from "expo-router";
-import { View, Text, StyleSheet } from "react-native";
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, Animated } from "react-native";
+import { useEffect, useRef } from "react";
+import { Ionicons } from "@expo/vector-icons";
 import { useDepartment } from "../context/DepartmentContext";
-import DepartmentSwitcher from "../components/DepartmentSwitcher";
+import { useTheme } from "../context/ThemeContext";
 
-function TabIcon({ icon, label, focused, color }: { icon: string; label: string; focused: boolean; color: string }) {
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
+
+const TABS_CONFIG = [
+    { name: 'index', label: 'Home', icon: 'home-outline', iconActive: 'home' },
+    { name: 'leads', label: 'Leads', icon: 'people-outline', iconActive: 'people' },
+    { name: 'contacts', label: 'Contacts', icon: 'person-circle-outline', iconActive: 'person-circle' },
+    { name: 'deals', label: 'Deals', icon: 'wallet-outline', iconActive: 'wallet' },
+    { name: 'activities', label: 'Activities', icon: 'calendar-outline', iconActive: 'calendar' },
+    { name: 'companies', label: 'Company', icon: 'business-outline', iconActive: 'business' },
+    { name: 'projects', label: 'Project', icon: 'cube-outline', iconActive: 'cube' },
+    { name: 'inventory', label: 'Inventory', icon: 'grid-outline', iconActive: 'grid' },
+    { name: 'bookings', label: 'Booking', icon: 'newspaper-outline', iconActive: 'newspaper' },
+    { name: 'accounts', label: 'Account', icon: 'cash-outline', iconActive: 'cash' },
+    { name: 'marketing', label: 'Marketing', icon: 'megaphone-outline', iconActive: 'megaphone' },
+];
+
+const AnimatedTabItem = ({ route, isFocused, activeColor, navigation, config }: any) => {
+    const { theme } = useTheme();
+    const scaleAnim = useRef(new Animated.Value(isFocused ? 1.2 : 1)).current;
+    const rotateAnim = useRef(new Animated.Value(isFocused ? 1 : 0)).current;
+
+    useEffect(() => {
+        Animated.parallel([
+            Animated.spring(scaleAnim, {
+                toValue: isFocused ? 1.2 : 1,
+                useNativeDriver: true,
+                friction: 4,
+            }),
+            Animated.timing(rotateAnim, {
+                toValue: isFocused ? 1 : 0,
+                duration: 600,
+                useNativeDriver: true,
+            })
+        ]).start();
+    }, [isFocused]);
+
+    const rotate = rotateAnim.interpolate({
+        inputRange: [0, 1],
+        outputRange: ['0deg', '360deg']
+    });
+
+    const onPress = () => {
+        const event = navigation.emit({
+            type: 'tabPress',
+            target: route.key,
+            canPreventDefault: true,
+        });
+
+        if (!isFocused && !event.defaultPrevented) {
+            navigation.navigate(route.name);
+        }
+    };
+
     return (
-        <View style={styles.tabItem}>
-            <Text style={[styles.tabIcon, focused && { color }]}>{icon}</Text>
-            <Text style={[styles.tabLabel, focused && { color, fontWeight: "700" }]}>{label}</Text>
-            {focused && <View style={[styles.activeIndicator, { backgroundColor: color }]} />}
+        <TouchableOpacity
+            onPress={onPress}
+            style={[styles.tabItem, isFocused && styles.tabItemActive]}
+            activeOpacity={0.7}
+        >
+            <Animated.View style={[
+                styles.iconBox,
+                isFocused && { backgroundColor: activeColor + '10' },
+                { transform: [{ scale: scaleAnim }, { rotate }] }
+            ]}>
+                <Ionicons
+                    name={(isFocused ? config.iconActive : config.icon) as any}
+                    size={22}
+                    color={isFocused ? activeColor : theme.textLight}
+                />
+            </Animated.View>
+            <Text style={[styles.tabLabel, { color: theme.textLight }, isFocused && { color: activeColor, fontWeight: "800" }]}>
+                {config.label}
+            </Text>
+            {isFocused && (
+                <Animated.View
+                    style={[
+                        styles.activeIndicator,
+                        { backgroundColor: activeColor, opacity: scaleAnim.interpolate({ inputRange: [1, 1.2], outputRange: [0, 1] }) }
+                    ]}
+                />
+            )}
+        </TouchableOpacity>
+    );
+};
+
+function CustomTabBar({ state, descriptors, navigation, activeColor }: any) {
+    const { theme } = useTheme();
+    return (
+        <View style={[styles.tabBarContainer, { backgroundColor: theme.card, borderTopColor: theme.border }]}>
+            <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.scrollContent}
+                decelerationRate="fast"
+            >
+                {state.routes.map((route: any, index: number) => {
+                    const { options } = descriptors[route.key];
+                    const isFocused = state.index === index;
+                    const config = TABS_CONFIG.find(t => t.name === route.name);
+
+                    if (!config || options.href === null) return null;
+
+                    return (
+                        <AnimatedTabItem
+                            key={route.key}
+                            route={route}
+                            isFocused={isFocused}
+                            activeColor={activeColor}
+                            options={options}
+                            navigation={navigation}
+                            config={config}
+                        />
+                    );
+                })}
+            </ScrollView>
         </View>
     );
 }
 
 export default function TabsLayout() {
-    const { currentDept, config } = useDepartment();
+    const { config } = useDepartment();
+    const { theme } = useTheme();
 
-    const isVisible = (name: string) => {
-        // Shared Home, Activities
-        if (name === 'index' || name === 'activities') return true;
-
-        // Sales Set (No Contacts/Companies)
-        if (currentDept === 'Sales') {
-            return ['leads', 'deals', 'projects'].includes(name);
-        }
-        // Inventory Set (No Projects, Added Companies)
-        if (currentDept === 'Inventory') {
-            return ['inventory', 'companies', 'contacts'].includes(name);
-        }
-        // Post-Sales Set
-        if (currentDept === 'Post-Sales') {
-            return ['marketing', 'bookings', 'accounts'].includes(name);
-        }
-        return false;
-    };
+    // In Omni-Nav, all tabs are visible and accessible. 
+    // We hta-ing the DepartmentSwitcher and consolidating all icons in one place.
 
     return (
-        <View style={{ flex: 1 }}>
-            <DepartmentSwitcher />
+        <View style={{ flex: 1, backgroundColor: theme.background }}>
             <Tabs
+                tabBar={(props) => <CustomTabBar {...props} activeColor={config.color} />}
                 screenOptions={{
                     headerShown: false,
-                    tabBarShowLabel: false,
-                    tabBarStyle: styles.tabBar,
                 }}
             >
-                <Tabs.Screen
-                    name="index"
-                    options={{
-                        tabBarIcon: ({ focused }) => <TabIcon icon="🏠" label="Home" focused={focused} color={config.color} />,
-                    }}
-                />
-                <Tabs.Screen
-                    name="leads"
-                    options={{
-                        href: isVisible('leads') ? '/(tabs)/leads' : null,
-                        tabBarIcon: ({ focused }) => <TabIcon icon="👥" label="Leads" focused={focused} color={config.color} />,
-                    }}
-                />
-                <Tabs.Screen
-                    name="contacts"
-                    options={{
-                        href: isVisible('contacts') ? '/(tabs)/contacts' : null,
-                        tabBarIcon: ({ focused }) => <TabIcon icon="📋" label="Contacts" focused={focused} color={config.color} />,
-                    }}
-                />
-                <Tabs.Screen
-                    name="deals"
-                    options={{
-                        href: isVisible('deals') ? '/(tabs)/deals' : null,
-                        tabBarIcon: ({ focused }) => <TabIcon icon="🤝" label="Deals" focused={focused} color={config.color} />,
-                    }}
-                />
-                <Tabs.Screen
-                    name="companies"
-                    options={{
-                        href: isVisible('companies') ? '/(tabs)/companies' : null,
-                        tabBarIcon: ({ focused }) => <TabIcon icon="🏗️" label="Company" focused={focused} color={config.color} />,
-                    }}
-                />
-                <Tabs.Screen
-                    name="projects"
-                    options={{
-                        href: isVisible('projects') ? '/(tabs)/projects' : null,
-                        tabBarIcon: ({ focused }) => <TabIcon icon="🏟️" label="Project" focused={focused} color={config.color} />,
-                    }}
-                />
-                <Tabs.Screen
-                    name="inventory"
-                    options={{
-                        href: isVisible('inventory') ? '/(tabs)/inventory' : null,
-                        tabBarIcon: ({ focused }) => <TabIcon icon="📦" label="Inventory" focused={focused} color={config.color} />,
-                    }}
-                />
-                <Tabs.Screen
-                    name="bookings"
-                    options={{
-                        href: isVisible('bookings') ? '/(tabs)/bookings' : null,
-                        tabBarIcon: ({ focused }) => <TabIcon icon="📝" label="Booking" focused={focused} color={config.color} />,
-                    }}
-                />
-                <Tabs.Screen
-                    name="accounts"
-                    options={{
-                        href: isVisible('accounts') ? '/(tabs)/accounts' : null,
-                        tabBarIcon: ({ focused }) => <TabIcon icon="💰" label="Account" focused={focused} color={config.color} />,
-                    }}
-                />
-                <Tabs.Screen
-                    name="marketing"
-                    options={{
-                        href: isVisible('marketing') ? '/(tabs)/marketing' : null,
-                        tabBarIcon: ({ focused }) => <TabIcon icon="📢" label="Marketing" focused={focused} color={config.color} />,
-                    }}
-                />
-                <Tabs.Screen
-                    name="activities"
-                    options={{
-                        tabBarIcon: ({ focused }) => <TabIcon icon="📅" label="Activities" focused={focused} color={config.color} />,
-                    }}
-                />
+                {TABS_CONFIG.map(tab => (
+                    <Tabs.Screen
+                        key={tab.name}
+                        name={tab.name}
+                        options={{
+                            title: tab.label,
+                        }}
+                    />
+                ))}
                 <Tabs.Screen
                     name="more"
                     options={{
-                        href: null, // Hide legacy more tab
+                        href: null,
                     }}
                 />
             </Tabs>
@@ -132,24 +160,55 @@ export default function TabsLayout() {
 }
 
 const styles = StyleSheet.create({
-    tabBar: {
-        height: 75,
+    tabBarContainer: {
+        position: 'absolute',
+        bottom: 20,
+        left: 20,
+        right: 20,
+        height: 85,
         backgroundColor: "#fff",
-        borderTopWidth: 1,
-        borderTopColor: "#F1F5F9",
-        paddingBottom: 10,
+        borderRadius: 30,
+        elevation: 20,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.15,
+        shadowRadius: 20,
+        borderWidth: 1,
+        borderColor: "rgba(226, 232, 240, 0.8)",
+        overflow: 'hidden'
+    },
+    scrollContent: {
+        paddingHorizontal: 10,
+        alignItems: 'center',
     },
     tabItem: {
         alignItems: "center",
         justifyContent: "center",
-        paddingTop: 10,
+        width: 85,
+        height: '100%',
     },
-    tabIcon: { fontSize: 20, color: "#94A3B8" },
-    tabLabel: { fontSize: 10, color: "#94A3B8", marginTop: 4, fontWeight: "500" },
+    tabItemActive: {
+        // Subtle feedback for active tab if needed
+    },
+    iconBox: {
+        width: 44,
+        height: 44,
+        borderRadius: 15,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 4
+    },
+    tabLabel: {
+        fontSize: 10,
+        color: "#94A3B8",
+        fontWeight: "600",
+        letterSpacing: 0.2
+    },
     activeIndicator: {
-        width: 4,
-        height: 4,
+        position: 'absolute',
+        bottom: 12,
+        width: 20,
+        height: 3,
         borderRadius: 2,
-        marginTop: 4,
     }
 });

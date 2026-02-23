@@ -15,7 +15,7 @@ export interface Booking {
 }
 
 export const getBookings = async (params?: any) => {
-    const res = await api.get("/bookings", { params });
+    const res = await api.get("/bookings", { params: { limit: "200", ...params } });
     return res.data;
 };
 

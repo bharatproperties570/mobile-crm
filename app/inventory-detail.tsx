@@ -1,17 +1,14 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import {
-    View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert,
+    View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert, SafeAreaView, Animated, Linking, Dimensions
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
+import { useTheme } from "./context/ThemeContext";
 import api from "./services/api";
 
-function fmt(amount?: any): string {
-    const n = Number(amount);
-    if (!n) return "—";
-    if (n >= 10000000) return `₹${(n / 10000000).toFixed(2)} Cr`;
-    if (n >= 100000) return `₹${(n / 100000).toFixed(2)} L`;
-    return `₹${n.toLocaleString("en-IN")}`;
-}
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
+
 
 function lv(field: unknown): string {
     if (!field) return "—";
@@ -23,24 +20,16 @@ function lv(field: unknown): string {
     return String(field) || "—";
 }
 
-function InfoRow({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
+function InfoRow({ label, value, accent, icon }: { label: string; value: string; accent?: boolean; icon?: any }) {
+    const { theme } = useTheme();
     if (!value || value === "—") return null;
     return (
-        <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>{label}</Text>
-            <Text style={[styles.infoValue, accent && styles.infoValueAccent]}>{value}</Text>
-        </View>
-    );
-}
-
-function Section({ title, icon, children }: { title: string; icon: string; children: React.ReactNode }) {
-    return (
-        <View style={styles.section}>
-            <View style={styles.sectionHead}>
-                <Text style={styles.sectionIcon}>{icon}</Text>
-                <Text style={styles.sectionTitle}>{title}</Text>
+        <View style={[styles.infoRow, { borderBottomColor: theme.border }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                {icon && <Ionicons name={icon} size={14} color={theme.textLight} />}
+                <Text style={[styles.infoLabel, { color: theme.textLight }]}>{label}</Text>
             </View>
-            <View style={styles.sectionBody}>{children}</View>
+            <Text style={[styles.infoValue, { color: theme.text }, accent && { color: theme.primary }]}>{value}</Text>
         </View>
     );
 }
@@ -53,174 +42,158 @@ const STATUS_COLORS: Record<string, string> = {
 export default function InventoryDetailScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
     const router = useRouter();
+    const { theme } = useTheme();
     const [inv, setInv] = useState<any>(null);
     const [loading, setLoading] = useState(true);
+    const fadeAnim = useRef(new Animated.Value(0)).current;
 
     useEffect(() => {
         if (!id) return;
         api.get(`/inventory/${id}`)
-            .then((res) => setInv(res.data?.data ?? res.data))
+            .then((res) => {
+                setInv(res.data?.data ?? res.data);
+                Animated.timing(fadeAnim, { toValue: 1, duration: 600, useNativeDriver: true }).start();
+            })
             .catch(() => Alert.alert("Error", "Could not load inventory"))
             .finally(() => setLoading(false));
     }, [id]);
 
-    if (loading) return <View style={styles.center}><ActivityIndicator size="large" color="#1E40AF" /></View>;
-    if (!inv) return <View style={styles.center}><Text style={styles.noData}>Not found</Text></View>;
+    if (loading) return <View style={[styles.center, { backgroundColor: theme.background }]}><ActivityIndicator size="large" color={theme.primary} /></View>;
+    if (!inv) return <View style={[styles.center, { backgroundColor: theme.background }]}><Text style={[styles.noData, { color: theme.textLight }]}>Unit not found</Text></View>;
 
     const statusLabel = lv(inv.status);
-    const statusColor = STATUS_COLORS[statusLabel.toLowerCase()] ?? "#6366F1";
-    const unitTitle = [inv.unitNumber, inv.block, inv.projectName ?? inv.project].filter(Boolean).join(" · ") || "Inventory Unit";
+    const statusColor = STATUS_COLORS[statusLabel.toLowerCase()] ?? theme.primary;
+    const unitTitle = `Unit ${inv.unitNumber || inv.unitNo || "N/A"} · ${inv.block || "Block A"}`;
 
     return (
-        <View style={styles.container}>
-            {/* Hero */}
-            <View style={styles.heroHeader}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-                    <Text style={styles.backIcon}>←</Text>
-                </TouchableOpacity>
-
-                {/* Unit Icon */}
-                <View style={styles.unitIconWrap}>
-                    <Text style={styles.unitIcon}>🏗️</Text>
+        <View style={[styles.container, { backgroundColor: theme.background }]}>
+            <SafeAreaView style={{ backgroundColor: theme.card, zIndex: 10 }}>
+                <View style={[styles.navBar, { borderBottomColor: theme.border }]}>
+                    <TouchableOpacity onPress={() => router.back()} style={[styles.navBtn, { backgroundColor: theme.background }]}>
+                        <Ionicons name="chevron-back" size={24} color={theme.text} />
+                    </TouchableOpacity>
+                    <Text style={[styles.navTitle, { color: theme.text }]}>Unit Command</Text>
+                    <TouchableOpacity style={[styles.navBtn, { backgroundColor: theme.background }]} onPress={() => router.push(`/add-inventory?id=${id}`)}>
+                        <Ionicons name="create-outline" size={22} color={theme.text} />
+                    </TouchableOpacity>
                 </View>
+            </SafeAreaView>
 
-                <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
-                    <Text style={styles.statusBadgeText}>{statusLabel}</Text>
-                </View>
+            <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+                <Animated.View style={{ opacity: fadeAnim }}>
+                    <View style={[styles.heroCard, { backgroundColor: theme.card }]}>
+                        <View style={styles.heroTopRow}>
+                            <View style={[styles.avatarBox, { backgroundColor: theme.primary + '15' }]}>
+                                <Ionicons name="home" size={32} color={theme.primary} />
+                            </View>
+                            <View style={styles.nameSection}>
+                                <Text style={[styles.heroName, { color: theme.text }]}>{unitTitle}</Text>
+                                <View style={[styles.statusCapsule, { backgroundColor: statusColor + '15' }]}>
+                                    <Text style={[styles.statusCapsuleText, { color: statusColor }]}>{statusLabel.toUpperCase()}</Text>
+                                </View>
+                            </View>
+                        </View>
 
-                <Text style={styles.heroTitle}>{unitTitle}</Text>
-                {inv.projectName ?? inv.project ? (
-                    <Text style={styles.heroSub}>🏘️ {inv.projectName ?? inv.project}</Text>
-                ) : null}
+                        <Text style={[styles.subtitle, { color: theme.textLight }]}>
+                            {inv.projectName || "Project Independent"} • {lv(inv.category)}
+                        </Text>
 
-                {/* Price Row */}
-                <View style={styles.priceRow}>
-                    <View style={styles.priceCard}>
-                        <Text style={styles.priceLbl}>Listed Price</Text>
-                        <Text style={styles.priceBig}>{fmt(inv.price)}</Text>
                     </View>
-                    {inv.totalCost ? (
-                        <View style={[styles.priceCard, { borderLeftWidth: 1, borderLeftColor: "rgba(255,255,255,0.2)" }]}>
-                            <Text style={styles.priceLbl}>Total Cost</Text>
-                            <Text style={styles.priceBig}>{fmt(inv.totalCost)}</Text>
+
+                    <View style={styles.quickActions}>
+                        <TouchableOpacity style={[styles.actionBtn, { backgroundColor: theme.primary }]} onPress={() => Alert.alert("Share", "Sharing inventory specifications...")}>
+                            <Ionicons name="share-social" size={20} color="#fff" />
+                            <Text style={styles.actionBtnText}>Share Specs</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={[styles.actionBtn, styles.actionBtnSoft, { backgroundColor: theme.card, borderColor: theme.border }]} onPress={() => Linking.openURL(`https://wa.me/?text=Check out Unit ${inv.unitNumber} at ${inv.projectName}`)}>
+                            <Ionicons name="logo-whatsapp" size={20} color="#10B981" />
+                            <Text style={[styles.actionBtnText, { color: theme.text }]}>WhatsApp</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={[styles.actionBtn, styles.actionBtnSoft, { backgroundColor: theme.card, borderColor: theme.border }]} onPress={() => router.push(`/add-lead?refInvent=${id}`)}>
+                            <Ionicons name="person-add-outline" size={20} color={theme.textLight} />
+                            <Text style={[styles.actionBtnText, { color: theme.text }]}>Add Lead</Text>
+                        </TouchableOpacity>
+                    </View>
+
+                    <View style={[styles.snapshotBar, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                        <View style={styles.snapItem}>
+                            <Text style={[styles.snapLabel, { color: theme.textLight }]}>UNIT TYPE</Text>
+                            <Text style={[styles.snapValue, { color: theme.text }]}>{lv(inv.unitType)}</Text>
                         </View>
-                    ) : null}
-                    {inv.size ? (
-                        <View style={[styles.priceCard, { borderLeftWidth: 1, borderLeftColor: "rgba(255,255,255,0.2)" }]}>
-                            <Text style={styles.priceLbl}>Size</Text>
-                            <Text style={styles.priceBig}>{inv.size} {inv.sizeUnit ?? ""}</Text>
+                        <View style={[styles.snapDivider, { backgroundColor: theme.border }]} />
+                        <View style={styles.snapItem}>
+                            <Text style={[styles.snapLabel, { color: theme.textLight }]}>SIZE</Text>
+                            <Text style={[styles.snapValue, { color: theme.text }]}>{inv.size || "—"} {inv.sizeUnit || ""}</Text>
                         </View>
-                    ) : null}
-                </View>
-            </View>
+                        <View style={[styles.snapDivider, { backgroundColor: theme.border }]} />
+                        <View style={styles.snapItem}>
+                            <Text style={[styles.snapLabel, { color: theme.textLight }]}>FACING</Text>
+                            <Text style={[styles.snapValue, { color: theme.text }]}>{lv(inv.facing)}</Text>
+                        </View>
+                    </View>
 
-            <ScrollView contentContainerStyle={styles.scroll}>
-                {/* Unit Details */}
-                <Section title="Unit Details" icon="🏢">
-                    <InfoRow label="Project" value={inv.projectName ?? inv.project ?? "—"} accent />
-                    <InfoRow label="Block" value={inv.block ?? "—"} />
-                    <InfoRow label="Unit Number" value={inv.unitNumber ?? "—"} accent />
-                    <InfoRow label="Floor" value={inv.floor?.toString() ?? "—"} />
-                    <InfoRow label="Category" value={lv(inv.category)} />
-                    <InfoRow label="Sub Category" value={lv(inv.subCategory)} />
-                    <InfoRow label="Unit Type" value={inv.unitType ?? "—"} />
-                    <InfoRow label="Facing" value={lv(inv.facing)} />
-                    <InfoRow label="Road Width" value={inv.roadWidth ?? "—"} />
-                    <InfoRow label="Intent" value={lv(inv.intent)} />
-                    <InfoRow label="Status" value={statusLabel} />
-                </Section>
+                    <View style={styles.mainGrid}>
+                        <View style={[styles.sectionCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                            <Text style={[styles.sectionTitle, { color: theme.text }]}>Unit Specifications</Text>
+                            <InfoRow label="Floor" value={inv.floor?.toString()} icon="layers-outline" />
+                            <InfoRow label="Unit Type" value={lv(inv.unitType)} icon="home-outline" />
+                            <InfoRow label="Facing" value={lv(inv.facing)} icon="compass-outline" />
+                            <InfoRow label="Road Width" value={inv.roadWidth} icon="git-merge-outline" />
+                        </View>
 
-                {/* Pricing */}
-                <Section title="Pricing" icon="💰">
-                    <InfoRow label="Listed Price" value={fmt(inv.price)} accent />
-                    <InfoRow label="Total Cost" value={fmt(inv.totalCost)} />
-                    <InfoRow label="All-Inclusive Price" value={fmt(inv.allInclusivePrice)} />
-                </Section>
+                        <View style={[styles.sectionCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                            <Text style={[styles.sectionTitle, { color: theme.text }]}>Area Breakdown</Text>
+                            <InfoRow label="Size" value={inv.size ? `${inv.size} ${inv.sizeUnit}` : "—"} icon="resize-outline" accent />
+                            <InfoRow label="Built Up Area" value={inv.builtUpArea?.toString()} icon="cube-outline" />
+                            <InfoRow label="Carpet Area" value={inv.carpetArea?.toString()} icon="grid-outline" />
+                        </View>
 
-                {/* Dimensions */}
-                <Section title="Dimensions" icon="📐">
-                    <InfoRow label="Size" value={inv.size ? `${inv.size} ${inv.sizeUnit ?? ""}`.trim() : "—"} />
-                    <InfoRow label="Built Up Area" value={inv.builtUpArea?.toString() ?? "—"} />
-                    <InfoRow label="Carpet Area" value={inv.carpetArea?.toString() ?? "—"} />
-                </Section>
-
-                {/* Location */}
-                <Section title="Location" icon="📍">
-                    <InfoRow label="City" value={inv.city ?? "—"} />
-                    <InfoRow label="Sector" value={inv.sector ?? "—"} />
-                    {inv.address ? (
-                        <InfoRow label="Address" value={typeof inv.address === "string" ? inv.address : JSON.stringify(inv.address)} />
-                    ) : null}
-                </Section>
-
-                {/* Ownership */}
-                {(inv.owners?.length > 0 || inv.associates?.length > 0) ? (
-                    <Section title="Ownership" icon="👤">
-                        {inv.owners?.map((o: unknown, i: number) => (
-                            <InfoRow key={i} label={`Owner ${i + 1}`} value={lv(o)} accent={i === 0} />
-                        ))}
-                        {inv.associates?.map((a: unknown, i: number) => (
-                            <InfoRow key={`a${i}`} label={`Associate ${i + 1}`} value={lv(a)} />
-                        ))}
-                    </Section>
-                ) : null}
-
-                {/* Assignment */}
-                <Section title="Assignment" icon="👥">
-                    <InfoRow label="Team" value={inv.team ?? "—"} />
-                    <InfoRow label="Assigned To" value={inv.assignedTo ?? "—"} />
-                    <InfoRow label="Visible To" value={inv.visibleTo ?? "—"} />
-                </Section>
-
-                <Section title="Record Info" icon="ℹ️">
-                    <InfoRow label="Created" value={inv.createdAt ? new Date(inv.createdAt).toLocaleDateString("en-IN") : "—"} />
-                    <InfoRow label="Updated" value={inv.updatedAt ? new Date(inv.updatedAt).toLocaleDateString("en-IN") : "—"} />
-                </Section>
+                        <View style={[styles.sectionCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                            <Text style={[styles.sectionTitle, { color: theme.text }]}>Assignment</Text>
+                            <InfoRow label="Assigned To" value={lv(inv.assignedTo)} icon="person-outline" />
+                            <InfoRow label="Visible To" value={lv(inv.visibleTo)} icon="eye-outline" />
+                        </View>
+                    </View>
+                </Animated.View>
             </ScrollView>
         </View>
     );
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: "#F0F4FF" },
+    container: { flex: 1 },
     center: { flex: 1, justifyContent: "center", alignItems: "center" },
-    noData: { fontSize: 16, color: "#94A3B8" },
-    heroHeader: {
-        backgroundColor: "#1E293B", paddingTop: 52, paddingBottom: 24, paddingHorizontal: 20, alignItems: "center",
-    },
-    backBtn: { position: "absolute", top: 52, left: 16, padding: 8 },
-    backIcon: { fontSize: 22, color: "#fff", fontWeight: "700" },
-    unitIconWrap: {
-        width: 70, height: 70, borderRadius: 35, backgroundColor: "rgba(255,255,255,0.1)",
-        justifyContent: "center", alignItems: "center", marginBottom: 12,
-        borderWidth: 2, borderColor: "rgba(255,255,255,0.2)",
-    },
-    unitIcon: { fontSize: 32 },
-    statusBadge: {
-        paddingHorizontal: 14, paddingVertical: 5, borderRadius: 20, marginBottom: 10,
-    },
-    statusBadgeText: { fontSize: 12, fontWeight: "800", color: "#fff", textTransform: "uppercase", letterSpacing: 0.5 },
-    heroTitle: { fontSize: 18, fontWeight: "800", color: "#fff", textAlign: "center", marginBottom: 4 },
-    heroSub: { fontSize: 13, color: "#94A3B8", marginBottom: 16, textAlign: "center" },
-    priceRow: { flexDirection: "row", backgroundColor: "rgba(255,255,255,0.08)", borderRadius: 14, width: "100%" },
-    priceCard: { flex: 1, alignItems: "center", padding: 12 },
-    priceLbl: { fontSize: 10, color: "rgba(255,255,255,0.6)", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 },
-    priceBig: { fontSize: 15, fontWeight: "800", color: "#fff" },
-    scroll: { padding: 16, paddingBottom: 80 },
-    section: {
-        backgroundColor: "#fff", borderRadius: 18, marginBottom: 14,
-        shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 2,
-        overflow: "hidden",
-    },
-    sectionHead: {
-        flexDirection: "row", alignItems: "center", padding: 14,
-        borderBottomWidth: 1, borderBottomColor: "#F1F5F9", backgroundColor: "#FAFBFF",
-    },
-    sectionIcon: { fontSize: 18, marginRight: 8 },
-    sectionTitle: { fontSize: 13, fontWeight: "800", color: "#1E3A8A", textTransform: "uppercase", letterSpacing: 0.5 },
-    sectionBody: { padding: 14 },
-    infoRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 7, borderBottomWidth: 1, borderBottomColor: "#F8FAFC" },
-    infoLabel: { fontSize: 13, color: "#64748B", fontWeight: "500", flex: 1 },
-    infoValue: { fontSize: 13, color: "#1E293B", fontWeight: "600", flex: 2, textAlign: "right" },
-    infoValueAccent: { color: "#1E40AF", fontWeight: "700" },
+    noData: { fontSize: 16, fontWeight: "600" },
+    navBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1 },
+    navBtn: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+    navTitle: { fontSize: 17, fontWeight: "800" },
+    scrollContent: { paddingBottom: 100 },
+    heroCard: { margin: 20, padding: 20, borderRadius: 24, shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 15, shadowOffset: { width: 0, height: 10 }, elevation: 5 },
+    heroTopRow: { flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 12 },
+    avatarBox: { width: 64, height: 64, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+    nameSection: { flex: 1 },
+    heroName: { fontSize: 20, fontWeight: "800", marginBottom: 6 },
+    statusCapsule: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, alignSelf: 'flex-start' },
+    statusCapsuleText: { fontSize: 11, fontWeight: "800" },
+    subtitle: { fontSize: 13, fontWeight: "600", marginBottom: 20 },
+    priceStrip: { flexDirection: 'row', padding: 16, borderRadius: 20, justifyContent: 'space-between' },
+    priceStripItem: { flex: 1, alignItems: 'center' },
+    priceStripLabel: { fontSize: 9, fontWeight: "800", marginBottom: 4 },
+    priceStripValue: { fontSize: 15, fontWeight: "800" },
+    priceDivider: { width: 1, height: '60%', alignSelf: 'center' },
+    quickActions: { flexDirection: 'row', paddingHorizontal: 20, gap: 12, marginBottom: 20 },
+    actionBtn: { flex: 1, height: 48, borderRadius: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, shadowColor: "#000", shadowOpacity: 0.1, shadowRadius: 5, elevation: 3 },
+    actionBtnSoft: { borderWidth: 1 },
+    actionBtnText: { color: "#fff", fontWeight: "800", fontSize: 13 },
+    snapshotBar: { marginHorizontal: 20, padding: 16, borderRadius: 20, borderWidth: 1, flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20 },
+    snapItem: { flex: 1, alignItems: 'center' },
+    snapLabel: { fontSize: 9, fontWeight: "800", marginBottom: 4 },
+    snapValue: { fontSize: 13, fontWeight: "800" },
+    snapDivider: { width: 1, height: '60%', alignSelf: 'center' },
+    mainGrid: { paddingHorizontal: 20 },
+    sectionCard: { padding: 20, borderRadius: 22, borderWidth: 1, marginBottom: 20 },
+    sectionTitle: { fontSize: 15, fontWeight: "800", marginBottom: 16 },
+    infoRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1 },
+    infoLabel: { fontSize: 14, fontWeight: "600" },
+    infoValue: { fontSize: 14, fontWeight: "700" },
 });

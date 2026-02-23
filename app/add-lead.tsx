@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from "react";
 import {
     View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity,
-    ActivityIndicator, Alert, Switch, Modal, FlatList, SafeAreaView, Platform
+    ActivityIndicator, Alert, Switch, Modal, FlatList, SafeAreaView, Platform,
+    Animated, Pressable
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
+import { useRef } from "react";
+import GooglePlacesAutocomplete from './components/GooglePlacesAutocompleteFixed';
 import { getTeams, getTeamMembers } from "./services/teams.service";
 import { getLeadById, addLead, updateLead, checkDuplicates } from "./services/leads.service";
 import { getLookups } from "./services/lookups.service";
@@ -14,9 +16,32 @@ import api from "./services/api";
 
 const LEAD_LOOKUP_TYPES = [
     "Requirement", "Category", "SubCategory", "PropertyType",
-    "Budget", "Facing", "Direction", "Status", "Campaign",
+    "Budget", "Facing", "Direction", "Status", "Stage", "Campaign",
     "Sub Campaign", "Source", "SubSource"
 ];
+
+// ─── Design Tokens ──────────────────────────────────────────────────────────
+const COLORS = {
+    primary: "#2563EB",
+    primaryLight: "#DBEAFE",
+    bg: "#F8FAFC",
+    cardBg: "#FFFFFF",
+    border: "#E2E8F0",
+    textPrimary: "#1E293B",
+    textSecondary: "#64748B",
+    textMuted: "#94A3B8",
+    error: "#EF4444",
+    errorLight: "#FEE2E2",
+    inputBg: "#F1F5F9",
+};
+
+const SPACING = {
+    outer: 20,
+    card: 20,
+    section: 24,
+    field: 18,
+    inputHeight: 52,
+};
 
 const BUDGET_VALUES = [
     { value: 500000, label: "5 Lakh" },
@@ -50,21 +75,221 @@ const GOOGLE_API_KEY = "AIzaSyBd2gdMJVt5C_tgYqWoRbBiatzmevYdB9U";
 // --- Constants & Helpers ---
 const FORM_STEPS = ["Requirement", "Location", "Contact", "System"];
 
-function FormLabel({ label, required }: { label: string; required?: boolean }) {
+// ─── Reusable Components ──────────────────────────────────────────────────────
+
+function SectionHeader({ title, icon }: { title: string; icon: string }) {
     return (
-        <View style={styles.labelContainer}>
-            <Text style={styles.label}>{label}</Text>
-            {required && <Text style={styles.required}>*</Text>}
+        <View style={styles.sectionHeader}>
+            <View style={styles.sectionHeaderTop}>
+                <Text style={styles.sectionIcon}>{icon}</Text>
+                <Text style={styles.sectionTitle}>{title}</Text>
+            </View>
+            <View style={styles.headerDivider} />
         </View>
     );
 }
 
-function SectionTitle({ title, icon }: { title: string; icon: string }) {
+function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
     return (
-        <View style={styles.sectionTitleRow}>
-            <Text style={styles.sectionIcon}>{icon}</Text>
-            <Text style={styles.sectionTitle}>{title}</Text>
+        <View style={styles.field}>
+            <Text style={styles.fieldLabel}>
+                {label}
+                {required && <Text style={styles.required}> *</Text>}
+            </Text>
+            {children}
         </View>
+    );
+}
+
+function Input({
+    value, onChangeText, placeholder, keyboardType, multiline, numberOfLines, editable = true, label, leftIcon, required, autoCapitalize
+}: {
+    value: string; onChangeText: (t: string) => void; placeholder?: string; keyboardType?: any; multiline?: boolean; numberOfLines?: number; editable?: boolean; label?: string; leftIcon?: React.ReactNode; required?: boolean; autoCapitalize?: "none" | "sentences" | "words" | "characters";
+}) {
+    const [isFocused, setIsFocused] = useState(false);
+    const animatedIsFocused = useRef(new Animated.Value(value ? 1 : 0)).current;
+
+    useEffect(() => {
+        Animated.timing(animatedIsFocused, {
+            toValue: (isFocused || value) ? 1 : 0,
+            duration: 200,
+            useNativeDriver: false,
+        }).start();
+    }, [isFocused, value]);
+
+    const labelStyle = {
+        position: 'absolute' as const,
+        left: leftIcon ? 44 : 16,
+        top: animatedIsFocused.interpolate({
+            inputRange: [0, 1],
+            outputRange: [14, -10],
+        }),
+        fontSize: animatedIsFocused.interpolate({
+            inputRange: [0, 1],
+            outputRange: [15, 12],
+        }),
+        color: animatedIsFocused.interpolate({
+            inputRange: [0, 1],
+            outputRange: [COLORS.textMuted, COLORS.primary],
+        }),
+        backgroundColor: COLORS.cardBg,
+        paddingHorizontal: 4,
+        zIndex: 1,
+    };
+
+    return (
+        <View style={[styles.inputContainer, multiline && { height: 'auto' }, isFocused && styles.inputContainerFocused]}>
+            {label && (
+                <Animated.Text style={labelStyle}>
+                    {label}
+                    {required && <Text style={{ color: COLORS.error }}> *</Text>}
+                </Animated.Text>
+            )}
+            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                {leftIcon && <View style={{ marginLeft: 16, marginRight: -8 }}>{leftIcon}</View>}
+                <TextInput
+                    style={[
+                        styles.input,
+                        multiline && { height: 100, textAlignVertical: "top", paddingTop: 12 },
+                        !editable && styles.inputDisabled,
+                        { flex: 1 }
+                    ]}
+                    value={value}
+                    onChangeText={onChangeText}
+                    placeholder={isFocused ? "" : placeholder}
+                    placeholderTextColor={COLORS.textMuted}
+                    keyboardType={keyboardType ?? "default"}
+                    multiline={multiline}
+                    numberOfLines={numberOfLines}
+                    editable={editable}
+                    onFocus={() => setIsFocused(true)}
+                    onBlur={() => setIsFocused(false)}
+                    autoCapitalize={autoCapitalize}
+                />
+            </View>
+        </View>
+    );
+}
+
+function FadeInView({ children, delay = 0 }: { children: React.ReactNode; delay?: number }) {
+    const fadeAnim = useRef(new Animated.Value(0)).current;
+    const slideAnim = useRef(new Animated.Value(20)).current;
+
+    useEffect(() => {
+        Animated.parallel([
+            Animated.timing(fadeAnim, {
+                toValue: 1,
+                duration: 400,
+                delay,
+                useNativeDriver: true,
+            }),
+            Animated.spring(slideAnim, {
+                toValue: 0,
+                tension: 50,
+                friction: 7,
+                delay,
+                useNativeDriver: true,
+            }),
+        ]).start();
+    }, [delay]);
+
+    return (
+        <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+            {children}
+        </Animated.View>
+    );
+}
+
+
+function PressableChip({
+    opt, isSelected, onSelect
+}: {
+    opt: { label: string, value: string }, isSelected: boolean, onSelect: (v: string) => void
+}) {
+    const scaleValue = useRef(new Animated.Value(1)).current;
+    const opacityValue = useRef(new Animated.Value(0)).current;
+
+    useEffect(() => {
+        Animated.timing(opacityValue, {
+            toValue: isSelected ? 1 : 0,
+            duration: 200,
+            useNativeDriver: true,
+        }).start();
+    }, [isSelected]);
+
+    const onPressIn = () => {
+        Animated.spring(scaleValue, {
+            toValue: 0.96,
+            useNativeDriver: true,
+        }).start();
+    };
+
+    const onPressOut = () => {
+        Animated.spring(scaleValue, {
+            toValue: 1,
+            useNativeDriver: true,
+        }).start();
+    };
+
+    return (
+        <Pressable
+            onPressIn={onPressIn}
+            onPressOut={onPressOut}
+            onPress={() => onSelect(opt.value)}
+        >
+            <Animated.View style={[
+                styles.chip,
+                isSelected && styles.chipSelected,
+                { transform: [{ scale: scaleValue }], flexDirection: 'row', alignItems: 'center' }
+            ]}>
+                <Animated.View style={{ opacity: opacityValue, width: isSelected ? 'auto' : 0, overflow: 'hidden', flexDirection: 'row', alignItems: 'center' }}>
+                    <Ionicons name="checkmark" size={14} color={COLORS.primary} style={{ marginRight: 4 }} />
+                </Animated.View>
+                <Text style={[styles.chipText, isSelected && styles.chipTextSelected]}>{opt.label}</Text>
+            </Animated.View>
+        </Pressable>
+    );
+}
+
+function SelectButton({
+    value, placeholder, options, onSelect,
+}: {
+    value: string; placeholder: string; options: { label: string, value: string }[]; onSelect: (v: string) => void;
+}) {
+    if (options.length === 0) return <Text style={styles.placeholderText}>{placeholder || "No options available"}</Text>;
+
+    return (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow} contentContainerStyle={styles.chipRowContent}>
+            {options.map((opt, idx) => (
+                <PressableChip
+                    key={`${opt.value || idx}-${idx}`}
+                    opt={opt}
+                    isSelected={value === opt.value}
+                    onSelect={(v) => onSelect(v === value ? "" : v)}
+                />
+            ))}
+        </ScrollView>
+    );
+}
+
+function MultiSelectButton({
+    values, placeholder, options, onToggle,
+}: {
+    values: string[]; placeholder: string; options: { label: string, value: string }[]; onToggle: (v: string) => void;
+}) {
+    if (options.length === 0) return <Text style={styles.placeholderText}>{placeholder || "No options available"}</Text>;
+
+    return (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow} contentContainerStyle={styles.chipRowContent}>
+            {options.map((opt, idx) => (
+                <PressableChip
+                    key={`${opt.value || idx}-${idx}`}
+                    opt={opt}
+                    isSelected={values.includes(opt.value)}
+                    onSelect={onToggle}
+                />
+            ))}
+        </ScrollView>
     );
 }
 
@@ -75,49 +300,50 @@ export default function AddLeadScreen() {
     const [loading, setLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
 
+    // Animations
+    const shakeAnim = useRef(new Animated.Value(0)).current;
+    const googlePlacesRef = useRef<any>(null);
+
     // Form State (Full parity with Web CRM)
     const [formData, setFormData] = useState<any>({
-        // Identity
+        // ... same state ...
         salutation: "Mr.",
         firstName: "",
         lastName: "",
         mobile: "",
         email: "",
 
-        // Requirement
         requirement: "Buy",
         purpose: "End Use",
         nri: false,
-        propertyType: [], // Category
-        subType: [], // Sub Category
-        unitType: [], // Size Type
+        propertyType: [],
+        subType: [],
+        unitType: [],
         budget: "",
         budgetMin: "",
         budgetMax: "",
         areaMin: "",
         areaMax: "",
         areaMetric: "Sq Yard",
-        facing: [], // Multi
-        roadWidth: [], // Multi
-        direction: [], // Multi
+        facing: [],
+        roadWidth: [],
+        direction: [],
         funding: "",
         timeline: "",
         furnishing: "",
         transactionType: "",
 
-        // Location
         searchLocation: "",
         locCity: "",
         locArea: "",
         locPinCode: "",
-        locRange: 5, // km
-        projectName: [], // Multi
-        projectTowers: [], // Specific towers
-        propertyNo: "", // Single/Start
-        propertyNoEnd: "", // End for range
-        unitSelectionMode: "Single", // Single, Multiple, Range
+        locRange: 5,
+        projectName: [],
+        projectTowers: [],
+        propertyNo: "",
+        propertyNoEnd: "",
+        unitSelectionMode: "Single",
 
-        // System / Assignment
         status: "",
         source: "",
         subSource: "",
@@ -125,6 +351,8 @@ export default function AddLeadScreen() {
         subCampaign: "",
         owner: "",
         team: "",
+        visibleTo: "Everyone",
+        stage: "",
         description: "",
         tags: [],
     });
@@ -200,12 +428,14 @@ export default function AddLeadScreen() {
                         locPinCode: l.locPinCode || "",
                         projectName: Array.isArray(l.projectName) ? l.projectName : [],
                         status: l.status?._id || l.status || "",
+                        stage: l.stage?._id || l.stage || "",
                         source: l.source?._id || l.source || "",
                         subSource: l.subSource?._id || l.subSource || "",
                         campaign: l.campaign?._id || l.campaign || "",
                         subCampaign: l.subCampaign?._id || l.subCampaign || "",
                         owner: l.owner?._id || l.owner || l.assignment?.assignedTo?._id || "",
-                        team: l.team?._id || l.team || "",
+                        team: l.assignment?.team?.[0] || l.team?._id || l.team || "",
+                        visibleTo: l.assignment?.visibleTo || "Everyone",
                         description: l.description || "",
                         tags: Array.isArray(l.tags) ? l.tags : [],
                     });
@@ -246,6 +476,26 @@ export default function AddLeadScreen() {
         return item?._id || value;
     };
 
+    const triggerShake = () => {
+        Animated.sequence([
+            Animated.timing(shakeAnim, { toValue: 10, duration: 50, useNativeDriver: true }),
+            Animated.timing(shakeAnim, { toValue: -10, duration: 50, useNativeDriver: true }),
+            Animated.timing(shakeAnim, { toValue: 10, duration: 50, useNativeDriver: true }),
+            Animated.timing(shakeAnim, { toValue: 0, duration: 50, useNativeDriver: true }),
+        ]).start();
+    };
+
+    const handleNext = () => {
+        if (step === 2) { // Contact Step
+            if (!formData.firstName || !formData.mobile) {
+                triggerShake();
+                Alert.alert("Missing Fields", "First Name and Mobile Number are required.");
+                return;
+            }
+        }
+        setStep(s => Math.min(s + 1, FORM_STEPS.length - 1));
+    };
+
     const handleSave = async () => {
         if (!formData.firstName || !formData.mobile) {
             Alert.alert("Error", "First Name and Mobile Number are required");
@@ -261,15 +511,17 @@ export default function AddLeadScreen() {
             const payload = {
                 ...formData,
                 requirement: getLookupId("Requirement", formData.requirement),
-                // Map projectTowers to locBlock for backend schema alignment
                 locBlock: formData.projectTowers,
                 budgetMin: formData.budgetMin ? Number(formData.budgetMin) : undefined,
                 budgetMax: formData.budgetMax ? Number(formData.budgetMax) : undefined,
                 areaMin: formData.areaMin ? Number(formData.areaMin) : undefined,
                 areaMax: formData.areaMax ? Number(formData.areaMax) : undefined,
+                assignment: {
+                    assignedTo: formData.owner || undefined,
+                    team: formData.team ? [formData.team] : [],
+                    visibleTo: formData.visibleTo || "Everyone"
+                }
             };
-
-            // Remove mobile-only ui state
             delete (payload as any).projectTowers;
 
             const res = id ? await updateLead(id, payload) : await addLead(payload);
@@ -285,107 +537,72 @@ export default function AddLeadScreen() {
         }
     };
 
-    if (loading) return <View style={styles.center}><ActivityIndicator size="large" color="#1E3A8A" /></View>;
+    if (loading) return <View style={styles.center}><ActivityIndicator size="large" color={COLORS.primary} /></View>;
 
     const renderMultiSelect = (type: string, field: string) => {
         const list = lookups[type];
-        if (!Array.isArray(list)) return null;
+        const options = (list || []).map(l => ({ label: l.lookup_value, value: l._id }));
         return (
-            <View style={styles.chipGroup}>
-                {list.map((item) => {
-                    const active = formData[field]?.includes(item._id);
-                    return (
-                        <TouchableOpacity
-                            key={item._id}
-                            style={[styles.chip, active && styles.chipActive]}
-                            onPress={() => {
-                                const newList = active
-                                    ? formData[field].filter((id: string) => id !== item._id)
-                                    : [...formData[field], item._id];
-                                setFormData({ ...formData, [field]: newList });
-                            }}
-                        >
-                            <Text style={[styles.chipText, active && styles.chipTextActive]}>{item.lookup_value}</Text>
-                        </TouchableOpacity>
-                    );
-                })}
-            </View>
+            <MultiSelectButton
+                values={formData[field]}
+                options={options}
+                placeholder={`Select ${type}`}
+                onToggle={(val) => {
+                    const current = formData[field] || [];
+                    const newList = current.includes(val) ? current.filter((i: string) => i !== val) : [...current, val];
+                    setFormData({ ...formData, [field]: newList });
+                }}
+            />
         );
     };
 
     const renderSingleSelect = (type: string, field: string, parentId?: string) => {
         let list = lookups[type];
         if (!Array.isArray(list)) return null;
-
-        // Apply filtering if parentId is provided
         if (parentId) {
             list = list.filter(item => item.parent_lookup_id === parentId || item.parent_lookup_value === parentId);
         }
-
+        const options = list.map(l => ({ label: l.lookup_value, value: l._id }));
         return (
-            <View style={styles.chipGroup}>
-                {list.map((item) => (
-                    <TouchableOpacity
-                        key={item._id}
-                        style={[styles.chip, formData[field] === item._id && styles.chipActive]}
-                        onPress={() => setFormData({ ...formData, [field]: item._id })}
-                    >
-                        <Text style={[styles.chipText, formData[field] === item._id && styles.chipTextActive]}>{item.lookup_value}</Text>
-                    </TouchableOpacity>
-                ))}
-            </View>
+            <SelectButton
+                value={formData[field]}
+                options={options}
+                placeholder={`Select ${type}`}
+                onSelect={(val) => setFormData({ ...formData, [field]: val })}
+            />
         );
     };
 
     const renderDependentMultiSelect = (type: string, field: string, parentIds: string[]) => {
         let list = lookups[type];
-        if (!Array.isArray(list)) return null;
+        if (!Array.isArray(list) || !parentIds || parentIds.length === 0) return <Text style={styles.hintText}>Select parent field first</Text>;
 
-        if (parentIds && parentIds.length > 0) {
-            const pIds = parentIds.map(id => String(id));
+        const pIds = parentIds.map(id => String(id));
+        const parentValues: string[] = [];
+        Object.values(lookups).flat().forEach((l: any) => {
+            if (pIds.includes(String(l._id))) parentValues.push(l.lookup_value);
+        });
 
-            // Find names of parents for hierarchy fallback
-            const parentValues: string[] = [];
-            Object.values(lookups).flat().forEach((l: any) => {
-                if (pIds.includes(String(l._id))) {
-                    parentValues.push(l.lookup_value);
-                }
-            });
+        const filtered = list.filter(item =>
+            pIds.includes(String(item.parent_lookup_id)) ||
+            pIds.includes(String(item.parent_lookup_value)) ||
+            parentValues.includes(item.parent_lookup_value)
+        );
 
-            list = list.filter(item => {
-                // Backend relationship match
-                return (
-                    pIds.includes(String(item.parent_lookup_id)) ||
-                    pIds.includes(String(item.parent_lookup_value)) ||
-                    parentValues.includes(item.parent_lookup_value)
-                );
-            });
-        } else {
-            return <Text style={styles.hintText}>Select parent field first</Text>;
-        }
+        if (filtered.length === 0) return <Text style={styles.hintText}>No options found for selection</Text>;
 
-        if (list.length === 0) return <Text style={styles.hintText}>No options found for selection</Text>;
-
+        const options = filtered.map(l => ({ label: l.lookup_value, value: l._id }));
         return (
-            <View style={styles.chipGroup}>
-                {list.map((item) => {
-                    const active = formData[field]?.includes(item._id);
-                    return (
-                        <TouchableOpacity
-                            key={item._id}
-                            style={[styles.chip, active && styles.chipActive]}
-                            onPress={() => {
-                                const newList = active
-                                    ? formData[field].filter((id: string) => id !== item._id)
-                                    : [...formData[field], item._id];
-                                setFormData({ ...formData, [field]: newList });
-                            }}
-                        >
-                            <Text style={[styles.chipText, active && styles.chipTextActive]}>{item.lookup_value}</Text>
-                        </TouchableOpacity>
-                    );
-                })}
-            </View>
+            <MultiSelectButton
+                values={formData[field]}
+                options={options}
+                placeholder={`Select ${type}`}
+                onToggle={(val) => {
+                    const current = formData[field] || [];
+                    const newList = current.includes(val) ? current.filter((i: string) => i !== val) : [...current, val];
+                    setFormData({ ...formData, [field]: newList });
+                }}
+            />
         );
     };
 
@@ -393,331 +610,309 @@ export default function AddLeadScreen() {
         switch (step) {
             case 0: // Requirement
                 return (
-                    <View style={styles.stepContainer}>
-                        <SectionTitle title="Requirement Details" icon="📋" />
+                    <FadeInView key="step0">
+                        <View style={styles.card}>
+                            <SectionHeader title="Requirement" icon="📋" />
 
-                        <FormLabel label="Requirement" required />
-                        <View style={styles.chipRow}>
-                            {["Buy", "Rent", "Lease"].map(r => (
-                                <TouchableOpacity
-                                    key={r}
-                                    style={[styles.chip, formData.requirement === r && styles.chipActive]}
-                                    onPress={() => setFormData({ ...formData, requirement: r })}
-                                >
-                                    <Text style={[styles.chipText, formData.requirement === r && styles.chipTextActive]}>{r}</Text>
-                                </TouchableOpacity>
-                            ))}
-                        </View>
+                            <Field label="Type" required>
+                                <SelectButton
+                                    value={formData.requirement}
+                                    options={["Buy", "Rent", "Lease"].map(r => ({ label: r, value: r }))}
+                                    onSelect={(v) => setFormData({ ...formData, requirement: v })}
+                                    placeholder="Select Type"
+                                />
+                            </Field>
 
-                        <FormLabel label="Category" />
-                        {renderMultiSelect("Category", "propertyType")}
+                            <Field label="Category">
+                                {renderMultiSelect("Category", "propertyType")}
+                            </Field>
 
-                        <FormLabel label="Sub Category" />
-                        {renderDependentMultiSelect("SubCategory", "subType", formData.propertyType)}
+                            <Field label="Sub Category">
+                                {renderDependentMultiSelect("SubCategory", "subType", formData.propertyType)}
+                            </Field>
 
-                        <FormLabel label="Size Type" />
-                        {renderDependentMultiSelect("PropertyType", "unitType", formData.subType)}
+                            <Field label="Size Type">
+                                {renderDependentMultiSelect("PropertyType", "unitType", formData.subType)}
+                            </Field>
 
-                        <FormLabel label="Budget Range" />
-                        <View style={styles.budgetRow}>
-                            <View style={{ flex: 1 }}>
-                                <Text style={styles.subLabel}>Min Budget</Text>
-                                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.budgetScroll}>
-                                    {BUDGET_VALUES.map((opt) => (
-                                        <TouchableOpacity
-                                            key={`min-${opt.value}`}
-                                            style={[styles.budgetChip, formData.budgetMin === String(opt.value) && styles.chipActive]}
-                                            onPress={() => setFormData({ ...formData, budgetMin: String(opt.value) })}
-                                        >
-                                            <Text style={[styles.budgetChipText, formData.budgetMin === String(opt.value) && styles.chipTextActive]}>{opt.label}</Text>
-                                        </TouchableOpacity>
-                                    ))}
-                                </ScrollView>
+                            <Field label="Budget (Min - Max)">
+                                <View style={{ flexDirection: 'row', gap: 12 }}>
+                                    <View style={{ flex: 1 }}>
+                                        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.budgetScroll}>
+                                            {BUDGET_VALUES.map((opt) => (
+                                                <PressableChip
+                                                    key={`min-${opt.value}`}
+                                                    opt={{ label: opt.label, value: String(opt.value) }}
+                                                    isSelected={formData.budgetMin === String(opt.value)}
+                                                    onSelect={(v) => setFormData({ ...formData, budgetMin: v })}
+                                                />
+                                            ))}
+                                        </ScrollView>
+                                    </View>
+                                </View>
+                                <View style={{ marginTop: 12 }}>
+                                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.budgetScroll}>
+                                        {BUDGET_VALUES
+                                            .filter(opt => !formData.budgetMin || opt.value > Number(formData.budgetMin))
+                                            .map((opt) => (
+                                                <PressableChip
+                                                    key={`max-${opt.value}`}
+                                                    opt={{ label: opt.label, value: String(opt.value) }}
+                                                    isSelected={formData.budgetMax === String(opt.value)}
+                                                    onSelect={(v) => setFormData({ ...formData, budgetMax: v })}
+                                                />
+                                            ))}
+                                    </ScrollView>
+                                </View>
+                            </Field>
+
+                            <Field label="Area Range">
+                                <View style={{ flexDirection: 'row', gap: 12 }}>
+                                    <Input value={formData.areaMin} onChangeText={v => setFormData({ ...formData, areaMin: v })} placeholder="Min" keyboardType="numeric" />
+                                    <Input value={formData.areaMax} onChangeText={v => setFormData({ ...formData, areaMax: v })} placeholder="Max" keyboardType="numeric" />
+                                </View>
+                            </Field>
+
+                            <Field label="Facing">
+                                {renderMultiSelect("Facing", "facing")}
+                            </Field>
+
+                            <Field label="Direction">
+                                {renderMultiSelect("Direction", "direction")}
+                            </Field>
+
+                            <Field label="Purpose">
+                                <SelectButton
+                                    value={formData.purpose}
+                                    options={["End Use", "Investment"].map(v => ({ label: v, value: v }))}
+                                    onSelect={(v) => setFormData({ ...formData, purpose: v })}
+                                    placeholder="Select Purpose"
+                                />
+                            </Field>
+
+                            <View style={[styles.rowAlign, { marginTop: 12 }]}>
+                                <Text style={styles.fieldLabel}>NRI Status</Text>
+                                <Switch value={formData.nri} onValueChange={v => setFormData({ ...formData, nri: v })} trackColor={{ true: COLORS.primaryLight, false: COLORS.border }} thumbColor={formData.nri ? COLORS.primary : "#f4f3f4"} />
                             </View>
                         </View>
-                        <View style={[styles.budgetRow, { marginTop: 10 }]}>
-                            <View style={{ flex: 1 }}>
-                                <Text style={styles.subLabel}>Max Budget</Text>
-                                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.budgetScroll}>
-                                    {BUDGET_VALUES
-                                        .filter(opt => !formData.budgetMin || opt.value > Number(formData.budgetMin))
-                                        .map((opt) => (
-                                            <TouchableOpacity
-                                                key={`max-${opt.value}`}
-                                                style={[styles.budgetChip, formData.budgetMax === String(opt.value) && styles.chipActive]}
-                                                onPress={() => setFormData({ ...formData, budgetMax: String(opt.value) })}
-                                            >
-                                                <Text style={[styles.budgetChipText, formData.budgetMax === String(opt.value) && styles.chipTextActive]}>{opt.label}</Text>
-                                            </TouchableOpacity>
-                                        ))}
-                                </ScrollView>
-                            </View>
-                        </View>
-
-                        <FormLabel label="Area Range" />
-                        <View style={styles.row}>
-                            <TextInput style={[styles.input, { flex: 1 }]} placeholder="Min Area" keyboardType="numeric" value={formData.areaMin} onChangeText={v => setFormData({ ...formData, areaMin: v })} />
-                            <View style={{ width: 10 }} />
-                            <TextInput style={[styles.input, { flex: 1 }]} placeholder="Max Area" keyboardType="numeric" value={formData.areaMax} onChangeText={v => setFormData({ ...formData, areaMax: v })} />
-                        </View>
-
-                        <FormLabel label="Facing" />
-                        {renderMultiSelect("Facing", "facing")}
-
-                        <FormLabel label="Direction" />
-                        {renderMultiSelect("Direction", "direction")}
-
-                        <FormLabel label="Purpose" />
-                        <View style={styles.row}>
-                            {["End Use", "Investment"].map(v => (
-                                <TouchableOpacity key={v} style={[styles.chip, formData.purpose === v && styles.chipActive, { marginRight: 8 }]} onPress={() => setFormData({ ...formData, purpose: v })}>
-                                    <Text style={[styles.chipText, formData.purpose === v && styles.chipTextActive]}>{v}</Text>
-                                </TouchableOpacity>
-                            ))}
-                        </View>
-
-                        <View style={styles.rowAlign}>
-                            <Text style={styles.label}>NRI Status</Text>
-                            <Switch value={formData.nri} onValueChange={v => setFormData({ ...formData, nri: v })} />
-                        </View>
-                    </View>
+                    </FadeInView>
                 );
             case 1: // Location
                 return (
-                    <View style={styles.stepContainer}>
-                        <SectionTitle title="Location & Range" icon="📍" />
+                    <FadeInView key="step1">
+                        <View style={styles.card}>
+                            <SectionHeader title="Location" icon="📍" />
 
-                        <FormLabel label="Search Location" />
-                        <View style={styles.googleSearchContainer}>
-                            <GooglePlacesAutocomplete
-                                placeholder="Area, sector or city..."
-                                onPress={(data, details) => {
-                                    if (details) {
-                                        const locObj = {
-                                            searchLocation: data.description,
-                                            locCity: details?.address_components?.find((c: any) => c.types.includes("locality"))?.long_name || "",
-                                            locArea: details?.address_components?.find((c: any) => c.types.includes("sublocality"))?.long_name || ""
-                                        };
-                                        setFormData((prev: any) => ({ ...prev, ...locObj }));
-                                    }
-                                }}
-                                query={{
-                                    key: GOOGLE_API_KEY,
-                                    language: "en",
-                                    components: "country:in",
-                                }}
-                                styles={{
-                                    textInput: styles.input,
-                                    container: { flex: 0 },
-                                    listView: { backgroundColor: "#ffffff", borderRadius: 10, marginTop: 5, elevation: 5, zIndex: 1000 }
-                                }}
-                                fetchDetails={true}
-                                enablePoweredByContainer={false}
-                                textInputProps={{
-                                    value: formData.searchLocation,
-                                    onChangeText: (v: string) => setFormData((prev: any) => ({ ...prev, searchLocation: v }))
-                                }}
-                            />
-                        </View>
-
-                        <View style={styles.rangeBox}>
-                            <View style={styles.rowAlign}>
-                                <Text style={styles.label}>Location Range ({formData.locRange} km)</Text>
-                                <Text style={styles.rangeValue}>{formData.locRange === 100 ? "100+ km" : `${formData.locRange} km`}</Text>
-                            </View>
-                            {/* Simple alternative to Slider if not installed: custom numeric buttons or text input */}
-                            <View style={styles.chipRow}>
-                                {[1, 5, 10, 25, 50, 100].map(r => (
-                                    <TouchableOpacity
-                                        key={r}
-                                        style={[styles.chip, formData.locRange === r && styles.chipActive]}
-                                        onPress={() => setFormData({ ...formData, locRange: r })}
-                                    >
-                                        <Text style={[styles.chipText, formData.locRange === r && styles.chipTextActive]}>{r === 100 ? "100+" : r}km</Text>
-                                    </TouchableOpacity>
-                                ))}
-                            </View>
-                        </View>
-
-                        <SectionTitle title="Project & Unit Selection" icon="🏗️" />
-
-                        <FormLabel label="Select Projects" />
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.projectScroll}>
-                            {Array.isArray(projects) && projects.map((p) => {
-                                const active = formData.projectName.includes(p.name);
-                                return (
-                                    <TouchableOpacity key={p._id} style={[styles.projectCard, active && styles.projectCardActive]} onPress={() => {
-                                        const newList = active ? formData.projectName.filter((n: string) => n !== p.name) : [...formData.projectName, p.name];
-                                        setFormData({ ...formData, projectName: newList });
-                                    }}>
-                                        <Text style={[styles.projectText, active && styles.projectTextActive]}>{p.name}</Text>
-                                        <Text style={styles.projectSub}>{p.address?.city || "Unknown City"}</Text>
-                                    </TouchableOpacity>
-                                );
-                            })}
-                        </ScrollView>
-
-                        {formData.projectName.length > 0 && (
-                            <View>
-                                <FormLabel label="Select Towers/Blocks" />
-                                <View style={styles.chipGroup}>
-                                    {projects
-                                        .filter(p => formData.projectName.includes(p.name))
-                                        .flatMap(p => (p.blocks || []).map((b: any) => ({ projectId: p._id, projectName: p.name, block: typeof b === 'string' ? b : b.name })))
-                                        .map((item, idx) => {
-                                            const key = `${item.projectName}-${item.block}`;
-                                            const active = formData.projectTowers.includes(key);
-                                            return (
-                                                <TouchableOpacity
-                                                    key={`${idx}-${item.block}`}
-                                                    style={[styles.chip, active && styles.chipActive]}
-                                                    onPress={() => {
-                                                        const newList = active
-                                                            ? formData.projectTowers.filter((t: string) => t !== key)
-                                                            : [...formData.projectTowers, key];
-                                                        setFormData((prev: any) => ({ ...prev, projectTowers: newList }));
-                                                    }}
-                                                >
-                                                    <Text style={[styles.chipText, active && styles.chipTextActive]}>{item.block} ({item.projectName})</Text>
-                                                </TouchableOpacity>
-                                            );
-                                        })
-                                    }
+                            <Field label="Search Location">
+                                <View style={styles.googleSearchContainer}>
+                                    <GooglePlacesAutocomplete
+                                        ref={googlePlacesRef}
+                                        placeholder="Area, sector or city..."
+                                        onPress={(data: any, details: any = null) => {
+                                            if (details) {
+                                                const locObj = {
+                                                    searchLocation: data.description,
+                                                    locCity: details?.address_components?.find((c: any) => c.types.includes("locality"))?.long_name || "",
+                                                    locArea: details?.address_components?.find((c: any) => c.types.includes("sublocality"))?.long_name || ""
+                                                };
+                                                setFormData((prev: any) => ({ ...prev, ...locObj }));
+                                            }
+                                        }}
+                                        query={{ key: GOOGLE_API_KEY, language: "en", components: "country:in" }}
+                                        styles={{
+                                            textInput: styles.input,
+                                            container: { flex: 0 },
+                                            listView: { backgroundColor: "#ffffff", borderRadius: 10, marginTop: 5, elevation: 5, zIndex: 1000 }
+                                        }}
+                                        fetchDetails={true}
+                                        enablePoweredByContainer={false}
+                                        textInputProps={{
+                                            placeholderTextColor: COLORS.textMuted,
+                                        }}
+                                    />
                                 </View>
+                            </Field>
 
-                                <FormLabel label="Unit Selection Mode" />
-                                <View style={styles.selectionModeRow}>
-                                    {["Single", "Multiple", "Range"].map(mode => (
-                                        <TouchableOpacity
-                                            key={mode}
-                                            style={[styles.modeBtn, formData.unitSelectionMode === mode && styles.modeBtnActive]}
-                                            onPress={() => setFormData({ ...formData, unitSelectionMode: mode })}
-                                        >
-                                            <Text style={[styles.modeBtnText, formData.unitSelectionMode === mode && styles.modeBtnTextActive]}>{mode}</Text>
-                                        </TouchableOpacity>
-                                    ))}
+                            <Field label={`Range (${formData.locRange} km)`}>
+                                <SelectButton
+                                    value={String(formData.locRange)}
+                                    options={[1, 5, 10, 25, 50, 100].map(r => ({ label: `${r === 100 ? "100+" : r}km`, value: String(r) }))}
+                                    onSelect={(v) => setFormData({ ...formData, locRange: Number(v) })}
+                                    placeholder="Select Range"
+                                />
+                            </Field>
+
+                            <SectionHeader title="Projects" icon="🏗️" />
+
+                            <Field label="Select Projects">
+                                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.projectScroll}>
+                                    {Array.isArray(projects) && projects.map((p) => {
+                                        const active = formData.projectName.includes(p.name);
+                                        return (
+                                            <TouchableOpacity key={p._id} style={[styles.projectCard, active && styles.projectCardActive]} onPress={() => {
+                                                const newList = active ? formData.projectName.filter((n: string) => n !== p.name) : [...formData.projectName, p.name];
+                                                setFormData({ ...formData, projectName: newList });
+                                            }}>
+                                                <Text style={[styles.projectText, active && styles.projectTextActive]}>{p.name}</Text>
+                                                <Text style={styles.projectSub}>{p.address?.city || "Unknown City"}</Text>
+                                            </TouchableOpacity>
+                                        );
+                                    })}
+                                </ScrollView>
+                            </Field>
+
+                            {formData.projectName.length > 0 && (
+                                <View>
+                                    <Field label="Blocks">
+                                        <View style={styles.chipGroup}>
+                                            {projects
+                                                .filter(p => formData.projectName.includes(p.name))
+                                                .flatMap(p => (p.blocks || []).map((b: any) => ({ projectId: p._id, projectName: p.name, block: typeof b === 'string' ? b : b.name })))
+                                                .map((item, idx) => {
+                                                    const key = `${item.projectName}-${item.block}`;
+                                                    const active = formData.projectTowers.includes(key);
+                                                    return (
+                                                        <PressableChip
+                                                            key={`${idx}-${item.block}`}
+                                                            opt={{ label: `${item.block} (${item.projectName})`, value: key }}
+                                                            isSelected={active}
+                                                            onSelect={() => {
+                                                                const newList = active ? formData.projectTowers.filter((t: string) => t !== key) : [...formData.projectTowers, key];
+                                                                setFormData((prev: any) => ({ ...prev, projectTowers: newList }));
+                                                            }}
+                                                        />
+                                                    );
+                                                })
+                                            }
+                                        </View>
+                                    </Field>
+
+                                    <Field label="Selection Mode">
+                                        <SelectButton
+                                            value={formData.unitSelectionMode}
+                                            options={["Single", "Multiple", "Range"].map(m => ({ label: m, value: m }))}
+                                            onSelect={(v) => setFormData({ ...formData, unitSelectionMode: v })}
+                                            placeholder="Select Mode"
+                                        />
+                                    </Field>
+
+                                    <Field label="Unit Details">
+                                        <View style={{ flexDirection: 'row', gap: 12 }}>
+                                            {formData.unitSelectionMode === "Range" ? (
+                                                <>
+                                                    <Input label="Start" value={formData.propertyNo} onChangeText={v => setFormData({ ...formData, propertyNo: v })} placeholder="e.g. 1" />
+                                                    <Input label="End" value={formData.propertyNoEnd} onChangeText={v => setFormData({ ...formData, propertyNoEnd: v })} placeholder="e.g. 10" />
+                                                </>
+                                            ) : (
+                                                <Input
+                                                    label={formData.unitSelectionMode === "Multiple" ? "Unit Numbers (CSV)" : "Unit Number"}
+                                                    value={formData.propertyNo}
+                                                    onChangeText={v => setFormData({ ...formData, propertyNo: v })}
+                                                    placeholder={formData.unitSelectionMode === "Multiple" ? "101, 102..." : "e.g. 101"}
+                                                />
+                                            )}
+                                        </View>
+                                    </Field>
                                 </View>
-
-                                {formData.unitSelectionMode === "Single" && (
-                                    <View>
-                                        <FormLabel label="Unit Number" />
-                                        <TextInput
-                                            style={styles.input}
-                                            placeholder="e.g. 101"
-                                            value={formData.propertyNo}
-                                            onChangeText={v => setFormData({ ...formData, propertyNo: v })}
-                                        />
-                                    </View>
-                                )}
-
-                                {formData.unitSelectionMode === "Multiple" && (
-                                    <View>
-                                        <FormLabel label="Unit Numbers (Comma separated)" />
-                                        <TextInput
-                                            style={styles.input}
-                                            placeholder="e.g. 101, 102, 205"
-                                            value={formData.propertyNo}
-                                            onChangeText={v => setFormData({ ...formData, propertyNo: v })}
-                                        />
-                                    </View>
-                                )}
-
-                                {formData.unitSelectionMode === "Range" && (
-                                    <View style={styles.row}>
-                                        <View style={{ flex: 1 }}>
-                                            <FormLabel label="Start Unit" />
-                                            <TextInput
-                                                style={styles.input}
-                                                placeholder="e.g. 1"
-                                                value={formData.propertyNo}
-                                                onChangeText={v => setFormData({ ...formData, propertyNo: v })}
-                                            />
-                                        </View>
-                                        <View style={{ width: 10 }} />
-                                        <View style={{ flex: 1 }}>
-                                            <FormLabel label="End Unit" />
-                                            <TextInput
-                                                style={styles.input}
-                                                placeholder="e.g. 10"
-                                                value={formData.propertyNoEnd}
-                                                onChangeText={v => setFormData({ ...formData, propertyNoEnd: v })}
-                                            />
-                                        </View>
-                                    </View>
-                                )}
-                            </View>
-                        )}
-                    </View>
+                            )}
+                        </View>
+                    </FadeInView>
                 );
             case 2: // Contact
                 return (
-                    <View style={styles.stepContainer}>
-                        <SectionTitle title="Identity & Contact" icon="👤" />
+                    <FadeInView key="step2">
+                        <View style={styles.card}>
+                            <SectionHeader title="Contact" icon="👤" />
 
-                        {Array.isArray(duplicates) && duplicates.length > 0 && (
-                            <View style={[styles.warningBox, isBlocked && styles.errorBox]}>
-                                <Text style={styles.warningTitle}>⚠️ {duplicates.length} Similar record(s) found</Text>
-                                {duplicates.map((d, i) => (
-                                    <Text key={i} style={styles.dupItem}>{d.firstName} {d.lastName} ({d.mobile || (Array.isArray(d.phones) && d.phones[0]?.number)})</Text>
-                                ))}
+                            {Array.isArray(duplicates) && duplicates.length > 0 && (
+                                <View style={[styles.warningBox, isBlocked && styles.errorBox]}>
+                                    <Text style={styles.warningTitle}>⚠️ {duplicates.length} Similar record(s) found</Text>
+                                    {duplicates.map((d, i) => (
+                                        <Text key={i} style={styles.dupItem}>{d.firstName} {d.lastName} ({d.mobile || (Array.isArray(d.phones) && d.phones[0]?.number)})</Text>
+                                    ))}
+                                </View>
+                            )}
+
+                            <View style={{ flexDirection: 'row', gap: 12 }}>
+                                <View style={{ width: 100 }}>
+                                    <Input label="Title" value={formData.salutation} onChangeText={v => setFormData({ ...formData, salutation: v })} />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    <Input label="First Name" required value={formData.firstName} onChangeText={v => setFormData({ ...formData, firstName: v })} />
+                                </View>
                             </View>
-                        )}
 
-                        <View style={styles.row}>
-                            <View style={{ width: 80 }}><FormLabel label="Title" /><TextInput style={styles.input} value={formData.salutation} onChangeText={v => setFormData({ ...formData, salutation: v })} /></View>
-                            <View style={{ width: 10 }} />
-                            <View style={{ flex: 1 }}><FormLabel label="First Name" required /><TextInput style={styles.input} value={formData.firstName} onChangeText={v => setFormData({ ...formData, firstName: v })} /></View>
+                            <Input label="Last Name" value={formData.lastName} onChangeText={v => setFormData({ ...formData, lastName: v })} />
+                            <Input label="Mobile" required keyboardType="phone-pad" value={formData.mobile} onChangeText={v => setFormData({ ...formData, mobile: v })} />
+                            <Input label="Email" autoCapitalize="none" keyboardType="email-address" value={formData.email} onChangeText={v => setFormData({ ...formData, email: v })} />
                         </View>
-                        <FormLabel label="Last Name" /><TextInput style={styles.input} value={formData.lastName} onChangeText={v => setFormData({ ...formData, lastName: v })} />
-
-                        <FormLabel label="Mobile Number" required />
-                        <TextInput style={styles.input} keyboardType="phone-pad" value={formData.mobile} onChangeText={v => setFormData({ ...formData, mobile: v })} />
-
-                        <FormLabel label="Email" />
-                        <TextInput style={styles.input} autoCapitalize="none" keyboardType="email-address" value={formData.email} onChangeText={v => setFormData({ ...formData, email: v })} />
-                    </View>
+                    </FadeInView>
                 );
             case 3: // System
                 return (
-                    <View style={styles.stepContainer}>
-                        <SectionTitle title="System & Assignment" icon="🏷️" />
+                    <FadeInView key="step3">
+                        <View style={styles.card}>
+                            <SectionHeader title="System" icon="⚙️" />
 
-                        <FormLabel label="Status" />
-                        {renderSingleSelect("Status", "status")}
+                            <Field label="Stage">
+                                {renderSingleSelect("Stage", "stage")}
+                            </Field>
 
-                        <FormLabel label="Campaign" />
-                        {renderSingleSelect("Campaign", "campaign")}
+                            <Field label="Campaign">
+                                {renderSingleSelect("Campaign", "campaign")}
+                            </Field>
 
-                        <FormLabel label="Sub Campaign" />
-                        {renderSingleSelect("Sub Campaign", "subCampaign", formData.campaign)}
+                            {formData.campaign ? (
+                                <Field label="Sub Campaign">
+                                    {renderSingleSelect("Sub Campaign", "subCampaign", formData.campaign)}
+                                </Field>
+                            ) : null}
 
-                        <FormLabel label="Source" />
-                        {renderSingleSelect("Source", "source")}
+                            <Field label="Source">
+                                {renderSingleSelect("Source", "source", formData.campaign)}
+                            </Field>
 
-                        <FormLabel label="Sub Source" />
-                        {renderSingleSelect("SubSource", "subSource", formData.source)}
+                            {formData.source ? (
+                                <Field label="Sub Source">
+                                    {renderSingleSelect("SubSource", "subSource", formData.source)}
+                                </Field>
+                            ) : null}
 
-                        <FormLabel label="Team" />
-                        <View style={styles.chipGroup}>
-                            {teams.map((t) => (
-                                <TouchableOpacity key={t._id} style={[styles.chip, formData.team === t._id && styles.chipActive]} onPress={() => setFormData({ ...formData, team: t._id, owner: "" })}>
-                                    <Text style={[styles.chipText, formData.team === t._id && styles.chipTextActive]}>{t.name}</Text>
-                                </TouchableOpacity>
-                            ))}
+                            <Field label="Assignment">
+                                <Text style={styles.subLabel}>Team</Text>
+                                <SelectButton
+                                    value={formData.team}
+                                    options={teams.map(t => ({ label: t.name, value: t._id }))}
+                                    onSelect={(v) => setFormData({ ...formData, team: v, owner: "" })}
+                                    placeholder="Select Team"
+                                />
+                                <View style={{ marginTop: 12 }}>
+                                    <Text style={styles.subLabel}>User</Text>
+                                    <SelectButton
+                                        value={formData.owner}
+                                        options={users.filter(u => !formData.team || u.team === formData.team).map(u => ({ label: u.fullName || u.name, value: u._id }))}
+                                        onSelect={(v) => setFormData({ ...formData, owner: v })}
+                                        placeholder="Select User"
+                                    />
+                                </View>
+                                <View style={{ marginTop: 12 }}>
+                                    <Text style={styles.subLabel}>Visibility</Text>
+                                    <SelectButton
+                                        value={formData.visibleTo}
+                                        options={[
+                                            { label: "Everyone", value: "Everyone" },
+                                            { label: "Team", value: "Team" },
+                                            { label: "Private", value: "Private" }
+                                        ]}
+                                        onSelect={(v) => setFormData({ ...formData, visibleTo: v })}
+                                        placeholder="Select Visibility"
+                                    />
+                                </View>
+                            </Field>
+
+                            <Input label="Internal Notes" multiline numberOfLines={4} value={formData.description} onChangeText={v => setFormData({ ...formData, description: v })} />
                         </View>
-
-                        <FormLabel label="Assigned To" />
-                        <View style={styles.chipGroup}>
-                            {users.filter(u => !formData.team || u.team === formData.team).map((u) => (
-                                <TouchableOpacity key={u._id} style={[styles.chip, formData.owner === u._id && styles.chipActive]} onPress={() => setFormData({ ...formData, owner: u._id })}>
-                                    <Text style={[styles.chipText, formData.owner === u._id && styles.chipTextActive]}>{u.fullName || u.name}</Text>
-                                </TouchableOpacity>
-                            ))}
-                        </View>
-
-                        <FormLabel label="Notes" />
-                        <TextInput style={[styles.input, { height: 80, textAlignVertical: 'top' }]} multiline value={formData.description} onChangeText={v => setFormData({ ...formData, description: v })} />
-                    </View>
+                    </FadeInView>
                 );
             default: return null;
         }
@@ -725,6 +920,7 @@ export default function AddLeadScreen() {
 
     return (
         <SafeAreaView style={styles.container}>
+            {/* Header */}
             <View style={styles.header}>
                 <TouchableOpacity
                     onPress={() => {
@@ -734,53 +930,62 @@ export default function AddLeadScreen() {
                             router.replace("/(tabs)/leads");
                         }
                     }}
-                    hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
+                    style={styles.closeBtn}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
-                    <Ionicons name="arrow-back" size={24} color="#1E3A8A" />
+                    <Ionicons name="close" size={24} color={COLORS.textPrimary} />
                 </TouchableOpacity>
-                <Text style={styles.headerTitle}>{id ? "Edit Lead" : "Add Lead"}</Text>
-                <View style={{ width: 24 }} />
+                <View style={styles.headerTitleContainer}>
+                    <Text style={styles.headerTitle}>{id ? "Edit Lead" : "Add Lead"}</Text>
+                    <Text style={styles.headerSubtitle}>{FORM_STEPS[step]}</Text>
+                </View>
+                <View style={{ width: 44 }} />
             </View>
 
-            <View style={styles.stepper}>
+            {/* Stepper */}
+            <View style={styles.stepperContainer}>
                 {FORM_STEPS.map((s, i) => (
-                    <View key={i} style={styles.stepItem}>
-                        <View style={[styles.stepCircle, step >= i && styles.stepCircleActive]}><Text style={[styles.stepNum, step >= i && styles.stepNumActive]}>{i + 1}</Text></View>
-                        <Text style={[styles.stepLabel, step >= i && styles.stepLabelActive]}>{s}</Text>
+                    <View key={s} style={styles.stepWrapper}>
+                        <View style={[styles.stepDot, step >= i && styles.stepDotActive]}>
+                            {step > i ? (
+                                <Ionicons name="checkmark" size={12} color="#fff" />
+                            ) : (
+                                <Text style={[styles.stepNumber, step >= i && styles.stepNumberActive]}>{i + 1}</Text>
+                            )}
+                        </View>
+                        <Text style={[styles.stepLabel, step >= i && styles.stepLabelActive]} numberOfLines={1}>{s}</Text>
                     </View>
                 ))}
             </View>
 
-            <ScrollView style={styles.mainScroll} showsVerticalScrollIndicator={false}>
-                {renderStepContent()}
+            <ScrollView style={styles.mainScroll} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+                <Animated.View style={{ transform: [{ translateX: shakeAnim }] }}>
+                    {renderStepContent()}
+                </Animated.View>
             </ScrollView>
 
+            {/* Footer */}
             <View style={styles.footer}>
                 {step > 0 && (
-                    <TouchableOpacity
-                        style={styles.prevBtn}
-                        onPress={() => setStep(step - 1)}
-                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                    >
+                    <TouchableOpacity style={styles.prevBtn} onPress={() => setStep(s => s - 1)}>
                         <Text style={styles.prevBtnText}>Back</Text>
                     </TouchableOpacity>
                 )}
                 {step < FORM_STEPS.length - 1 ? (
-                    <TouchableOpacity
-                        style={styles.nextBtn}
-                        onPress={() => setStep(step + 1)}
-                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                    >
-                        <Text style={styles.nextBtnText}>Next</Text>
+                    <TouchableOpacity style={styles.nextBtn} onPress={handleNext}>
+                        <Text style={styles.nextBtnText}>Continue</Text>
+                        <Ionicons name="arrow-forward" size={18} color="#fff" style={{ marginLeft: 8 }} />
                     </TouchableOpacity>
                 ) : (
-                    <TouchableOpacity
-                        style={[styles.saveBtn, isBlocked && !id && styles.disabledBtn]}
-                        onPress={handleSave}
-                        disabled={isSaving || (isBlocked && !id)}
-                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                    >
-                        {isSaving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>{id ? "Update Lead" : "Save Lead"}</Text>}
+                    <TouchableOpacity style={[styles.saveBtn, (isSaving || (isBlocked && !id)) && styles.disabledBtn]} onPress={handleSave} disabled={isSaving || (isBlocked && !id)}>
+                        {isSaving ? (
+                            <ActivityIndicator color="#fff" size="small" />
+                        ) : (
+                            <>
+                                <Text style={styles.saveBtnText}>{id ? "Update Lead" : "Create Lead"}</Text>
+                                <Ionicons name="cloud-upload" size={18} color="#fff" style={{ marginLeft: 8 }} />
+                            </>
+                        )}
                     </TouchableOpacity>
                 )}
             </View>
@@ -789,77 +994,130 @@ export default function AddLeadScreen() {
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: "#F8FAFC" },
+    container: { flex: 1, backgroundColor: COLORS.bg },
     center: { flex: 1, justifyContent: "center", alignItems: "center" },
-    header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingTop: 12, paddingBottom: 16, backgroundColor: "#fff" },
-    headerTitle: { fontSize: 20, fontWeight: "800", color: "#1E3A8A" },
-    stepper: { flexDirection: "row", justifyContent: "space-between", padding: 16, backgroundColor: "#fff", borderBottomWidth: 1, borderBottomColor: "#F1F5F9" },
-    stepItem: { alignItems: "center", flex: 1 },
-    stepCircle: { width: 24, height: 24, borderRadius: 12, backgroundColor: "#E2E8F0", justifyContent: "center", alignItems: "center", marginBottom: 4 },
-    stepCircleActive: { backgroundColor: "#1E3A8A" },
-    stepNum: { fontSize: 11, fontWeight: "700", color: "#64748B" },
-    stepNumActive: { color: "#fff" },
-    stepLabel: { fontSize: 9, fontWeight: "600", color: "#94A3B8" },
-    stepLabelActive: { color: "#1E3A8A" },
-    mainScroll: { flex: 1, padding: 20 },
-    stepContainer: { paddingBottom: 120 },
-    sectionTitleRow: { flexDirection: "row", alignItems: "center", marginBottom: 16 },
-    sectionIcon: { fontSize: 22, marginRight: 8 },
-    sectionTitle: { fontSize: 18, fontWeight: "800", color: "#1E3A8A" },
-    labelContainer: { flexDirection: "row", marginBottom: 6, marginTop: 14 },
-    label: { fontSize: 13, fontWeight: "600", color: "#475569" },
-    required: { color: "#EF4444", marginLeft: 2 },
-    input: { backgroundColor: "#fff", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 10, padding: 10, fontSize: 15, color: "#1E293B" },
-    rowAlign: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 20 },
-    chipGroup: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
-    chip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 18, backgroundColor: "#fff", borderWidth: 1, borderColor: "#E2E8F0" },
-    chipActive: { backgroundColor: "#1E3A8A", borderColor: "#1E3A8A" },
-    chipText: { fontSize: 12, color: "#64748B", fontWeight: "600" },
-    chipTextActive: { color: "#fff" },
-    row: { flexDirection: "row" },
+    header: {
+        flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+        paddingHorizontal: 16, paddingTop: Platform.OS === 'ios' ? 10 : 40, paddingBottom: 16,
+        backgroundColor: COLORS.cardBg, borderBottomWidth: 1, borderBottomColor: COLORS.border,
+        zIndex: 10,
+    },
+    closeBtn: {
+        width: 44, height: 44, borderRadius: 22, backgroundColor: COLORS.bg,
+        justifyContent: "center", alignItems: "center", zIndex: 11,
+    },
+    headerTitleContainer: { alignItems: "center" },
+    headerTitle: { fontSize: 18, fontWeight: "800", color: COLORS.textPrimary },
+    headerSubtitle: { fontSize: 12, color: COLORS.textSecondary, fontWeight: "600", marginTop: 2, textTransform: 'uppercase', letterSpacing: 1 },
+
+    stepperContainer: {
+        flexDirection: "row", justifyContent: "space-between", padding: 20,
+        backgroundColor: COLORS.cardBg, borderBottomWidth: 1, borderBottomColor: COLORS.border,
+    },
+    stepWrapper: { alignItems: "center", flex: 1 },
+    stepDot: {
+        width: 28, height: 28, borderRadius: 14, backgroundColor: COLORS.inputBg,
+        justifyContent: "center", alignItems: "center", marginBottom: 6,
+    },
+    stepDotActive: { backgroundColor: COLORS.primary },
+    stepNumber: { fontSize: 12, fontWeight: "700", color: COLORS.textSecondary },
+    stepNumberActive: { color: "#fff" },
+    stepLabel: { fontSize: 10, fontWeight: "600", color: COLORS.textMuted },
+    stepLabelActive: { color: COLORS.primary },
+
+    mainScroll: { flex: 1 },
+    scrollContent: { padding: SPACING.outer, paddingBottom: 120 },
+    card: {
+        backgroundColor: COLORS.cardBg, borderRadius: 20, padding: SPACING.card,
+        borderWidth: 1, borderColor: COLORS.border,
+        ...Platform.select({
+            ios: { shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 10 },
+            android: { elevation: 3 },
+        }),
+    },
+    sectionHeader: { marginBottom: SPACING.section },
+    sectionHeaderTop: { flexDirection: "row", alignItems: "center" },
+    headerDivider: { height: 2, backgroundColor: COLORS.primaryLight, width: 40, marginTop: 8, borderRadius: 1 },
+    sectionIcon: { fontSize: 22, marginRight: 12 },
+    sectionTitle: { fontSize: 18, fontWeight: "800", color: COLORS.textPrimary },
+
+    field: { marginBottom: SPACING.field },
+    fieldLabel: { fontSize: 14, fontWeight: "700", color: COLORS.textSecondary, marginBottom: 8, marginLeft: 4 },
+    required: { color: COLORS.error },
+
+    inputContainer: {
+        height: SPACING.inputHeight, backgroundColor: COLORS.cardBg,
+        borderWidth: 1, borderColor: COLORS.border, borderRadius: 14,
+        justifyContent: "center", position: 'relative', marginVertical: 8,
+    },
+    inputContainerFocused: { borderColor: COLORS.primary, backgroundColor: COLORS.cardBg },
+    input: {
+        height: "100%", paddingHorizontal: 16, fontSize: 15,
+        color: COLORS.textPrimary, fontWeight: "500",
+    },
+    inputDisabled: { backgroundColor: COLORS.inputBg, color: COLORS.textMuted },
+
+    chipRow: { marginBottom: 12 },
+    chipRowContent: { paddingRight: 20 },
+    chip: {
+        paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12,
+        backgroundColor: COLORS.cardBg, borderWidth: 1, borderColor: COLORS.border,
+        marginRight: 8, marginBottom: 8,
+    },
+    chipSelected: { borderColor: COLORS.primary, backgroundColor: COLORS.primaryLight },
+    chipText: { fontSize: 14, fontWeight: "600", color: COLORS.textSecondary },
+    chipTextSelected: { color: COLORS.primary },
+    chipGroup: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+    subLabel: { fontSize: 13, fontWeight: "600", color: COLORS.textSecondary, marginBottom: 6, marginTop: 12 },
+    placeholderText: { fontSize: 14, color: COLORS.textMuted, fontStyle: 'italic', padding: 10 },
+
+    rowAlign: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+    hintText: { fontSize: 12, color: COLORS.textMuted, fontStyle: "italic", marginTop: 4 },
+
+    budgetScroll: { paddingVertical: 4 },
     projectScroll: { marginBottom: 15 },
     projectCard: {
-        padding: 12, borderRadius: 12, borderWidth: 1, borderColor: "#E2E8F0",
-        marginRight: 10, width: 140, backgroundColor: "#fff"
+        padding: 16, borderRadius: 16, borderWidth: 1, borderColor: COLORS.border,
+        marginRight: 12, width: 160, backgroundColor: COLORS.cardBg,
     },
-    projectCardActive: { borderColor: "#1E3A8A", backgroundColor: "#EFF6FF" },
-    projectText: { fontWeight: "700", color: "#1E293B", fontSize: 13 },
-    projectTextActive: { color: "#1E3A8A" },
-    projectSub: { fontSize: 11, color: "#64748B", marginTop: 2 },
-    budgetRow: { marginBottom: 10 },
-    subLabel: { fontSize: 12, color: "#64748B", marginBottom: 5, fontWeight: "600" },
-    budgetScroll: { paddingVertical: 5 },
-    budgetChip: {
-        paddingVertical: 8, paddingHorizontal: 12, borderRadius: 20,
-        backgroundColor: "#F1F5F9", marginRight: 8, borderWidth: 1, borderColor: "#E2E8F0"
+    projectCardActive: { borderColor: COLORS.primary, backgroundColor: COLORS.primaryLight },
+    projectText: { fontSize: 14, fontWeight: "700", color: COLORS.textPrimary },
+    projectTextActive: { color: COLORS.primary },
+    projectSub: { fontSize: 12, color: COLORS.textSecondary, marginTop: 4 },
+
+    googleSearchContainer: { zIndex: 100, marginBottom: 10 },
+
+    footer: {
+        position: "absolute", bottom: 0, left: 0, right: 0,
+        padding: 20, backgroundColor: COLORS.cardBg,
+        borderTopWidth: 1, borderTopColor: COLORS.border,
+        flexDirection: "row", gap: 12,
+        paddingBottom: Platform.OS === 'ios' ? 34 : 20,
     },
-    budgetChipText: { fontSize: 12, color: "#475569", fontWeight: "600" },
-    googleSearchContainer: { zIndex: 10, marginBottom: 15 },
-    rangeBox: {
-        backgroundColor: "#F8FAFC", padding: 15, borderRadius: 12,
-        borderWidth: 1, borderColor: "#E2E8F0", marginBottom: 20
+    nextBtn: {
+        flex: 1, backgroundColor: COLORS.primary, height: 56,
+        borderRadius: 16, justifyContent: "center", alignItems: "center",
+        flexDirection: "row",
     },
-    rangeValue: { fontSize: 14, fontWeight: "700", color: "#1E3A8A" },
-    chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-    selectionModeRow: { flexDirection: "row", gap: 10, marginBottom: 15 },
-    modeBtn: {
-        flex: 1, paddingVertical: 10, borderRadius: 8, borderWidth: 1,
-        borderColor: "#E2E8F0", backgroundColor: "#fff", alignItems: "center"
-    },
-    modeBtnActive: { borderColor: "#1E3A8A", backgroundColor: "#EFF6FF" },
-    modeBtnText: { fontSize: 13, color: "#64748B", fontWeight: "600" },
-    modeBtnTextActive: { color: "#1E3A8A" },
-    hintText: { fontSize: 12, color: "#94A3B8", fontStyle: "italic", marginBottom: 10 },
-    footer: { position: "absolute", bottom: 0, left: 0, right: 0, padding: 16, backgroundColor: "#fff", borderTopWidth: 1, borderTopColor: "#F1F5F9", flexDirection: "row", gap: 10 },
-    nextBtn: { flex: 1, backgroundColor: "#1E3A8A", height: 50, borderRadius: 12, justifyContent: "center", alignItems: "center" },
     nextBtnText: { color: "#fff", fontSize: 16, fontWeight: "700" },
-    prevBtn: { width: 100, backgroundColor: "#F1F5F9", height: 50, borderRadius: 12, justifyContent: "center", alignItems: "center" },
-    prevBtnText: { color: "#475569", fontSize: 16, fontWeight: "700" },
-    saveBtn: { flex: 1, backgroundColor: "#10B981", height: 50, borderRadius: 12, justifyContent: "center", alignItems: "center" },
+    prevBtn: {
+        width: 100, backgroundColor: COLORS.inputBg, height: 56,
+        borderRadius: 16, justifyContent: "center", alignItems: "center",
+    },
+    prevBtnText: { color: COLORS.textSecondary, fontSize: 16, fontWeight: "700" },
+    saveBtn: {
+        flex: 1, backgroundColor: "#10B981", height: 56,
+        borderRadius: 16, justifyContent: "center", alignItems: "center",
+        flexDirection: "row",
+    },
     saveBtnText: { color: "#fff", fontSize: 16, fontWeight: "700" },
-    disabledBtn: { backgroundColor: "#94A3B8" },
-    warningBox: { backgroundColor: "#FFFBEB", padding: 12, borderRadius: 10, borderLeftWidth: 4, borderLeftColor: "#F59E0B", marginBottom: 16 },
-    errorBox: { backgroundColor: "#FEF2F2", borderLeftColor: "#EF4444" },
-    warningTitle: { fontSize: 13, fontWeight: "700", color: "#92400E", marginBottom: 6 },
-    dupItem: { fontSize: 12, color: "#1E293B", marginBottom: 2 },
+    disabledBtn: { backgroundColor: COLORS.textMuted },
+
+    warningBox: {
+        backgroundColor: "#FFFBEB", padding: 14, borderRadius: 12,
+        borderLeftWidth: 4, borderLeftColor: "#F59E0B", marginBottom: 20,
+    },
+    errorBox: { backgroundColor: "#FEF2F2", borderLeftColor: COLORS.error },
+    warningTitle: { fontSize: 14, fontWeight: "700", color: "#92400E", marginBottom: 8 },
+    dupItem: { fontSize: 13, color: COLORS.textPrimary, marginBottom: 4 },
 });

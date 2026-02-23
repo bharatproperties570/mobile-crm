@@ -153,6 +153,56 @@ function FadeInView({ children, delay = 0 }: { children: React.ReactNode; delay?
     );
 }
 
+function PressableChip({
+    opt, isSelected, onSelect
+}: {
+    opt: { label: string, value: string }, isSelected: boolean, onSelect: (v: string) => void
+}) {
+    const scaleValue = useRef(new Animated.Value(1)).current;
+    const opacityValue = useRef(new Animated.Value(0)).current;
+
+    useEffect(() => {
+        Animated.timing(opacityValue, {
+            toValue: isSelected ? 1 : 0,
+            duration: 200,
+            useNativeDriver: true,
+        }).start();
+    }, [isSelected]);
+
+    const onPressIn = () => {
+        Animated.spring(scaleValue, {
+            toValue: 0.96,
+            useNativeDriver: true,
+        }).start();
+    };
+
+    const onPressOut = () => {
+        Animated.spring(scaleValue, {
+            toValue: 1,
+            useNativeDriver: true,
+        }).start();
+    };
+
+    return (
+        <Pressable
+            onPressIn={onPressIn}
+            onPressOut={onPressOut}
+            onPress={() => onSelect(opt.value)}
+        >
+            <Animated.View style={[
+                styles.chip,
+                isSelected && styles.chipSelected,
+                { transform: [{ scale: scaleValue }], flexDirection: 'row', alignItems: 'center' }
+            ]}>
+                <Animated.View style={{ opacity: opacityValue, width: isSelected ? 'auto' : 0, overflow: 'hidden', flexDirection: 'row', alignItems: 'center' }}>
+                    <Ionicons name="checkmark" size={14} color={COLORS.primary} style={{ marginRight: 4 }} />
+                </Animated.View>
+                <Text style={[styles.chipText, isSelected && styles.chipTextSelected]}>{opt.label}</Text>
+            </Animated.View>
+        </Pressable>
+    );
+}
+
 function SelectButton({
     value, placeholder, options, onSelect,
 }: {
@@ -162,53 +212,14 @@ function SelectButton({
 
     return (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow} contentContainerStyle={styles.chipRowContent}>
-            {options.map((opt, idx) => {
-                const isSelected = value === opt.value;
-                const scaleValue = useRef(new Animated.Value(1)).current;
-                const opacityValue = useRef(new Animated.Value(0)).current;
-
-                useEffect(() => {
-                    Animated.timing(opacityValue, {
-                        toValue: isSelected ? 1 : 0,
-                        duration: 200,
-                        useNativeDriver: true,
-                    }).start();
-                }, [isSelected]);
-
-                const onPressIn = () => {
-                    Animated.spring(scaleValue, {
-                        toValue: 0.96,
-                        useNativeDriver: true,
-                    }).start();
-                };
-
-                const onPressOut = () => {
-                    Animated.spring(scaleValue, {
-                        toValue: 1,
-                        useNativeDriver: true,
-                    }).start();
-                };
-
-                return (
-                    <Pressable
-                        key={`${opt.value || idx}-${idx}`}
-                        onPressIn={onPressIn}
-                        onPressOut={onPressOut}
-                        onPress={() => onSelect(opt.value === value ? "" : opt.value)}
-                    >
-                        <Animated.View style={[
-                            styles.chip,
-                            isSelected && styles.chipSelected,
-                            { transform: [{ scale: scaleValue }], flexDirection: 'row', alignItems: 'center' }
-                        ]}>
-                            <Animated.View style={{ opacity: opacityValue, width: isSelected ? 'auto' : 0, overflow: 'hidden', flexDirection: 'row', alignItems: 'center' }}>
-                                <Ionicons name="checkmark" size={14} color={COLORS.primary} style={{ marginRight: 4 }} />
-                            </Animated.View>
-                            <Text style={[styles.chipText, isSelected && styles.chipTextSelected]}>{opt.label}</Text>
-                        </Animated.View>
-                    </Pressable>
-                );
-            })}
+            {options.map((opt, idx) => (
+                <PressableChip
+                    key={`${opt.value || idx}-${idx}`}
+                    opt={opt}
+                    isSelected={value === opt.value}
+                    onSelect={(v) => onSelect(v === value ? "" : v)}
+                />
+            ))}
         </ScrollView>
     );
 }
@@ -256,6 +267,118 @@ function SearchableDropdown({
                                 <Text style={styles.modalEmptyText}>No matching results found</Text>
                                 <Text style={{ fontSize: 13, color: COLORS.textSecondary, marginTop: 4 }}>Try adjusting your search terms</Text>
                             </View>
+                        }
+                        keyboardShouldPersistTaps="handled"
+                    />
+                </View>
+            </View>
+        </Modal>
+    );
+}
+
+function ContactSearchModal({
+    visible, onClose, onSelect
+}: {
+    visible: boolean; onClose: () => void; onSelect: (c: any) => void;
+}) {
+    const [search, setSearch] = useState("");
+    const [results, setResults] = useState<any[]>([]);
+    const [loading, setLoading] = useState(false);
+
+    useEffect(() => {
+        if (!visible) {
+            setSearch("");
+            setResults([]);
+            return;
+        }
+    }, [visible]);
+
+    useEffect(() => {
+        const delay = setTimeout(async () => {
+            if (search.length > 2) {
+                setLoading(true);
+                try {
+                    const res = await api.get("/contacts", { params: { search, limit: 15 } });
+                    // Backend returns 'records'
+                    setResults((res.data?.records || res.data?.data || []).map((c: any) => ({
+                        id: c._id,
+                        name: c.name || `${c.firstName || ''} ${c.lastName || ''}`.trim() || "Unnamed",
+                        mobile: c.mobile || (c.phones?.[0]?.number) || "No Mobile"
+                    })));
+                } catch (e) {
+                    console.error("Modal search failed", e);
+                } finally {
+                    setLoading(false);
+                }
+            } else {
+                setResults([]);
+            }
+        }, 500);
+        return () => clearTimeout(delay);
+    }, [search]);
+
+    return (
+        <Modal visible={visible} animationType="slide" transparent={true} onRequestClose={onClose}>
+            <View style={styles.modalOverlay}>
+                <View style={[styles.modalContent, { height: '90%' }]}>
+                    <View style={styles.modalHeader}>
+                        <Text style={styles.modalTitle}>Select Contact</Text>
+                        <TouchableOpacity onPress={onClose}>
+                            <Ionicons name="close" size={28} color={COLORS.textPrimary} />
+                        </TouchableOpacity>
+                    </View>
+
+                    <View style={{ position: 'relative' }}>
+                        <TextInput
+                            style={styles.modalSearchInput}
+                            placeholder="Search by name or mobile..."
+                            value={search}
+                            onChangeText={setSearch}
+                            autoFocus
+                        />
+                        {loading && (
+                            <ActivityIndicator
+                                style={{ position: 'absolute', right: 16, top: 16 }}
+                                color={COLORS.primary}
+                            />
+                        )}
+                    </View>
+
+                    <FlatList
+                        data={results}
+                        keyExtractor={(item) => item.id}
+                        renderItem={({ item }) => (
+                            <TouchableOpacity
+                                style={[styles.modalListItem, { flexDirection: 'row', alignItems: 'center' }]}
+                                onPress={() => { onSelect(item); onClose(); }}
+                            >
+                                <View style={{
+                                    width: 44, height: 44, borderRadius: 22,
+                                    backgroundColor: COLORS.bg, justifyContent: 'center', alignItems: 'center',
+                                    marginRight: 14
+                                }}>
+                                    <Text style={{ fontWeight: '700', color: COLORS.primary, fontSize: 16 }}>
+                                        {item.name.charAt(0).toUpperCase()}
+                                    </Text>
+                                </View>
+                                <View>
+                                    <Text style={[styles.modalListItemText, { fontWeight: '600' }]}>{item.name}</Text>
+                                    <Text style={{ fontSize: 13, color: COLORS.textSecondary, marginTop: 2 }}>{item.mobile}</Text>
+                                </View>
+                            </TouchableOpacity>
+                        )}
+                        ListEmptyComponent={
+                            search.length > 2 && !loading ? (
+                                <View style={{ alignItems: 'center', marginTop: 100 }}>
+                                    <Ionicons name="person-remove-outline" size={64} color={COLORS.border} />
+                                    <Text style={[styles.modalEmptyText, { marginTop: 16 }]}>No contacts found</Text>
+                                </View>
+                            ) : search.length <= 2 && !loading ? (
+                                <View style={{ alignItems: 'center', marginTop: 100 }}>
+                                    <Ionicons name="search-outline" size={64} color={COLORS.border} />
+                                    <Text style={[styles.modalEmptyText, { marginTop: 16 }]}>Type 3+ characters to search</Text>
+                                </View>
+                            ) : null
                         }
                         keyboardShouldPersistTaps="handled"
                     />
@@ -348,7 +471,7 @@ const INITIAL: InventoryForm = {
     locationSearch: "",
     address: { country: "", state: "", city: "", location: "", tehsil: "", postOffice: "", pinCode: "", hNo: "", street: "", area: "" },
     owners: [],
-    assignedTo: "", team: "", status: "Active", intent: "Sell", visibleTo: "Everyone",
+    assignedTo: "", team: "", status: "Available", intent: "Sell", visibleTo: "Everyone",
 };
 
 export default function AddInventoryScreen() {
@@ -372,15 +495,14 @@ export default function AddInventoryScreen() {
     // Master Data States
     const [propertyConfig, setPropertyConfig] = useState<any>({});
     const [masterFields, setMasterFields] = useState<any>({});
+    const [lookups, setLookups] = useState<any[]>([]); // Professional Lookup Store
     const [projects, setProjects] = useState<any[]>([]);
 
     const [teams, setTeams] = useState<any[]>([]);
     const [users, setUsers] = useState<any[]>([]);
 
     // Owner Search State
-    const [ownerSearch, setOwnerSearch] = useState("");
-    const [searchResults, setSearchResults] = useState<any[]>([]);
-    const [searching, setSearching] = useState(false);
+    const [isContactModalOpen, setIsContactModalOpen] = useState(false);
     const [selectedOwner, setSelectedOwner] = useState<any>(null);
     const [linkData, setLinkData] = useState({ role: "Property Owner", relationship: "" });
 
@@ -500,25 +622,7 @@ export default function AddInventoryScreen() {
     }, [form.subCategory]);
 
 
-    useEffect(() => {
-        const delayDebounce = setTimeout(async () => {
-            if (ownerSearch.length > 2) {
-                setSearching(true);
-                try {
-                    const res = await api.get("/contacts", { params: { search: ownerSearch, limit: 10 } });
-                    setSearchResults((res.data?.data || []).map((c: any) => ({
-                        id: c._id,
-                        name: c.name || `${c.firstName} ${c.lastName}`,
-                        mobile: c.mobile || (c.phones?.[0]?.number) || "N/A"
-                    })));
-                } catch (e) { console.error("Owner search failed", e); }
-                finally { setSearching(false); }
-            } else {
-                setSearchResults([]);
-            }
-        }, 500);
-        return () => clearTimeout(delayDebounce);
-    }, [ownerSearch]);
+    // Remove inline search useEffect as it's now in ContactSearchModal
 
     const handleLinkOwner = () => {
         if (!selectedOwner) return;
@@ -536,7 +640,6 @@ export default function AddInventoryScreen() {
         }
         setForm(f => ({ ...f, owners: [newLink, ...f.owners] }));
         setSelectedOwner(null);
-        setOwnerSearch("");
         setLinkData({ role: "Property Owner", relationship: "" });
     };
 
@@ -563,6 +666,7 @@ export default function AddInventoryScreen() {
                 load("/users?limit=1000", (data) =>
                     setUsers(data.map((u: any) => ({ label: u.name || u.fullName, value: u._id, team: u.team })))
                 ),
+                load("/lookups?limit=2000", setLookups), // Fetch all active lookups once
             ]);
         };
         fetchSystemData();
@@ -601,36 +705,62 @@ export default function AddInventoryScreen() {
 
         setSaving(true);
         try {
-            const findId = (items: any[], val: string) => items.find(i => i.lookup_value === val)?._id || val;
+            console.log("[InventorySave] handleSave initiated");
+            // Global Professional Resolver: Matches text labels to backend ObjectIds
+            const resolveId = (type: string, value: string) => {
+                if (!value) return null;
+                if (!lookups || lookups.length === 0) {
+                    console.warn(`[InventorySave] Lookups not loaded yet for type: ${type}`);
+                    return value;
+                }
+                const match = lookups.find(l =>
+                    l.lookup_type?.toLowerCase() === type.toLowerCase() &&
+                    l.lookup_value?.toLowerCase() === value.toLowerCase()
+                );
+                if (match) {
+                    console.log(`[InventorySave] Resolved ${type}: ${value} -> ${match._id}`);
+                    return match._id;
+                }
+                console.log(`[InventorySave] No match for ${type}: ${value}, using as-is`);
+                return value;
+            };
 
-            // Transform categories/subCategories to IDs
-            const catId = INITIAL.category === form.category ? "" : findId(masterFields.categories || [], form.category);
-            const subCatId = findId(masterFields.subCategories || [], form.subCategory);
-
+            // Align payload with backend strict & mixed schema
             const payload = {
                 ...form,
-                category: catId || form.category,
-                subCategory: subCatId || form.subCategory,
-                status: "Active",
-                intent: "Sell",
+                // Primary Identifiers
+                unitNumber: form.unitNo, // Model (L12)
+                unitNo: form.unitNo,     // Controller (L97)
+
+                // Lookup References (ObjectIds required for Mongoose refs)
+                category: resolveId('Category', form.category),
+                subCategory: resolveId('SubCategory', form.subCategory),
+                status: resolveId('Status', form.status),
+                intent: resolveId('Intent', form.intent),
+                facing: resolveId('Facing', form.facing),
+
+                // Project Linking
+                projectId: form.projectId, // Valid ObjectId from list
+                projectName: form.projectName, // Human readable
 
                 // Calculated builtup details
                 builtupDetails: form.builtupDetails.map(d => ({
                     ...d,
+                    floor: d.floor,
                     length: Number(d.length) || 0,
                     width: Number(d.width) || 0,
                     totalArea: Number(d.totalArea) || 0
                 })),
 
+                // Location Details (Backend nested schema)
                 address: {
                     ...form.address,
-                    country: form.address.country,
-                    state: form.address.state,
                     city: form.address.city,
                     location: form.address.location,
+                    area: form.address.area,
                 },
 
-                // Split owners and associates for backend schema
+                // Split owners and associates (ObjectId arrays)
                 owners: form.owners.filter(o => o.role === 'Property Owner').map(o => o.id),
                 associates: form.owners.filter(o => o.role === 'Associate').map(o => ({
                     contact: o.id,
@@ -638,20 +768,32 @@ export default function AddInventoryScreen() {
                 })),
             };
 
+            // Remove temporary frontend-only state before sending
             const finalPayload: any = { ...payload };
             delete finalPayload.locationSearch;
-            delete finalPayload.projectName; // projectId is used
+
+            console.log("[InventorySave] Submitting Payload:", JSON.stringify(finalPayload, null, 2));
 
             const res = await api.post("/inventory", finalPayload);
-            if (res.data?.success) {
-                Alert.alert("Success", "Inventory saved successfully.");
-                router.replace("/(tabs)/inventory");
+
+            if (res.data?.success || res.status === 201 || res.status === 200) {
+                console.log("[InventorySave] Save Success");
+                Alert.alert("Success 🎉", "Inventory has been saved and linked professionally.", [
+                    {
+                        text: "OK", onPress: () => {
+                            console.log("[InventorySave] Navigating back after success");
+                            router.replace("/(tabs)/inventory");
+                        }
+                    }
+                ]);
             } else {
-                throw new Error(res.data?.error || res.data?.message || "Failed to save");
+                console.error("[InventorySave] Save failed with unexpected response:", res.data);
+                throw new Error(res.data?.error || "Failed to save inventory.");
             }
         } catch (e: any) {
-            console.error("Save Error:", e.response?.data || e.message);
-            Alert.alert("Error", e.response?.data?.error || e.message || "Failed to save inventory.");
+            console.error("[InventorySave] Error Exception:", e.response?.data || e.message);
+            const errorMsg = e.response?.data?.error || e.message || "Failed to save. Check your connection.";
+            Alert.alert("Save Failed", errorMsg);
         } finally {
             setSaving(false);
         }
@@ -935,63 +1077,24 @@ export default function AddInventoryScreen() {
                 return (
                     <FadeInView key="step3" delay={100}>
                         <SectionHeader title="Owner & Associates" icon="👥" />
+
                         <View style={styles.card}>
                             {!selectedOwner ? (
                                 <View>
-                                    <Text style={{ fontSize: 13, color: COLORS.textSecondary, marginBottom: 12 }}>
-                                        Search and link contacts as owners or associates for this property.
+                                    <Text style={{ fontSize: 13, color: COLORS.textSecondary, marginBottom: 16 }}>
+                                        Link verified contacts as owners or associates for professional record keeping.
                                     </Text>
-                                    <View style={{ position: 'relative' }}>
-                                        <Input
-                                            label="Search Contacts"
-                                            value={ownerSearch}
-                                            onChangeText={setOwnerSearch}
-                                            placeholder="Find by name or phone..."
-                                            leftIcon={<Ionicons name="search-outline" size={20} color={COLORS.textSecondary} />}
-                                        />
-                                        {searching && (
-                                            <ActivityIndicator
-                                                color={COLORS.primary}
-                                                style={{ position: 'absolute', right: 16, top: 40 }}
-                                            />
-                                        )}
-                                    </View>
 
-                                    {searchResults.length > 0 && (
-                                        <View style={[styles.searchResults, { marginTop: 4 }]}>
-                                            <FlatList
-                                                data={searchResults}
-                                                keyExtractor={(item) => item.id}
-                                                renderItem={({ item }) => (
-                                                    <TouchableOpacity
-                                                        style={styles.searchResultItem}
-                                                        onPress={() => {
-                                                            setSelectedOwner(item);
-                                                            setSearchResults([]);
-                                                            setOwnerSearch("");
-                                                        }}
-                                                    >
-                                                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                                            <View style={{
-                                                                width: 40, height: 40, borderRadius: 20,
-                                                                backgroundColor: COLORS.bg, justifyContent: 'center', alignItems: 'center',
-                                                                marginRight: 12
-                                                            }}>
-                                                                <Text style={{ fontWeight: '700', color: COLORS.primary }}>
-                                                                    {(item.name || "C").charAt(0).toUpperCase()}
-                                                                </Text>
-                                                            </View>
-                                                            <View>
-                                                                <Text style={styles.searchResultName}>{item.name}</Text>
-                                                                <Text style={styles.searchResultMobile}>{item.mobile}</Text>
-                                                            </View>
-                                                        </View>
-                                                    </TouchableOpacity>
-                                                )}
-                                                style={{ maxHeight: 250 }}
-                                            />
+                                    <TouchableOpacity
+                                        style={[styles.selector, { borderStyle: 'dashed', borderWidth: 1.5, borderColor: COLORS.primary }]}
+                                        onPress={() => setIsContactModalOpen(true)}
+                                    >
+                                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                            <Ionicons name="person-add-outline" size={20} color={COLORS.primary} style={{ marginRight: 10 }} />
+                                            <Text style={[styles.selectorText, { color: COLORS.primary, fontWeight: '600' }]}>Select Contact to Link</Text>
                                         </View>
-                                    )}
+                                        <Ionicons name="search-outline" size={20} color={COLORS.primary} />
+                                    </TouchableOpacity>
                                 </View>
                             ) : (
                                 <View style={styles.linkContainer}>
@@ -1009,6 +1112,9 @@ export default function AddInventoryScreen() {
                                             <Text style={styles.linkName}>{selectedOwner.name}</Text>
                                             <Text style={styles.linkMobile}>{selectedOwner.mobile}</Text>
                                         </View>
+                                        <TouchableOpacity onPress={() => setSelectedOwner(null)}>
+                                            <Ionicons name="close-circle" size={24} color={COLORS.error} />
+                                        </TouchableOpacity>
                                     </View>
 
                                     <View style={{ backgroundColor: '#fff', padding: 16, borderRadius: 12, borderWidth: 1, borderColor: COLORS.border }}>
@@ -1026,15 +1132,8 @@ export default function AddInventoryScreen() {
                                             </Field>
                                         )}
 
-                                        <TouchableOpacity style={[styles.linkBtn, { marginTop: 12 }]} onPress={handleLinkOwner}>
-                                            <Text style={styles.linkBtnText}>Finish & Link</Text>
-                                        </TouchableOpacity>
-
-                                        <TouchableOpacity
-                                            style={{ marginTop: 16, alignItems: 'center' }}
-                                            onPress={() => setSelectedOwner(null)}
-                                        >
-                                            <Text style={{ color: COLORS.error, fontWeight: '600' }}>Choose different person</Text>
+                                        <TouchableOpacity style={[styles.saveBtn, { height: 48, borderRadius: 12, marginTop: 12 }]} onPress={handleLinkOwner}>
+                                            <Text style={styles.saveBtnText}>Confirm Link</Text>
                                         </TouchableOpacity>
                                     </View>
                                 </View>
@@ -1042,7 +1141,10 @@ export default function AddInventoryScreen() {
 
                             {form.owners.length > 0 && (
                                 <View style={{ marginTop: 24, borderTopWidth: 1, borderTopColor: COLORS.border, paddingTop: 20 }}>
-                                    <Text style={{ fontSize: 14, fontWeight: '700', color: COLORS.textSecondary, marginBottom: 16 }}>Linked Contacts</Text>
+                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                                        <Text style={{ fontSize: 14, fontWeight: '700', color: COLORS.textSecondary }}>Linked Portfolio</Text>
+                                        <Text style={{ fontSize: 12, color: COLORS.primary, fontWeight: '600' }}>{form.owners.length} Linked</Text>
+                                    </View>
                                     {form.owners.map((owner, idx) => (
                                         <View key={`${owner.id}-${idx}`} style={{
                                             flexDirection: 'row',
@@ -1151,7 +1253,9 @@ export default function AddInventoryScreen() {
                 <View style={styles.header}>
                     <TouchableOpacity
                         activeOpacity={0.7}
+                        hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
                         onPress={() => {
+                            console.log("[InventoryHeader] Back/Close Pressed. Step:", step);
                             if (step > 0) {
                                 setStep(step - 1);
                             } else {
@@ -1159,15 +1263,22 @@ export default function AddInventoryScreen() {
                                 if (isDirty) {
                                     Alert.alert("Discard Changes?", "You have unsaved changes. Are you sure you want to go back?", [
                                         { text: "Keep Editing", style: "cancel" },
-                                        { text: "Discard", style: "destructive", onPress: () => router.back() }
+                                        {
+                                            text: "Discard", style: "destructive", onPress: () => {
+                                                console.log("[InventoryHeader] Discarding and navigating back");
+                                                router.back();
+                                            }
+                                        }
                                     ]);
                                 } else {
+                                    console.log("[InventoryHeader] No changes. Navigating back");
                                     router.back();
                                 }
                             }
                         }}
+                        style={{ padding: 4, zIndex: 10 }}
                     >
-                        <Ionicons name={step > 0 ? "arrow-back" : "close"} size={24} color={COLORS.textPrimary} style={styles.headerIcon} />
+                        <Ionicons name={step > 0 ? "arrow-back" : "close"} size={28} color={COLORS.textPrimary} style={styles.headerIcon} />
                     </TouchableOpacity>
                     <View style={styles.headerTitleContainer}>
                         <Text style={styles.headerTitle}>{FORM_STEPS[step]}</Text>
@@ -1292,6 +1403,12 @@ export default function AddInventoryScreen() {
                     placeholder="Search User"
                     onSelect={(val) => setForm(f => ({ ...f, assignedTo: val }))}
                 />
+
+                <ContactSearchModal
+                    visible={isContactModalOpen}
+                    onClose={() => setIsContactModalOpen(false)}
+                    onSelect={(c) => setSelectedOwner(c)}
+                />
             </KeyboardAvoidingView>
         </SafeAreaView>
     );
@@ -1307,11 +1424,13 @@ const styles = StyleSheet.create({
         paddingBottom: 12,
         backgroundColor: COLORS.bg,
         paddingTop: Platform.OS === 'ios' ? 50 : 16,
+        zIndex: 1000,
+        elevation: 10,
     },
     headerIcon: { fontWeight: '300' },
-    headerTitleContainer: { flex: 1, alignItems: 'center' },
-    headerTitle: { fontSize: 20, fontWeight: "600", color: COLORS.textPrimary },
-    headerSubtitle: { fontSize: 13, color: COLORS.textMuted, marginTop: 2 },
+    headerTitleContainer: { flex: 1, alignItems: 'center', paddingRight: 40 }, // Offset to balance the left icon
+    headerTitle: { fontSize: 20, fontWeight: "700", color: COLORS.textPrimary },
+    headerSubtitle: { fontSize: 13, color: COLORS.textSecondary, marginTop: 2, fontWeight: '500' },
     progressContainer: { paddingHorizontal: 20, marginBottom: 12 },
     progressTrack: { height: 6, backgroundColor: COLORS.border, borderRadius: 3, overflow: 'hidden' },
     progressFill: { height: '100%', backgroundColor: COLORS.primary, borderRadius: 3 },

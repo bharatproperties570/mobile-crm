@@ -19,7 +19,7 @@ export interface Company {
 }
 
 export const getCompanies = async (params?: Record<string, string>) => {
-    const res = await api.get("/companies", { params });
+    const res = await api.get("/companies", { params: { limit: "200", ...params } });
     return res.data;
 };
 

@@ -45,7 +45,12 @@ export function lookupVal(field: unknown): string {
 }
 
 export const getContacts = async (params?: Record<string, string>) => {
-    const res = await api.get("/contacts", { params });
+    const res = await api.get("/contacts", { params: { limit: "200", ...params } });
+    return res.data;
+};
+
+export const getLeads = async (params?: Record<string, string>) => {
+    const res = await api.get("/leads", { params: { limit: "200", ...params } });
     return res.data;
 };
 

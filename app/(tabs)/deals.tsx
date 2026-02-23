@@ -1,7 +1,8 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useCallback, useEffect, useState, useRef, useMemo, memo } from "react";
 import {
     View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity,
-    RefreshControl, ActivityIndicator, Alert, Linking, Modal, Pressable, Animated
+    RefreshControl, ActivityIndicator, Alert, Linking, Modal, Pressable, Animated,
+    SafeAreaView, Dimensions, Vibration
 } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -52,14 +53,14 @@ function formatAmount(amount?: number): string {
     return `₹${amount.toLocaleString("en-IN")}`;
 }
 
-function DealCard({
+const DealCard = memo(({
     deal,
     onPress,
     onLongPress,
     onCall,
     onWhatsApp,
     onSMS,
-    onActivity
+    onMenuPress,
 }: {
     deal: Deal;
     onPress: () => void;
@@ -67,25 +68,19 @@ function DealCard({
     onCall: () => void;
     onWhatsApp: () => void;
     onSMS: () => void;
-    onActivity: () => void;
-}) {
+    onMenuPress: () => void;
+}) => {
     const stageStr = (resolveName(deal.stage) || "open").toLowerCase();
     const color = STAGE_COLORS[stageStr] ?? "#6366F1";
     const amount = deal.price || deal.amount || 0;
 
     const renderRightActions = () => (
         <View style={styles.rightActions}>
-            <TouchableOpacity
-                style={[styles.swipeAction, { backgroundColor: '#3B82F6' }]}
-                onPress={onCall}
-            >
+            <TouchableOpacity style={[styles.swipeAction, { backgroundColor: '#3B82F6' }]} onPress={onCall}>
                 <Ionicons name="call" size={20} color="#fff" />
                 <Text style={styles.swipeLabel}>Call</Text>
             </TouchableOpacity>
-            <TouchableOpacity
-                style={[styles.swipeAction, { backgroundColor: '#64748B' }]}
-                onPress={onSMS}
-            >
+            <TouchableOpacity style={[styles.swipeAction, { backgroundColor: '#64748B' }]} onPress={onSMS}>
                 <Ionicons name="chatbubble" size={20} color="#fff" />
                 <Text style={styles.swipeLabel}>SMS</Text>
             </TouchableOpacity>
@@ -94,15 +89,12 @@ function DealCard({
 
     const renderLeftActions = () => (
         <View style={styles.leftActions}>
-            <TouchableOpacity
-                style={[styles.swipeAction, { backgroundColor: '#25D366' }]}
-                onPress={onWhatsApp}
-            >
+            <TouchableOpacity style={[styles.swipeAction, { backgroundColor: '#25D366' }]} onPress={onWhatsApp}>
                 <Ionicons name="logo-whatsapp" size={22} color="#fff" />
                 <Text style={styles.swipeLabel}>WhatsApp</Text>
             </TouchableOpacity>
             <TouchableOpacity
-                style={[styles.swipeAction, { backgroundColor: '#4F46E5' }]}
+                style={[styles.swipeAction, { backgroundColor: '#6366F1' }]}
                 onPress={() => {
                     const contact = deal.associatedContact as any;
                     if (contact?.email) Linking.openURL(`mailto:${contact.email}`);
@@ -115,79 +107,80 @@ function DealCard({
     );
 
     const dealTypeStr = resolveName(deal.intent || deal.dealType || deal.transactionType || "Sell").toUpperCase();
-
-    // CRM Business Rule: Scoring Engine Colors
     const score = deal.score || (deal as any).dealScore || 0;
-    let typeColor = "#64748B"; // cold (0-30), default
+    let typeColor = "#64748B"; // cold (0-30)
     if (score >= 81) typeColor = "#7C3AED"; // superHot
     else if (score >= 61) typeColor = "#EF4444"; // hot
     else if (score >= 31) typeColor = "#F59E0B"; // warm
 
     return (
-        <Swipeable
-            renderRightActions={renderRightActions}
-            renderLeftActions={renderLeftActions}
-            friction={2}
-            rightThreshold={40}
-            leftThreshold={40}
-        >
-            <TouchableOpacity
-                style={styles.card}
-                onPress={onPress}
-                onLongPress={onLongPress}
-                activeOpacity={0.85}
-            >
-                <View style={[styles.cardAccent, { backgroundColor: typeColor }]}>
-                    <View style={styles.verticalTextContainer}>
-                        <Text style={styles.verticalText}>{dealTypeStr || "DEAL"}</Text>
-                    </View>
-                </View>
-                <View style={styles.cardContent}>
-                    <View style={styles.cardTop}>
-                        <View style={{ flex: 1 }}>
-                            <View style={styles.headerTitleRow}>
-                                <Text style={styles.dealIdText}>{deal.dealId || `DEAL-${deal._id.slice(-6).toUpperCase()}`}</Text>
-                                <TouchableOpacity onPress={onLongPress} style={styles.moreBtn}>
-                                    <Ionicons name="ellipsis-vertical" size={20} color="#94A3B8" />
-                                </TouchableOpacity>
+        <Swipeable renderRightActions={renderRightActions} renderLeftActions={renderLeftActions} friction={2}>
+            <TouchableOpacity style={styles.card} onPress={onPress} onLongPress={onLongPress} activeOpacity={0.9}>
+                <View style={[styles.cardAccent, { backgroundColor: typeColor }]} />
+                <View style={styles.cardMain}>
+                    <Text style={styles.dealBlock}>{deal.block || (typeof deal.inventoryId === 'object' ? deal.inventoryId?.block : "") || "No Block"}</Text>
+                    <View style={styles.cardHeader}>
+                        <View style={styles.cardIdentity}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                <Text style={styles.dealUnitNumber}>{deal.unitNo || (typeof deal.inventoryId === 'object' ? deal.inventoryId?.unitNumber : "") || "N/A"}</Text>
+                                <View style={[styles.typePill, { backgroundColor: color + '15' }]}>
+                                    <Text style={[styles.typePillText, { color: color }]}>
+                                        {[
+                                            resolveName(deal.unitType || (typeof deal.inventoryId === 'object' ? deal.inventoryId?.unitType : "")),
+                                            resolveName(deal.subCategory || (typeof deal.inventoryId === 'object' ? deal.inventoryId?.subCategory : ""))
+                                        ].filter(t => t && t !== "—").join(' · ') || "Property"}
+                                    </Text>
+                                </View>
                             </View>
-                            <Text style={styles.cardTitle} numberOfLines={1}>{getDealTitle(deal)}</Text>
+                            <Text style={styles.dealProjectName}>{deal.projectName || "Unnamed Project"}</Text>
                         </View>
-                        <Text style={[styles.amount, { color }]}>{formatAmount(amount)}</Text>
+                        <View style={styles.headerRight}>
+                            <Text style={[styles.dealAmount, { color: color }]}>{formatAmount(amount)}</Text>
+                            <TouchableOpacity style={styles.menuTrigger} onPress={onMenuPress}>
+                                <Ionicons name="ellipsis-vertical" size={20} color="#94A3B8" />
+                            </TouchableOpacity>
+                        </View>
                     </View>
 
-                    <View style={styles.cardMeta}>
-                        <View style={[styles.stageBadge, { backgroundColor: color + "18" }]}>
+                    <View style={styles.cardBody}>
+                        <View style={[styles.stagePill, { backgroundColor: color + "15" }]}>
+                            <View style={[styles.stageDot, { backgroundColor: color }]} />
                             <Text style={[styles.stageText, { color }]}>{resolveName(deal.stage)}</Text>
                         </View>
-                        <Text style={styles.metaText} numberOfLines={1}>
-                            👤 Client: {resolveName(deal.associatedContact || (deal as any).partyStructure?.buyer || deal.owner)}
-                            {deal.assignedTo ? ` • RM: ${resolveName(deal.assignedTo)}` : ""}
-                        </Text>
+                        <View style={styles.clientRow}>
+                            <Ionicons name="person-circle-outline" size={14} color="#64748B" />
+                            <Text style={styles.clientName} numberOfLines={1}>
+                                {resolveName(deal.associatedContact || (deal as any).partyStructure?.buyer || deal.owner)}
+                            </Text>
+                        </View>
                     </View>
 
-                    <View style={styles.cardBottom}>
-                        <Text style={styles.locationText}>
-                            📍 {deal.location || (typeof deal.inventoryId === 'object' ? deal.inventoryId?.location : "") || deal.projectName || "Property"}
-                        </Text>
-                        {deal.date || deal.createdAt ? (
-                            <Text style={styles.dateText}>📅 {new Date(deal.date || deal.createdAt!).toLocaleDateString("en-IN")}</Text>
-                        ) : null}
+                    <View style={styles.cardFooter}>
+                        <View style={styles.locationGroup}>
+                            <Ionicons name="location-outline" size={12} color="#94A3B8" />
+                            <Text style={styles.locationText} numberOfLines={1}>
+                                {deal.location || (typeof deal.inventoryId === 'object' ? deal.inventoryId?.location : "") || deal.projectName || "Property"}
+                            </Text>
+                        </View>
+                        {deal.createdAt && (
+                            <Text style={styles.dateText}>{new Date(deal.createdAt).toLocaleDateString("en-IN")}</Text>
+                        )}
                     </View>
                 </View>
             </TouchableOpacity>
         </Swipeable>
     );
-}
+});
 
 export default function DealsScreen() {
     const { trackCall } = useCallTracking();
     const router = useRouter();
     const [deals, setDeals] = useState<Deal[]>([]);
-    const [filtered, setFiltered] = useState<Deal[]>([]);
     const [search, setSearch] = useState("");
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
+    const [page, setPage] = useState(1);
+    const [hasMore, setHasMore] = useState(true);
 
     // Action Hub State
     const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null);
@@ -197,19 +190,35 @@ export default function DealsScreen() {
     const [showTagEditor, setShowTagEditor] = useState(false);
     const [users, setUsers] = useState<any[]>([]);
     const [newTag, setNewTag] = useState("");
-    const slideAnim = useRef(new Animated.Value(300)).current;
+    const slideAnim = useRef(new Animated.Value(350)).current;
 
-    const fetchDeals = useCallback(async () => {
-        const result = await safeApiCall<Deal>(() => getDeals());
+    const fetchDeals = useCallback(async (pageNum = 1, shouldAppend = false) => {
+        if (!shouldAppend) setLoading(true);
+        const result = await safeApiCall<any>(() => getDeals({ page: String(pageNum), limit: "50" }));
+
         if (result.error) {
-            Alert.alert("Data Load Error", `Could not load deals:\n${result.error}`, [{ text: "Retry", onPress: fetchDeals }]);
-        } else {
-            setDeals(result.data);
-            setFiltered(result.data);
+            Alert.alert("Data Load Error", `Could not load deals:\n${result.error}`, [{ text: "Retry", onPress: () => fetchDeals(pageNum, shouldAppend) }]);
+        } else if (result.data) {
+            const dataObj = result.data as any;
+            const newDeals = dataObj.data || dataObj.records || (Array.isArray(dataObj) ? dataObj : []);
+            setDeals(prev => shouldAppend ? [...prev, ...newDeals] : newDeals);
+            setHasMore(newDeals.length === 50);
+            setPage(pageNum);
         }
         setLoading(false);
         setRefreshing(false);
     }, []);
+
+    const onRefresh = useCallback(() => {
+        setRefreshing(true);
+        fetchDeals(1, false);
+    }, [fetchDeals]);
+
+    const loadMore = useCallback(() => {
+        if (!loading && hasMore) {
+            fetchDeals(page + 1, true);
+        }
+    }, [loading, hasMore, page, fetchDeals]);
 
     const loadUsers = async () => {
         const res = await api.get("/users?limit=50");
@@ -218,15 +227,65 @@ export default function DealsScreen() {
 
     useFocusEffect(
         useCallback(() => {
-            fetchDeals();
+            fetchDeals(1, false);
         }, [fetchDeals])
     );
 
+    const filtered = useMemo(() => {
+        if (!search) return deals;
+        const q = search.toLowerCase();
+        return deals.filter((d) => getDealTitle(d).toLowerCase().includes(q));
+    }, [deals, search]);
+
     const handleSearch = (text: string) => {
         setSearch(text);
-        const q = text.toLowerCase();
-        setFiltered(deals.filter((d) => getDealTitle(d).toLowerCase().includes(q)));
     };
+
+    const renderHeader = () => (
+        <SafeAreaView style={styles.safeArea}>
+            <View style={styles.header}>
+                <View>
+                    <Text style={styles.headerTitle}>Deals</Text>
+                    <Text style={styles.headerSubtitle}>{filtered.length} active opportunities</Text>
+                </View>
+                <TouchableOpacity style={styles.addBtn} onPress={() => router.push("/add-deal")}>
+                    <Ionicons name="add" size={26} color="#fff" />
+                </TouchableOpacity>
+            </View>
+
+            {filtered.length > 0 && (
+                <View style={styles.headerCard}>
+                    <View>
+                        <Text style={styles.summaryLabel}>PIPELINE VALUE</Text>
+                        <Text style={styles.summaryValue}>{formatAmount(totalValue)}</Text>
+                    </View>
+                    <View style={styles.summaryDivider} />
+                    <View style={styles.summaryStats}>
+                        <View style={styles.statItem}>
+                            <Text style={styles.statLabel}>AVG</Text>
+                            <Text style={styles.statValue}>{formatAmount(totalValue / filtered.length)}</Text>
+                        </View>
+                    </View>
+                </View>
+            )}
+
+            <View style={styles.commandBar}>
+                <Ionicons name="search" size={20} color="#94A3B8" />
+                <TextInput
+                    style={styles.commandInput}
+                    placeholder="Search Deals or Properties..."
+                    placeholderTextColor="#94A3B8"
+                    value={search}
+                    onChangeText={handleSearch}
+                />
+                {search.length > 0 && (
+                    <TouchableOpacity onPress={() => setSearch("")}>
+                        <Ionicons name="close-circle" size={18} color="#CBD5E1" />
+                    </TouchableOpacity>
+                )}
+            </View>
+        </SafeAreaView>
+    );
 
     const openHub = (deal: Deal) => {
         setSelectedDeal(deal);
@@ -315,7 +374,6 @@ export default function DealsScreen() {
             const updated = { ...selectedDeal, tags };
             setSelectedDeal(updated);
             setDeals(deals.map(d => d._id === selectedDeal._id ? updated : d));
-            setFiltered(filtered.map(d => d._id === selectedDeal._id ? updated : d));
         }
     };
 
@@ -327,44 +385,21 @@ export default function DealsScreen() {
             const updated = { ...selectedDeal, tags };
             setSelectedDeal(updated);
             setDeals(deals.map(d => d._id === selectedDeal._id ? updated : d));
-            setFiltered(filtered.map(d => d._id === selectedDeal._id ? updated : d));
             setNewTag("");
         }
     };
 
-    const totalValue = filtered.reduce((sum, d) => sum + (d.price || d.amount || 0), 0);
+    const totalValue = deals.reduce((sum: number, d: Deal) => sum + (Number(d.price) || Number(d.amount) || 0), 0);
 
     return (
         <GestureHandlerRootView style={styles.container}>
-            <View style={styles.header}>
-                <Text style={styles.headerTitle}>Deals</Text>
-                <Text style={styles.headerCount}>{filtered.length} deals</Text>
-            </View>
-
-            {!loading && filtered.length > 0 && (
-                <View style={styles.totalBanner}>
-                    <Text style={styles.totalLabel}>Pipeline Value</Text>
-                    <Text style={styles.totalValue}>{formatAmount(totalValue)}</Text>
-                </View>
-            )}
-
-            <View style={styles.searchBox}>
-                <Ionicons name="search" size={18} color="#94A3B8" />
-                <TextInput
-                    style={styles.searchInput}
-                    placeholder="Search deals..."
-                    placeholderTextColor="#94A3B8"
-                    value={search}
-                    onChangeText={handleSearch}
-                />
-            </View>
-
-            {loading ? (
-                <ActivityIndicator color="#1E40AF" size="large" style={{ marginTop: 60 }} />
+            {loading && page === 1 ? (
+                <View style={styles.center}><ActivityIndicator color="#2563EB" size="large" /></View>
             ) : (
                 <FlatList
                     data={filtered}
                     keyExtractor={(item) => item._id}
+                    ListHeaderComponent={renderHeader}
                     renderItem={({ item }) => (
                         <DealCard
                             deal={item}
@@ -373,15 +408,28 @@ export default function DealsScreen() {
                             onCall={() => handleCall(item)}
                             onWhatsApp={() => handleWhatsApp(item)}
                             onSMS={() => handleSMS(item)}
-                            onActivity={() => router.push(`/add-activity?id=${item._id}&type=Deal`)}
+                            onMenuPress={() => openHub(item)}
                         />
                     )}
                     contentContainerStyle={styles.list}
-                    refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchDeals(); }} tintColor="#1E40AF" />}
+                    initialNumToRender={10}
+                    maxToRenderPerBatch={10}
+                    windowSize={5}
+                    removeClippedSubviews={true}
+                    getItemLayout={(data, index) => ({
+                        length: 120,
+                        offset: 120 * index,
+                        index,
+                    })}
+                    onEndReached={loadMore}
+                    onEndReachedThreshold={0.5}
+                    refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#2563EB" />}
+                    ListFooterComponent={loading && page > 1 ? <ActivityIndicator color="#2563EB" style={{ marginVertical: 20 }} /> : null}
+                    ListHeaderComponentStyle={{ marginBottom: 12 }}
                     ListEmptyComponent={
                         <View style={styles.empty}>
-                            <Text style={styles.emptyIcon}>🤝</Text>
-                            <Text style={styles.emptyText}>{search ? "No results found" : "No deals yet"}</Text>
+                            <Ionicons name="briefcase-outline" size={64} color="#E2E8F0" />
+                            <Text style={styles.emptyText}>{search ? "No matches found" : "Your pipeline is empty"}</Text>
                         </View>
                     }
                 />
@@ -398,12 +446,14 @@ export default function DealsScreen() {
                         </View>
 
                         <View style={styles.actionGrid}>
-                            <TouchableOpacity style={styles.actionItem} onPress={() => { router.push(`/add-deal?id=${selectedDeal?._id}`); closeHub(); }}>
+                            <TouchableOpacity style={styles.actionItem} onPress={() => {
+                                router.push(`/add-deal?id=${selectedDeal?._id}`); closeHub();
+                            }}>
                                 <View style={[styles.actionIcon, { backgroundColor: "#F1F5F9" }]}>
                                     <Ionicons name="create" size={24} color="#64748B" />
                                 </View>
                                 <Text style={styles.actionLabel}>Edit</Text>
-                            </TouchableOpacity>
+                            </TouchableOpacity >
 
                             <TouchableOpacity style={styles.actionItem} onPress={() => { router.push(`/match-lead?dealId=${selectedDeal?._id}`); closeHub(); }}>
                                 <View style={[styles.actionIcon, { backgroundColor: "#FDF2F8" }]}>
@@ -467,7 +517,7 @@ export default function DealsScreen() {
                                 </View>
                                 <Text style={styles.actionLabel}>Dormant</Text>
                             </TouchableOpacity>
-                        </View>
+                        </View >
 
                         {showStagePicker && (
                             <View style={styles.pickerView}>
@@ -486,133 +536,168 @@ export default function DealsScreen() {
                             </View>
                         )}
 
-                        {showReassign && (
-                            <View style={styles.pickerView}>
-                                <Text style={styles.sectionTitle}>Reassign Deal</Text>
-                                <View style={styles.chipList}>
-                                    {users.map((u) => (
-                                        <TouchableOpacity
-                                            key={u._id}
-                                            style={styles.actionChip}
-                                            onPress={() => handleReassign(u._id)}
-                                        >
-                                            <Text style={styles.actionChipText}>{u.fullName || u.name}</Text>
-                                        </TouchableOpacity>
-                                    ))}
-                                </View>
-                            </View>
-                        )}
-                        {showTagEditor && (
-                            <View style={styles.pickerView}>
-                                <Text style={styles.sectionTitle}>Manage Tags</Text>
-                                <View style={styles.tagInputRow}>
-                                    <TextInput
-                                        style={styles.tagInput}
-                                        placeholder="Add new tag..."
-                                        value={newTag}
-                                        onChangeText={setNewTag}
-                                        onSubmitEditing={handleAddTag}
-                                    />
-                                    <TouchableOpacity style={styles.addTagBtn} onPress={handleAddTag}>
-                                        <Ionicons name="add" size={20} color="#fff" />
-                                    </TouchableOpacity>
-                                </View>
-                                <View style={styles.chipList}>
-                                    {(selectedDeal?.tags || []).map((t: string, idx: number) => (
-                                        <View key={idx} style={styles.tagChip}>
-                                            <Text style={styles.tagChipText}>{t}</Text>
-                                            <TouchableOpacity onPress={() => handleRemoveTag(t)}>
-                                                <Ionicons name="close-circle" size={14} color="#94A3B8" />
+                        {
+                            showReassign && (
+                                <View style={styles.pickerView}>
+                                    <Text style={styles.sectionTitle}>Reassign Deal</Text>
+                                    <View style={styles.chipList}>
+                                        {users.map((u) => (
+                                            <TouchableOpacity
+                                                key={u._id}
+                                                style={styles.actionChip}
+                                                onPress={() => handleReassign(u._id)}
+                                            >
+                                                <Text style={styles.actionChipText}>{u.fullName || u.name}</Text>
                                             </TouchableOpacity>
-                                        </View>
-                                    ))}
+                                        ))}
+                                    </View>
                                 </View>
-                            </View>
-                        )}
-                    </Animated.View>
-                </Pressable>
-            </Modal>
+                            )
+                        }
+                        {
+                            showTagEditor && (
+                                <View style={styles.pickerView}>
+                                    <Text style={styles.sectionTitle}>Manage Tags</Text>
+                                    <View style={styles.tagInputRow}>
+                                        <TextInput
+                                            style={styles.tagInput}
+                                            placeholder="Add new tag..."
+                                            value={newTag}
+                                            onChangeText={setNewTag}
+                                            onSubmitEditing={handleAddTag}
+                                        />
+                                        <TouchableOpacity style={styles.addTagBtn} onPress={handleAddTag}>
+                                            <Ionicons name="add" size={20} color="#fff" />
+                                        </TouchableOpacity>
+                                    </View>
+                                    <View style={styles.chipList}>
+                                        {(selectedDeal?.tags || []).map((t: string, idx: number) => (
+                                            <View key={idx} style={styles.tagChip}>
+                                                <Text style={styles.tagChipText}>{t}</Text>
+                                                <TouchableOpacity onPress={() => handleRemoveTag(t)}>
+                                                    <Ionicons name="close-circle" size={14} color="#94A3B8" />
+                                                </TouchableOpacity>
+                                            </View>
+                                        ))}
+                                    </View>
+                                </View>
+                            )
+                        }
+                    </Animated.View >
+                </Pressable >
+            </Modal >
 
             <TouchableOpacity style={styles.fab} onPress={() => router.push("/add-deal")}>
                 <Ionicons name="add" size={32} color="#fff" />
             </TouchableOpacity>
-        </GestureHandlerRootView>
+        </GestureHandlerRootView >
     );
 }
 
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: "#F8FAFC" },
-    header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20, paddingTop: 56, paddingBottom: 14 },
-    headerTitle: { fontSize: 26, fontWeight: "800", color: "#1E293B" },
-    headerCount: { fontSize: 13, color: "#64748B", fontWeight: "600" },
-    totalBanner: {
-        marginHorizontal: 20, marginBottom: 12, backgroundColor: "#1E293B",
-        borderRadius: 14, padding: 14, flexDirection: "row", justifyContent: "space-between", alignItems: "center",
+    safeArea: { backgroundColor: "#fff" },
+    center: { flex: 1, justifyContent: "center", alignItems: "center" },
+
+    header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20, paddingTop: 12, paddingBottom: 16 },
+    headerTitle: { fontSize: 28, fontWeight: "900", color: "#0F172A", letterSpacing: -0.5 },
+    headerSubtitle: { fontSize: 13, color: "#64748B", fontWeight: "600", marginTop: 2 },
+    addBtn: { width: 44, height: 44, borderRadius: 14, backgroundColor: "#2563EB", justifyContent: 'center', alignItems: 'center' },
+
+    headerCard: {
+        marginHorizontal: 20, marginBottom: 16, backgroundColor: "#0F172A", borderRadius: 24,
+        padding: 20, flexDirection: 'row', alignItems: 'center',
+        shadowColor: "#2563EB", shadowOpacity: 0.2, shadowRadius: 15, shadowOffset: { width: 0, height: 10 }
     },
-    totalLabel: { color: "#94A3B8", fontSize: 13, fontWeight: "600" },
-    totalValue: { color: "#fff", fontSize: 20, fontWeight: "800" },
-    searchBox: {
-        flexDirection: "row", alignItems: "center", marginHorizontal: 20, marginBottom: 14,
-        backgroundColor: "#fff", borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10,
-        shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 2,
+    summaryLabel: { color: "#94A3B8", fontSize: 10, fontWeight: "900", letterSpacing: 1, marginBottom: 4 },
+    summaryValue: { color: "#fff", fontSize: 24, fontWeight: "900" },
+    summaryDivider: { width: 1, height: 40, backgroundColor: "rgba(255,255,255,0.1)", marginHorizontal: 20 },
+    summaryStats: { flex: 1 },
+    statItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    statLabel: { color: "#64748B", fontSize: 9, fontWeight: "900" },
+    statValue: { color: "#10B981", fontSize: 13, fontWeight: "800" },
+
+    commandBar: {
+        flexDirection: "row", alignItems: "center", marginHorizontal: 20, marginBottom: 4,
+        paddingHorizontal: 16, paddingVertical: 12, backgroundColor: "#F8FAFC",
+        borderRadius: 16, borderWidth: 1, borderColor: "#E2E8F0"
     },
-    searchInput: { flex: 1, fontSize: 14, color: "#1E293B", marginLeft: 8 },
-    list: { paddingHorizontal: 12, paddingBottom: 100 },
+    commandInput: { flex: 1, marginLeft: 12, fontSize: 15, color: "#1E293B", fontWeight: "600" },
+
+    list: { paddingBottom: 100 },
+
+    // Modern Deal Card
     card: {
-        backgroundColor: "#fff", borderRadius: 16, marginBottom: 12, flexDirection: "row", overflow: "hidden",
-        shadowColor: "#000", shadowOpacity: 0.06, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 3,
+        flexDirection: "row", backgroundColor: "#fff", marginHorizontal: 16, marginBottom: 12,
+        borderRadius: 24, overflow: "hidden", borderWidth: 1, borderColor: "#F1F5F9",
+        shadowColor: "#000", shadowOpacity: 0.03, shadowRadius: 10, shadowOffset: { width: 0, height: 5 }
     },
-    cardAccent: { width: 22, justifyContent: "center", alignItems: "center" },
-    verticalTextContainer: { width: 120, transform: [{ rotate: "-90deg" }], alignItems: "center", justifyContent: "center" },
-    verticalText: { color: "#fff", fontSize: 10, fontWeight: "900", letterSpacing: 2, textAlign: "center" },
-    cardContent: { flex: 1, padding: 16 },
-    cardTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 },
-    headerTitleRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", flex: 1 },
-    dealIdText: { fontSize: 10, fontWeight: "800", color: "#94A3B8", textTransform: "uppercase", marginBottom: 2 },
-    cardTitle: { fontSize: 15, fontWeight: "700", color: "#334155", flex: 1, marginRight: 8 },
-    amount: { fontSize: 16, fontWeight: "800" },
-    moreBtn: { padding: 4, marginRight: -8 },
-    cardMeta: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 10 },
-    stageBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20 },
-    stageText: { fontSize: 11, fontWeight: "700", textTransform: "capitalize" },
-    metaText: { fontSize: 12, color: "#64748B", flex: 1 },
-    cardBottom: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", borderTopWidth: 1, borderTopColor: "#F1F5F9", paddingTop: 10 },
-    locationText: { fontSize: 11, color: "#94A3B8", flex: 1, marginRight: 10 },
-    dateText: { fontSize: 11, color: "#94A3B8" },
-    empty: { alignItems: "center", marginTop: 80 },
-    emptyIcon: { fontSize: 48, marginBottom: 12 },
-    emptyText: { fontSize: 16, color: "#94A3B8", fontWeight: "600" },
+    cardAccent: { width: 6 },
+    cardMain: { flex: 1, padding: 16 },
+    cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 },
+    cardIdentity: { flex: 1 },
+    dealId: { fontSize: 10, fontWeight: "900", color: "#94A3B8", textTransform: "uppercase", marginBottom: 2 },
+    dealBlock: { fontSize: 11, color: "#64748B", fontWeight: "700", textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 },
+    dealUnitNumber: { fontSize: 18, fontWeight: "900", color: "#0F172A" },
+    dealProjectName: { fontSize: 14, fontWeight: "700", color: "#475569", marginTop: 4 },
+    typePill: { paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4 },
+    typePillText: { fontSize: 9, fontWeight: "800" },
+    dealTitle: { fontSize: 16, fontWeight: "800", color: "#1E293B" },
+    dealAmount: { fontSize: 16, fontWeight: "900" },
+
+    cardBody: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+    stagePill: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, gap: 6 },
+    stageDot: { width: 6, height: 6, borderRadius: 3 },
+    stageText: { fontSize: 11, fontWeight: "800", textTransform: 'uppercase' },
+    clientRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1, marginLeft: 12 },
+    clientName: { fontSize: 13, color: "#64748B", fontWeight: "700" },
+
+    headerRight: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+    menuTrigger: { padding: 4, marginRight: -4 },
+    cardQuickActions: { flexDirection: 'row', gap: 8, alignItems: 'center' },
+    quickActionBtn: { width: 32, height: 32, borderRadius: 10, backgroundColor: "#F8FAFC", justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: "#F1F5F9" },
+
+    cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 12, borderTopWidth: 1, borderTopColor: "#F8FAFC" },
+    locationGroup: { flexDirection: 'row', alignItems: 'center', gap: 4, flex: 1 },
+    locationText: { fontSize: 12, color: "#94A3B8", fontWeight: "600" },
+    dateText: { fontSize: 11, color: "#94A3B8", fontWeight: "700" },
 
     // Swipe Styles
-    rightActions: { flexDirection: 'row', width: 140 },
-    leftActions: { flexDirection: 'row', width: 150 },
-    swipeAction: { width: 75, justifyContent: 'center', alignItems: 'center', height: '100%' },
+    rightActions: { flexDirection: 'row', paddingLeft: 10 },
+    leftActions: { flexDirection: 'row', paddingRight: 10 },
+    swipeAction: { width: 70, justifyContent: 'center', alignItems: 'center', height: '100%' },
     swipeLabel: { color: '#fff', fontSize: 10, fontWeight: '800', marginTop: 4 },
 
     // Sheet Styles
-    modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
-    sheetContainer: { backgroundColor: "#fff", borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingBottom: 40, minHeight: 300 },
+    modalOverlay: { flex: 1, backgroundColor: "rgba(15, 23, 42, 0.4)", justifyContent: "flex-end" },
+    sheetContainer: { backgroundColor: "#fff", borderTopLeftRadius: 32, borderTopRightRadius: 32, paddingHorizontal: 20, paddingBottom: 40, minHeight: 400 },
     sheetHandle: { width: 40, height: 4, backgroundColor: "#E2E8F0", borderRadius: 2, alignSelf: "center", marginTop: 12, marginBottom: 20 },
-    sheetHeader: { marginBottom: 24 },
-    sheetTitle: { fontSize: 20, fontWeight: "800", color: "#1E293B" },
-    sheetSub: { fontSize: 14, color: "#64748B", fontWeight: "600", marginTop: 2 },
-    actionGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "flex-start", gap: 12 },
+    sheetHeader: { marginBottom: 24, alignItems: 'center' },
+    sheetTitle: { fontSize: 20, fontWeight: "900", color: "#0F172A" },
+    sheetSub: { fontSize: 12, color: "#64748B", fontWeight: "700", textTransform: 'uppercase', marginTop: 4 },
+
+    actionGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: 'center', gap: 12 },
     actionItem: { width: "22%", alignItems: "center", marginBottom: 16 },
-    actionIcon: { width: 52, height: 52, borderRadius: 26, justifyContent: "center", alignItems: "center", marginBottom: 6 },
-    actionLabel: { fontSize: 11, fontWeight: "700", color: "#475569", textAlign: "center" },
-    pickerView: { marginTop: 10, paddingBottom: 20, borderTopWidth: 1, borderTopColor: "#F1F5F9", paddingTop: 20 },
-    sectionTitle: { fontSize: 13, fontWeight: "800", color: "#94A3B8", textTransform: "uppercase", marginBottom: 12 },
+    actionIcon: { width: 56, height: 56, borderRadius: 20, justifyContent: "center", alignItems: "center", marginBottom: 8, shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 5, shadowOffset: { width: 0, height: 2 } },
+    actionLabel: { fontSize: 10, fontWeight: "800", color: "#475569", textAlign: "center" },
+
+    pickerView: { marginTop: 10, padding: 20, backgroundColor: "#F8FAFC", borderRadius: 20 },
+    sectionTitle: { fontSize: 12, fontWeight: "900", color: "#94A3B8", textTransform: "uppercase", marginBottom: 16 },
     chipList: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-    actionChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, backgroundColor: "#F1F5F9", borderWidth: 1, borderColor: "#E2E8F0" },
-    actionChipText: { fontSize: 12, fontWeight: "700", color: "#475569" },
-    tagInputRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 12 },
-    tagInput: { flex: 1, backgroundColor: "#F8FAFC", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 10, padding: 8, fontSize: 14 },
-    addTagBtn: { backgroundColor: "#1E3A8A", width: 36, height: 36, borderRadius: 18, justifyContent: "center", alignItems: "center" },
-    tagChip: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, backgroundColor: "#EEF2FF", borderWidth: 1, borderColor: "#E0E7FF" },
-    tagChipText: { fontSize: 12, fontWeight: "700", color: "#4F46E5" },
+    actionChip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, backgroundColor: "#fff", borderWidth: 1, borderColor: "#E2E8F0" },
+    actionChipText: { fontSize: 12, fontWeight: "800", color: "#475569" },
+
+    tagInputRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 16 },
+    tagInput: { flex: 1, backgroundColor: "#fff", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 12, padding: 12, fontSize: 14, fontWeight: "600" },
+    addTagBtn: { backgroundColor: "#2563EB", width: 40, height: 40, borderRadius: 12, justifyContent: "center", alignItems: "center" },
+    tagChip: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, backgroundColor: "#EFF6FF", borderWidth: 1, borderColor: "#DBEAFE" },
+    tagChipText: { fontSize: 12, fontWeight: "800", color: "#2563EB" },
+
+    empty: { alignItems: "center", marginTop: 100 },
+    emptyText: { marginTop: 16, fontSize: 15, color: "#94A3B8", fontWeight: "700" },
     fab: {
         position: "absolute", bottom: 30, right: 20, width: 56, height: 56,
-        borderRadius: 28, backgroundColor: "#1E3A8A", justifyContent: "center",
+        borderRadius: 28, backgroundColor: "#2563EB", justifyContent: "center",
         alignItems: "center", elevation: 4, shadowColor: "#000",
         shadowOpacity: 0.2, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }
     },

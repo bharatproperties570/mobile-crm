@@ -22,7 +22,7 @@ export interface Activity {
 }
 
 export const getActivities = async (params: any = {}) => {
-    const res = await api.get("/activities", { params });
+    const res = await api.get("/activities", { params: { limit: "200", ...params } });
     return res.data;
 };
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, memo, useMemo } from "react";
 import {
     View, Text, StyleSheet, FlatList, TouchableOpacity,
     ActivityIndicator, RefreshControl, TextInput, Alert
@@ -91,171 +91,171 @@ export default function ActivitiesScreen() {
         return new Date(a.dueDate) < new Date();
     }).length;
 
-    const renderCard = ({ item }: { item: Activity }) => {
+    const ActivityCard = memo(({ item, onPress, onDelete }: { item: Activity; onPress: () => void; onDelete: (id: string) => void }) => {
         const meta = TYPE_META[item.type] || { color: "#64748B", icon: "list", emoji: "📌" };
         const statusStyle = STATUS_COLORS[item.status] || { bg: "#F1F5F9", text: "#64748B" };
         const dueDate = item.dueDate ? new Date(item.dueDate) : null;
         const isToday = dueDate?.toDateString() === new Date().toDateString();
         const isOverdue = dueDate && dueDate < new Date() && item.status !== "Completed";
         const relatedName = (item as any).relatedTo?.[0]?.name || (item as any).entityName || "";
+        const router = useRouter();
 
         return (
             <TouchableOpacity
                 style={[styles.card, isOverdue && styles.cardOverdue]}
-                activeOpacity={0.7}
-                onPress={() => router.push(`/activity/${item._id}` as any)}
+                activeOpacity={0.9}
+                onPress={onPress}
             >
-                {/* Left accent */}
                 <View style={[styles.cardAccent, { backgroundColor: meta.color }]} />
-
-                <View style={{ flex: 1, paddingLeft: 14 }}>
-                    {/* Top Row */}
-                    <View style={styles.cardTopRow}>
+                <View style={styles.cardMain}>
+                    <View style={styles.cardHeader}>
                         <View style={[styles.typeBadge, { backgroundColor: meta.color + "15" }]}>
-                            <Text style={{ fontSize: 11 }}>{meta.emoji}</Text>
-                            <Text style={[styles.typeBadgeText, { color: meta.color }]}>{item.type}</Text>
+                            <Text style={styles.typeEmoji}>{meta.emoji}</Text>
+                            <Text style={[styles.typeText, { color: meta.color }]}>{item.type.toUpperCase()}</Text>
                         </View>
                         <View style={[styles.statusBadge, { backgroundColor: statusStyle.bg }]}>
                             <Text style={[styles.statusBadgeText, { color: statusStyle.text }]}>{item.status}</Text>
                         </View>
                     </View>
 
-                    {/* Subject */}
                     <Text style={styles.subject} numberOfLines={2}>{item.subject}</Text>
 
-                    {/* Related To */}
                     {relatedName ? (
-                        <View style={styles.relatedRow}>
-                            <Ionicons name="person-outline" size={12} color="#94A3B8" />
-                            <Text style={styles.relatedText}>{relatedName}</Text>
+                        <View style={styles.clientRow}>
+                            <Ionicons name="person-circle-outline" size={14} color="#64748B" />
+                            <Text style={styles.clientName}>{relatedName}</Text>
                         </View>
                     ) : null}
 
-                    {/* Bottom Meta Row */}
-                    <View style={styles.cardBottomRow}>
-                        <View style={styles.metaItem}>
+                    <View style={styles.cardFooter}>
+                        <View style={styles.metaGroup}>
                             <Ionicons name={isOverdue ? "alert-circle" : "calendar-outline"} size={13} color={isOverdue ? "#EF4444" : "#94A3B8"} />
-                            <Text style={[styles.metaText, isOverdue && { color: "#EF4444", fontWeight: "700" }]}>
-                                {isToday ? "Today" : dueDate?.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) || "-"}
-                                {item.dueTime ? ` · ${item.dueTime}` : ""}
+                            <Text style={[styles.metaText, isOverdue && { color: "#EF4444", fontWeight: "800" }]}>
+                                {isToday ? "Today" : dueDate?.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                                {item.dueTime ? ` @ ${item.dueTime}` : ""}
                             </Text>
                         </View>
-                        <View style={styles.metaItem}>
-                            <Text style={{ fontSize: 11 }}>{PRIORITY_ICONS[item.priority] || "🟡"}</Text>
+                        <View style={styles.metaGroup}>
+                            <Text style={styles.priorityEmoji}>{PRIORITY_ICONS[item.priority] || "🟡"}</Text>
                             <Text style={styles.metaText}>{item.priority}</Text>
                         </View>
-                        <View style={{ flex: 1 }} />
-                        {/* Actions */}
-                        <TouchableOpacity
-                            style={styles.actionBtn}
-                            onPress={() => router.push({ pathname: "/add-activity", params: { id: item._id } } as any)}
-                        >
-                            <Ionicons name="create-outline" size={16} color="#64748B" />
-                        </TouchableOpacity>
-                        <TouchableOpacity style={[styles.actionBtn, { marginLeft: 4 }]} onPress={() => handleDelete(item._id!)}>
-                            <Ionicons name="trash-outline" size={16} color="#EF4444" />
-                        </TouchableOpacity>
+                        <View style={styles.actionGroup}>
+                            <TouchableOpacity style={styles.iconBtn} onPress={() => router.push({ pathname: "/add-activity", params: { id: item._id } } as any)}>
+                                <Ionicons name="create-outline" size={18} color="#64748B" />
+                            </TouchableOpacity>
+                            <TouchableOpacity style={[styles.iconBtn, { marginLeft: 8 }]} onPress={() => onDelete(item._id!)}>
+                                <Ionicons name="trash-outline" size={18} color="#EF4444" />
+                            </TouchableOpacity>
+                        </View>
                     </View>
                 </View>
             </TouchableOpacity>
         );
-    };
+    });
 
     return (
         <View style={styles.container}>
-            {/* Header */}
             <View style={styles.header}>
                 <View>
                     <Text style={styles.headerTitle}>Activities</Text>
-                    <Text style={styles.headerSub}>{activities.length} total scheduled</Text>
+                    <Text style={styles.headerSubtitle}>{activities.length} scheduled interactions</Text>
                 </View>
                 <TouchableOpacity style={styles.addBtn} onPress={() => router.push("/add-activity" as any)}>
-                    <Ionicons name="add" size={22} color="#fff" />
+                    <Ionicons name="add" size={26} color="#fff" />
                 </TouchableOpacity>
             </View>
 
-            {/* Stats Row */}
-            <View style={styles.statsRow}>
-                <View style={[styles.statCard, { borderLeftColor: "#F59E0B" }]}>
-                    <Text style={[styles.statNum, { color: "#F59E0B" }]}>{pendingCount}</Text>
-                    <Text style={styles.statLabel}>Pending</Text>
+            <View style={styles.statsGrid}>
+                <View style={[styles.statTile, { backgroundColor: "#FFF7ED" }]}>
+                    <Text style={[styles.statValue, { color: "#EA580C" }]}>{pendingCount}</Text>
+                    <Text style={styles.statLabel}>PENDING</Text>
                 </View>
-                <View style={[styles.statCard, { borderLeftColor: "#3B82F6" }]}>
-                    <Text style={[styles.statNum, { color: "#3B82F6" }]}>{todayCount}</Text>
-                    <Text style={styles.statLabel}>Today</Text>
+                <View style={[styles.statTile, { backgroundColor: "#EFF6FF" }]}>
+                    <Text style={[styles.statValue, { color: "#2563EB" }]}>{todayCount}</Text>
+                    <Text style={styles.statLabel}>TODAY</Text>
                 </View>
-                <View style={[styles.statCard, { borderLeftColor: "#EF4444" }]}>
-                    <Text style={[styles.statNum, { color: "#EF4444" }]}>{overdueCount}</Text>
-                    <Text style={styles.statLabel}>Overdue</Text>
+                <View style={[styles.statTile, { backgroundColor: "#FEF2F2" }]}>
+                    <Text style={[styles.statValue, { color: "#DC2626" }]}>{overdueCount}</Text>
+                    <Text style={styles.statLabel}>OVERDUE</Text>
                 </View>
             </View>
 
-            {/* Search */}
-            <View style={styles.searchBar}>
-                <Ionicons name="search" size={18} color="#94A3B8" />
+            <View style={styles.commandBar}>
+                <Ionicons name="search" size={20} color="#94A3B8" />
                 <TextInput
-                    style={styles.searchInput}
-                    placeholder="Search by subject, client..."
+                    style={styles.commandInput}
+                    placeholder="Search Client or Subject..."
                     placeholderTextColor="#94A3B8"
                     value={search}
                     onChangeText={setSearch}
                 />
-                {search.length > 0 && (
-                    <TouchableOpacity onPress={() => setSearch("")}>
-                        <Ionicons name="close-circle" size={18} color="#94A3B8" />
-                    </TouchableOpacity>
-                )}
             </View>
 
-            {/* Type Filter Tabs */}
-            <View style={styles.filterScrollWrap}>
-                {TYPE_TABS.map(t => {
-                    const meta = TYPE_META[t];
-                    const active = typeFilter === t;
-                    return (
-                        <TouchableOpacity
-                            key={t}
-                            style={[styles.typeTab, active && { backgroundColor: meta?.color || "#1E40AF", borderColor: meta?.color || "#1E40AF" }]}
-                            onPress={() => setTypeFilter(t)}
-                        >
-                            {meta && <Text style={{ fontSize: 12 }}>{meta.emoji}</Text>}
-                            <Text style={[styles.typeTabText, active && { color: "#fff" }]}>{t}</Text>
-                        </TouchableOpacity>
-                    );
-                })}
+            <View style={styles.filterTray}>
+                <FlatList
+                    horizontal
+                    data={TYPE_TABS}
+                    keyExtractor={t => t}
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.filterScroll}
+                    renderItem={({ item: t }) => {
+                        const active = typeFilter === t;
+                        const meta = TYPE_META[t];
+                        return (
+                            <TouchableOpacity
+                                style={[styles.filterChip, active && { backgroundColor: "#0F172A", borderColor: "#0F172A" }]}
+                                onPress={() => setTypeFilter(t)}
+                            >
+                                {meta && <Text style={styles.chipEmoji}>{meta.emoji}</Text>}
+                                <Text style={[styles.chipText, active && { color: "#fff" }]}>{t}</Text>
+                            </TouchableOpacity>
+                        );
+                    }}
+                />
             </View>
 
-            {/* Status Tabs */}
-            <View style={styles.statusTabRow}>
+            <View style={styles.statusDock}>
                 {STATUS_TABS.map(s => (
-                    <TouchableOpacity key={s} style={[styles.statusTab, statusFilter === s && styles.statusTabActive]} onPress={() => setStatusFilter(s)}>
-                        <Text style={[styles.statusTabText, statusFilter === s && styles.statusTabTextActive]}>{s}</Text>
+                    <TouchableOpacity
+                        key={s}
+                        style={[styles.dockItem, statusFilter === s && styles.dockItemActive]}
+                        onPress={() => setStatusFilter(s)}
+                    >
+                        <Text style={[styles.dockText, statusFilter === s && styles.dockTextActive]}>{s}</Text>
                     </TouchableOpacity>
                 ))}
             </View>
 
-            {/* List */}
             {loading ? (
-                <View style={styles.center}><ActivityIndicator size="large" color="#1E40AF" /></View>
+                <View style={styles.center}><ActivityIndicator size="large" color="#2563EB" /></View>
             ) : (
                 <FlatList
                     data={activities}
                     keyExtractor={item => item._id || Math.random().toString()}
-                    renderItem={renderCard}
+                    renderItem={({ item }) => (
+                        <ActivityCard
+                            item={item}
+                            onPress={() => router.push(`/activity/${item._id}` as any)}
+                            onDelete={(id) => handleDelete(id)}
+                        />
+                    )}
                     contentContainerStyle={styles.list}
-                    refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchActivities(); }} tintColor="#1E40AF" />}
+                    initialNumToRender={10}
+                    maxToRenderPerBatch={10}
+                    windowSize={5}
+                    removeClippedSubviews={true}
+                    getItemLayout={(data, index) => ({
+                        length: 160,
+                        offset: 160 * index,
+                        index,
+                    })}
+                    refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchActivities(); }} tintColor="#2563EB" />}
                     ListEmptyComponent={
-                        <View style={styles.emptyWrap}>
-                            <Text style={{ fontSize: 48, marginBottom: 12 }}>📅</Text>
-                            <Text style={styles.emptyTitle}>No Activities Found</Text>
-                            <Text style={styles.emptyText}>Schedule a call, meeting, or site visit to get started.</Text>
-                            <TouchableOpacity style={styles.emptyBtn} onPress={() => router.push("/add-activity" as any)}>
-                                <Ionicons name="add-circle" size={20} color="#fff" />
-                                <Text style={{ color: "#fff", fontWeight: "700", fontSize: 15 }}>Schedule Activity</Text>
-                            </TouchableOpacity>
+                        <View style={styles.empty}>
+                            <Ionicons name="calendar-outline" size={64} color="#E2E8F0" />
+                            <Text style={styles.emptyText}>No activities scheduled</Text>
                         </View>
                     }
-                    showsVerticalScrollIndicator={false}
                 />
             )}
         </View>
@@ -263,58 +263,71 @@ export default function ActivitiesScreen() {
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: "#F1F5F9" },
+    container: { flex: 1, backgroundColor: "#fff" },
     center: { flex: 1, justifyContent: "center", alignItems: "center" },
 
-    // Header
-    header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20, paddingTop: 60, paddingBottom: 16, backgroundColor: "#fff", shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 8, shadowOffset: { width: 0, height: 2 } },
-    headerTitle: { fontSize: 28, fontWeight: "800", color: "#0F172A" },
-    headerSub: { fontSize: 13, color: "#94A3B8", marginTop: 2 },
-    addBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: "#1E40AF", justifyContent: "center", alignItems: "center", shadowColor: "#1E40AF", shadowOpacity: 0.4, shadowRadius: 8, shadowOffset: { width: 0, height: 4 } },
+    header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20, paddingTop: 60, paddingBottom: 16 },
+    headerTitle: { fontSize: 32, fontWeight: "900", color: "#0F172A", letterSpacing: -1 },
+    headerSubtitle: { fontSize: 13, color: "#94A3B8", fontWeight: "600", marginTop: 2 },
+    addBtn: { width: 44, height: 44, borderRadius: 14, backgroundColor: "#2563EB", justifyContent: 'center', alignItems: 'center' },
 
-    // Stats
-    statsRow: { flexDirection: "row", paddingHorizontal: 16, paddingTop: 14, gap: 10 },
-    statCard: { flex: 1, backgroundColor: "#fff", borderRadius: 12, padding: 14, borderLeftWidth: 3, shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 6, shadowOffset: { width: 0, height: 2 } },
-    statNum: { fontSize: 24, fontWeight: "900" },
-    statLabel: { fontSize: 11, color: "#94A3B8", fontWeight: "600", marginTop: 2 },
+    statsGrid: { flexDirection: 'row', paddingHorizontal: 20, gap: 12, marginBottom: 16 },
+    statTile: { flex: 1, padding: 16, borderRadius: 20, justifyContent: 'center' },
+    statValue: { fontSize: 24, fontWeight: "900" },
+    statLabel: { fontSize: 10, fontWeight: "800", color: "#64748B", marginTop: 2 },
 
-    // Search
-    searchBar: { flexDirection: "row", alignItems: "center", gap: 10, marginHorizontal: 16, marginTop: 14, backgroundColor: "#fff", borderRadius: 14, paddingHorizontal: 14, height: 48, shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 6, shadowOffset: { width: 0, height: 2 } },
-    searchInput: { flex: 1, fontSize: 15, color: "#1E293B" },
+    commandBar: {
+        flexDirection: "row", alignItems: "center", marginHorizontal: 20, marginBottom: 16,
+        paddingHorizontal: 16, paddingVertical: 12, backgroundColor: "#F8FAFC",
+        borderRadius: 16, borderWidth: 1, borderColor: "#E2E8F0"
+    },
+    commandInput: { flex: 1, marginLeft: 12, fontSize: 15, color: "#1E293B", fontWeight: "600" },
 
-    // Type Tabs
-    filterScrollWrap: { flexDirection: "row", paddingHorizontal: 16, paddingTop: 12, gap: 8, flexWrap: "nowrap" },
-    typeTab: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, borderWidth: 1.5, borderColor: "#E2E8F0", backgroundColor: "#fff" },
-    typeTabText: { fontSize: 12, fontWeight: "700", color: "#64748B" },
+    filterTray: { marginBottom: 16 },
+    filterScroll: { paddingHorizontal: 20, gap: 10 },
+    filterChip: {
+        flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 10,
+        borderRadius: 20, backgroundColor: "#fff", borderWidth: 1.5, borderColor: "#F1F5F9"
+    },
+    chipEmoji: { fontSize: 14, marginRight: 6 },
+    chipText: { fontSize: 13, fontWeight: "700", color: "#64748B" },
 
-    // Status Tabs
-    statusTabRow: { flexDirection: "row", paddingHorizontal: 16, paddingTop: 10, gap: 0, borderBottomWidth: 1, borderBottomColor: "#E2E8F0", backgroundColor: "#fff", marginTop: 8 },
-    statusTab: { paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 2, borderBottomColor: "transparent" },
-    statusTabActive: { borderBottomColor: "#1E40AF" },
-    statusTabText: { fontSize: 13, fontWeight: "600", color: "#94A3B8" },
-    statusTabTextActive: { color: "#1E40AF" },
+    statusDock: { flexDirection: 'row', paddingHorizontal: 20, borderBottomWidth: 1, borderBottomColor: "#F1F5F9", marginBottom: 12 },
+    dockItem: { paddingVertical: 12, marginRight: 24, borderBottomWidth: 2, borderBottomColor: 'transparent' },
+    dockItemActive: { borderBottomColor: "#2563EB" },
+    dockText: { fontSize: 14, fontWeight: "700", color: "#94A3B8" },
+    dockTextActive: { color: "#2563EB" },
 
-    // Cards
-    list: { padding: 16, paddingBottom: 100 },
-    card: { backgroundColor: "#fff", borderRadius: 16, marginBottom: 10, overflow: "hidden", flexDirection: "row", shadowColor: "#000", shadowOpacity: 0.06, shadowRadius: 8, shadowOffset: { width: 0, height: 3 } },
-    cardOverdue: { borderWidth: 1, borderColor: "#FCA5A5" },
-    cardAccent: { width: 4 },
-    cardTopRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8, paddingTop: 14 },
-    typeBadge: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10 },
-    typeBadgeText: { fontSize: 11, fontWeight: "800" },
-    statusBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 },
-    statusBadgeText: { fontSize: 11, fontWeight: "700" },
-    subject: { fontSize: 15, fontWeight: "700", color: "#0F172A", lineHeight: 21, marginBottom: 6 },
-    relatedRow: { flexDirection: "row", alignItems: "center", gap: 4, marginBottom: 10 },
-    relatedText: { fontSize: 12, color: "#64748B" },
-    cardBottomRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingBottom: 14 },
-    metaItem: { flexDirection: "row", alignItems: "center", gap: 4 },
-    metaText: { fontSize: 12, color: "#94A3B8", fontWeight: "500" },
-    actionBtn: { width: 32, height: 32, borderRadius: 8, backgroundColor: "#F8FAFC", justifyContent: "center", alignItems: "center" },
+    list: { paddingHorizontal: 20, paddingBottom: 100 },
+    card: {
+        flexDirection: "row", backgroundColor: "#fff", marginBottom: 16,
+        borderRadius: 24, overflow: "hidden", borderWidth: 1, borderColor: "#F1F5F9",
+        shadowColor: "#000", shadowOpacity: 0.03, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }
+    },
+    cardOverdue: { borderColor: "#FECACA", backgroundColor: "#FFF5F5" },
+    cardAccent: { width: 6 },
+    cardMain: { flex: 1, padding: 16 },
+    cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
 
-    // Empty
-    emptyWrap: { flex: 1, alignItems: "center", paddingTop: 80, paddingHorizontal: 40 },
-    emptyTitle: { fontSize: 20, fontWeight: "800", color: "#1E293B", marginBottom: 8 },
-    emptyText: { fontSize: 14, color: "#94A3B8", textAlign: "center", lineHeight: 20 },
-    emptyBtn: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "#1E40AF", paddingHorizontal: 24, paddingVertical: 14, borderRadius: 16, marginTop: 24 },
+    typeBadge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, gap: 6 },
+    typeEmoji: { fontSize: 12 },
+    typeText: { fontSize: 10, fontWeight: "900" },
+
+    statusBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+    statusBadgeText: { fontSize: 10, fontWeight: "800" },
+
+    subject: { fontSize: 16, fontWeight: "800", color: "#1E293B", lineHeight: 22, marginBottom: 8 },
+    clientRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 16 },
+    clientName: { fontSize: 13, color: "#64748B", fontWeight: "600" },
+
+    cardFooter: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+    metaGroup: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+    metaText: { fontSize: 12, color: "#94A3B8", fontWeight: "600" },
+    priorityEmoji: { fontSize: 12 },
+
+    actionGroup: { flex: 1, flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center' },
+    iconBtn: { width: 32, height: 32, borderRadius: 10, backgroundColor: "#F8FAFC", justifyContent: 'center', alignItems: 'center' },
+
+    empty: { alignItems: "center", marginTop: 80, paddingHorizontal: 40 },
+    emptyText: { marginTop: 16, fontSize: 16, color: "#94A3B8", fontWeight: "700", textAlign: 'center' },
 });

@@ -8,12 +8,17 @@ export interface Lead {
     mobile?: string;
     email?: string;
     status?: { _id: string; lookup_value: string } | string;
+    stage?: { _id: string; lookup_value: string } | string;
     source?: { _id: string; lookup_value: string } | string;
     requirement?: { _id: string; lookup_value: string } | string;
     budget?: { _id: string; lookup_value: string } | string;
     location?: { _id: string; lookup_value: string } | string;
     owner?: { _id: string; name?: string; fullName?: string } | string;
-    assignment?: { assignedTo?: { _id: string; name?: string; fullName?: string } | string };
+    assignment?: {
+        assignedTo?: { _id: string; name?: string; fullName?: string } | string;
+        team?: string[];
+        visibleTo?: string;
+    };
     createdAt?: string;
     description?: string;
     salutation?: string;
@@ -40,7 +45,7 @@ export function leadName(lead: Lead): string {
 
 
 export const getLeads = async (params?: Record<string, string>) => {
-    const res = await api.get("/leads", { params });
+    const res = await api.get("/leads", { params: { limit: "200", ...params } });
     return res.data;
 };
 

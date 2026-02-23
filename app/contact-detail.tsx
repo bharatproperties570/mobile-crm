@@ -1,12 +1,16 @@
-import React, { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
-    ActivityIndicator, Linking, Alert, SafeAreaView
+    ActivityIndicator, Linking, Alert, SafeAreaView, Animated, Dimensions
 } from "react-native";
 import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
+import { useTheme } from "./context/ThemeContext";
+import { useCallTracking } from "./context/CallTrackingContext";
 import { getContactById } from "./services/contacts.service";
 import { getActivities } from "./services/activities.service";
-import { useCallTracking } from "./context/CallTrackingContext";
+
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 function lv(field: unknown): string {
     if (!field) return "—";
@@ -18,35 +22,61 @@ function lv(field: unknown): string {
     return String(field) || "—";
 }
 
-function InfoRow({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
-    if (!value || value === "—") return null;
-    return (
-        <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>{label}</Text>
-            <Text style={[styles.infoValue, accent && styles.infoValueAccent]}>{value}</Text>
-        </View>
-    );
+function formatTimeAgo(dateString?: string) {
+    if (!dateString) return "Never";
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffInSecs = Math.floor((now.getTime() - date.getTime()) / 1000);
+    if (diffInSecs < 60) return "Just now";
+    if (diffInSecs < 3600) return `${Math.floor(diffInSecs / 60)}m ago`;
+    if (diffInSecs < 86400) return `${Math.floor(diffInSecs / 3600)}h ago`;
+    return `${Math.floor(diffInSecs / 86400)}d ago`;
 }
 
-function Section({ title, icon, children }: { title: string; icon: string; children: React.ReactNode }) {
+function getContactScore(contact: any, activities: any[]) {
+    let score = 50;
+    if (activities.length > 5) score += 20;
+    if (contact.phones?.length > 1) score += 10;
+    if (contact.emails?.length > 0) score += 10;
+
+    score = Math.min(score, 100);
+    const color = score > 80 ? "#10B981" : score > 50 ? "#F59E0B" : "#EF4444";
+    return { val: score, color };
+}
+
+function getContactInsight(contact: any, activities: any[]) {
+    if (activities.length === 0) return "First contact pending. Initiate a warm intro via WhatsApp.";
+    const lastActivity = activities[0];
+    const daysSince = Math.floor((Date.now() - new Date(lastActivity.dueDate).getTime()) / 86400000);
+    if (daysSince > 30) return "Stale contact. Reach out to stay relevant.";
+    if (contact.tags?.includes("Hot")) return "High value contact. Prioritize all interactions.";
+    return "Consistently active contact. Maintain professional rapport.";
+}
+
+function InfoRow({ label, value, accent, icon }: { label: string; value: string; accent?: boolean; icon?: any }) {
+    const { theme } = useTheme();
+    if (!value || value === "—") return null;
     return (
-        <View style={styles.section}>
-            <View style={styles.sectionHead}>
-                <Text style={styles.sectionIcon}>{icon}</Text>
-                <Text style={styles.sectionTitle}>{title}</Text>
+        <View style={[styles.infoRow, { borderBottomColor: theme.border }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                {icon && <Ionicons name={icon} size={14} color={theme.textLight} />}
+                <Text style={[styles.infoLabel, { color: theme.textLight }]}>{label}</Text>
             </View>
-            <View style={styles.sectionBody}>{children}</View>
+            <Text style={[styles.infoValue, { color: theme.text }, accent && { color: theme.primary }]}>{value}</Text>
         </View>
     );
 }
 
 export default function ContactDetailScreen() {
-    const { trackCall } = useCallTracking();
     const { id } = useLocalSearchParams<{ id: string }>();
     const router = useRouter();
+    const { theme } = useTheme();
+    const { trackCall } = useCallTracking();
     const [contact, setContact] = useState<any>(null);
     const [activities, setActivities] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const scrollY = useRef(new Animated.Value(0)).current;
+    const fadeAnim = useRef(new Animated.Value(0)).current;
 
     const fetchData = useCallback(async () => {
         if (!id) return;
@@ -57,8 +87,9 @@ export default function ContactDetailScreen() {
             ]);
             setContact(contactRes?.data ?? contactRes);
             setActivities(actRes?.data ?? actRes);
+            Animated.timing(fadeAnim, { toValue: 1, duration: 600, useNativeDriver: true }).start();
         } catch (error) {
-            Alert.alert("Error", "Could not refresh data");
+            console.error(error);
         } finally {
             setLoading(false);
         }
@@ -70,237 +101,172 @@ export default function ContactDetailScreen() {
         }, [fetchData])
     );
 
-    if (loading) {
-        return (
-            <View style={styles.center}>
-                <ActivityIndicator size="large" color="#1E40AF" />
-            </View>
-        );
-    }
-
-    if (!contact) {
-        return (
-            <View style={styles.center}>
-                <Text style={styles.noData}>Contact not found</Text>
-            </View>
-        );
-    }
+    if (loading) return <View style={[styles.center, { backgroundColor: theme.background }]}><ActivityIndicator size="large" color={theme.primary} /></View>;
+    if (!contact) return <View style={[styles.center, { backgroundColor: theme.background }]}><Text style={[styles.noData, { color: theme.textLight }]}>Contact not found</Text></View>;
 
     const firstName = contact.name ?? "";
     const lastName = contact.surname ?? "";
     const fullName = [firstName, lastName].filter(Boolean).join(" ") || "Unknown";
     const initials = (firstName[0] ?? "") + (lastName[0] ?? firstName[1] ?? "");
     const phone = contact.phones?.[0]?.number ?? "";
-    const phone2 = contact.phones?.[1]?.number ?? "";
     const email = contact.emails?.[0]?.address ?? "";
-    const email2 = contact.emails?.[1]?.address ?? "";
+    const score = getContactScore(contact, activities);
 
     return (
-        <SafeAreaView style={styles.container}>
-            {/* Header */}
-            <View style={styles.heroHeader}>
-                <TouchableOpacity
-                    onPress={() => router.back()}
-                    style={styles.backBtn}
-                    hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
-                >
-                    <Text style={styles.backIcon}>←</Text>
-                </TouchableOpacity>
-                <View style={styles.heroAvatar}>
-                    <Text style={styles.heroInitials}>{initials.toUpperCase() || "?"}</Text>
-                </View>
-                <Text style={styles.heroName}>{fullName}</Text>
-                {contact.company ? <Text style={styles.heroSub}>🏢 {contact.company}</Text> : null}
-
-                {/* Quick Action Buttons */}
-                <View style={styles.quickActions}>
-                    {phone ? (
-                        <TouchableOpacity style={[styles.qaBtn, { backgroundColor: "#10B981" }]} onPress={() => trackCall(phone, id!, "Contact", fullName)}>
-                            <Text style={styles.qaBtnIcon}>📞</Text>
-                            <Text style={styles.qaBtnText}>Call</Text>
-                        </TouchableOpacity>
-                    ) : null}
-                    {email ? (
-                        <TouchableOpacity style={[styles.qaBtn, { backgroundColor: "#3B82F6" }]} onPress={() => Linking.openURL(`mailto:${email}`)}>
-                            <Text style={styles.qaBtnIcon}>✉️</Text>
-                            <Text style={styles.qaBtnText}>Email</Text>
-                        </TouchableOpacity>
-                    ) : null}
-                    {phone ? (
-                        <TouchableOpacity style={[styles.qaBtn, { backgroundColor: "#25D366" }]} onPress={() => Linking.openURL(`https://wa.me/${phone.replace(/\D/g, "")}`)}>
-                            <Text style={styles.qaBtnIcon}>💬</Text>
-                            <Text style={styles.qaBtnText}>WhatsApp</Text>
-                        </TouchableOpacity>
-                    ) : null}
-                </View>
-            </View>
-
-            <ScrollView contentContainerStyle={styles.scroll}>
-                {/* Contact Info */}
-                <Section title="Contact Info" icon="📱">
-                    <InfoRow label="Primary Phone" value={phone} accent />
-                    {phone2 ? <InfoRow label="Secondary Phone" value={phone2} /> : null}
-                    <InfoRow label="Primary Email" value={email} accent />
-                    {email2 ? <InfoRow label="Secondary Email" value={email2} /> : null}
-                    <InfoRow label="Father's Name" value={contact.fatherName ?? "—"} />
-                </Section>
-
-                {/* Professional */}
-                <Section title="Professional Details" icon="💼">
-                    <InfoRow label="Company" value={contact.company ?? "—"} />
-                    <InfoRow label="Work Office" value={contact.workOffice ?? "—"} />
-                    <InfoRow label="Designation" value={lv(contact.designation)} />
-                    <InfoRow label="Profession" value={lv(contact.professionCategory)} />
-                </Section>
-
-                {/* Personal */}
-                <Section title="Personal Details" icon="🪪">
-                    <InfoRow label="Gender" value={contact.gender ?? "—"} />
-                    <InfoRow label="Marital Status" value={contact.maritalStatus ?? "—"} />
-                    {contact.birthDate ? (
-                        <InfoRow label="Date of Birth" value={new Date(contact.birthDate).toLocaleDateString("en-IN")} />
-                    ) : null}
-                    {contact.anniversaryDate ? (
-                        <InfoRow label="Anniversary" value={new Date(contact.anniversaryDate).toLocaleDateString("en-IN")} />
-                    ) : null}
-                </Section>
-
-                {/* Source */}
-                <Section title="Source & Campaign" icon="📣">
-                    <InfoRow label="Source" value={lv(contact.source)} />
-                    <InfoRow label="Sub Source" value={lv(contact.subSource)} />
-                    <InfoRow label="Campaign" value={lv(contact.campaign)} />
-                    <InfoRow label="Status" value={contact.status ?? "—"} />
-                    <InfoRow label="Stage" value={contact.stage ?? "—"} />
-                </Section>
-
-                {/* Address */}
-                {contact.personalAddress ? (
-                    <Section title="Address" icon="📍">
-                        <InfoRow label="House / Flat" value={contact.personalAddress.hNo ?? "—"} />
-                        <InfoRow label="Street" value={contact.personalAddress.street ?? "—"} />
-                        <InfoRow label="Area" value={contact.personalAddress.area ?? "—"} />
-                        <InfoRow label="City" value={lv(contact.personalAddress.city)} />
-                        <InfoRow label="State" value={lv(contact.personalAddress.state)} />
-                        <InfoRow label="Pin Code" value={contact.personalAddress.pinCode ?? "—"} />
-                    </Section>
-                ) : null}
-
-                {/* Tags */}
-                {contact.tags && contact.tags.length > 0 ? (
-                    <Section title="Tags" icon="🏷️">
-                        <View style={styles.tagRow}>
-                            {contact.tags.map((tag: string, i: number) => (
-                                <View key={i} style={styles.tag}>
-                                    <Text style={styles.tagText}>{tag}</Text>
-                                </View>
-                            ))}
-                        </View>
-                    </Section>
-                ) : null}
-
-                {/* Description */}
-                {contact.description ? (
-                    <Section title="Notes" icon="📝">
-                        <Text style={styles.notes}>{contact.description}</Text>
-                    </Section>
-                ) : null}
-
-                {/* Meta */}
-                <Section title="Record Info" icon="ℹ️">
-                    <InfoRow label="Created" value={contact.createdAt ? new Date(contact.createdAt).toLocaleDateString("en-IN") : "—"} />
-                    <InfoRow label="Owner" value={lv(contact.owner)} />
-                </Section>
-
-                {/* Activities Section */}
-                <Section title="Recent Activities" icon="🕒">
-                    {activities && activities.length > 0 ? (
-                        activities.map((act, i) => (
-                            <View key={i} style={styles.activityItem}>
-                                <View style={styles.activityHeader}>
-                                    <Text style={styles.activityType}>{act.type}</Text>
-                                    <Text style={styles.activityDate}>{new Date(act.dueDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</Text>
-                                </View>
-                                <Text style={styles.activitySubject}>{act.subject}</Text>
-                                {act.details?.completionResult ? (
-                                    <View style={styles.resultBadge}>
-                                        <Text style={styles.resultText}>Result: {act.details.completionResult}</Text>
-                                    </View>
-                                ) : (
-                                    <Text style={styles.activityStatus}>Status: {act.status}</Text>
-                                )}
-                            </View>
-                        ))
-                    ) : (
-                        <Text style={styles.emptyText}>No activities logged yet.</Text>
-                    )}
-                    <TouchableOpacity
-                        style={styles.addActInline}
-                        onPress={() => router.push(`/add-activity?id=${id}&type=Contact`)}
-                    >
-                        <Text style={styles.addActInlineText}>+ Log New Activity</Text>
+        <View style={[styles.container, { backgroundColor: theme.background }]}>
+            <SafeAreaView style={{ backgroundColor: theme.card, zIndex: 10 }}>
+                <View style={[styles.navBar, { borderBottomColor: theme.border }]}>
+                    <TouchableOpacity onPress={() => router.back()} style={[styles.navBtn, { backgroundColor: theme.background }]}>
+                        <Ionicons name="chevron-back" size={24} color={theme.text} />
                     </TouchableOpacity>
-                </Section>
+                    <Text style={[styles.navTitle, { color: theme.text }]}>Contact Hub</Text>
+                    <TouchableOpacity style={[styles.navBtn, { backgroundColor: theme.background }]} onPress={() => router.push(`/add-contact?id=${id}`)}>
+                        <Ionicons name="create-outline" size={22} color={theme.text} />
+                    </TouchableOpacity>
+                </View>
+            </SafeAreaView>
+
+            <ScrollView
+                contentContainerStyle={styles.scrollContent}
+                showsVerticalScrollIndicator={false}
+                onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: false })}
+            >
+                <Animated.View style={{ opacity: fadeAnim }}>
+                    <View style={[styles.heroCard, { backgroundColor: theme.card }]}>
+                        <View style={styles.heroTopRow}>
+                            <View style={[styles.avatarBox, { backgroundColor: theme.primary + '15' }]}>
+                                <Text style={[styles.avatarText, { color: theme.primary }]}>{initials.toUpperCase()}</Text>
+                            </View>
+                            <View style={styles.nameSection}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                    <Text style={[styles.heroName, { color: theme.text }]}>{fullName}</Text>
+                                    <View style={[styles.scoreBadge, { backgroundColor: score.color + '20' }]}>
+                                        <Text style={[styles.scoreText, { color: score.color }]}>{score.val}%</Text>
+                                    </View>
+                                </View>
+                                <View style={[styles.statusCapsule, { backgroundColor: theme.primary + '15' }]}>
+                                    <Text style={[styles.statusCapsuleText, { color: theme.primary }]}>{lv(contact.professionCategory).toUpperCase()}</Text>
+                                </View>
+                            </View>
+                        </View>
+                    </View>
+
+                    <View style={styles.quickActions}>
+                        <TouchableOpacity style={[styles.actionBtn, { backgroundColor: theme.primary }]} onPress={() => trackCall(phone, id!, "Contact", fullName)}>
+                            <Ionicons name="call" size={20} color="#fff" />
+                            <Text style={styles.actionBtnText}>Call</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#10B981' }]} onPress={() => Linking.openURL(`https://wa.me/${phone.replace(/\D/g, "")}`)}>
+                            <Ionicons name="logo-whatsapp" size={20} color="#fff" />
+                            <Text style={styles.actionBtnText}>WhatsApp</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={[styles.actionBtn, styles.actionBtnSoft, { backgroundColor: theme.card, borderColor: theme.border }]} onPress={() => Linking.openURL(`mailto:${email}`)}>
+                            <Ionicons name="mail" size={20} color={theme.primary} />
+                            <Text style={[styles.actionBtnText, { color: theme.text }]}>Email</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={[styles.actionBtn, styles.actionBtnSoft, { backgroundColor: theme.card, borderColor: theme.border }]} onPress={() => router.push(`/add-activity?id=${id}&type=Contact`)}>
+                            <Ionicons name="calendar-outline" size={20} color={theme.textLight} />
+                            <Text style={[styles.actionBtnText, { color: theme.text }]}>Activity</Text>
+                        </TouchableOpacity>
+                    </View>
+
+                    <View style={[styles.snapshotBar, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                        <View style={styles.snapItem}>
+                            <Text style={[styles.snapLabel, { color: theme.textLight }]}>RELATION</Text>
+                            <Text style={[styles.snapValue, { color: theme.text }]}>{lv(contact.status)}</Text>
+                        </View>
+                        <View style={[styles.snapDivider, { backgroundColor: theme.border }]} />
+                        <View style={styles.snapItem}>
+                            <Text style={[styles.snapLabel, { color: theme.textLight }]}>ACTIVITIES</Text>
+                            <Text style={[styles.snapValue, { color: theme.text }]}>{activities.length}</Text>
+                        </View>
+                        <View style={[styles.snapDivider, { backgroundColor: theme.border }]} />
+                        <View style={styles.snapItem}>
+                            <Text style={[styles.snapLabel, { color: theme.textLight }]}>LAST CONV</Text>
+                            <Text style={[styles.snapValue, { color: theme.text }]}>{formatTimeAgo(activities[0]?.dueDate)}</Text>
+                        </View>
+                    </View>
+
+                    <View style={[styles.insightCard, { backgroundColor: theme.primary + '08', borderColor: theme.primary + '20' }]}>
+                        <View style={[styles.insightIconBox, { backgroundColor: theme.primary + '20' }]}>
+                            <Ionicons name="sparkles-outline" size={16} color={theme.primary} />
+                        </View>
+                        <Text style={[styles.insightText, { color: theme.text }]}>{getContactInsight(contact, activities)}</Text>
+                    </View>
+
+                    <View style={styles.mainGrid}>
+                        <View style={[styles.sectionCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                            <Text style={[styles.sectionTitle, { color: theme.text }]}>Contact Details</Text>
+                            <InfoRow label="Phone" value={phone} icon="call-outline" accent />
+                            <InfoRow label="Email" value={email} icon="mail-outline" />
+                            <InfoRow label="Company" value={contact.company} icon="business-outline" />
+                            <InfoRow label="Profession" value={lv(contact.professionCategory)} icon="briefcase-outline" />
+                        </View>
+
+                        <View style={[styles.sectionCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                            <Text style={[styles.sectionTitle, { color: theme.text }]}>Personal & Tags</Text>
+                            <InfoRow label="Gender" value={contact.gender} icon="person-outline" />
+                            <InfoRow label="Source" value={lv(contact.source)} icon="share-social-outline" />
+                            {contact.tags && contact.tags.length > 0 && (
+                                <View style={styles.tagRow}>
+                                    {contact.tags.map((tag: any, i: number) => (
+                                        <View key={i} style={[styles.tag, { backgroundColor: theme.primary + '15' }]}>
+                                            <Text style={[styles.tagText, { color: theme.primary }]}>{tag}</Text>
+                                        </View>
+                                    ))}
+                                </View>
+                            )}
+                        </View>
+
+                        <View style={[styles.sectionCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                            <Text style={[styles.sectionTitle, { color: theme.text }]}>Record Management</Text>
+                            <InfoRow label="Owner" value={lv(contact.owner)} icon="shield-checkmark-outline" />
+                            <InfoRow label="Created On" value={new Date(contact.createdAt).toLocaleDateString()} icon="calendar-outline" />
+                        </View>
+                    </View>
+                </Animated.View>
             </ScrollView>
-        </SafeAreaView>
+        </View>
     );
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: "#F0F4FF" },
-    center: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#F0F4FF" },
-    noData: { fontSize: 16, color: "#94A3B8" },
-    heroHeader: {
-        backgroundColor: "#1E40AF", paddingTop: 12, paddingBottom: 28, paddingHorizontal: 20, alignItems: "center",
-    },
-    backBtn: { position: "absolute", top: 12, left: 16, padding: 8 },
-    backIcon: { fontSize: 22, color: "#fff", fontWeight: "700" },
-    heroAvatar: {
-        width: 80, height: 80, borderRadius: 40,
-        backgroundColor: "rgba(255,255,255,0.2)", justifyContent: "center", alignItems: "center",
-        marginBottom: 12, borderWidth: 3, borderColor: "rgba(255,255,255,0.4)",
-    },
-    heroInitials: { fontSize: 28, fontWeight: "800", color: "#fff" },
-    heroName: { fontSize: 22, fontWeight: "800", color: "#fff", textAlign: "center" },
-    heroSub: { fontSize: 13, color: "#BFDBFE", marginTop: 4, textAlign: "center" },
-    quickActions: { flexDirection: "row", gap: 12, marginTop: 20 },
-    qaBtn: {
-        flexDirection: "row", alignItems: "center", gap: 6,
-        paddingHorizontal: 16, paddingVertical: 10, borderRadius: 24,
-        shadowColor: "#000", shadowOpacity: 0.15, shadowRadius: 4, shadowOffset: { width: 0, height: 2 },
-    },
-    qaBtnIcon: { fontSize: 16 },
-    qaBtnText: { color: "#fff", fontWeight: "700", fontSize: 13 },
-    scroll: { padding: 16, paddingBottom: 80 },
-    section: {
-        backgroundColor: "#fff", borderRadius: 18, marginBottom: 14,
-        shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 2,
-        overflow: "hidden",
-    },
-    sectionHead: {
-        flexDirection: "row", alignItems: "center", padding: 14,
-        borderBottomWidth: 1, borderBottomColor: "#F1F5F9", backgroundColor: "#FAFBFF",
-    },
-    sectionIcon: { fontSize: 18, marginRight: 8 },
-    sectionTitle: { fontSize: 13, fontWeight: "800", color: "#1E3A8A", textTransform: "uppercase", letterSpacing: 0.5 },
-    sectionBody: { padding: 14 },
-    infoRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 7, borderBottomWidth: 1, borderBottomColor: "#F8FAFC" },
-    infoLabel: { fontSize: 13, color: "#64748B", fontWeight: "500", flex: 1 },
-    infoValue: { fontSize: 13, color: "#1E293B", fontWeight: "600", flex: 2, textAlign: "right" },
-    infoValueAccent: { color: "#1E40AF", fontWeight: "700" },
-    tagRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-    tag: { backgroundColor: "#EEF2FF", borderRadius: 20, paddingHorizontal: 12, paddingVertical: 5 },
-    tagText: { fontSize: 12, color: "#4338CA", fontWeight: "600" },
-    notes: { fontSize: 14, color: "#475569", lineHeight: 22 },
-    activityItem: { paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: "#F1F5F9" },
-    activityHeader: { flexDirection: "row", justifyContent: "space-between", marginBottom: 4 },
-    activityType: { fontSize: 11, fontWeight: "800", color: "#1E40AF" },
-    activityDate: { fontSize: 11, color: "#94A3B8", fontWeight: "600" },
-    activitySubject: { fontSize: 14, fontWeight: "700", color: "#1E293B", marginBottom: 4 },
-    activityStatus: { fontSize: 12, color: "#64748B" },
-    resultBadge: { backgroundColor: "#ECFDF5", paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, alignSelf: "flex-start" },
-    resultText: { fontSize: 11, color: "#059669", fontWeight: "700" },
-    emptyText: { textAlign: "center", color: "#94A3B8", marginVertical: 10, fontSize: 13 },
-    addActInline: { marginTop: 12, paddingVertical: 10, alignItems: "center", backgroundColor: "#EFF6FF", borderRadius: 12, borderWidth: 1, borderColor: "#DBEAFE", borderStyle: "dashed" },
-    addActInlineText: { color: "#1E40AF", fontWeight: "700", fontSize: 13 },
+    container: { flex: 1 },
+    center: { flex: 1, justifyContent: "center", alignItems: "center" },
+    noData: { fontSize: 16, fontWeight: "600" },
+    navBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1 },
+    navBtn: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+    navTitle: { fontSize: 17, fontWeight: "800" },
+    scrollContent: { paddingBottom: 100 },
+    heroCard: { margin: 20, padding: 20, borderRadius: 24, shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 15, shadowOffset: { width: 0, height: 10 }, elevation: 5 },
+    heroTopRow: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+    avatarBox: { width: 64, height: 64, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+    avatarText: { fontSize: 24, fontWeight: "800" },
+    nameSection: { flex: 1 },
+    heroName: { fontSize: 20, fontWeight: "800", marginBottom: 4 },
+    scoreBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10 },
+    scoreText: { fontSize: 13, fontWeight: "800" },
+    statusCapsule: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, alignSelf: 'flex-start' },
+    statusCapsuleText: { fontSize: 11, fontWeight: "800" },
+    quickActions: { flexDirection: 'row', paddingHorizontal: 20, gap: 12, marginBottom: 20 },
+    actionBtn: { flex: 1, height: 48, borderRadius: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, shadowColor: "#000", shadowOpacity: 0.1, shadowRadius: 5, elevation: 3 },
+    actionBtnSoft: { borderWidth: 1 },
+    actionBtnText: { color: "#fff", fontWeight: "800", fontSize: 13 },
+    snapshotBar: { marginHorizontal: 20, padding: 16, borderRadius: 20, borderWidth: 1, flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20 },
+    snapItem: { flex: 1, alignItems: 'center' },
+    snapLabel: { fontSize: 9, fontWeight: "800", marginBottom: 4 },
+    snapValue: { fontSize: 14, fontWeight: "800" },
+    snapDivider: { width: 1, height: '60%', alignSelf: 'center' },
+    insightCard: { marginHorizontal: 20, padding: 16, borderRadius: 18, borderLeftWidth: 4, flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 20 },
+    insightIconBox: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+    insightText: { flex: 1, fontSize: 13, fontWeight: "600", lineHeight: 18 },
+    mainGrid: { paddingHorizontal: 20 },
+    sectionCard: { padding: 20, borderRadius: 22, borderWidth: 1, marginBottom: 20, shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 15, shadowOffset: { width: 0, height: 10 }, elevation: 3 },
+    sectionTitle: { fontSize: 16, fontWeight: "800", marginBottom: 16 },
+    infoRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1 },
+    infoLabel: { fontSize: 14, fontWeight: "600" },
+    infoValue: { fontSize: 14, fontWeight: "700" },
+    tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
+    tag: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 },
+    tagText: { fontSize: 12, fontWeight: "700" },
 });

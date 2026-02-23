@@ -66,8 +66,8 @@ export interface Project {
     updatedAt?: string;
 }
 
-export const getProjects = async () => {
-    const res = await api.get("/projects");
+export const getProjects = async (params?: Record<string, string>) => {
+    const res = await api.get("/projects", { params: { limit: "200", ...params } });
     return res.data;
 };
 

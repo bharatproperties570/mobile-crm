@@ -7,6 +7,8 @@ export interface Deal {
     title?: string;
     projectName?: string;
     unitNo?: string;
+    unitNumber?: string;
+    subCategory?: string;
     price?: number;
     amount?: number; // fallback
     stage?: string;
@@ -19,6 +21,9 @@ export interface Deal {
     inventoryId?: {
         _id: string;
         unitNumber?: string;
+        unitNo?: string;
+        subCategory?: string;
+        unitType?: string;
         projectName?: string;
         block?: string;
         location?: string;
