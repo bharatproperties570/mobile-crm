@@ -106,9 +106,12 @@ const InventoryCard = memo(({ item, onPress, onCall, onWhatsApp, onSMS, onMenuPr
                         </TouchableOpacity>
                     </View>
 
-                    <Text style={styles.listProjectInfo} numberOfLines={1}>
-                        {item.projectName || "N/A"} • {item.block || "No Block"}
-                    </Text>
+                    <View style={styles.listProjectContainer}>
+                        <Text numberOfLines={1}>
+                            <Text style={styles.listProjectName}>{item.projectName || "N/A"}</Text>
+                            <Text style={styles.listBlockName}> • {item.block || "No Block"}</Text>
+                        </Text>
+                    </View>
 
                     <View style={styles.listFooter}>
                         <View style={styles.listMetaContainer}>
@@ -387,7 +390,9 @@ const styles = StyleSheet.create({
     listIconBox: { width: 48, height: 48, borderRadius: 16, justifyContent: 'center', alignItems: 'center' },
     listMain: { flex: 1 },
     listHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
-    listProjectInfo: { fontSize: 13, fontWeight: "600", color: "#64748B", marginBottom: 8 },
+    listProjectContainer: { marginBottom: 8 },
+    listProjectName: { fontSize: 15, fontWeight: "700", color: "#1E293B" },
+    listBlockName: { fontSize: 11, fontWeight: "600", color: "#94A3B8" },
     listUnitNumber: { fontSize: 18, fontWeight: "900", color: "#0F172A" },
     typePill: { paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4 },
     typePillText: { fontSize: 9, fontWeight: "800" },
