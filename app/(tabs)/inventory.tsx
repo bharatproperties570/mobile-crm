@@ -29,12 +29,13 @@ const TYPE_ICONS: Record<string, string> = {
     'Shop': 'cart'
 };
 
-const InventoryCard = memo(({ item, onPress, onCall, onWhatsApp, onSMS, onMenuPress, viewMode }: {
+const InventoryCard = memo(({ item, onPress, onCall, onWhatsApp, onSMS, onEmail, onMenuPress, viewMode }: {
     item: Inventory;
     onPress: () => void;
     onCall: () => void;
     onWhatsApp: () => void;
     onSMS: () => void;
+    onEmail: () => void;
     onMenuPress: () => void;
     viewMode: 'list' | 'grid'
 }) => {
@@ -65,6 +66,10 @@ const InventoryCard = memo(({ item, onPress, onCall, onWhatsApp, onSMS, onMenuPr
             <TouchableOpacity style={[styles.swipeAction, { backgroundColor: '#25D366' }]} onPress={onWhatsApp}>
                 <Ionicons name="logo-whatsapp" size={22} color="#fff" />
                 <Text style={styles.swipeLabel}>WhatsApp</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.swipeAction, { backgroundColor: '#BBF7D0' }]} onPress={onEmail}>
+                <Ionicons name="mail" size={22} color="#166534" />
+                <Text style={[styles.swipeLabel, { color: '#166534' }]}>Email</Text>
             </TouchableOpacity>
         </View>
     );
@@ -212,6 +217,15 @@ export default function InventoryScreen() {
         Linking.openURL(`sms:${phone}`);
     };
 
+    const handleEmail = (item: Inventory) => {
+        const email = item.owners?.[0]?.email || (item as any).ownerEmail;
+        if (!email) {
+            Alert.alert("No Email", "No owner email linked.");
+            return;
+        }
+        Linking.openURL(`mailto:${email}`);
+    };
+
     return (
         <SafeAreaView style={styles.safeArea}>
             <View style={styles.container}>
@@ -267,6 +281,7 @@ export default function InventoryScreen() {
                             onCall={() => handleCall(item)}
                             onWhatsApp={() => handleWhatsApp(item)}
                             onSMS={() => handleSMS(item)}
+                            onEmail={() => handleEmail(item)}
                             onMenuPress={() => openHub(item)}
                         />
                     )}

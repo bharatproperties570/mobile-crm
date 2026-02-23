@@ -637,8 +637,8 @@ const styles = StyleSheet.create({
         shadowColor: "#000", shadowOpacity: 0.03, shadowRadius: 10, shadowOffset: { width: 0, height: 5 }
     },
     cardAccent: { width: 6 },
-    cardMain: { flex: 1, padding: 16 },
-    cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 },
+    cardMain: { flex: 1, padding: 12 },
+    cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 },
     cardIdentity: { flex: 1 },
     dealId: { fontSize: 10, fontWeight: "900", color: "#94A3B8", textTransform: "uppercase", marginBottom: 2 },
     dealProjectContainer: { marginTop: 2 },
@@ -650,7 +650,7 @@ const styles = StyleSheet.create({
     dealTitle: { fontSize: 16, fontWeight: "800", color: "#1E293B" },
     dealAmount: { fontSize: 16, fontWeight: "900" },
 
-    cardBody: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+    cardBody: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
     stagePill: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, gap: 6 },
     stageDot: { width: 6, height: 6, borderRadius: 3 },
     stageText: { fontSize: 11, fontWeight: "800", textTransform: 'uppercase' },
