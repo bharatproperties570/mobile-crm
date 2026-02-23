@@ -90,11 +90,7 @@ const InventoryCard = memo(({ item, onPress, onCall, onWhatsApp, onSMS, onMenuPr
     return (
         <Swipeable renderRightActions={renderRightActions} renderLeftActions={renderLeftActions} friction={2}>
             <TouchableOpacity style={styles.listCard} onPress={onPress} activeOpacity={0.8}>
-                <View style={[styles.listIconBox, { backgroundColor: color + "15" }]}>
-                    <Ionicons name={iconName as any} size={20} color={color} />
-                </View>
                 <View style={styles.listMain}>
-                    <Text style={styles.listBlock}>{item.block || "No Block"}</Text>
                     <View style={styles.listHeader}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                             <Text style={styles.listUnitNumber}>{item.unitNumber || item.unitNo || "N/A"}</Text>
@@ -109,7 +105,11 @@ const InventoryCard = memo(({ item, onPress, onCall, onWhatsApp, onSMS, onMenuPr
                             <Ionicons name="ellipsis-vertical" size={18} color="#94A3B8" />
                         </TouchableOpacity>
                     </View>
-                    <Text style={styles.listProjectName}>{item.projectName || "N/A"}</Text>
+
+                    <Text style={styles.listProjectInfo} numberOfLines={1}>
+                        {item.projectName || "N/A"} • {item.block || "No Block"}
+                    </Text>
+
                     <View style={styles.listFooter}>
                         <View style={styles.listMetaContainer}>
                             <View style={styles.listMeta}>
@@ -385,11 +385,10 @@ const styles = StyleSheet.create({
         shadowColor: "#000", shadowOpacity: 0.02, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }
     },
     listIconBox: { width: 48, height: 48, borderRadius: 16, justifyContent: 'center', alignItems: 'center' },
-    listMain: { flex: 1, marginHorizontal: 16 },
-    listHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginVertical: 4 },
-    listBlock: { fontSize: 11, color: "#64748B", fontWeight: "700", textTransform: 'uppercase', letterSpacing: 0.5 },
+    listMain: { flex: 1 },
+    listHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
+    listProjectInfo: { fontSize: 13, fontWeight: "600", color: "#64748B", marginBottom: 8 },
     listUnitNumber: { fontSize: 18, fontWeight: "900", color: "#0F172A" },
-    listProjectName: { fontSize: 14, fontWeight: "700", color: "#475569", marginBottom: 8 },
     typePill: { paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4 },
     typePillText: { fontSize: 9, fontWeight: "800" },
     statusPill: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },

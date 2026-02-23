@@ -118,7 +118,6 @@ const DealCard = memo(({
             <TouchableOpacity style={styles.card} onPress={onPress} onLongPress={onLongPress} activeOpacity={0.9}>
                 <View style={[styles.cardAccent, { backgroundColor: typeColor }]} />
                 <View style={styles.cardMain}>
-                    <Text style={styles.dealBlock}>{deal.block || (typeof deal.inventoryId === 'object' ? deal.inventoryId?.block : "") || "No Block"}</Text>
                     <View style={styles.cardHeader}>
                         <View style={styles.cardIdentity}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -132,7 +131,9 @@ const DealCard = memo(({
                                     </Text>
                                 </View>
                             </View>
-                            <Text style={styles.dealProjectName}>{deal.projectName || "Unnamed Project"}</Text>
+                            <Text style={styles.dealProjectInfo} numberOfLines={1}>
+                                {deal.projectName || "Unnamed Project"} • {deal.block || (typeof deal.inventoryId === 'object' ? deal.inventoryId?.block : "") || "No Block"}
+                            </Text>
                         </View>
                         <View style={styles.headerRight}>
                             <Text style={[styles.dealAmount, { color: color }]}>{formatAmount(amount)}</Text>
@@ -637,7 +638,7 @@ const styles = StyleSheet.create({
     cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 },
     cardIdentity: { flex: 1 },
     dealId: { fontSize: 10, fontWeight: "900", color: "#94A3B8", textTransform: "uppercase", marginBottom: 2 },
-    dealBlock: { fontSize: 11, color: "#64748B", fontWeight: "700", textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 },
+    dealProjectInfo: { fontSize: 13, fontWeight: "600", color: "#64748B", marginTop: 2 },
     dealUnitNumber: { fontSize: 18, fontWeight: "900", color: "#0F172A" },
     dealProjectName: { fontSize: 14, fontWeight: "700", color: "#475569", marginTop: 4 },
     typePill: { paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4 },
