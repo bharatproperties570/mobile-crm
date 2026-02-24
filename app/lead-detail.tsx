@@ -125,38 +125,101 @@ export default function LeadDetailScreen() {
 
     return (
         <View style={[styles.container, { backgroundColor: theme.background }]}>
-            {/* Header with Glass Effect & Actions */}
-            <SafeAreaView style={{ backgroundColor: theme.card, borderBottomWidth: 1, borderBottomColor: theme.border }}>
+            {/* Premium SaaS Header */}
+            <SafeAreaView style={[styles.headerCard, { backgroundColor: theme.card }]}>
                 <View style={styles.headerTop}>
-                    <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-                        <Ionicons name="chevron-back" size={24} color={theme.text} />
+                    <TouchableOpacity onPress={() => router.back()} style={styles.backBtnCircle}>
+                        <Ionicons name="chevron-back" size={22} color={theme.text} />
                     </TouchableOpacity>
-                    <View style={styles.headerInfo}>
-                        <Text style={[styles.headerName, { color: theme.text }]} numberOfLines={1}>{name}</Text>
-                        <View style={styles.headerSub}>
-                            <Text style={{ fontSize: 11, color: theme.textLight }}>{lead.mobile}</Text>
-                            {lead.email && <Text style={{ fontSize: 11, color: theme.textLight }}> • {lead.email}</Text>}
+                    <View style={styles.headerTitleContainer}>
+                        <Text style={[styles.headerNamePremium, { color: theme.text }]} numberOfLines={1}>{name}</Text>
+                        <View style={styles.headerBadgeRow}>
+                            <View style={[styles.miniBadge, { backgroundColor: theme.primary + '20' }]}>
+                                <Text style={[styles.miniBadgeText, { color: theme.primary }]}>{lead.mobile}</Text>
+                            </View>
+                            {lead.email && (
+                                <View style={[styles.miniBadge, { backgroundColor: theme.border + '40' }]}>
+                                    <Text style={[styles.miniBadgeText, { color: theme.textLight }]}>{lead.email}</Text>
+                                </View>
+                            )}
                         </View>
                     </View>
-                    <View style={[styles.scorePill, { backgroundColor: score.color }]}>
-                        <Text style={styles.scorePillText}>{score.val}%</Text>
+                    <View style={styles.scoreContainer}>
+                        <View style={[styles.scoreRing, { borderColor: score.color + '40' }]}>
+                            <Text style={[styles.scoreValue, { color: score.color }]}>{score.val}</Text>
+                            <Text style={[styles.scoreLabel, { color: theme.textLight }]}>INTENT</Text>
+                        </View>
                     </View>
                 </View>
 
-                {/* Inline Action Hub */}
-                <View style={styles.actionHub}>
-                    <TouchableOpacity style={[styles.hubBtn, { backgroundColor: theme.primary }]} onPress={() => trackCall(lead.mobile, id!, "Lead", name)}>
-                        <Ionicons name="call" size={18} color="#fff" />
-                    </TouchableOpacity>
-                    <TouchableOpacity style={[styles.hubBtn, { backgroundColor: '#128C7E' }]} onPress={() => Linking.openURL(`https://wa.me/${lead.mobile.replace(/\D/g, "")}`)}>
-                        <Ionicons name="logo-whatsapp" size={18} color="#fff" />
-                    </TouchableOpacity>
-                    <TouchableOpacity style={[styles.hubBtn, { backgroundColor: '#EA4335' }]} onPress={() => Linking.openURL(`mailto:${lead.email}`)}>
-                        <Ionicons name="mail" size={18} color="#fff" />
-                    </TouchableOpacity>
-                    <TouchableOpacity style={[styles.hubBtn, { backgroundColor: theme.textLight }]} onPress={() => router.push(`/add-activity?id=${id}&type=Lead`)}>
-                        <Ionicons name="calendar" size={18} color="#fff" />
-                    </TouchableOpacity>
+                {/* Information Strategy Bar */}
+                <View style={[styles.strategyBar, { borderTopColor: theme.border, borderBottomColor: theme.border }]}>
+                    <View style={styles.strategyBlock}>
+                        <Text style={[styles.strategyLabel, { color: theme.textLight }]}>ASSIGNED TO</Text>
+                        <View style={styles.strategyValueRow}>
+                            <Ionicons name="person-circle" size={14} color={theme.primary} />
+                            <Text style={[styles.strategyValue, { color: theme.text }]} numberOfLines={1}>
+                                {lv(lead.assignment?.assignedTo) || lv(lead.owner) || "Unassigned"}
+                            </Text>
+                        </View>
+                    </View>
+
+                    <View style={[styles.strategyDivider, { backgroundColor: theme.border }]} />
+
+                    <View style={styles.strategyBlock}>
+                        <Text style={[styles.strategyLabel, { color: theme.textLight }]}>VISIBILITY</Text>
+                        <View style={styles.strategyValueRow}>
+                            <Ionicons name={lead.assignment?.visibleTo === 'Everyone' ? 'eye-outline' : 'lock-closed-outline'} size={14} color="#6366F1" />
+                            <Text style={[styles.strategyValue, { color: theme.text }]}>
+                                {lead.assignment?.visibleTo || "Everyone"}
+                            </Text>
+                        </View>
+                    </View>
+                </View>
+
+                {/* Marketing & Acquisition Row */}
+                <View style={styles.marketingRow}>
+                    <View style={[styles.marketingPill, { backgroundColor: theme.primary + '10' }]}>
+                        <Ionicons name="megaphone" size={12} color={theme.primary} />
+                        <Text style={[styles.marketingText, { color: theme.primary }]}>
+                            {lv(lead.source) || lv(lead.contactDetails?.source) || "Direct"}
+                        </Text>
+                    </View>
+
+                    {(lv(lead.subSource) || lv(lead.contactDetails?.subSource)) && (
+                        <View style={[styles.marketingPill, { backgroundColor: '#10B981' + '10' }]}>
+                            <Ionicons name="git-branch" size={12} color="#10B981" />
+                            <Text style={[styles.marketingText, { color: '#10B981' }]}>
+                                {lv(lead.subSource) || lv(lead.contactDetails?.subSource)}
+                            </Text>
+                        </View>
+                    )}
+
+                    {(lv(lead.campaign) || lv(lead.contactDetails?.campaign)) && (
+                        <View style={[styles.marketingPill, { backgroundColor: '#7C3AED' + '10' }]}>
+                            <Ionicons name="flag" size={12} color="#7C3AED" />
+                            <Text style={[styles.marketingText, { color: '#7C3AED' }]}>
+                                {lv(lead.campaign) || lv(lead.contactDetails?.campaign)}
+                            </Text>
+                        </View>
+                    )}
+                </View>
+
+
+
+
+                {/* Professional Action Hub */}
+                <View style={styles.modernActionHub}>
+                    {[
+                        { icon: 'call', color: theme.primary, onPress: () => trackCall(lead.mobile, id!, "Lead", name) },
+                        { icon: 'logo-whatsapp', color: '#128C7E', onPress: () => Linking.openURL(`https://wa.me/${lead.mobile.replace(/\D/g, "")}`) },
+                        { icon: 'mail', color: '#EA4335', onPress: () => Linking.openURL(`mailto:${lead.email}`) },
+                        { icon: 'calendar', color: '#6366F1', onPress: () => router.push(`/add-activity?id=${id}&type=Lead`) },
+                    ].map((action, i) => (
+                        <TouchableOpacity key={i} style={[styles.modernHubBtn, { backgroundColor: action.color }]} onPress={action.onPress}>
+                            <Ionicons name={action.icon as any} size={20} color="#fff" />
+                        </TouchableOpacity>
+                    ))}
                 </View>
 
                 {/* Swipeable Tabs Navigation */}
@@ -299,10 +362,10 @@ export default function LeadDetailScreen() {
                             </View>
                         )}
                     </ScrollView>
-                </View>
+                </View >
 
                 {/* 2. Requirement */}
-                <View style={styles.tabContent}>
+                < View style={styles.tabContent} >
                     <ScrollView contentContainerStyle={styles.innerScroll}>
                         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
                             <Text style={[styles.cardTitle, { color: theme.text }]}>Core Requirements</Text>
@@ -324,10 +387,10 @@ export default function LeadDetailScreen() {
                             <InfoRow label="Timeline" value={lead.timeline} icon="time-outline" />
                         </View>
                     </ScrollView>
-                </View>
+                </View >
 
                 {/* 3. Activities */}
-                <View style={styles.tabContent}>
+                < View style={styles.tabContent} >
                     <ScrollView contentContainerStyle={styles.innerScroll}>
                         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
                             <View style={styles.sectionHeader}>
@@ -355,10 +418,10 @@ export default function LeadDetailScreen() {
                             )}
                         </View>
                     </ScrollView>
-                </View>
+                </View >
 
                 {/* 4. Match */}
-                <View style={styles.tabContent}>
+                < View style={styles.tabContent} >
                     <ScrollView contentContainerStyle={styles.innerScroll}>
                         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
                             <View style={styles.sectionHeader}>
@@ -393,10 +456,10 @@ export default function LeadDetailScreen() {
                             )}
                         </View>
                     </ScrollView>
-                </View>
+                </View >
 
                 {/* 5. Inventory */}
-                <View style={styles.tabContent}>
+                < View style={styles.tabContent} >
                     <ScrollView contentContainerStyle={styles.innerScroll}>
                         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
                             <Text style={[styles.cardTitle, { color: theme.text }]}>Owned / Associated Units</Text>
@@ -419,10 +482,10 @@ export default function LeadDetailScreen() {
                             )}
                         </View>
                     </ScrollView>
-                </View>
+                </View >
 
                 {/* 6. Assignment */}
-                <View style={styles.tabContent}>
+                < View style={styles.tabContent} >
                     <ScrollView contentContainerStyle={styles.innerScroll}>
                         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
                             <Text style={[styles.cardTitle, { color: theme.text }]}>Assignment Tracking</Text>
@@ -432,14 +495,14 @@ export default function LeadDetailScreen() {
                         </View>
                         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
                             <Text style={[styles.cardTitle, { color: theme.text }]}>Campaign Info</Text>
-                            <InfoRow label="Source" value={lv(lead.source) !== "—" ? lv(lead.source) : lv(lead.contactDetails?.source)} icon="compass-outline" />
-                            <InfoRow label="Sub Source" value={lead.contactDetails?.subSource || "None"} icon="git-branch-outline" />
-                            <InfoRow label="Campaign" value={lead.contactDetails?.campaign || "Direct"} icon="megaphone-outline" accent />
+                            <InfoRow label="Source" value={lv(lead.source) || lv(lead.contactDetails?.source) || "Direct"} icon="compass-outline" />
+                            <InfoRow label="Sub Source" value={lv(lead.subSource) || lv(lead.contactDetails?.subSource) || "None"} icon="git-branch-outline" />
+                            <InfoRow label="Campaign" value={lv(lead.campaign) || lv(lead.contactDetails?.campaign) || "Direct"} icon="megaphone-outline" accent />
                         </View>
                     </ScrollView>
-                </View>
-            </ScrollView>
-        </View>
+                </View >
+            </ScrollView >
+        </View >
     );
 }
 
@@ -448,16 +511,33 @@ const styles = StyleSheet.create({
     center: { flex: 1, justifyContent: "center", alignItems: "center" },
     noData: { fontSize: 16, color: "#94A3B8" },
 
-    headerTop: { flexDirection: 'row', alignItems: 'center', padding: 16, gap: 12 },
-    backBtn: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
-    headerInfo: { flex: 1 },
-    headerName: { fontSize: 17, fontWeight: '800' },
-    headerSub: { flexDirection: 'row', marginTop: 2 },
-    scorePill: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
-    scorePillText: { color: '#fff', fontSize: 12, fontWeight: '900' },
+    headerCard: { borderBottomLeftRadius: 30, borderBottomRightRadius: 30, elevation: 12, shadowOpacity: 0.1, shadowRadius: 15, paddingBottom: 8 },
+    headerTop: { flexDirection: 'row', alignItems: 'center', padding: 20, gap: 15 },
+    backBtnCircle: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(0,0,0,0.05)', justifyContent: 'center', alignItems: 'center' },
+    headerTitleContainer: { flex: 1 },
+    headerNamePremium: { fontSize: 22, fontWeight: '900', letterSpacing: -0.5 },
+    headerBadgeRow: { flexDirection: 'row', gap: 6, marginTop: 4 },
+    miniBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
+    miniBadgeText: { fontSize: 10, fontWeight: '700' },
 
-    actionHub: { flexDirection: 'row', justifyContent: 'center', gap: 20, paddingBottom: 16 },
-    hubBtn: { width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center', elevation: 4, shadowOpacity: 0.2, shadowRadius: 5 },
+    scoreContainer: { alignItems: 'center', justifyContent: 'center' },
+    scoreRing: { width: 54, height: 54, borderRadius: 27, borderWidth: 3, alignItems: 'center', justifyContent: 'center' },
+    scoreValue: { fontSize: 18, fontWeight: '900' },
+    scoreLabel: { fontSize: 7, fontWeight: '900', marginTop: -2 },
+
+    strategyBar: { flexDirection: 'row', paddingVertical: 15, paddingHorizontal: 20, borderTopWidth: 1, borderBottomWidth: 1, marginTop: 5 },
+    strategyBlock: { flex: 1 },
+    strategyLabel: { fontSize: 9, fontWeight: '900', letterSpacing: 1, marginBottom: 4 },
+    strategyValueRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    strategyValue: { fontSize: 13, fontWeight: '800' },
+    strategyDivider: { width: 1, height: '100%', marginHorizontal: 15 },
+
+    marketingRow: { flexDirection: 'row', paddingHorizontal: 20, paddingVertical: 12, gap: 10, flexWrap: 'wrap' },
+    marketingPill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
+    marketingText: { fontSize: 11, fontWeight: '800' },
+
+    modernActionHub: { flexDirection: 'row', justifyContent: 'center', gap: 20, paddingVertical: 15 },
+    modernHubBtn: { width: 50, height: 50, borderRadius: 25, justifyContent: 'center', alignItems: 'center', elevation: 8, shadowOpacity: 0.3, shadowRadius: 10 },
 
     tabsScroll: { paddingHorizontal: 16 },
     tabItem: { paddingVertical: 12, marginRight: 24, borderBottomWidth: 2, borderBottomColor: 'transparent' },
