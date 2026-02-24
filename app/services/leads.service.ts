@@ -37,6 +37,10 @@ export interface Lead {
     propertyNo?: string;
     propertyNoEnd?: string;
     unitSelectionMode?: string;
+    // Enrichment fields
+    intent_index?: number;
+    lead_classification?: string;
+    intent_tags?: string[];
 }
 
 export function leadName(lead: Lead): string {
@@ -51,6 +55,16 @@ export const getLeads = async (params?: Record<string, string>) => {
 
 export const getLeadById = async (id: string) => {
     const res = await api.get(`/leads/${id}`);
+    return res.data;
+};
+
+export const getActivities = async (leadId: string) => {
+    const res = await api.get(`/activities?lead=${leadId}`);
+    return res.data;
+};
+
+export const getMatchingInventory = async (leadId: string) => {
+    const res = await api.get(`/inventory/match?leadId=${leadId}`);
     return res.data;
 };
 

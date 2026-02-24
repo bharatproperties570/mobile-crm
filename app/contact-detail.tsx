@@ -9,6 +9,8 @@ import { useTheme } from "./context/ThemeContext";
 import { useCallTracking } from "./context/CallTrackingContext";
 import { getContactById } from "./services/contacts.service";
 import { getActivities } from "./services/activities.service";
+import { useLookup } from "./context/LookupContext";
+
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -72,7 +74,9 @@ export default function ContactDetailScreen() {
     const router = useRouter();
     const { theme } = useTheme();
     const { trackCall } = useCallTracking();
+    const { getLookupValue } = useLookup();
     const [contact, setContact] = useState<any>(null);
+
     const [activities, setActivities] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const scrollY = useRef(new Animated.Value(0)).current;
@@ -145,8 +149,9 @@ export default function ContactDetailScreen() {
                                     </View>
                                 </View>
                                 <View style={[styles.statusCapsule, { backgroundColor: theme.primary + '15' }]}>
-                                    <Text style={[styles.statusCapsuleText, { color: theme.primary }]}>{lv(contact.professionCategory).toUpperCase()}</Text>
+                                    <Text style={[styles.statusCapsuleText, { color: theme.primary }]}>{getLookupValue("ProfessionalCategory", contact.professionCategory).toUpperCase()}</Text>
                                 </View>
+
                             </View>
                         </View>
                     </View>
@@ -196,18 +201,30 @@ export default function ContactDetailScreen() {
 
                     <View style={styles.mainGrid}>
                         <View style={[styles.sectionCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
-                            <Text style={[styles.sectionTitle, { color: theme.text }]}>Contact Details</Text>
-                            <InfoRow label="Phone" value={phone} icon="call-outline" accent />
-                            <InfoRow label="Email" value={email} icon="mail-outline" />
+                            <Text style={[styles.sectionTitle, { color: theme.text }]}>Communication Details</Text>
+                            {contact.phones?.map((p: any, i: number) => (
+                                <InfoRow key={`p-${i}`} label={i === 0 ? "Primary Mobile" : `Phone ${i + 1}`} value={p.number} icon="call-outline" accent />
+                            ))}
+                            {contact.emails?.map((e: any, i: number) => (
+                                <InfoRow key={`e-${i}`} label={i === 0 ? "Primary Email" : `Email ${i + 1}`} value={e.address} icon="mail-outline" />
+                            ))}
+                        </View>
+
+                        <View style={[styles.sectionCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                            <Text style={[styles.sectionTitle, { color: theme.text }]}>Professional Details</Text>
                             <InfoRow label="Company" value={contact.company} icon="business-outline" />
-                            <InfoRow label="Profession" value={lv(contact.professionCategory)} icon="briefcase-outline" />
+                            <InfoRow label="Work Office" value={contact.workOffice} icon="location-outline" />
+                            <InfoRow label="Profession" value={getLookupValue("ProfessionalCategory", contact.professionCategory)} icon="briefcase-outline" />
+                            <InfoRow label="Specialization" value={getLookupValue("ProfessionalSubCategory", contact.professionSubCategory)} icon="ribbon-outline" />
+                            <InfoRow label="Designation" value={getLookupValue("ProfessionalDesignation", contact.designation)} icon="medal-outline" />
                         </View>
 
                         <View style={[styles.sectionCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
                             <Text style={[styles.sectionTitle, { color: theme.text }]}>Personal & Tags</Text>
                             <InfoRow label="Gender" value={contact.gender} icon="person-outline" />
-                            <InfoRow label="Source" value={lv(contact.source)} icon="share-social-outline" />
+                            <InfoRow label="Source" value={getLookupValue("Source", contact.source)} icon="share-social-outline" />
                             {contact.tags && contact.tags.length > 0 && (
+
                                 <View style={styles.tagRow}>
                                     {contact.tags.map((tag: any, i: number) => (
                                         <View key={i} style={[styles.tag, { backgroundColor: theme.primary + '15' }]}>
@@ -220,9 +237,10 @@ export default function ContactDetailScreen() {
 
                         <View style={[styles.sectionCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
                             <Text style={[styles.sectionTitle, { color: theme.text }]}>Record Management</Text>
-                            <InfoRow label="Owner" value={lv(contact.owner)} icon="shield-checkmark-outline" />
+                            <InfoRow label="Owner" value={getLookupValue("Owner", contact.owner)} icon="shield-checkmark-outline" />
                             <InfoRow label="Created On" value={new Date(contact.createdAt).toLocaleDateString()} icon="calendar-outline" />
                         </View>
+
                     </View>
                 </Animated.View>
             </ScrollView>

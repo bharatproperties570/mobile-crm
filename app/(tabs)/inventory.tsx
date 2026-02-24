@@ -46,7 +46,7 @@ const InventoryCard = memo(({ item, onPress, onCall, onWhatsApp, onSMS, onEmail,
     const unitType = lookupVal(item.unitType);
     const iconName = TYPE_ICONS[type] || 'cube';
 
-    const displayType = [type, subCat, unitType].filter(Boolean).join(' · ');
+    const displayType = [subCat, unitType].filter(v => v && v !== "—").join(' · ');
 
     const renderRightActions = () => (
         <View style={styles.rightActions}>
@@ -106,9 +106,6 @@ const InventoryCard = memo(({ item, onPress, onCall, onWhatsApp, onSMS, onEmail,
                         <View style={[styles.statusPill, { backgroundColor: color + "10" }]}>
                             <Text style={[styles.statusPillText, { color: color }]}>{status}</Text>
                         </View>
-                        <TouchableOpacity style={styles.menuTrigger} onPress={onMenuPress}>
-                            <Ionicons name="ellipsis-vertical" size={18} color="#94A3B8" />
-                        </TouchableOpacity>
                     </View>
 
                     <View style={styles.listProjectContainer}>
@@ -125,9 +122,11 @@ const InventoryCard = memo(({ item, onPress, onCall, onWhatsApp, onSMS, onEmail,
                                 <Text style={styles.listMetaText}>{item.size} {item.sizeUnit}</Text>
                             </View>
                         </View>
+                        <TouchableOpacity style={styles.menuTrigger} onPress={onMenuPress}>
+                            <Ionicons name="ellipsis-vertical" size={18} color="#94A3B8" />
+                        </TouchableOpacity>
                     </View>
                 </View>
-                <Ionicons name="chevron-forward" size={18} color="#CBD5E1" />
             </TouchableOpacity>
         </Swipeable >
     );
@@ -226,44 +225,46 @@ export default function InventoryScreen() {
         Linking.openURL(`mailto:${email}`);
     };
 
-    return (
-        <SafeAreaView style={styles.safeArea}>
-            <View style={styles.container}>
-                <View style={styles.header}>
-                    <View>
-                        <Text style={styles.headerTitle}>Inventory</Text>
-                        <Text style={styles.headerSubtitle}>{filtered.length} total units available</Text>
-                    </View>
-                    <View style={styles.headerActions}>
-                        <TouchableOpacity
-                            style={styles.actionBtn}
-                            onPress={() => setViewMode(viewMode === 'list' ? 'grid' : 'list')}
-                        >
-                            <Ionicons name={viewMode === 'list' ? "grid-outline" : "list-outline"} size={20} color="#1E293B" />
-                        </TouchableOpacity>
-                        <TouchableOpacity style={[styles.actionBtn, styles.actionBtnPrimary]} onPress={() => router.push("/add-inventory")}>
-                            <Ionicons name="add" size={24} color="#fff" />
-                        </TouchableOpacity>
-                    </View>
+    const renderHeader = () => (
+        <View style={styles.headerContainer}>
+            <View style={styles.header}>
+                <View>
+                    <Text style={styles.headerTitle}>Inventory</Text>
+                    <Text style={styles.headerSubtitle}>{filtered.length} total units available</Text>
                 </View>
-
-                <View style={styles.commandBar}>
-                    <Ionicons name="search" size={20} color="#94A3B8" />
-                    <TextInput
-                        style={styles.commandInput}
-                        placeholder="Search Project or Unit..."
-                        placeholderTextColor="#94A3B8"
-                        value={search}
-                        onChangeText={setSearch}
-                    />
-                    {search.length > 0 && (
-                        <TouchableOpacity onPress={() => setSearch("")}>
-                            <Ionicons name="close-circle" size={18} color="#CBD5E1" />
-                        </TouchableOpacity>
-                    )}
+                <View style={styles.headerActions}>
+                    <TouchableOpacity
+                        style={styles.actionBtn}
+                        onPress={() => setViewMode(viewMode === 'list' ? 'grid' : 'list')}
+                    >
+                        <Ionicons name={viewMode === 'list' ? "grid-outline" : "list-outline"} size={20} color="#1E293B" />
+                    </TouchableOpacity>
+                    <TouchableOpacity style={[styles.actionBtn, styles.actionBtnPrimary]} onPress={() => router.push("/add-inventory")}>
+                        <Ionicons name="add" size={24} color="#fff" />
+                    </TouchableOpacity>
                 </View>
             </View>
 
+            <View style={styles.commandBar}>
+                <Ionicons name="search" size={20} color="#94A3B8" />
+                <TextInput
+                    style={styles.commandInput}
+                    placeholder="Search Project or Unit..."
+                    placeholderTextColor="#94A3B8"
+                    value={search}
+                    onChangeText={setSearch}
+                />
+                {search.length > 0 && (
+                    <TouchableOpacity onPress={() => setSearch("")}>
+                        <Ionicons name="close-circle" size={18} color="#CBD5E1" />
+                    </TouchableOpacity>
+                )}
+            </View>
+        </View>
+    );
+
+    return (
+        <SafeAreaView style={styles.safeArea}>
             {loading ? (
                 <View style={styles.center}><ActivityIndicator size="large" color="#2563EB" /></View>
             ) : (
@@ -286,6 +287,7 @@ export default function InventoryScreen() {
                         />
                     )}
                     contentContainerStyle={styles.list}
+                    ListHeaderComponent={renderHeader}
                     initialNumToRender={10}
                     maxToRenderPerBatch={10}
                     windowSize={5}
@@ -364,6 +366,20 @@ export default function InventoryScreen() {
                                 </View>
                                 <Text style={styles.actionLabel}>Feedback</Text>
                             </TouchableOpacity>
+
+                            <TouchableOpacity style={styles.actionItem} onPress={() => { if (selectedInv) handleSMS(selectedInv); closeHub(); }}>
+                                <View style={[styles.actionIcon, { backgroundColor: "#FFF7ED" }]}>
+                                    <Ionicons name="chatbubble" size={24} color="#F97316" />
+                                </View>
+                                <Text style={styles.actionLabel}>SMS</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity style={styles.actionItem} onPress={() => { if (selectedInv) handleEmail(selectedInv); closeHub(); }}>
+                                <View style={[styles.actionIcon, { backgroundColor: "#EEF2FF" }]}>
+                                    <Ionicons name="mail" size={24} color="#6366F1" />
+                                </View>
+                                <Text style={styles.actionLabel}>Email</Text>
+                            </TouchableOpacity>
                         </View >
                     </Animated.View >
                 </Pressable >
@@ -373,8 +389,9 @@ export default function InventoryScreen() {
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: "#F8FAFC" },
+    container: { flex: 1, backgroundColor: "#fff" },
     safeArea: { flex: 1, backgroundColor: "#fff" },
+    headerContainer: { backgroundColor: "#F8FAFC", paddingBottom: 8 },
     center: { flex: 1, justifyContent: "center", alignItems: "center" },
     header: {
         flexDirection: "row", justifyContent: "space-between", alignItems: "center",
@@ -406,8 +423,8 @@ const styles = StyleSheet.create({
     listMain: { flex: 1 },
     listHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
     listProjectContainer: { marginBottom: 8 },
-    listProjectName: { fontSize: 15, fontWeight: "700", color: "#1E293B" },
-    listBlockName: { fontSize: 11, fontWeight: "600", color: "#94A3B8" },
+    listProjectName: { fontSize: 16, fontWeight: "800", color: "#0F172A" },
+    listBlockName: { fontSize: 10, fontWeight: "500", color: "#CBD5E1" },
     listUnitNumber: { fontSize: 18, fontWeight: "900", color: "#0F172A" },
     typePill: { paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4 },
     typePillText: { fontSize: 9, fontWeight: "800" },
@@ -428,8 +445,8 @@ const styles = StyleSheet.create({
     gridMediaSlot: { height: 100, borderRadius: 18, marginBottom: 12, justifyContent: 'center', alignItems: 'center', position: 'relative' },
     gridStatusDot: { position: 'absolute', top: 10, right: 10, width: 8, height: 8, borderRadius: 4, borderWidth: 1.5, borderColor: '#fff' },
     gridInfo: { paddingHorizontal: 4 },
-    gridProject: { fontSize: 14, fontWeight: "800", color: "#1E293B", marginBottom: 2 },
-    gridUnit: { fontSize: 11, color: "#64748B", fontWeight: "600", marginBottom: 6 },
+    gridProject: { fontSize: 15, fontWeight: "800", color: "#0F172A", marginBottom: 2 },
+    gridUnit: { fontSize: 10, color: "#CBD5E1", fontWeight: "500", marginBottom: 8 },
     gridMenuTrigger: { position: 'absolute', top: 10, left: 10, padding: 4 },
     gridPrice: { fontSize: 14, fontWeight: "900", color: "#2563EB" },
 

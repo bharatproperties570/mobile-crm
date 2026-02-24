@@ -1,18 +1,180 @@
-import { useState, useCallback, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
-    TextInput, Alert, Switch, ActivityIndicator, KeyboardAvoidingView, Platform, SafeAreaView
+    TextInput, Alert, Switch, ActivityIndicator, KeyboardAvoidingView,
+    Platform, SafeAreaView, Animated, Pressable
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { createProject, type Project, type ProjectBlock } from "./services/projects.service";
 import { getLookups, type Lookup } from "./services/lookups.service";
 import { safeApiCall } from "./services/api.helpers";
+import { useTheme, SPACING } from "./context/ThemeContext";
+
+// ─── Reusable Components ──────────────────────────────────────────────────────
+
+function SectionHeader({ title, icon, subtitle }: { title: string; icon: string; subtitle?: string }) {
+    const { theme } = useTheme();
+    return (
+        <View style={styles.sectionHeader}>
+            <View style={styles.sectionHeaderRow}>
+                <View style={[styles.sectionIconBox, { backgroundColor: theme.primary + '10' }]}>
+                    <Text style={styles.sectionIconText}>{icon}</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                    <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>{title}</Text>
+                    {subtitle && <Text style={[styles.sectionSubtitle, { color: theme.textSecondary }]}>{subtitle}</Text>}
+                </View>
+            </View>
+            <View style={[styles.sectionSeparator, { backgroundColor: theme.border }]} />
+        </View>
+    );
+}
+
+function Field({ label, required, children, helperText }: { label?: string; required?: boolean; children: React.ReactNode; helperText?: string }) {
+    const { theme } = useTheme();
+    return (
+        <View style={styles.field}>
+            {label && (
+                <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>
+                    {label}
+                    {required && <Text style={{ color: theme.error }}> *</Text>}
+                </Text>
+            )}
+            {children}
+            {helperText && <Text style={[styles.helperText, { color: theme.textMuted }]}>{helperText}</Text>}
+        </View>
+    );
+}
+
+function Input({
+    value, onChangeText, placeholder, keyboardType, multiline, numberOfLines, editable = true, label, icon
+}: {
+    value: string; onChangeText: (t: string) => void; placeholder?: string; keyboardType?: any; multiline?: boolean; numberOfLines?: number; editable?: boolean; label?: string; icon?: string;
+}) {
+    const { theme } = useTheme();
+    const [isFocused, setIsFocused] = useState(false);
+    const labelAnim = useRef(new Animated.Value(value ? 1 : 0)).current;
+
+    useEffect(() => {
+        Animated.timing(labelAnim, {
+            toValue: (isFocused || value) ? 1 : 0,
+            duration: 200,
+            useNativeDriver: false,
+        }).start();
+    }, [isFocused, value]);
+
+    const labelStyle = {
+        position: 'absolute' as const,
+        left: 16,
+        top: labelAnim.interpolate({
+            inputRange: [0, 1],
+            outputRange: [18, -10],
+        }),
+        fontSize: labelAnim.interpolate({
+            inputRange: [0, 1],
+            outputRange: [15, 12],
+        }),
+        color: labelAnim.interpolate({
+            inputRange: [0, 1],
+            outputRange: [theme.textMuted, theme.primary],
+        }),
+        backgroundColor: theme.cardBg,
+        paddingHorizontal: 4,
+        zIndex: 1,
+    };
+
+    return (
+        <View style={[
+            styles.inputWrapper,
+            { backgroundColor: theme.inputBg, borderColor: theme.border },
+            isFocused && { borderColor: theme.primary, backgroundColor: theme.cardBg },
+            !editable && { opacity: 0.6, backgroundColor: theme.border },
+            multiline && { height: 'auto', minHeight: 100 }
+        ]}>
+            {label && <Animated.Text style={labelStyle}>{label}</Animated.Text>}
+            <View style={styles.inputInner}>
+                {icon && <Ionicons name={icon as any} size={18} color={isFocused ? theme.primary : theme.textMuted} style={styles.inputIcon} />}
+                <TextInput
+                    style={[
+                        styles.input,
+                        { color: theme.textPrimary },
+                        multiline && { height: 100, textAlignVertical: 'top', paddingTop: 16 }
+                    ]}
+                    value={value}
+                    onChangeText={onChangeText}
+                    placeholder={isFocused ? "" : placeholder}
+                    placeholderTextColor={theme.textMuted}
+                    keyboardType={keyboardType}
+                    multiline={multiline}
+                    numberOfLines={numberOfLines}
+                    editable={editable}
+                    onFocus={() => setIsFocused(true)}
+                    onBlur={() => setIsFocused(false)}
+                />
+            </View>
+        </View>
+    );
+}
+
+function PressableChip({
+    label, isSelected, onSelect, icon
+}: {
+    label: string, isSelected: boolean, onSelect: () => void, icon?: string
+}) {
+    const { theme } = useTheme();
+    const scale = useRef(new Animated.Value(1)).current;
+
+    const onPressIn = () => Animated.spring(scale, { toValue: 0.95, useNativeDriver: true }).start();
+    const onPressOut = () => Animated.spring(scale, { toValue: 1, useNativeDriver: true }).start();
+
+    return (
+        <Pressable
+            onPressIn={onPressIn}
+            onPressOut={onPressOut}
+            onPress={onSelect}
+        >
+            <Animated.View style={[
+                styles.selectableChip,
+                { borderColor: theme.border, backgroundColor: theme.cardBg },
+                isSelected && { backgroundColor: theme.primary + '08', borderColor: theme.primary },
+                { transform: [{ scale }] }
+            ]}>
+                {icon && <Ionicons name={icon as any} size={16} color={isSelected ? theme.primary : theme.textSecondary} style={{ marginRight: 6 }} />}
+                <Text style={[styles.selectableChipText, { color: theme.textSecondary }, isSelected && { color: theme.primary }]}>{label}</Text>
+                {isSelected && <Ionicons name="checkmark-circle" size={16} color={theme.primary} style={{ marginLeft: 6 }} />}
+            </Animated.View>
+        </Pressable>
+    );
+}
+
+function SelectButton({
+    value, options, onSelect,
+}: {
+    value: string; options: { label: string, value: string }[]; onSelect: (v: string) => void;
+}) {
+    const { theme } = useTheme();
+    if (options.length === 0) return <Text style={{ color: theme.textSecondary, fontSize: 13, padding: 8 }}>No options available</Text>;
+
+    return (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow} contentContainerStyle={styles.chipRowContent}>
+            {options.map((opt, idx) => (
+                <PressableChip
+                    key={`${opt.value || idx}-${idx}`}
+                    label={opt.label}
+                    isSelected={value === opt.value}
+                    onSelect={() => onSelect(opt.value === value ? "" : opt.value)}
+                />
+            ))}
+        </ScrollView>
+    );
+}
 
 const STEPS = ["Basic", "Location", "Blocks", "Amenities"];
 
 export default function AddProjectScreen() {
     const router = useRouter();
+    const { theme } = useTheme();
     const [step, setStep] = useState(0);
     const [loading, setLoading] = useState(false);
 
@@ -79,56 +241,60 @@ export default function AddProjectScreen() {
     };
 
     return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
+        <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
             <KeyboardAvoidingView
-                style={styles.container}
-                behavior={Platform.OS === "ios" ? "padding" : "height"}
+                style={{ flex: 1 }}
+                behavior={Platform.OS === "ios" ? "padding" : undefined}
             >
-                <View style={styles.header}>
+                <View style={[styles.header, { backgroundColor: theme.background }]}>
                     <TouchableOpacity
                         onPress={prevStep}
+                        style={styles.backBtn}
                         hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
                     >
-                        <Ionicons name={step === 0 ? "close" : "arrow-back"} size={24} color="#1E293B" />
+                        <Ionicons name={step === 0 ? "close" : "arrow-back"} size={26} color={theme.textPrimary} />
                     </TouchableOpacity>
-                    <View style={styles.headerTitleGroup}>
-                        <Text style={styles.headerTitle}>Add Project</Text>
-                        <Text style={styles.headerSub}>Step {step + 1} of {STEPS.length}: {STEPS[step]}</Text>
+                    <View style={styles.headerTitleContainer}>
+                        <Text style={[styles.headerTitle, { color: theme.textPrimary }]}>Add Project</Text>
+                        <Text style={[styles.headerSubtitle, { color: theme.textSecondary }]}>Step {step + 1} of {STEPS.length}: {STEPS[step]}</Text>
                     </View>
-                    {loading ? <ActivityIndicator size="small" color="#1E3A8A" /> : <View style={{ width: 24 }} />}
+                    <View style={{ width: 28 }} />
                 </View>
 
-                <View style={styles.stepIndicator}>
+                <View style={[styles.progressBarContainer, { backgroundColor: theme.border }]}>
                     {STEPS.map((s, i) => (
                         <View
                             key={i}
                             style={[
-                                styles.indicatorBar,
-                                i <= step && styles.indicatorBarActive,
-                                i === step && styles.indicatorBarCurrent
+                                styles.progressBar,
+                                i < step && { backgroundColor: theme.primary + '40' },
+                                i === step && { backgroundColor: theme.primary }
                             ]}
                         />
                     ))}
                 </View>
 
-                <ScrollView contentContainerStyle={styles.scroll}>
+                <ScrollView style={styles.content} contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
                     {renderStepContent()}
                 </ScrollView>
 
-                <View style={styles.footer}>
+                <View style={[styles.footer, { backgroundColor: theme.cardBg, borderTopColor: theme.border }]}>
                     <TouchableOpacity
-                        style={styles.btnSecondary}
+                        style={[styles.footerBtnSecondary, { backgroundColor: theme.background, borderColor: theme.border }]}
                         onPress={prevStep}
-                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                     >
-                        <Text style={styles.btnTextSecondary}>{step === 0 ? "Cancel" : "Back"}</Text>
+                        <Text style={[styles.footerBtnTextSecondary, { color: theme.textSecondary }]}>{step === 0 ? "Cancel" : "Previous"}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
-                        style={styles.btnPrimary}
+                        style={[styles.footerBtnPrimary, { backgroundColor: theme.primary, shadowColor: theme.primary }, loading && { opacity: 0.7 }]}
                         onPress={nextStep}
-                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        disabled={loading}
                     >
-                        <Text style={styles.btnTextPrimary}>{step === STEPS.length - 1 ? "Finish" : "Next"}</Text>
+                        {loading ? (
+                            <ActivityIndicator color="#fff" size="small" />
+                        ) : (
+                            <Text style={styles.footerBtnTextPrimary}>{step === STEPS.length - 1 ? "Complete Setup" : "Continue"}</Text>
+                        )}
                     </TouchableOpacity>
                 </View>
             </KeyboardAvoidingView>
@@ -137,66 +303,58 @@ export default function AddProjectScreen() {
 }
 
 function BasicStep({ data, update, lookups }: { data: Partial<Project>; update: any; lookups: any }) {
+    const { theme } = useTheme();
     return (
-        <View style={styles.formSection}>
-            <View style={styles.inputGroup}>
-                <Text style={styles.label}>Project Name *</Text>
-                <TextInput
-                    style={styles.input}
-                    placeholder="e.g. Green Valley"
-                    value={data.name}
-                    onChangeText={txt => update({ ...data, name: txt })}
-                />
-            </View>
-
-            <View style={styles.inputGroup}>
-                <Text style={styles.label}>RERA Number</Text>
-                <TextInput
-                    style={styles.input}
-                    placeholder="e.g. PBRERA-123"
-                    value={data.reraNumber}
-                    onChangeText={txt => update({ ...data, reraNumber: txt })}
-                />
-            </View>
-
-            <View style={styles.inputGroup}>
-                <Text style={styles.label}>Status</Text>
-                <View style={styles.chipList}>
-                    {lookups["ProjectStatus"]?.map((s: Lookup) => (
-                        <TouchableOpacity
-                            key={s._id}
-                            style={[styles.chip, data.status === s._id && styles.chipActive]}
-                            onPress={() => update({ ...data, status: s._id })}
-                        >
-                            <Text style={[styles.chipText, data.status === s._id && styles.chipTextActive]}>{s.lookup_value}</Text>
-                        </TouchableOpacity>
-                    ))}
-                </View>
-            </View>
-
-            <View style={styles.grid}>
-                <View style={[styles.inputGroup, { flex: 1, marginRight: 8 }]}>
-                    <Text style={styles.label}>Land Area</Text>
-                    <TextInput
-                        style={styles.input}
-                        keyboardType="numeric"
-                        placeholder="e.g. 10"
-                        value={data.landArea}
-                        onChangeText={txt => update({ ...data, landArea: txt })}
+        <View style={styles.stepContainer}>
+            <SectionHeader title="Basic Details" icon="🏠" subtitle="Key identity and status" />
+            <View style={[styles.card, { backgroundColor: theme.cardBg, borderColor: theme.border }]}>
+                <Field required>
+                    <Input
+                        label="Project Name"
+                        placeholder="e.g. Green Valley"
+                        value={data.name || ""}
+                        onChangeText={txt => update({ ...data, name: txt })}
                     />
-                </View>
-                <View style={[styles.inputGroup, { flex: 0.8 }]}>
-                    <Text style={styles.label}>Unit</Text>
-                    <View style={styles.chipList}>
-                        {["Acres", "Gaj"].map(u => (
-                            <TouchableOpacity
-                                key={u}
-                                style={[styles.chip, data.landAreaUnit === u && styles.chipActive]}
-                                onPress={() => update({ ...data, landAreaUnit: u })}
-                            >
-                                <Text style={[styles.chipText, data.landAreaUnit === u && styles.chipTextActive]}>{u}</Text>
-                            </TouchableOpacity>
-                        ))}
+                </Field>
+
+                <Field>
+                    <Input
+                        label="RERA Number"
+                        placeholder="e.g. PBRERA-123"
+                        value={data.reraNumber || ""}
+                        onChangeText={txt => update({ ...data, reraNumber: txt })}
+                        icon="document-text-outline"
+                    />
+                </Field>
+
+                <Field label="Project Status">
+                    <SelectButton
+                        value={data.status || ""}
+                        options={lookups["ProjectStatus"]?.map((s: Lookup) => ({ label: s.lookup_value, value: s._id })) || []}
+                        onSelect={val => update({ ...data, status: val })}
+                    />
+                </Field>
+
+                <View style={styles.row}>
+                    <View style={{ flex: 1.2 }}>
+                        <Field>
+                            <Input
+                                label="Land Area"
+                                keyboardType="numeric"
+                                placeholder="e.g. 10"
+                                value={data.landArea || ""}
+                                onChangeText={txt => update({ ...data, landArea: txt })}
+                            />
+                        </Field>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                        <Field label="Unit">
+                            <SelectButton
+                                value={data.landAreaUnit || "Acres"}
+                                options={["Acres", "Gaj"].map(u => ({ label: u, value: u }))}
+                                onSelect={val => update({ ...data, landAreaUnit: val })}
+                            />
+                        </Field>
                     </View>
                 </View>
             </View>
@@ -205,41 +363,44 @@ function BasicStep({ data, update, lookups }: { data: Partial<Project>; update: 
 }
 
 function LocationStep({ data, update }: { data: Partial<Project>; update: any }) {
+    const { theme } = useTheme();
     return (
-        <View style={styles.formSection}>
-            <View style={styles.inputGroup}>
-                <Text style={styles.label}>City *</Text>
-                <TextInput
-                    style={styles.input}
-                    placeholder="e.g. Mohali"
-                    value={data.address?.city}
-                    onChangeText={txt => update({ ...data, address: { ...data.address, city: txt } })}
-                />
-            </View>
-            <View style={styles.inputGroup}>
-                <Text style={styles.label}>Area / Sector</Text>
-                <TextInput
-                    style={styles.input}
-                    placeholder="e.g. Sector 82"
-                    value={data.address?.location}
-                    onChangeText={txt => update({ ...data, address: { ...data.address, location: txt } })}
-                />
-            </View>
-            <View style={styles.inputGroup}>
-                <Text style={styles.label}>Full Address / Landmark</Text>
-                <TextInput
-                    style={[styles.input, { height: 80 }]}
-                    multiline
-                    placeholder="e.g. Near Airport Road"
-                    value={data.locationSearch}
-                    onChangeText={txt => update({ ...data, locationSearch: txt })}
-                />
+        <View style={styles.stepContainer}>
+            <SectionHeader title="Location Details" icon="📍" subtitle="Project site and accessible markers" />
+            <View style={[styles.card, { backgroundColor: theme.cardBg, borderColor: theme.border }]}>
+                <Field required>
+                    <Input
+                        label="City"
+                        placeholder="e.g. Mohali"
+                        value={data.address?.city || ""}
+                        onChangeText={txt => update({ ...data, address: { ...data.address, city: txt } })}
+                    />
+                </Field>
+                <Field>
+                    <Input
+                        label="Area / Sector"
+                        placeholder="e.g. Sector 82"
+                        value={data.address?.location || ""}
+                        onChangeText={txt => update({ ...data, address: { ...data.address, location: txt } })}
+                    />
+                </Field>
+                <Field>
+                    <Input
+                        label="Full Address / Landmark"
+                        placeholder="e.g. Near Airport Road"
+                        value={data.locationSearch || ""}
+                        onChangeText={txt => update({ ...data, locationSearch: txt })}
+                        multiline
+                        numberOfLines={3}
+                    />
+                </Field>
             </View>
         </View>
     );
 }
 
 function BlocksStep({ data, update }: { data: Partial<Project>; update: any }) {
+    const { theme } = useTheme();
     const [newBlock, setNewBlock] = useState("");
 
     const addBlock = () => {
@@ -255,38 +416,56 @@ function BlocksStep({ data, update }: { data: Partial<Project>; update: any }) {
     };
 
     return (
-        <View style={styles.formSection}>
-            <View style={styles.inputGroup}>
-                <Text style={styles.label}>Add Block / Phase</Text>
-                <View style={styles.grid}>
-                    <TextInput
-                        style={[styles.input, { flex: 1, marginRight: 8 }]}
-                        placeholder="Block A, Phase 1..."
-                        value={newBlock}
-                        onChangeText={setNewBlock}
-                    />
-                    <TouchableOpacity style={styles.btnAdd} onPress={addBlock}>
-                        <Ionicons name="add" size={24} color="#fff" />
-                    </TouchableOpacity>
-                </View>
-            </View>
-
-            <View style={styles.blockList}>
-                {data.blocks?.map((b: ProjectBlock, i: number) => (
-                    <View key={i} style={styles.blockItem}>
-                        <Text style={styles.blockItemText}>{b.name}</Text>
-                        <TouchableOpacity onPress={() => removeBlock(i)}>
-                            <Ionicons name="trash-outline" size={18} color="#EF4444" />
+        <View style={styles.stepContainer}>
+            <SectionHeader title="Project Blocks" icon="🏗️" subtitle="Phases and sectoral partitions" />
+            <View style={[styles.card, { backgroundColor: theme.cardBg, borderColor: theme.border }]}>
+                <Field label="Add Block / Phase">
+                    <View style={styles.addBlockRow}>
+                        <View style={{ flex: 1 }}>
+                            <Input
+                                value={newBlock}
+                                onChangeText={setNewBlock}
+                                placeholder="Block A, Phase 1..."
+                            />
+                        </View>
+                        <TouchableOpacity style={[styles.btnAddBlock, { backgroundColor: theme.primary, shadowColor: theme.primary }]} onPress={addBlock}>
+                            <Ionicons name="add" size={24} color="#fff" />
                         </TouchableOpacity>
                     </View>
-                ))}
+                </Field>
+
+                <View style={styles.blockList}>
+                    {data.blocks?.map((b: ProjectBlock, i: number) => (
+                        <View key={i} style={[styles.blockItem, { backgroundColor: theme.inputBg, borderColor: theme.border }]}>
+                            <View style={[styles.blockIcon, { backgroundColor: theme.primary + '10' }]}>
+                                <Ionicons name="business" size={18} color={theme.primary} />
+                            </View>
+                            <Text style={[styles.blockItemText, { color: theme.textPrimary }]}>{b.name}</Text>
+                            <TouchableOpacity onPress={() => removeBlock(i)} style={styles.blockDeleteBtn}>
+                                <Ionicons name="trash-outline" size={18} color={theme.error} />
+                            </TouchableOpacity>
+                        </View>
+                    ))}
+                    {(!data.blocks || data.blocks.length === 0) && (
+                        <Text style={[styles.hintText, { color: theme.textMuted }]}>No blocks added yet.</Text>
+                    )}
+                </View>
             </View>
         </View>
     );
 }
 
 function AmenitiesStep({ data, update }: { data: Partial<Project>; update: any }) {
-    const AMENITIES = ["Clubhouse", "Gym", "Swimming Pool", "Gated Community", "Power Backup", "Parks", "Jogging Track"];
+    const { theme } = useTheme();
+    const AMENITIES = [
+        { name: "Clubhouse", icon: "business" },
+        { name: "Gym", icon: "fitness" },
+        { name: "Swimming Pool", icon: "water" },
+        { name: "Gated Community", icon: "shield-checkmark" },
+        { name: "Power Backup", icon: "flash" },
+        { name: "Parks", icon: "leaf" },
+        { name: "Jogging Track", icon: "walk" }
+    ];
 
     const toggle = (name: string) => {
         update({
@@ -296,79 +475,173 @@ function AmenitiesStep({ data, update }: { data: Partial<Project>; update: any }
     };
 
     return (
-        <View style={styles.formSection}>
-            <Text style={styles.label}>Amenities</Text>
-            {AMENITIES.map(a => (
-                <View key={a} style={styles.switchRow}>
-                    <Text style={styles.switchLabel}>{a}</Text>
-                    <Switch
-                        value={!!data.amenities?.[a]}
-                        onValueChange={() => toggle(a)}
-                        trackColor={{ true: "#1E3A8A", false: "#E2E8F0" }}
-                    />
-                </View>
-            ))}
+        <View style={styles.stepContainer}>
+            <SectionHeader title="Amenities" icon="✨" subtitle="Premium features and facilities" />
+            <View style={[styles.card, { backgroundColor: theme.cardBg, borderColor: theme.border }]}>
+                {AMENITIES.map(a => (
+                    <TouchableOpacity
+                        key={a.name}
+                        style={[styles.amenityRow, { borderBottomColor: theme.border + '50' }]}
+                        onPress={() => toggle(a.name)}
+                    >
+                        <View style={[styles.amenityIconContainer, { backgroundColor: theme.background }]}>
+                            <Ionicons name={a.icon as any} size={20} color={data.amenities?.[a.name] ? theme.primary : theme.textMuted} />
+                        </View>
+                        <Text style={[styles.amenityLabel, { color: theme.textSecondary }, data.amenities?.[a.name] && { color: theme.textPrimary, fontWeight: '700' }]}>{a.name}</Text>
+                        <Switch
+                            value={!!data.amenities?.[a.name]}
+                            onValueChange={() => toggle(a.name)}
+                            trackColor={{ true: theme.primary + '40', false: theme.border }}
+                            thumbColor={data.amenities?.[a.name] ? theme.primary : theme.textMuted}
+                        />
+                    </TouchableOpacity>
+                ))}
+            </View>
         </View>
     );
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: "#fff" },
+    container: { flex: 1 },
     header: {
-        flexDirection: "row", alignItems: "center", paddingHorizontal: 16,
-        paddingTop: 12, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: "#F1F5F9"
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+        paddingHorizontal: 20,
+        paddingBottom: 16,
+        paddingTop: Platform.OS === 'ios' ? 60 : 20,
+        zIndex: 1000,
     },
-    headerTitleGroup: { flex: 1, marginLeft: 16 },
-    headerTitle: { fontSize: 18, fontWeight: "800", color: "#1E293B" },
-    headerSub: { fontSize: 11, color: "#64748B", fontWeight: "600", marginTop: 2 },
-    stepIndicator: { flexDirection: "row", height: 3, backgroundColor: "#F1F5F9" },
-    indicatorBar: { flex: 1 },
-    indicatorBarActive: { backgroundColor: "#EEF2FF" },
-    indicatorBarCurrent: { backgroundColor: "#1E3A8A" },
-    scroll: { padding: 20 },
-    formSection: { gap: 16 },
-    inputGroup: { marginBottom: 16 },
-    label: { fontSize: 13, fontWeight: "700", color: "#475569", marginBottom: 8 },
+    backBtn: { padding: 4, zIndex: 10 },
+    headerTitleContainer: { flex: 1, alignItems: 'center' },
+    headerTitle: { fontSize: 18, fontWeight: "800", letterSpacing: -0.5 },
+    headerSubtitle: { fontSize: 11, fontWeight: "600", marginTop: 2 },
+    progressBarContainer: { flexDirection: "row", height: 3, overflow: 'hidden' },
+    progressBar: { flex: 1, height: '100%' },
+    content: { flex: 1 },
+    scroll: { padding: SPACING.outer, paddingBottom: 40 },
+    stepContainer: { gap: 16 },
+    sectionHeader: { marginTop: 8, marginBottom: 20 },
+    sectionHeaderRow: { flexDirection: "row", alignItems: "center", gap: 14 },
+    sectionIconBox: { width: 44, height: 44, borderRadius: 14, alignItems: "center", justifyContent: "center" },
+    sectionIconText: { fontSize: 20 },
+    sectionTitle: { fontSize: 17, fontWeight: "800", letterSpacing: -0.3 },
+    sectionSubtitle: { fontSize: 12, marginTop: 2, fontWeight: '500' },
+    sectionSeparator: { height: 1, marginTop: 16, opacity: 0.5 },
+    card: {
+        borderRadius: 24,
+        padding: SPACING.card,
+        marginBottom: 24,
+        borderWidth: 1,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.04,
+        shadowRadius: 16,
+        elevation: 2,
+    },
+    row: { flexDirection: "row", alignItems: "center", gap: 16 },
+    field: { marginBottom: SPACING.field },
+    fieldLabel: { fontSize: 13, fontWeight: "700", marginBottom: 8, marginLeft: 4 },
+    helperText: { fontSize: 12, marginTop: 6, marginLeft: 4 },
+    inputWrapper: {
+        position: 'relative',
+        height: SPACING.inputHeight,
+        borderRadius: 16,
+        borderWidth: 1.5,
+        justifyContent: 'center',
+    },
+    inputInner: { flexDirection: 'row', alignItems: 'center', flex: 1, paddingHorizontal: 16 },
+    inputIcon: { marginRight: 12 },
     input: {
-        backgroundColor: "#F8FAFC", borderWidth: 1, borderColor: "#E2E8F0",
-        borderRadius: 12, padding: 12, fontSize: 15, color: "#1E293B"
+        fontSize: 16,
+        height: '100%',
+        fontWeight: '600',
+        flex: 1,
     },
-    chipList: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-    chip: {
-        paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20,
-        backgroundColor: "#F1F5F9", borderWidth: 1, borderColor: "#E2E8F0"
+    chipRow: { flexDirection: "row", marginTop: 4 },
+    chipRowContent: { paddingRight: 20 },
+    selectableChip: {
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        borderRadius: 14,
+        borderWidth: 1.5,
+        marginRight: 10,
+        flexDirection: 'row',
+        alignItems: 'center',
     },
-    chipActive: { backgroundColor: "#1E3A8A", borderColor: "#1E3A8A" },
-    chipText: { fontSize: 12, fontWeight: "700", color: "#64748B" },
-    chipTextActive: { color: "#fff" },
-    grid: { flexDirection: "row", alignItems: "center" },
-    btnAdd: {
-        width: 48, height: 48, borderRadius: 12, backgroundColor: "#1E3A8A",
-        justifyContent: "center", alignItems: "center"
+    selectableChipText: { fontSize: 14, fontWeight: "600" },
+    addBlockRow: { flexDirection: 'row', gap: 12, alignItems: 'center' },
+    btnAddBlock: {
+        width: SPACING.inputHeight,
+        height: SPACING.inputHeight,
+        borderRadius: 16,
+        alignItems: 'center',
+        justifyContent: 'center',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.2,
+        shadowRadius: 8,
+        elevation: 4,
     },
-    blockList: { marginTop: 12, gap: 8 },
+    blockList: { marginTop: 16, gap: 12 },
     blockItem: {
-        flexDirection: "row", justifyContent: "space-between", alignItems: "center",
-        padding: 12, backgroundColor: "#F8FAFC", borderRadius: 12, borderWidth: 1, borderColor: "#E2E8F0"
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 14,
+        borderRadius: 16,
+        borderWidth: 1,
     },
-    blockItemText: { fontSize: 14, fontWeight: "600", color: "#1E293B" },
-    switchRow: {
-        flexDirection: "row", justifyContent: "space-between", alignItems: "center",
-        paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: "#F8FAFC"
+    blockIcon: {
+        width: 32,
+        height: 32,
+        borderRadius: 8,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: 12,
     },
-    switchLabel: { fontSize: 15, color: "#475569", fontWeight: "500" },
+    blockItemText: { flex: 1, fontSize: 15, fontWeight: '700' },
+    blockDeleteBtn: { padding: 6 },
+    hintText: { fontSize: 13, textAlign: 'center', marginTop: 8, fontStyle: 'italic' },
+    amenityRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 14,
+        borderBottomWidth: 1,
+    },
+    amenityIconContainer: {
+        width: 36,
+        height: 36,
+        borderRadius: 10,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: 14,
+    },
+    amenityLabel: { flex: 1, fontSize: 15, fontWeight: '600' },
     footer: {
-        flexDirection: "row", padding: 20, borderTopWidth: 1,
-        borderTopColor: "#F1F5F9", backgroundColor: "#fff", gap: 12
+        flexDirection: "row",
+        padding: 20,
+        borderTopWidth: 1,
+        gap: 12,
+        paddingBottom: Platform.OS === 'ios' ? 40 : 20,
     },
-    btnSecondary: {
-        flex: 1, paddingVertical: 14, borderRadius: 12,
-        backgroundColor: "#F8FAFC", alignItems: "center", borderWidth: 1, borderColor: "#E2E8F0"
+    footerBtnSecondary: {
+        flex: 1,
+        height: 54,
+        borderRadius: 16,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1.5,
     },
-    btnPrimary: {
-        flex: 2, paddingVertical: 14, borderRadius: 12,
-        backgroundColor: "#1E3A8A", alignItems: "center"
+    footerBtnPrimary: {
+        flex: 2,
+        height: 54,
+        borderRadius: 16,
+        alignItems: 'center',
+        justifyContent: 'center',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.25,
+        shadowRadius: 12,
+        elevation: 6,
     },
-    btnTextSecondary: { fontSize: 15, fontWeight: "700", color: "#64748B" },
-    btnTextPrimary: { fontSize: 15, fontWeight: "700", color: "#fff" },
+    footerBtnTextSecondary: { fontSize: 15, fontWeight: "700" },
+    footerBtnTextPrimary: { fontSize: 15, fontWeight: "800", color: "#fff" },
 });

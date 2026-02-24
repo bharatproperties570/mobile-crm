@@ -37,7 +37,7 @@ function getDealTitle(deal: Deal): string {
     const inv = typeof deal.inventoryId === 'object' ? deal.inventoryId : null;
     const project = deal.projectName || inv?.projectName || "Property";
     const block = deal.block || inv?.block;
-    const unit = deal.unitNo || inv?.unitNumber;
+    const unit = deal.unitNo || deal.unitNumber || inv?.unitNo || inv?.unitNumber;
 
     let titleParts = [project];
     if (block) titleParts.push(block);
@@ -60,6 +60,7 @@ const DealCard = memo(({
     onCall,
     onWhatsApp,
     onSMS,
+    onEmail,
     onMenuPress,
 }: {
     deal: Deal;
@@ -68,6 +69,7 @@ const DealCard = memo(({
     onCall: () => void;
     onWhatsApp: () => void;
     onSMS: () => void;
+    onEmail: () => void;
     onMenuPress: () => void;
 }) => {
     const stageStr = (resolveName(deal.stage) || "open").toLowerCase();
@@ -121,7 +123,7 @@ const DealCard = memo(({
                     <View style={styles.cardHeader}>
                         <View style={styles.cardIdentity}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                <Text style={styles.dealUnitNumber}>{deal.unitNo || (typeof deal.inventoryId === 'object' ? deal.inventoryId?.unitNumber : "") || "N/A"}</Text>
+                                <Text style={styles.dealUnitNumber}>{deal.unitNo || deal.unitNumber || (typeof deal.inventoryId === 'object' ? (deal.inventoryId?.unitNo || deal.inventoryId?.unitNumber) : "") || "N/A"}</Text>
                                 <View style={[styles.typePill, { backgroundColor: color + '15' }]}>
                                     <Text style={[styles.typePillText, { color: color }]}>
                                         {[
@@ -133,7 +135,7 @@ const DealCard = memo(({
                             </View>
                             <View style={styles.dealProjectContainer}>
                                 <Text numberOfLines={1}>
-                                    <Text style={styles.dealProjectName}>{deal.projectName || "Unnamed Project"}</Text>
+                                    <Text style={styles.dealProjectName}>{deal.projectName || (deal.projectId && typeof deal.projectId === 'object' ? (deal.projectId as any).name : "") || "Unnamed Project"}</Text>
                                     <Text style={styles.dealBlockName}> • {deal.block || (typeof deal.inventoryId === 'object' ? deal.inventoryId?.block : "") || "No Block"}</Text>
                                 </Text>
                             </View>
@@ -339,6 +341,15 @@ export default function DealsScreen() {
         Linking.openURL(`sms:${phone}`);
     };
 
+    const handleEmail = (deal: Deal) => {
+        const email = (deal.associatedContact as any)?.email || (deal.owner as any)?.email || (deal.contact as any)?.email;
+        if (!email) {
+            Alert.alert("Error", "No email linked to this deal.");
+            return;
+        }
+        Linking.openURL(`mailto:${email}`);
+    };
+
     // Action Grid Handlers
     const handleReassign = async (userId: string) => {
         if (!selectedDeal) return;
@@ -412,6 +423,7 @@ export default function DealsScreen() {
                             onCall={() => handleCall(item)}
                             onWhatsApp={() => handleWhatsApp(item)}
                             onSMS={() => handleSMS(item)}
+                            onEmail={() => handleEmail(item)}
                             onMenuPress={() => openHub(item)}
                         />
                     )}
@@ -520,6 +532,34 @@ export default function DealsScreen() {
                                     <Ionicons name="moon" size={24} color="#94A3B8" />
                                 </View>
                                 <Text style={styles.actionLabel}>Dormant</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity style={styles.actionItem} onPress={() => { if (selectedDeal) handleCall(selectedDeal); closeHub(); }}>
+                                <View style={[styles.actionIcon, { backgroundColor: "#EFF6FF" }]}>
+                                    <Ionicons name="call" size={24} color="#3B82F6" />
+                                </View>
+                                <Text style={styles.actionLabel}>Call</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity style={styles.actionItem} onPress={() => { if (selectedDeal) handleWhatsApp(selectedDeal); closeHub(); }}>
+                                <View style={[styles.actionIcon, { backgroundColor: "#F0FDF4" }]}>
+                                    <Ionicons name="logo-whatsapp" size={24} color="#10B981" />
+                                </View>
+                                <Text style={styles.actionLabel}>WhatsApp</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity style={styles.actionItem} onPress={() => { if (selectedDeal) handleSMS(selectedDeal); closeHub(); }}>
+                                <View style={[styles.actionIcon, { backgroundColor: "#FFF7ED" }]}>
+                                    <Ionicons name="chatbubble" size={24} color="#F97316" />
+                                </View>
+                                <Text style={styles.actionLabel}>SMS</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity style={styles.actionItem} onPress={() => { if (selectedDeal) handleEmail(selectedDeal); closeHub(); }}>
+                                <View style={[styles.actionIcon, { backgroundColor: "#EEF2FF" }]}>
+                                    <Ionicons name="mail" size={24} color="#6366F1" />
+                                </View>
+                                <Text style={styles.actionLabel}>Email</Text>
                             </TouchableOpacity>
                         </View >
 
@@ -642,8 +682,8 @@ const styles = StyleSheet.create({
     cardIdentity: { flex: 1 },
     dealId: { fontSize: 10, fontWeight: "900", color: "#94A3B8", textTransform: "uppercase", marginBottom: 2 },
     dealProjectContainer: { marginTop: 2 },
-    dealProjectName: { fontSize: 15, fontWeight: "700", color: "#1E293B" },
-    dealBlockName: { fontSize: 11, fontWeight: "600", color: "#94A3B8" },
+    dealProjectName: { fontSize: 16, fontWeight: "800", color: "#0F172A" },
+    dealBlockName: { fontSize: 10, fontWeight: "500", color: "#CBD5E1" },
     dealUnitNumber: { fontSize: 18, fontWeight: "900", color: "#0F172A" },
     typePill: { paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4 },
     typePillText: { fontSize: 9, fontWeight: "800" },

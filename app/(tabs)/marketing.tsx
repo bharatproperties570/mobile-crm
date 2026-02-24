@@ -12,6 +12,11 @@ export default function MarketingScreen() {
         { id: '2', name: "New Launch Mohali", reach: "8k", conversion: "1.8%", status: 'Completed' },
     ];
 
+    const intelligenceProspects = [
+        { id: '101', name: 'Raj Kumar', classification: 'Serious Buyer', intentIndex: 92, tags: ['Ready Cash', 'ROI Focus'], campaign: 'Google Plot Campaign' },
+        { id: '102', name: 'Amit Shah', classification: 'Investor', intentIndex: 88, tags: ['Plot Expert', 'Multiple Units'], campaign: 'Facebook Flat Campaign' },
+    ];
+
     // Action Hub State
     const [selectedCamp, setSelectedCamp] = useState<any>(null);
     const [hubVisible, setHubVisible] = useState(false);
@@ -59,6 +64,41 @@ export default function MarketingScreen() {
                             <Text style={[styles.statLabel, { color: theme.textLight }]}>TOTAL REACH</Text>
                         </View>
                     </View>
+
+                    <Text style={[styles.sectionTitle, { color: theme.text }]}>Intelligence Hub</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 30, marginHorizontal: -20, paddingHorizontal: 20 }}>
+                        {intelligenceProspects.map((prospect) => (
+                            <View key={prospect.id} style={[styles.prospectCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                                <View style={styles.prospectHeader}>
+                                    <View style={[styles.prospectAvatar, { backgroundColor: theme.primary + '15' }]}>
+                                        <Text style={[styles.prospectAvatarText, { color: theme.primary }]}>{prospect.name.charAt(0)}</Text>
+                                    </View>
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={[styles.prospectName, { color: theme.text }]} numberOfLines={1}>{prospect.name}</Text>
+                                        <Text style={[styles.prospectCamp, { color: theme.textLight }]}>{prospect.campaign}</Text>
+                                    </View>
+                                    <View style={[styles.prospectScore, { backgroundColor: '#7C3AED' }]}>
+                                        <Text style={styles.prospectScoreText}>{prospect.intentIndex}</Text>
+                                    </View>
+                                </View>
+                                <View style={styles.prospectBadges}>
+                                    <View style={[styles.classificationBadge, { backgroundColor: '#F59E0B20' }]}>
+                                        <Text style={[styles.classificationText, { color: '#F59E0B' }]}>{prospect.classification.toUpperCase()}</Text>
+                                    </View>
+                                </View>
+                                <View style={styles.prospectTags}>
+                                    {prospect.tags.map((tag, idx) => (
+                                        <View key={idx} style={[styles.tagPill, { backgroundColor: theme.primary + '10' }]}>
+                                            <Text style={[styles.tagText, { color: theme.primary }]}>#{tag.toUpperCase()}</Text>
+                                        </View>
+                                    ))}
+                                </View>
+                                <TouchableOpacity style={[styles.prospectAction, { backgroundColor: theme.primary }]} onPress={() => Alert.alert("Intelligence", `Opening profile for ${prospect.name}...`)}>
+                                    <Text style={styles.prospectActionText}>View Profile</Text>
+                                </TouchableOpacity>
+                            </View>
+                        ))}
+                    </ScrollView>
 
                     <Text style={[styles.sectionTitle, { color: theme.text }]}>Campaign Performance</Text>
                     {campaigns.map(c => (
@@ -187,6 +227,24 @@ const styles = StyleSheet.create({
     addBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 12, padding: 18, borderRadius: 20, marginTop: 32, shadowColor: "#000", shadowOpacity: 0.1, shadowRadius: 10, elevation: 5 },
     addBtnText: { color: "#fff", fontWeight: "800", fontSize: 16 },
     menuTrigger: { padding: 4 },
+
+    // Intelligence Hub Styles
+    prospectCard: { width: 280, borderRadius: 24, padding: 16, borderWidth: 1, marginRight: 15, shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 10, elevation: 3 },
+    prospectHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 },
+    prospectAvatar: { width: 40, height: 40, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+    prospectAvatarText: { fontSize: 18, fontWeight: '800' },
+    prospectName: { fontSize: 15, fontWeight: '800' },
+    prospectCamp: { fontSize: 10, fontWeight: '600' },
+    prospectScore: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8 },
+    prospectScoreText: { color: '#fff', fontSize: 10, fontWeight: '900' },
+    prospectBadges: { flexDirection: 'row', marginBottom: 10 },
+    classificationBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+    classificationText: { fontSize: 9, fontWeight: '800' },
+    prospectTags: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 16 },
+    tagPill: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+    tagText: { fontSize: 9, fontWeight: '700' },
+    prospectAction: { paddingVertical: 10, borderRadius: 12, alignItems: 'center' },
+    prospectActionText: { color: '#fff', fontSize: 12, fontWeight: '800' },
 });
 
 const actionHubStyles = StyleSheet.create({

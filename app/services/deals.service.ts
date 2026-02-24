@@ -18,6 +18,10 @@ export interface Deal {
     contact?: any; // legacy fallback
     lead?: any;
     inventory?: any;
+    projectId?: {
+        _id: string;
+        name?: string;
+    } | string;
     inventoryId?: {
         _id: string;
         unitNumber?: string;
@@ -27,6 +31,8 @@ export interface Deal {
         projectName?: string;
         block?: string;
         location?: string;
+        size?: number | string;
+        sizeUnit?: string;
     } | string;
     location?: string;
     closingDate?: string;
@@ -84,5 +90,10 @@ export const addDeal = async (data: Partial<Deal>) => {
 
 export const updateDeal = async (id: string, data: Partial<Deal>) => {
     const res = await api.put(`/deals/${id}`, data);
+    return res.data;
+};
+
+export const getMatchingDeals = async (leadId: string) => {
+    const res = await api.get("/deals/match", { params: { leadId } });
     return res.data;
 };

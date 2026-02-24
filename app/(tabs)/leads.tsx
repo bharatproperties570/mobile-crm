@@ -47,6 +47,18 @@ function formatTimeAgo(dateString?: string) {
 }
 
 function getLeadScore(lead: Lead) {
+    // 1. Prefer Backend Enrichment Score if available (Lead Score 3.0)
+    if (lead.intent_index !== undefined && lead.intent_index !== null) {
+        const scoreVal = lead.intent_index || 0;
+        let color = "#64748B"; // Cold
+        if (scoreVal >= 81) color = "#7C3AED"; // Super Hot
+        else if (scoreVal >= 61) color = "#EF4444"; // Hot
+        else if (scoreVal >= 31) color = "#F59E0B"; // Warm
+
+        return { val: scoreVal, color, bg: color + '10' };
+    }
+
+    // 2. Fallback to heuristic logic if not enriched
     const stage = lookupVal(lead.stage).toLowerCase();
     if (stage === "hot") return { val: 98, color: "#EF4444", bg: "#FEF2F2" };
     if (["new", "contacted"].includes(stage)) return { val: 65, color: "#3B82F6", bg: "#EFF6FF" };
@@ -531,6 +543,12 @@ const LeadCard = memo(({ lead, index, onPress, onMore, isSelected, onLongPress }
                                 <Ionicons name="call-outline" size={12} color={theme.textLight} />
                                 <Text style={[styles.leadMobile, { color: theme.textMuted }]}>{lead.mobile}</Text>
                             </View>
+                            {lead.lead_classification && (
+                                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                                    <Ionicons name="shield-checkmark" size={10} color="#F59E0B" />
+                                    <Text style={{ fontSize: 9, fontWeight: '700', color: '#F59E0B', marginLeft: 4 }}>{lead.lead_classification.toUpperCase()}</Text>
+                                </View>
+                            )}
                         </View>
                         <View style={styles.qualityBox}>
                             <LeadScoreRing score={score.val} color={score.color} size={36} />
@@ -551,6 +569,16 @@ const LeadCard = memo(({ lead, index, onPress, onMore, isSelected, onLongPress }
                             <View style={styles.locRow}>
                                 <Ionicons name="location-sharp" size={14} color={theme.textLight} />
                                 <Text style={[styles.locText, { color: theme.textLight }]} numberOfLines={1}>{lead.locCity}</Text>
+                            </View>
+                        )}
+                        {lead.intent_tags && lead.intent_tags.length > 0 && (
+                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 8 }}>
+                                {lead.intent_tags.slice(0, 3).map((tag, i) => (
+                                    <View key={i} style={{ backgroundColor: theme.primary + '10', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, borderWidth: 1, borderColor: theme.primary + '20' }}>
+                                        <Text style={{ fontSize: 8, fontWeight: '700', color: theme.primary }}>#{tag.toUpperCase()}</Text>
+                                    </View>
+                                ))}
+                                {lead.intent_tags.length > 3 && <Text style={{ fontSize: 8, color: theme.textLight }}>+{lead.intent_tags.length - 3}</Text>}
                             </View>
                         )}
                     </View>
@@ -955,9 +983,9 @@ const styles = StyleSheet.create({
     segmentTextActive: { color: "#fff" },
 
     listContent: { paddingHorizontal: 20, paddingBottom: 120, paddingTop: 10 },
-    card: { backgroundColor: "#fff", borderRadius: 16, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: "#F1F5F9", shadowColor: "#000", shadowOpacity: 0.03, shadowRadius: 10, shadowOffset: { width: 0, height: 4 } },
+    card: { backgroundColor: "#fff", borderRadius: 16, padding: 10, marginBottom: 8, borderWidth: 1, borderColor: "#F1F5F9", shadowColor: "#000", shadowOpacity: 0.03, shadowRadius: 10, shadowOffset: { width: 0, height: 4 } },
     cardSelected: { borderColor: "#2563EB", borderWidth: 2, backgroundColor: "#F8FAFF" },
-    cardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
+    cardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
     leadInfo: { flex: 1 },
     leadName: { fontSize: 15, fontWeight: "700", color: "#0F172A", marginBottom: 1 },
     mobileRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
@@ -965,13 +993,13 @@ const styles = StyleSheet.create({
     qualityBox: { marginRight: 12 },
     moreBtn: { width: 32, height: 32, justifyContent: 'center', alignItems: 'center' },
 
-    cardBody: { marginBottom: 8, gap: 4 },
+    cardBody: { marginBottom: 6, gap: 2 },
     reqRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
     reqText: { fontSize: 12, color: "#475569", fontWeight: "600" },
     locRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
     locText: { fontSize: 11, color: "#94A3B8", fontWeight: "500" },
 
-    cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1, borderTopColor: "#F8FAFC", paddingTop: 8 },
+    cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1, borderTopColor: "#F8FAFC", paddingTop: 6 },
     badgeGroup: { flexDirection: 'row', gap: 6 },
     statusBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
     statusText: { fontSize: 10, fontWeight: "800", textTransform: 'uppercase' },

@@ -27,18 +27,28 @@ const AnimatedTabItem = ({ route, isFocused, activeColor, navigation, config }: 
     const rotateAnim = useRef(new Animated.Value(isFocused ? 1 : 0)).current;
 
     useEffect(() => {
-        Animated.parallel([
+        const animations = [
             Animated.spring(scaleAnim, {
                 toValue: isFocused ? 1.2 : 1,
                 useNativeDriver: true,
                 friction: 4,
-            }),
-            Animated.timing(rotateAnim, {
-                toValue: isFocused ? 1 : 0,
-                duration: 600,
-                useNativeDriver: true,
             })
-        ]).start();
+        ];
+
+        if (isFocused) {
+            rotateAnim.setValue(0);
+            animations.push(
+                Animated.timing(rotateAnim, {
+                    toValue: 1,
+                    duration: 600,
+                    useNativeDriver: true,
+                })
+            );
+        } else {
+            rotateAnim.setValue(0);
+        }
+
+        Animated.parallel(animations).start();
     }, [isFocused]);
 
     const rotate = rotateAnim.interpolate({
@@ -66,7 +76,14 @@ const AnimatedTabItem = ({ route, isFocused, activeColor, navigation, config }: 
         >
             <Animated.View style={[
                 styles.iconBox,
-                isFocused && { backgroundColor: activeColor + '10' },
+                isFocused && {
+                    backgroundColor: activeColor + '15',
+                    borderColor: activeColor + '30',
+                    borderWidth: 1.5,
+                    shadowColor: activeColor,
+                    shadowOpacity: 0.2,
+                    shadowRadius: 10,
+                },
                 { transform: [{ scale: scaleAnim }, { rotate }] }
             ]}>
                 <Ionicons
@@ -75,7 +92,11 @@ const AnimatedTabItem = ({ route, isFocused, activeColor, navigation, config }: 
                     color={isFocused ? activeColor : theme.textLight}
                 />
             </Animated.View>
-            <Text style={[styles.tabLabel, { color: theme.textLight }, isFocused && { color: activeColor, fontWeight: "800" }]}>
+            <Text style={[
+                styles.tabLabel,
+                { color: theme.textLight },
+                isFocused && { color: activeColor, fontWeight: "900", letterSpacing: 0.5 }
+            ]}>
                 {config.label}
             </Text>
             {isFocused && (
@@ -162,53 +183,57 @@ export default function TabsLayout() {
 const styles = StyleSheet.create({
     tabBarContainer: {
         position: 'absolute',
-        bottom: 20,
-        left: 20,
-        right: 20,
-        height: 85,
-        backgroundColor: "#fff",
-        borderRadius: 30,
-        elevation: 20,
+        bottom: 25,
+        left: 15,
+        right: 15,
+        height: 88,
+        backgroundColor: "rgba(255, 255, 255, 0.85)", // Glass effect base
+        borderRadius: 35,
+        elevation: 25,
         shadowColor: "#000",
-        shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.15,
-        shadowRadius: 20,
-        borderWidth: 1,
-        borderColor: "rgba(226, 232, 240, 0.8)",
+        shadowOffset: { width: 0, height: 12 },
+        shadowOpacity: 0.2,
+        shadowRadius: 25,
+        borderWidth: 1.5,
+        borderColor: "rgba(255, 255, 255, 0.6)", // Glossy border
         overflow: 'hidden'
     },
     scrollContent: {
-        paddingHorizontal: 10,
+        paddingHorizontal: 12,
         alignItems: 'center',
     },
     tabItem: {
         alignItems: "center",
         justifyContent: "center",
-        width: 85,
+        width: 90,
         height: '100%',
     },
     tabItemActive: {
-        // Subtle feedback for active tab if needed
+        // Subtle feedback for active tab
     },
     iconBox: {
-        width: 44,
-        height: 44,
-        borderRadius: 15,
+        width: 46,
+        height: 46,
+        borderRadius: 18,
         justifyContent: 'center',
         alignItems: 'center',
-        marginBottom: 4
+        marginBottom: 5,
+        backgroundColor: "transparent",
+        borderColor: "transparent",
+        borderWidth: 1.5,
     },
     tabLabel: {
         fontSize: 10,
         color: "#94A3B8",
-        fontWeight: "600",
-        letterSpacing: 0.2
+        fontWeight: "700",
+        letterSpacing: 0.3,
+        marginTop: 2
     },
     activeIndicator: {
         position: 'absolute',
         bottom: 12,
-        width: 20,
-        height: 3,
+        width: 16,
+        height: 4,
         borderRadius: 2,
     }
 });

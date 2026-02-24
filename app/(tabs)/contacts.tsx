@@ -13,6 +13,7 @@ import {
 } from "../services/contacts.service";
 import { safeApiCall } from "../services/api.helpers";
 import { useCallTracking } from "../context/CallTrackingContext";
+import { useLookup } from "../context/LookupContext";
 
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get("window");
 const AVATAR_COLORS = ["#6366F1", "#8B5CF6", "#EC4899", "#F59E0B", "#10B981", "#3B82F6"];
@@ -39,7 +40,9 @@ function getInitials(c: Contact): string {
 
 const ContactCard = memo(({ contact, idx, onPress, onMenuPress }: { contact: Contact; idx: number; onPress: () => void; onMenuPress: () => void }) => {
     const { trackCall } = useCallTracking();
+    const { getLookupValue } = useLookup();
     const color = AVATAR_COLORS[idx % AVATAR_COLORS.length];
+
     const name = contactFullName(contact);
     const phone = contactPhone(contact);
     const email = contactEmail(contact);
@@ -112,10 +115,13 @@ const ContactCard = memo(({ contact, idx, onPress, onMenuPress }: { contact: Con
                             <View style={[styles.stageDot, { backgroundColor: stageColor }]} />
                         </View>
                         <Text style={styles.cardSubtitle} numberOfLines={1}>
-                            {lookupVal(contact.designation) !== "—" ? `${lookupVal(contact.designation)} • ` : ""}
+                            {(getLookupValue("ProfessionalDesignation", contact.designation) !== "—" && getLookupValue("ProfessionalDesignation", contact.designation) !== "")
+                                ? `${getLookupValue("ProfessionalDesignation", contact.designation)} • `
+                                : ""}
                             {contact.company || (phone ? phone : "Individual")}
                         </Text>
                     </View>
+
                     <TouchableOpacity style={styles.menuTrigger} onPress={(e) => { e.stopPropagation(); onMenuPress(); }}>
                         <Ionicons name="ellipsis-vertical" size={18} color="#94A3B8" />
                     </TouchableOpacity>

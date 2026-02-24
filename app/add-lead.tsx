@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
     View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity,
     ActivityIndicator, Alert, Switch, Modal, FlatList, SafeAreaView, Platform,
@@ -6,42 +6,19 @@ import {
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { useRef } from "react";
 import GooglePlacesAutocomplete from './components/GooglePlacesAutocompleteFixed';
 import { getTeams, getTeamMembers } from "./services/teams.service";
 import { getLeadById, addLead, updateLead, checkDuplicates } from "./services/leads.service";
 import { getLookups } from "./services/lookups.service";
 import { getProjects } from "./services/projects.service";
 import api from "./services/api";
+import { useTheme, SPACING } from "./context/ThemeContext";
 
 const LEAD_LOOKUP_TYPES = [
     "Requirement", "Category", "SubCategory", "PropertyType",
     "Budget", "Facing", "Direction", "Status", "Stage", "Campaign",
     "Sub Campaign", "Source", "SubSource"
 ];
-
-// ─── Design Tokens ──────────────────────────────────────────────────────────
-const COLORS = {
-    primary: "#2563EB",
-    primaryLight: "#DBEAFE",
-    bg: "#F8FAFC",
-    cardBg: "#FFFFFF",
-    border: "#E2E8F0",
-    textPrimary: "#1E293B",
-    textSecondary: "#64748B",
-    textMuted: "#94A3B8",
-    error: "#EF4444",
-    errorLight: "#FEE2E2",
-    inputBg: "#F1F5F9",
-};
-
-const SPACING = {
-    outer: 20,
-    card: 20,
-    section: 24,
-    field: 18,
-    inputHeight: 52,
-};
 
 const BUDGET_VALUES = [
     { value: 500000, label: "5 Lakh" },
@@ -71,46 +48,55 @@ const BUDGET_VALUES = [
 ];
 
 const GOOGLE_API_KEY = "AIzaSyBd2gdMJVt5C_tgYqWoRbBiatzmevYdB9U";
-
-// --- Constants & Helpers ---
 const FORM_STEPS = ["Requirement", "Location", "Contact", "System"];
 
 // ─── Reusable Components ──────────────────────────────────────────────────────
 
-function SectionHeader({ title, icon }: { title: string; icon: string }) {
+function SectionHeader({ title, icon, subtitle }: { title: string; icon: string; subtitle?: string }) {
+    const { theme } = useTheme();
     return (
         <View style={styles.sectionHeader}>
-            <View style={styles.sectionHeaderTop}>
-                <Text style={styles.sectionIcon}>{icon}</Text>
-                <Text style={styles.sectionTitle}>{title}</Text>
+            <View style={styles.sectionHeaderRow}>
+                <View style={[styles.sectionIconBox, { backgroundColor: theme.primary + '10' }]}>
+                    <Text style={styles.sectionIconText}>{icon}</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                    <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>{title}</Text>
+                    {subtitle && <Text style={[styles.sectionSubtitle, { color: theme.textSecondary }]}>{subtitle}</Text>}
+                </View>
             </View>
-            <View style={styles.headerDivider} />
+            <View style={[styles.sectionSeparator, { backgroundColor: theme.border }]} />
         </View>
     );
 }
 
-function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
+function Field({ label, required, children, helperText }: { label?: string; required?: boolean; children: React.ReactNode; helperText?: string }) {
+    const { theme } = useTheme();
     return (
         <View style={styles.field}>
-            <Text style={styles.fieldLabel}>
-                {label}
-                {required && <Text style={styles.required}> *</Text>}
-            </Text>
+            {label && (
+                <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>
+                    {label}
+                    {required && <Text style={{ color: theme.error }}> *</Text>}
+                </Text>
+            )}
             {children}
+            {helperText && <Text style={[styles.helperText, { color: theme.textMuted }]}>{helperText}</Text>}
         </View>
     );
 }
 
 function Input({
-    value, onChangeText, placeholder, keyboardType, multiline, numberOfLines, editable = true, label, leftIcon, required, autoCapitalize
+    value, onChangeText, placeholder, keyboardType, multiline, numberOfLines, editable = true, label, icon, required, autoCapitalize
 }: {
-    value: string; onChangeText: (t: string) => void; placeholder?: string; keyboardType?: any; multiline?: boolean; numberOfLines?: number; editable?: boolean; label?: string; leftIcon?: React.ReactNode; required?: boolean; autoCapitalize?: "none" | "sentences" | "words" | "characters";
+    value: string; onChangeText: (t: string) => void; placeholder?: string; keyboardType?: any; multiline?: boolean; numberOfLines?: number; editable?: boolean; label?: string; icon?: string; required?: boolean; autoCapitalize?: "none" | "sentences" | "words" | "characters";
 }) {
+    const { theme } = useTheme();
     const [isFocused, setIsFocused] = useState(false);
-    const animatedIsFocused = useRef(new Animated.Value(value ? 1 : 0)).current;
+    const labelAnim = useRef(new Animated.Value(value ? 1 : 0)).current;
 
     useEffect(() => {
-        Animated.timing(animatedIsFocused, {
+        Animated.timing(labelAnim, {
             toValue: (isFocused || value) ? 1 : 0,
             duration: 200,
             useNativeDriver: false,
@@ -119,46 +105,50 @@ function Input({
 
     const labelStyle = {
         position: 'absolute' as const,
-        left: leftIcon ? 44 : 16,
-        top: animatedIsFocused.interpolate({
+        left: 16,
+        top: labelAnim.interpolate({
             inputRange: [0, 1],
-            outputRange: [14, -10],
+            outputRange: [18, -10],
         }),
-        fontSize: animatedIsFocused.interpolate({
+        fontSize: labelAnim.interpolate({
             inputRange: [0, 1],
             outputRange: [15, 12],
         }),
-        color: animatedIsFocused.interpolate({
+        color: labelAnim.interpolate({
             inputRange: [0, 1],
-            outputRange: [COLORS.textMuted, COLORS.primary],
+            outputRange: [theme.textMuted, theme.primary],
         }),
-        backgroundColor: COLORS.cardBg,
+        backgroundColor: theme.cardBg,
         paddingHorizontal: 4,
         zIndex: 1,
     };
 
     return (
-        <View style={[styles.inputContainer, multiline && { height: 'auto' }, isFocused && styles.inputContainerFocused]}>
+        <View style={[
+            styles.inputWrapper,
+            { backgroundColor: theme.inputBg, borderColor: theme.border },
+            isFocused && { borderColor: theme.primary, backgroundColor: theme.cardBg },
+            !editable && { opacity: 0.6, backgroundColor: theme.border },
+            multiline && { height: 'auto', minHeight: 100 }
+        ]}>
             {label && (
                 <Animated.Text style={labelStyle}>
-                    {label}
-                    {required && <Text style={{ color: COLORS.error }}> *</Text>}
+                    {label}{required && <Text style={{ color: theme.error }}> *</Text>}
                 </Animated.Text>
             )}
-            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                {leftIcon && <View style={{ marginLeft: 16, marginRight: -8 }}>{leftIcon}</View>}
+            <View style={styles.inputInner}>
+                {icon && <Ionicons name={icon as any} size={18} color={isFocused ? theme.primary : theme.textMuted} style={styles.inputIcon} />}
                 <TextInput
                     style={[
                         styles.input,
-                        multiline && { height: 100, textAlignVertical: "top", paddingTop: 12 },
-                        !editable && styles.inputDisabled,
-                        { flex: 1 }
+                        { color: theme.textPrimary },
+                        multiline && { height: 100, textAlignVertical: 'top', paddingTop: 16 }
                     ]}
                     value={value}
                     onChangeText={onChangeText}
                     placeholder={isFocused ? "" : placeholder}
-                    placeholderTextColor={COLORS.textMuted}
-                    keyboardType={keyboardType ?? "default"}
+                    placeholderTextColor={theme.textMuted}
+                    keyboardType={keyboardType}
                     multiline={multiline}
                     numberOfLines={numberOfLines}
                     editable={editable}
@@ -177,19 +167,8 @@ function FadeInView({ children, delay = 0 }: { children: React.ReactNode; delay?
 
     useEffect(() => {
         Animated.parallel([
-            Animated.timing(fadeAnim, {
-                toValue: 1,
-                duration: 400,
-                delay,
-                useNativeDriver: true,
-            }),
-            Animated.spring(slideAnim, {
-                toValue: 0,
-                tension: 50,
-                friction: 7,
-                delay,
-                useNativeDriver: true,
-            }),
+            Animated.timing(fadeAnim, { toValue: 1, duration: 400, delay, useNativeDriver: true }),
+            Animated.spring(slideAnim, { toValue: 0, tension: 50, friction: 7, delay, useNativeDriver: true }),
         ]).start();
     }, [delay]);
 
@@ -200,72 +179,53 @@ function FadeInView({ children, delay = 0 }: { children: React.ReactNode; delay?
     );
 }
 
-
 function PressableChip({
-    opt, isSelected, onSelect
+    label, isSelected, onSelect, icon
 }: {
-    opt: { label: string, value: string }, isSelected: boolean, onSelect: (v: string) => void
+    label: string, isSelected: boolean, onSelect: () => void, icon?: string
 }) {
-    const scaleValue = useRef(new Animated.Value(1)).current;
-    const opacityValue = useRef(new Animated.Value(0)).current;
+    const { theme } = useTheme();
+    const scale = useRef(new Animated.Value(1)).current;
 
-    useEffect(() => {
-        Animated.timing(opacityValue, {
-            toValue: isSelected ? 1 : 0,
-            duration: 200,
-            useNativeDriver: true,
-        }).start();
-    }, [isSelected]);
-
-    const onPressIn = () => {
-        Animated.spring(scaleValue, {
-            toValue: 0.96,
-            useNativeDriver: true,
-        }).start();
-    };
-
-    const onPressOut = () => {
-        Animated.spring(scaleValue, {
-            toValue: 1,
-            useNativeDriver: true,
-        }).start();
-    };
+    const onPressIn = () => Animated.spring(scale, { toValue: 0.95, useNativeDriver: true }).start();
+    const onPressOut = () => Animated.spring(scale, { toValue: 1, useNativeDriver: true }).start();
 
     return (
         <Pressable
             onPressIn={onPressIn}
             onPressOut={onPressOut}
-            onPress={() => onSelect(opt.value)}
+            onPress={onSelect}
         >
             <Animated.View style={[
-                styles.chip,
-                isSelected && styles.chipSelected,
-                { transform: [{ scale: scaleValue }], flexDirection: 'row', alignItems: 'center' }
+                styles.selectableChip,
+                { borderColor: theme.border, backgroundColor: theme.cardBg },
+                isSelected && { backgroundColor: theme.primary + '08', borderColor: theme.primary },
+                { transform: [{ scale }] }
             ]}>
-                <Animated.View style={{ opacity: opacityValue, width: isSelected ? 'auto' : 0, overflow: 'hidden', flexDirection: 'row', alignItems: 'center' }}>
-                    <Ionicons name="checkmark" size={14} color={COLORS.primary} style={{ marginRight: 4 }} />
-                </Animated.View>
-                <Text style={[styles.chipText, isSelected && styles.chipTextSelected]}>{opt.label}</Text>
+                {icon && <Ionicons name={icon as any} size={16} color={isSelected ? theme.primary : theme.textSecondary} style={{ marginRight: 6 }} />}
+                <Text style={[styles.selectableChipText, { color: theme.textSecondary }, isSelected && { color: theme.primary }]}>{label}</Text>
+                {isSelected && <Ionicons name="checkmark-circle" size={16} color={theme.primary} style={{ marginLeft: 6 }} />}
             </Animated.View>
         </Pressable>
     );
 }
 
 function SelectButton({
-    value, placeholder, options, onSelect,
+    value, options, onSelect,
 }: {
-    value: string; placeholder: string; options: { label: string, value: string }[]; onSelect: (v: string) => void;
+    value: string; options: { label: string, value: string }[]; onSelect: (v: string) => void;
 }) {
-    if (options.length === 0) return <Text style={styles.placeholderText}>{placeholder || "No options available"}</Text>;
+    const { theme } = useTheme();
+    if (options.length === 0) return <Text style={{ color: theme.textSecondary, fontSize: 13, padding: 8 }}>No options available</Text>;
 
     return (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow} contentContainerStyle={styles.chipRowContent}>
             {options.map((opt, idx) => (
                 <PressableChip
                     key={`${opt.value || idx}-${idx}`}
-                    opt={opt}
+                    label={opt.label}
                     isSelected={value === opt.value}
-                    onSelect={(v) => onSelect(v === value ? "" : v)}
+                    onSelect={() => onSelect(opt.value === value ? "" : opt.value)}
                 />
             ))}
         </ScrollView>
@@ -273,20 +233,21 @@ function SelectButton({
 }
 
 function MultiSelectButton({
-    values, placeholder, options, onToggle,
+    values, options, onToggle,
 }: {
-    values: string[]; placeholder: string; options: { label: string, value: string }[]; onToggle: (v: string) => void;
+    values: string[]; options: { label: string, value: string }[]; onToggle: (v: string) => void;
 }) {
-    if (options.length === 0) return <Text style={styles.placeholderText}>{placeholder || "No options available"}</Text>;
+    const { theme } = useTheme();
+    if (options.length === 0) return <Text style={{ color: theme.textSecondary, fontSize: 13, padding: 8 }}>No options available</Text>;
 
     return (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow} contentContainerStyle={styles.chipRowContent}>
             {options.map((opt, idx) => (
                 <PressableChip
                     key={`${opt.value || idx}-${idx}`}
-                    opt={opt}
+                    label={opt.label}
                     isSelected={values.includes(opt.value)}
-                    onSelect={onToggle}
+                    onSelect={() => onToggle(opt.value)}
                 />
             ))}
         </ScrollView>
@@ -295,69 +256,28 @@ function MultiSelectButton({
 
 export default function AddLeadScreen() {
     const router = useRouter();
+    const { theme } = useTheme();
     const { id } = useLocalSearchParams<{ id: string }>();
     const [step, setStep] = useState(0);
     const [loading, setLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
 
-    // Animations
     const shakeAnim = useRef(new Animated.Value(0)).current;
     const googlePlacesRef = useRef<any>(null);
 
-    // Form State (Full parity with Web CRM)
     const [formData, setFormData] = useState<any>({
-        // ... same state ...
-        salutation: "Mr.",
-        firstName: "",
-        lastName: "",
-        mobile: "",
-        email: "",
-
-        requirement: "Buy",
-        purpose: "End Use",
-        nri: false,
-        propertyType: [],
-        subType: [],
-        unitType: [],
-        budget: "",
-        budgetMin: "",
-        budgetMax: "",
-        areaMin: "",
-        areaMax: "",
-        areaMetric: "Sq Yard",
-        facing: [],
-        roadWidth: [],
-        direction: [],
-        funding: "",
-        timeline: "",
-        furnishing: "",
-        transactionType: "",
-
-        searchLocation: "",
-        locCity: "",
-        locArea: "",
-        locPinCode: "",
-        locRange: 5,
-        projectName: [],
-        projectTowers: [],
-        propertyNo: "",
-        propertyNoEnd: "",
-        unitSelectionMode: "Single",
-
-        status: "",
-        source: "",
-        subSource: "",
-        campaign: "",
-        subCampaign: "",
-        owner: "",
-        team: "",
-        visibleTo: "Everyone",
-        stage: "",
-        description: "",
-        tags: [],
+        salutation: "Mr.", firstName: "", lastName: "", mobile: "", email: "",
+        requirement: "Buy", purpose: "End Use", nri: false,
+        propertyType: [], subType: [], unitType: [],
+        budget: "", budgetMin: "", budgetMax: "", areaMin: "", areaMax: "", areaMetric: "Sq Yard",
+        facing: [], roadWidth: [], direction: [],
+        funding: "", timeline: "", furnishing: "", transactionType: "",
+        searchLocation: "", locCity: "", locArea: "", locPinCode: "", locRange: 5,
+        projectName: [], projectTowers: [], propertyNo: "", propertyNoEnd: "", unitSelectionMode: "Single",
+        status: "", source: "", subSource: "", campaign: "", subCampaign: "",
+        owner: "", team: "", visibleTo: "Everyone", stage: "", description: "", tags: [],
     });
 
-    // Master Data
     const [lookups, setLookups] = useState<Record<string, any[]>>({});
     const [projects, setProjects] = useState<any[]>([]);
     const [teams, setTeams] = useState<any[]>([]);
@@ -381,7 +301,6 @@ export default function AddLeadScreen() {
                     const res = results[i];
                     lookupMap[type] = res?.data || (Array.isArray(res) ? res : []);
                 });
-
                 setLookups(lookupMap);
 
                 const projectsRes = results[LEAD_LOOKUP_TYPES.length];
@@ -442,7 +361,6 @@ export default function AddLeadScreen() {
                 }
             } catch (error) {
                 console.error("Failed to load form data", error);
-                Alert.alert("Error", "Could not load form data.");
             } finally {
                 setLoading(false);
             }
@@ -450,7 +368,6 @@ export default function AddLeadScreen() {
         loadInitialData();
     }, [id]);
 
-    // Duplicate Check
     useEffect(() => {
         const delayDebounce = setTimeout(async () => {
             if (formData.firstName.length > 2 || formData.mobile.length > 5) {
@@ -469,13 +386,6 @@ export default function AddLeadScreen() {
         return () => clearTimeout(delayDebounce);
     }, [formData.firstName, formData.mobile]);
 
-    const getLookupId = (type: string, value: string) => {
-        const list = lookups[type];
-        if (!Array.isArray(list)) return null;
-        const item = list.find((l: any) => l.lookup_value === value);
-        return item?._id || value;
-    };
-
     const triggerShake = () => {
         Animated.sequence([
             Animated.timing(shakeAnim, { toValue: 10, duration: 50, useNativeDriver: true }),
@@ -486,28 +396,32 @@ export default function AddLeadScreen() {
     };
 
     const handleNext = () => {
-        if (step === 2) { // Contact Step
-            if (!formData.firstName || !formData.mobile) {
-                triggerShake();
-                Alert.alert("Missing Fields", "First Name and Mobile Number are required.");
-                return;
-            }
+        if (step === 2 && (!formData.firstName || !formData.mobile)) {
+            triggerShake();
+            Alert.alert("Required Fields", "First Name and Mobile are mandatory.");
+            return;
         }
         setStep(s => Math.min(s + 1, FORM_STEPS.length - 1));
     };
 
     const handleSave = async () => {
         if (!formData.firstName || !formData.mobile) {
-            Alert.alert("Error", "First Name and Mobile Number are required");
+            Alert.alert("Required", "First Name and Mobile are mandatory.");
             return;
         }
         if (isBlocked && !id) {
-            Alert.alert("Critical", "A critical duplicate rule prevents saving this record.");
+            Alert.alert("Duplicate Blocked", "This record matches an existing entry and cannot be saved.");
             return;
         }
 
         setIsSaving(true);
         try {
+            const getLookupId = (type: string, val: string) => {
+                const list = lookups[type];
+                if (!Array.isArray(list)) return null;
+                return list.find((l: any) => l.lookup_value === val)?._id || val;
+            };
+
             const payload = {
                 ...formData,
                 requirement: getLookupId("Requirement", formData.requirement),
@@ -528,16 +442,14 @@ export default function AddLeadScreen() {
             if (res.success || res.status === 200 || res.data) {
                 router.replace("/(tabs)/leads");
             } else {
-                throw new Error(res.message || "Failed to save lead");
+                throw new Error(res.message || "Save failed");
             }
         } catch (error: any) {
-            Alert.alert("Error", error.message || "Failed to save lead");
+            Alert.alert("Error", error.message || "Failed to save lead.");
         } finally {
             setIsSaving(false);
         }
     };
-
-    if (loading) return <View style={styles.center}><ActivityIndicator size="large" color={COLORS.primary} /></View>;
 
     const renderMultiSelect = (type: string, field: string) => {
         const list = lookups[type];
@@ -546,7 +458,6 @@ export default function AddLeadScreen() {
             <MultiSelectButton
                 values={formData[field]}
                 options={options}
-                placeholder={`Select ${type}`}
                 onToggle={(val) => {
                     const current = formData[field] || [];
                     const newList = current.includes(val) ? current.filter((i: string) => i !== val) : [...current, val];
@@ -559,44 +470,24 @@ export default function AddLeadScreen() {
     const renderSingleSelect = (type: string, field: string, parentId?: string) => {
         let list = lookups[type];
         if (!Array.isArray(list)) return null;
-        if (parentId) {
-            list = list.filter(item => item.parent_lookup_id === parentId || item.parent_lookup_value === parentId);
-        }
+        if (parentId) list = list.filter(item => item.parent_lookup_id === parentId || item.parent_lookup_value === parentId);
         const options = list.map(l => ({ label: l.lookup_value, value: l._id }));
-        return (
-            <SelectButton
-                value={formData[field]}
-                options={options}
-                placeholder={`Select ${type}`}
-                onSelect={(val) => setFormData({ ...formData, [field]: val })}
-            />
-        );
+        return <SelectButton value={formData[field]} options={options} onSelect={(val) => setFormData({ ...formData, [field]: val })} />;
     };
 
     const renderDependentMultiSelect = (type: string, field: string, parentIds: string[]) => {
         let list = lookups[type];
-        if (!Array.isArray(list) || !parentIds || parentIds.length === 0) return <Text style={styles.hintText}>Select parent field first</Text>;
-
+        if (!Array.isArray(list) || !parentIds || parentIds.length === 0) return <Text style={{ color: theme.textMuted, fontSize: 13, fontStyle: 'italic', padding: 8 }}>Select parent field first</Text>;
         const pIds = parentIds.map(id => String(id));
         const parentValues: string[] = [];
-        Object.values(lookups).flat().forEach((l: any) => {
-            if (pIds.includes(String(l._id))) parentValues.push(l.lookup_value);
-        });
-
-        const filtered = list.filter(item =>
-            pIds.includes(String(item.parent_lookup_id)) ||
-            pIds.includes(String(item.parent_lookup_value)) ||
-            parentValues.includes(item.parent_lookup_value)
-        );
-
-        if (filtered.length === 0) return <Text style={styles.hintText}>No options found for selection</Text>;
-
+        Object.values(lookups).flat().forEach((l: any) => { if (pIds.includes(String(l._id))) parentValues.push(l.lookup_value); });
+        const filtered = list.filter(item => pIds.includes(String(item.parent_lookup_id)) || pIds.includes(String(item.parent_lookup_value)) || parentValues.includes(item.parent_lookup_value));
+        if (filtered.length === 0) return <Text style={{ color: theme.textMuted, fontSize: 13, fontStyle: 'italic', padding: 8 }}>No options available</Text>;
         const options = filtered.map(l => ({ label: l.lookup_value, value: l._id }));
         return (
             <MultiSelectButton
                 values={formData[field]}
                 options={options}
-                placeholder={`Select ${type}`}
                 onToggle={(val) => {
                     const current = formData[field] || [];
                     const newList = current.includes(val) ? current.filter((i: string) => i !== val) : [...current, val];
@@ -611,88 +502,38 @@ export default function AddLeadScreen() {
             case 0: // Requirement
                 return (
                     <FadeInView key="step0">
-                        <View style={styles.card}>
-                            <SectionHeader title="Requirement" icon="📋" />
-
+                        <SectionHeader title="Requirement" icon="📋" subtitle="Property needs and budget" />
+                        <View style={[styles.card, { backgroundColor: theme.cardBg, borderColor: theme.border }]}>
                             <Field label="Type" required>
-                                <SelectButton
-                                    value={formData.requirement}
-                                    options={["Buy", "Rent", "Lease"].map(r => ({ label: r, value: r }))}
-                                    onSelect={(v) => setFormData({ ...formData, requirement: v })}
-                                    placeholder="Select Type"
-                                />
+                                <SelectButton value={formData.requirement} options={["Buy", "Rent", "Lease"].map(r => ({ label: r, value: r }))} onSelect={(v) => setFormData({ ...formData, requirement: v })} />
                             </Field>
-
-                            <Field label="Category">
-                                {renderMultiSelect("Category", "propertyType")}
-                            </Field>
-
-                            <Field label="Sub Category">
-                                {renderDependentMultiSelect("SubCategory", "subType", formData.propertyType)}
-                            </Field>
-
-                            <Field label="Size Type">
-                                {renderDependentMultiSelect("PropertyType", "unitType", formData.subType)}
-                            </Field>
-
-                            <Field label="Budget (Min - Max)">
-                                <View style={{ flexDirection: 'row', gap: 12 }}>
-                                    <View style={{ flex: 1 }}>
-                                        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.budgetScroll}>
-                                            {BUDGET_VALUES.map((opt) => (
-                                                <PressableChip
-                                                    key={`min-${opt.value}`}
-                                                    opt={{ label: opt.label, value: String(opt.value) }}
-                                                    isSelected={formData.budgetMin === String(opt.value)}
-                                                    onSelect={(v) => setFormData({ ...formData, budgetMin: v })}
-                                                />
-                                            ))}
-                                        </ScrollView>
-                                    </View>
-                                </View>
+                            <Field label="Category">{renderMultiSelect("Category", "propertyType")}</Field>
+                            <Field label="Sub Category">{renderDependentMultiSelect("SubCategory", "subType", formData.propertyType)}</Field>
+                            <Field label="Size Type">{renderDependentMultiSelect("PropertyType", "unitType", formData.subType)}</Field>
+                            <Field label="Budget Range (Min - Max)">
+                                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.budgetScroll}>
+                                    {BUDGET_VALUES.map((opt) => (
+                                        <PressableChip key={`min-${opt.value}`} label={opt.label} isSelected={formData.budgetMin === String(opt.value)} onSelect={() => setFormData({ ...formData, budgetMin: String(opt.value) })} />
+                                    ))}
+                                </ScrollView>
                                 <View style={{ marginTop: 12 }}>
                                     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.budgetScroll}>
-                                        {BUDGET_VALUES
-                                            .filter(opt => !formData.budgetMin || opt.value > Number(formData.budgetMin))
-                                            .map((opt) => (
-                                                <PressableChip
-                                                    key={`max-${opt.value}`}
-                                                    opt={{ label: opt.label, value: String(opt.value) }}
-                                                    isSelected={formData.budgetMax === String(opt.value)}
-                                                    onSelect={(v) => setFormData({ ...formData, budgetMax: v })}
-                                                />
-                                            ))}
+                                        {BUDGET_VALUES.filter(opt => !formData.budgetMin || opt.value > Number(formData.budgetMin)).map((opt) => (
+                                            <PressableChip key={`max-${opt.value}`} label={opt.label} isSelected={formData.budgetMax === String(opt.value)} onSelect={() => setFormData({ ...formData, budgetMax: String(opt.value) })} />
+                                        ))}
                                     </ScrollView>
                                 </View>
                             </Field>
-
-                            <Field label="Area Range">
-                                <View style={{ flexDirection: 'row', gap: 12 }}>
-                                    <Input value={formData.areaMin} onChangeText={v => setFormData({ ...formData, areaMin: v })} placeholder="Min" keyboardType="numeric" />
-                                    <Input value={formData.areaMax} onChangeText={v => setFormData({ ...formData, areaMax: v })} placeholder="Max" keyboardType="numeric" />
-                                </View>
-                            </Field>
-
-                            <Field label="Facing">
-                                {renderMultiSelect("Facing", "facing")}
-                            </Field>
-
-                            <Field label="Direction">
-                                {renderMultiSelect("Direction", "direction")}
-                            </Field>
-
-                            <Field label="Purpose">
-                                <SelectButton
-                                    value={formData.purpose}
-                                    options={["End Use", "Investment"].map(v => ({ label: v, value: v }))}
-                                    onSelect={(v) => setFormData({ ...formData, purpose: v })}
-                                    placeholder="Select Purpose"
-                                />
-                            </Field>
-
-                            <View style={[styles.rowAlign, { marginTop: 12 }]}>
-                                <Text style={styles.fieldLabel}>NRI Status</Text>
-                                <Switch value={formData.nri} onValueChange={v => setFormData({ ...formData, nri: v })} trackColor={{ true: COLORS.primaryLight, false: COLORS.border }} thumbColor={formData.nri ? COLORS.primary : "#f4f3f4"} />
+                            <View style={styles.row}>
+                                <View style={{ flex: 1 }}><Field label="Min Area"><Input value={formData.areaMin} onChangeText={v => setFormData({ ...formData, areaMin: v })} placeholder="Min" keyboardType="numeric" /></Field></View>
+                                <View style={{ flex: 1 }}><Field label="Max Area"><Input value={formData.areaMax} onChangeText={v => setFormData({ ...formData, areaMax: v })} placeholder="Max" keyboardType="numeric" /></Field></View>
+                            </View>
+                            <Field label="Facing">{renderMultiSelect("Facing", "facing")}</Field>
+                            <Field label="Direction">{renderMultiSelect("Direction", "direction")}</Field>
+                            <Field label="Purpose"><SelectButton value={formData.purpose} options={["End Use", "Investment"].map(v => ({ label: v, value: v }))} onSelect={(v) => setFormData({ ...formData, purpose: v })} /></Field>
+                            <View style={[styles.rowAlign, { paddingVertical: 12, borderTopWidth: 1, borderTopColor: theme.border, marginTop: 10 }]}>
+                                <Text style={[styles.fieldLabel, { color: theme.textSecondary, marginBottom: 0 }]}>NRI Status</Text>
+                                <Switch value={formData.nri} onValueChange={v => setFormData({ ...formData, nri: v })} trackColor={{ true: theme.primary + '40', false: theme.border }} thumbColor={formData.nri ? theme.primary : theme.textMuted} />
                             </View>
                         </View>
                     </FadeInView>
@@ -700,9 +541,8 @@ export default function AddLeadScreen() {
             case 1: // Location
                 return (
                     <FadeInView key="step1">
-                        <View style={styles.card}>
-                            <SectionHeader title="Location" icon="📍" />
-
+                        <SectionHeader title="Location & Project" icon="📍" subtitle="Preferred areas and developments" />
+                        <View style={[styles.card, { backgroundColor: theme.cardBg, borderColor: theme.border }]}>
                             <Field label="Search Location">
                                 <View style={styles.googleSearchContainer}>
                                     <GooglePlacesAutocomplete
@@ -720,96 +560,60 @@ export default function AddLeadScreen() {
                                         }}
                                         query={{ key: GOOGLE_API_KEY, language: "en", components: "country:in" }}
                                         styles={{
-                                            textInput: styles.input,
+                                            textInput: [styles.input, { color: theme.textPrimary, backgroundColor: theme.inputBg, borderRadius: 12, borderWidth: 1, borderColor: theme.border }],
                                             container: { flex: 0 },
-                                            listView: { backgroundColor: "#ffffff", borderRadius: 10, marginTop: 5, elevation: 5, zIndex: 1000 }
+                                            listView: { backgroundColor: theme.cardBg, borderRadius: 12, marginTop: 5, elevation: 5, zIndex: 1000, borderWidth: 1, borderColor: theme.border }
                                         }}
                                         fetchDetails={true}
                                         enablePoweredByContainer={false}
-                                        textInputProps={{
-                                            placeholderTextColor: COLORS.textMuted,
-                                        }}
+                                        textInputProps={{ placeholderTextColor: theme.textMuted }}
                                     />
                                 </View>
                             </Field>
-
                             <Field label={`Range (${formData.locRange} km)`}>
-                                <SelectButton
-                                    value={String(formData.locRange)}
-                                    options={[1, 5, 10, 25, 50, 100].map(r => ({ label: `${r === 100 ? "100+" : r}km`, value: String(r) }))}
-                                    onSelect={(v) => setFormData({ ...formData, locRange: Number(v) })}
-                                    placeholder="Select Range"
-                                />
+                                <SelectButton value={String(formData.locRange)} options={[1, 5, 10, 25, 50, 100].map(r => ({ label: `${r === 100 ? "100+" : r}km`, value: String(r) }))} onSelect={(v) => setFormData({ ...formData, locRange: Number(v) })} />
                             </Field>
-
-                            <SectionHeader title="Projects" icon="🏗️" />
-
-                            <Field label="Select Projects">
+                            <Field label="Shortlisted Projects">
                                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.projectScroll}>
                                     {Array.isArray(projects) && projects.map((p) => {
                                         const active = formData.projectName.includes(p.name);
                                         return (
-                                            <TouchableOpacity key={p._id} style={[styles.projectCard, active && styles.projectCardActive]} onPress={() => {
+                                            <TouchableOpacity key={p._id} style={[styles.projectCard, { borderColor: theme.border, backgroundColor: theme.cardBg }, active && { borderColor: theme.primary, backgroundColor: theme.primary + '08' }]} onPress={() => {
                                                 const newList = active ? formData.projectName.filter((n: string) => n !== p.name) : [...formData.projectName, p.name];
                                                 setFormData({ ...formData, projectName: newList });
                                             }}>
-                                                <Text style={[styles.projectText, active && styles.projectTextActive]}>{p.name}</Text>
-                                                <Text style={styles.projectSub}>{p.address?.city || "Unknown City"}</Text>
+                                                <Text style={[styles.projectText, { color: theme.textPrimary }, active && { color: theme.primary }]}>{p.name}</Text>
+                                                <Text style={[styles.projectSub, { color: theme.textSecondary }]}>{p.address?.city || "Unknown City"}</Text>
                                             </TouchableOpacity>
                                         );
                                     })}
                                 </ScrollView>
                             </Field>
-
                             {formData.projectName.length > 0 && (
                                 <View>
                                     <Field label="Blocks">
                                         <View style={styles.chipGroup}>
                                             {projects
                                                 .filter(p => formData.projectName.includes(p.name))
-                                                .flatMap(p => (p.blocks || []).map((b: any) => ({ projectId: p._id, projectName: p.name, block: typeof b === 'string' ? b : b.name })))
+                                                .flatMap(p => (p.blocks || []).map((b: any) => ({ projectName: p.name, block: typeof b === 'string' ? b : b.name })))
                                                 .map((item, idx) => {
                                                     const key = `${item.projectName}-${item.block}`;
                                                     const active = formData.projectTowers.includes(key);
-                                                    return (
-                                                        <PressableChip
-                                                            key={`${idx}-${item.block}`}
-                                                            opt={{ label: `${item.block} (${item.projectName})`, value: key }}
-                                                            isSelected={active}
-                                                            onSelect={() => {
-                                                                const newList = active ? formData.projectTowers.filter((t: string) => t !== key) : [...formData.projectTowers, key];
-                                                                setFormData((prev: any) => ({ ...prev, projectTowers: newList }));
-                                                            }}
-                                                        />
-                                                    );
+                                                    return <PressableChip key={`${idx}-${item.block}`} label={`${item.block} (${item.projectName})`} isSelected={active} onSelect={() => setFormData({ ...formData, projectTowers: active ? formData.projectTowers.filter((t: string) => t !== key) : [...formData.projectTowers, key] })} />;
                                                 })
                                             }
                                         </View>
                                     </Field>
-
-                                    <Field label="Selection Mode">
-                                        <SelectButton
-                                            value={formData.unitSelectionMode}
-                                            options={["Single", "Multiple", "Range"].map(m => ({ label: m, value: m }))}
-                                            onSelect={(v) => setFormData({ ...formData, unitSelectionMode: v })}
-                                            placeholder="Select Mode"
-                                        />
-                                    </Field>
-
+                                    <Field label="Selection Mode"><SelectButton value={formData.unitSelectionMode} options={["Single", "Multiple", "Range"].map(m => ({ label: m, value: m }))} onSelect={(v) => setFormData({ ...formData, unitSelectionMode: v })} /></Field>
                                     <Field label="Unit Details">
-                                        <View style={{ flexDirection: 'row', gap: 12 }}>
+                                        <View style={styles.row}>
                                             {formData.unitSelectionMode === "Range" ? (
                                                 <>
-                                                    <Input label="Start" value={formData.propertyNo} onChangeText={v => setFormData({ ...formData, propertyNo: v })} placeholder="e.g. 1" />
-                                                    <Input label="End" value={formData.propertyNoEnd} onChangeText={v => setFormData({ ...formData, propertyNoEnd: v })} placeholder="e.g. 10" />
+                                                    <View style={{ flex: 1 }}><Input label="Start" value={formData.propertyNo} onChangeText={v => setFormData({ ...formData, propertyNo: v })} placeholder="e.g. 1" /></View>
+                                                    <View style={{ flex: 1 }}><Input label="End" value={formData.propertyNoEnd} onChangeText={v => setFormData({ ...formData, propertyNoEnd: v })} placeholder="e.g. 10" /></View>
                                                 </>
                                             ) : (
-                                                <Input
-                                                    label={formData.unitSelectionMode === "Multiple" ? "Unit Numbers (CSV)" : "Unit Number"}
-                                                    value={formData.propertyNo}
-                                                    onChangeText={v => setFormData({ ...formData, propertyNo: v })}
-                                                    placeholder={formData.unitSelectionMode === "Multiple" ? "101, 102..." : "e.g. 101"}
-                                                />
+                                                <View style={{ flex: 1 }}><Input label={formData.unitSelectionMode === "Multiple" ? "Unit Nos (CSV)" : "Unit Number"} value={formData.propertyNo} onChangeText={v => setFormData({ ...formData, propertyNo: v })} placeholder={formData.unitSelectionMode === "Multiple" ? "101, 102..." : "e.g. 101"} /></View>
                                             )}
                                         </View>
                                     </Field>
@@ -821,96 +625,45 @@ export default function AddLeadScreen() {
             case 2: // Contact
                 return (
                     <FadeInView key="step2">
-                        <View style={styles.card}>
-                            <SectionHeader title="Contact" icon="👤" />
-
+                        <SectionHeader title="Contact Info" icon="👤" subtitle="Lead identity and communication" />
+                        <View style={[styles.card, { backgroundColor: theme.cardBg, borderColor: theme.border }]}>
                             {Array.isArray(duplicates) && duplicates.length > 0 && (
-                                <View style={[styles.warningBox, isBlocked && styles.errorBox]}>
-                                    <Text style={styles.warningTitle}>⚠️ {duplicates.length} Similar record(s) found</Text>
+                                <View style={[styles.warningBox, { backgroundColor: theme.primary + '08', borderLeftColor: theme.primary }, isBlocked && { backgroundColor: theme.error + '08', borderLeftColor: theme.error }]}>
+                                    <Text style={[styles.warningTitle, { color: isBlocked ? theme.error : theme.primary }]}>⚠️ {duplicates.length} Similar record(s) found</Text>
                                     {duplicates.map((d, i) => (
-                                        <Text key={i} style={styles.dupItem}>{d.firstName} {d.lastName} ({d.mobile || (Array.isArray(d.phones) && d.phones[0]?.number)})</Text>
+                                        <Text key={i} style={[styles.dupItem, { color: theme.textPrimary }]}>{d.firstName} {d.lastName} ({d.mobile || (Array.isArray(d.phones) && d.phones[0]?.number)})</Text>
                                     ))}
                                 </View>
                             )}
-
-                            <View style={{ flexDirection: 'row', gap: 12 }}>
-                                <View style={{ width: 100 }}>
-                                    <Input label="Title" value={formData.salutation} onChangeText={v => setFormData({ ...formData, salutation: v })} />
-                                </View>
-                                <View style={{ flex: 1 }}>
-                                    <Input label="First Name" required value={formData.firstName} onChangeText={v => setFormData({ ...formData, firstName: v })} />
-                                </View>
+                            <View style={styles.row}>
+                                <View style={{ width: 100 }}><Input label="Title" value={formData.salutation} onChangeText={v => setFormData({ ...formData, salutation: v })} /></View>
+                                <View style={{ flex: 1 }}><Input label="First Name" required value={formData.firstName} onChangeText={v => setFormData({ ...formData, firstName: v })} /></View>
                             </View>
-
                             <Input label="Last Name" value={formData.lastName} onChangeText={v => setFormData({ ...formData, lastName: v })} />
-                            <Input label="Mobile" required keyboardType="phone-pad" value={formData.mobile} onChangeText={v => setFormData({ ...formData, mobile: v })} />
-                            <Input label="Email" autoCapitalize="none" keyboardType="email-address" value={formData.email} onChangeText={v => setFormData({ ...formData, email: v })} />
+                            <Input label="Mobile" required keyboardType="phone-pad" icon="call-outline" value={formData.mobile} onChangeText={v => setFormData({ ...formData, mobile: v })} />
+                            <Input label="Email" autoCapitalize="none" keyboardType="email-address" icon="mail-outline" value={formData.email} onChangeText={v => setFormData({ ...formData, email: v })} />
                         </View>
                     </FadeInView>
                 );
             case 3: // System
                 return (
                     <FadeInView key="step3">
-                        <View style={styles.card}>
-                            <SectionHeader title="System" icon="⚙️" />
-
-                            <Field label="Stage">
-                                {renderSingleSelect("Stage", "stage")}
-                            </Field>
-
-                            <Field label="Campaign">
-                                {renderSingleSelect("Campaign", "campaign")}
-                            </Field>
-
-                            {formData.campaign ? (
-                                <Field label="Sub Campaign">
-                                    {renderSingleSelect("Sub Campaign", "subCampaign", formData.campaign)}
-                                </Field>
-                            ) : null}
-
-                            <Field label="Source">
-                                {renderSingleSelect("Source", "source", formData.campaign)}
-                            </Field>
-
-                            {formData.source ? (
-                                <Field label="Sub Source">
-                                    {renderSingleSelect("SubSource", "subSource", formData.source)}
-                                </Field>
-                            ) : null}
-
+                        <SectionHeader title="System & Assignment" icon="⚙️" subtitle="Back-office routing and status" />
+                        <View style={[styles.card, { backgroundColor: theme.cardBg, borderColor: theme.border }]}>
+                            <Field label="Stage">{renderSingleSelect("Stage", "stage")}</Field>
+                            <Field label="Campaign">{renderSingleSelect("Campaign", "campaign")}</Field>
+                            {formData.campaign ? <Field label="Sub Campaign">{renderSingleSelect("Sub Campaign", "subCampaign", formData.campaign)}</Field> : null}
+                            <Field label="Source">{renderSingleSelect("Source", "source", formData.campaign)}</Field>
+                            {formData.source ? <Field label="Sub Source">{renderSingleSelect("SubSource", "subSource", formData.source)}</Field> : null}
                             <Field label="Assignment">
-                                <Text style={styles.subLabel}>Team</Text>
-                                <SelectButton
-                                    value={formData.team}
-                                    options={teams.map(t => ({ label: t.name, value: t._id }))}
-                                    onSelect={(v) => setFormData({ ...formData, team: v, owner: "" })}
-                                    placeholder="Select Team"
-                                />
-                                <View style={{ marginTop: 12 }}>
-                                    <Text style={styles.subLabel}>User</Text>
-                                    <SelectButton
-                                        value={formData.owner}
-                                        options={users.filter(u => !formData.team || u.team === formData.team).map(u => ({ label: u.fullName || u.name, value: u._id }))}
-                                        onSelect={(v) => setFormData({ ...formData, owner: v })}
-                                        placeholder="Select User"
-                                    />
-                                </View>
-                                <View style={{ marginTop: 12 }}>
-                                    <Text style={styles.subLabel}>Visibility</Text>
-                                    <SelectButton
-                                        value={formData.visibleTo}
-                                        options={[
-                                            { label: "Everyone", value: "Everyone" },
-                                            { label: "Team", value: "Team" },
-                                            { label: "Private", value: "Private" }
-                                        ]}
-                                        onSelect={(v) => setFormData({ ...formData, visibleTo: v })}
-                                        placeholder="Select Visibility"
-                                    />
-                                </View>
+                                <Text style={[styles.subLabel, { color: theme.textSecondary }]}>Team</Text>
+                                <SelectButton value={formData.team} options={teams.map(t => ({ label: t.name, value: t._id }))} onSelect={(v) => setFormData({ ...formData, team: v, owner: "" })} />
+                                <Text style={[styles.subLabel, { color: theme.textSecondary, marginTop: 16 }]}>User</Text>
+                                <SelectButton value={formData.owner} options={users.filter(u => !formData.team || u.team === formData.team).map(u => ({ label: u.fullName || u.name, value: u._id }))} onSelect={(v) => setFormData({ ...formData, owner: v })} />
+                                <Text style={[styles.subLabel, { color: theme.textSecondary, marginTop: 16 }]}>Visibility</Text>
+                                <SelectButton value={formData.visibleTo} options={[{ label: "Everyone", value: "Everyone" }, { label: "Team", value: "Team" }, { label: "Private", value: "Private" }]} onSelect={(v) => setFormData({ ...formData, visibleTo: v })} />
                             </Field>
-
-                            <Input label="Internal Notes" multiline numberOfLines={4} value={formData.description} onChangeText={v => setFormData({ ...formData, description: v })} />
+                            <Input label="Internal Notes" multiline numberOfLines={4} value={formData.description} onChangeText={v => setFormData({ ...formData, description: v })} icon="create-outline" />
                         </View>
                     </FadeInView>
                 );
@@ -918,74 +671,45 @@ export default function AddLeadScreen() {
         }
     };
 
+    if (loading) return <View style={styles.center}><ActivityIndicator size="large" color={theme.primary} /></View>;
+
     return (
-        <SafeAreaView style={styles.container}>
-            {/* Header */}
-            <View style={styles.header}>
-                <TouchableOpacity
-                    onPress={() => {
-                        if (router.canGoBack()) {
-                            router.back();
-                        } else {
-                            router.replace("/(tabs)/leads");
-                        }
-                    }}
-                    style={styles.closeBtn}
-                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                >
-                    <Ionicons name="close" size={24} color={COLORS.textPrimary} />
+        <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+            <View style={[styles.header, { backgroundColor: theme.background, borderBottomColor: theme.border }]}>
+                <TouchableOpacity onPress={() => router.back()} style={[styles.closeBtn, { backgroundColor: theme.inputBg }]} hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}>
+                    <Ionicons name="close" size={24} color={theme.textPrimary} />
                 </TouchableOpacity>
                 <View style={styles.headerTitleContainer}>
-                    <Text style={styles.headerTitle}>{id ? "Edit Lead" : "Add Lead"}</Text>
-                    <Text style={styles.headerSubtitle}>{FORM_STEPS[step]}</Text>
+                    <Text style={[styles.headerTitle, { color: theme.textPrimary }]}>{id ? "Edit Lead" : "Add Lead"}</Text>
+                    <Text style={[styles.headerSubtitle, { color: theme.textSecondary }]}>{FORM_STEPS[step]}</Text>
                 </View>
                 <View style={{ width: 44 }} />
             </View>
 
-            {/* Stepper */}
-            <View style={styles.stepperContainer}>
+            <View style={[styles.stepperContainer, { backgroundColor: theme.cardBg, borderBottomColor: theme.border }]}>
                 {FORM_STEPS.map((s, i) => (
                     <View key={s} style={styles.stepWrapper}>
-                        <View style={[styles.stepDot, step >= i && styles.stepDotActive]}>
-                            {step > i ? (
-                                <Ionicons name="checkmark" size={12} color="#fff" />
-                            ) : (
-                                <Text style={[styles.stepNumber, step >= i && styles.stepNumberActive]}>{i + 1}</Text>
-                            )}
+                        <View style={[styles.stepDot, { backgroundColor: theme.inputBg }, step >= i && { backgroundColor: theme.primary }]}>
+                            {step > i ? <Ionicons name="checkmark" size={14} color="#fff" /> : <Text style={[styles.stepNumber, { color: theme.textSecondary }, step >= i && { color: "#fff" }]}>{i + 1}</Text>}
                         </View>
-                        <Text style={[styles.stepLabel, step >= i && styles.stepLabelActive]} numberOfLines={1}>{s}</Text>
+                        <Text style={[styles.stepLabel, { color: theme.textMuted }, step >= i && { color: theme.primary }]} numberOfLines={1}>{s}</Text>
                     </View>
                 ))}
             </View>
 
-            <ScrollView style={styles.mainScroll} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+            <ScrollView style={styles.mainScroll} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
                 <Animated.View style={{ transform: [{ translateX: shakeAnim }] }}>
                     {renderStepContent()}
                 </Animated.View>
             </ScrollView>
 
-            {/* Footer */}
-            <View style={styles.footer}>
-                {step > 0 && (
-                    <TouchableOpacity style={styles.prevBtn} onPress={() => setStep(s => s - 1)}>
-                        <Text style={styles.prevBtnText}>Back</Text>
-                    </TouchableOpacity>
-                )}
+            <View style={[styles.footer, { backgroundColor: theme.cardBg, borderTopColor: theme.border }]}>
+                {step > 0 && <TouchableOpacity style={[styles.prevBtn, { backgroundColor: theme.inputBg }]} onPress={() => setStep(s => s - 1)}><Text style={[styles.prevBtnText, { color: theme.textSecondary }]}>Back</Text></TouchableOpacity>}
                 {step < FORM_STEPS.length - 1 ? (
-                    <TouchableOpacity style={styles.nextBtn} onPress={handleNext}>
-                        <Text style={styles.nextBtnText}>Continue</Text>
-                        <Ionicons name="arrow-forward" size={18} color="#fff" style={{ marginLeft: 8 }} />
-                    </TouchableOpacity>
+                    <TouchableOpacity style={[styles.nextBtn, { backgroundColor: theme.primary }]} onPress={handleNext}><Text style={styles.nextBtnText}>Continue</Text><Ionicons name="arrow-forward" size={18} color="#fff" style={{ marginLeft: 8 }} /></TouchableOpacity>
                 ) : (
-                    <TouchableOpacity style={[styles.saveBtn, (isSaving || (isBlocked && !id)) && styles.disabledBtn]} onPress={handleSave} disabled={isSaving || (isBlocked && !id)}>
-                        {isSaving ? (
-                            <ActivityIndicator color="#fff" size="small" />
-                        ) : (
-                            <>
-                                <Text style={styles.saveBtnText}>{id ? "Update Lead" : "Create Lead"}</Text>
-                                <Ionicons name="cloud-upload" size={18} color="#fff" style={{ marginLeft: 8 }} />
-                            </>
-                        )}
+                    <TouchableOpacity style={[styles.saveBtn, { backgroundColor: theme.success }, (isSaving || (isBlocked && !id)) && styles.disabledBtn]} onPress={handleSave} disabled={isSaving || (isBlocked && !id)}>
+                        {isSaving ? <ActivityIndicator color="#fff" size="small" /> : <><Text style={styles.saveBtnText}>{id ? "Update Lead" : "Create Lead"}</Text><Ionicons name="cloud-upload" size={18} color="#fff" style={{ marginLeft: 8 }} /></>}
                     </TouchableOpacity>
                 )}
             </View>
@@ -994,130 +718,57 @@ export default function AddLeadScreen() {
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: COLORS.bg },
+    container: { flex: 1 },
     center: { flex: 1, justifyContent: "center", alignItems: "center" },
-    header: {
-        flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-        paddingHorizontal: 16, paddingTop: Platform.OS === 'ios' ? 10 : 40, paddingBottom: 16,
-        backgroundColor: COLORS.cardBg, borderBottomWidth: 1, borderBottomColor: COLORS.border,
-        zIndex: 10,
-    },
-    closeBtn: {
-        width: 44, height: 44, borderRadius: 22, backgroundColor: COLORS.bg,
-        justifyContent: "center", alignItems: "center", zIndex: 11,
-    },
+    header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingTop: Platform.OS === 'ios' ? 10 : 40, paddingBottom: 16, borderBottomWidth: 1, zIndex: 10 },
+    closeBtn: { width: 44, height: 44, borderRadius: 22, justifyContent: "center", alignItems: "center" },
     headerTitleContainer: { alignItems: "center" },
-    headerTitle: { fontSize: 18, fontWeight: "800", color: COLORS.textPrimary },
-    headerSubtitle: { fontSize: 12, color: COLORS.textSecondary, fontWeight: "600", marginTop: 2, textTransform: 'uppercase', letterSpacing: 1 },
-
-    stepperContainer: {
-        flexDirection: "row", justifyContent: "space-between", padding: 20,
-        backgroundColor: COLORS.cardBg, borderBottomWidth: 1, borderBottomColor: COLORS.border,
-    },
+    headerTitle: { fontSize: 18, fontWeight: "800" },
+    headerSubtitle: { fontSize: 11, fontWeight: "700", marginTop: 2, textTransform: 'uppercase', letterSpacing: 0.5 },
+    stepperContainer: { flexDirection: "row", justifyContent: "space-between", padding: 20, borderBottomWidth: 1 },
     stepWrapper: { alignItems: "center", flex: 1 },
-    stepDot: {
-        width: 28, height: 28, borderRadius: 14, backgroundColor: COLORS.inputBg,
-        justifyContent: "center", alignItems: "center", marginBottom: 6,
-    },
-    stepDotActive: { backgroundColor: COLORS.primary },
-    stepNumber: { fontSize: 12, fontWeight: "700", color: COLORS.textSecondary },
-    stepNumberActive: { color: "#fff" },
-    stepLabel: { fontSize: 10, fontWeight: "600", color: COLORS.textMuted },
-    stepLabelActive: { color: COLORS.primary },
-
+    stepDot: { width: 30, height: 30, borderRadius: 15, justifyContent: "center", alignItems: "center", marginBottom: 6 },
+    stepNumber: { fontSize: 13, fontWeight: "800" },
+    stepLabel: { fontSize: 10, fontWeight: "700" },
     mainScroll: { flex: 1 },
     scrollContent: { padding: SPACING.outer, paddingBottom: 120 },
-    card: {
-        backgroundColor: COLORS.cardBg, borderRadius: 20, padding: SPACING.card,
-        borderWidth: 1, borderColor: COLORS.border,
-        ...Platform.select({
-            ios: { shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 10 },
-            android: { elevation: 3 },
-        }),
-    },
-    sectionHeader: { marginBottom: SPACING.section },
-    sectionHeaderTop: { flexDirection: "row", alignItems: "center" },
-    headerDivider: { height: 2, backgroundColor: COLORS.primaryLight, width: 40, marginTop: 8, borderRadius: 1 },
-    sectionIcon: { fontSize: 22, marginRight: 12 },
-    sectionTitle: { fontSize: 18, fontWeight: "800", color: COLORS.textPrimary },
-
+    card: { borderRadius: 24, padding: SPACING.card, borderWidth: 1, shadowColor: "#000", shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.04, shadowRadius: 16, elevation: 2 },
+    sectionHeader: { marginBottom: 20, marginTop: 10 },
+    sectionHeaderRow: { flexDirection: "row", alignItems: "center", gap: 14 },
+    sectionIconBox: { width: 44, height: 44, borderRadius: 14, alignItems: "center", justifyContent: "center" },
+    sectionIconText: { fontSize: 20 },
+    sectionTitle: { fontSize: 17, fontWeight: "800", letterSpacing: -0.3 },
+    sectionSubtitle: { fontSize: 12, marginTop: 2, fontWeight: '500' },
+    sectionSeparator: { height: 1, marginTop: 16, opacity: 0.5 },
     field: { marginBottom: SPACING.field },
-    fieldLabel: { fontSize: 14, fontWeight: "700", color: COLORS.textSecondary, marginBottom: 8, marginLeft: 4 },
-    required: { color: COLORS.error },
-
-    inputContainer: {
-        height: SPACING.inputHeight, backgroundColor: COLORS.cardBg,
-        borderWidth: 1, borderColor: COLORS.border, borderRadius: 14,
-        justifyContent: "center", position: 'relative', marginVertical: 8,
-    },
-    inputContainerFocused: { borderColor: COLORS.primary, backgroundColor: COLORS.cardBg },
-    input: {
-        height: "100%", paddingHorizontal: 16, fontSize: 15,
-        color: COLORS.textPrimary, fontWeight: "500",
-    },
-    inputDisabled: { backgroundColor: COLORS.inputBg, color: COLORS.textMuted },
-
+    fieldLabel: { fontSize: 13, fontWeight: "700", marginBottom: 8, marginLeft: 4 },
+    inputWrapper: { position: 'relative', height: SPACING.inputHeight, borderRadius: 16, borderWidth: 1.5, justifyContent: 'center' },
+    inputInner: { flexDirection: 'row', alignItems: 'center', flex: 1, paddingHorizontal: 16 },
+    inputIcon: { marginRight: 12 },
+    input: { fontSize: 16, height: '100%', fontWeight: '600', flex: 1 },
     chipRow: { marginBottom: 12 },
     chipRowContent: { paddingRight: 20 },
-    chip: {
-        paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12,
-        backgroundColor: COLORS.cardBg, borderWidth: 1, borderColor: COLORS.border,
-        marginRight: 8, marginBottom: 8,
-    },
-    chipSelected: { borderColor: COLORS.primary, backgroundColor: COLORS.primaryLight },
-    chipText: { fontSize: 14, fontWeight: "600", color: COLORS.textSecondary },
-    chipTextSelected: { color: COLORS.primary },
+    selectableChip: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 14, borderWidth: 1.5, marginRight: 10, flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
+    selectableChipText: { fontSize: 14, fontWeight: "600" },
     chipGroup: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-    subLabel: { fontSize: 13, fontWeight: "600", color: COLORS.textSecondary, marginBottom: 6, marginTop: 12 },
-    placeholderText: { fontSize: 14, color: COLORS.textMuted, fontStyle: 'italic', padding: 10 },
-
+    subLabel: { fontSize: 12, fontWeight: "700", marginLeft: 4 },
+    row: { flexDirection: "row", alignItems: "center", gap: 16 },
     rowAlign: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-    hintText: { fontSize: 12, color: COLORS.textMuted, fontStyle: "italic", marginTop: 4 },
-
     budgetScroll: { paddingVertical: 4 },
     projectScroll: { marginBottom: 15 },
-    projectCard: {
-        padding: 16, borderRadius: 16, borderWidth: 1, borderColor: COLORS.border,
-        marginRight: 12, width: 160, backgroundColor: COLORS.cardBg,
-    },
-    projectCardActive: { borderColor: COLORS.primary, backgroundColor: COLORS.primaryLight },
-    projectText: { fontSize: 14, fontWeight: "700", color: COLORS.textPrimary },
-    projectTextActive: { color: COLORS.primary },
-    projectSub: { fontSize: 12, color: COLORS.textSecondary, marginTop: 4 },
-
+    projectCard: { padding: 16, borderRadius: 20, borderWidth: 1.5, marginRight: 12, width: 170 },
+    projectText: { fontSize: 15, fontWeight: "800" },
+    projectSub: { fontSize: 12, marginTop: 4, fontWeight: '500' },
     googleSearchContainer: { zIndex: 100, marginBottom: 10 },
-
-    footer: {
-        position: "absolute", bottom: 0, left: 0, right: 0,
-        padding: 20, backgroundColor: COLORS.cardBg,
-        borderTopWidth: 1, borderTopColor: COLORS.border,
-        flexDirection: "row", gap: 12,
-        paddingBottom: Platform.OS === 'ios' ? 34 : 20,
-    },
-    nextBtn: {
-        flex: 1, backgroundColor: COLORS.primary, height: 56,
-        borderRadius: 16, justifyContent: "center", alignItems: "center",
-        flexDirection: "row",
-    },
-    nextBtnText: { color: "#fff", fontSize: 16, fontWeight: "700" },
-    prevBtn: {
-        width: 100, backgroundColor: COLORS.inputBg, height: 56,
-        borderRadius: 16, justifyContent: "center", alignItems: "center",
-    },
-    prevBtnText: { color: COLORS.textSecondary, fontSize: 16, fontWeight: "700" },
-    saveBtn: {
-        flex: 1, backgroundColor: "#10B981", height: 56,
-        borderRadius: 16, justifyContent: "center", alignItems: "center",
-        flexDirection: "row",
-    },
-    saveBtnText: { color: "#fff", fontSize: 16, fontWeight: "700" },
-    disabledBtn: { backgroundColor: COLORS.textMuted },
-
-    warningBox: {
-        backgroundColor: "#FFFBEB", padding: 14, borderRadius: 12,
-        borderLeftWidth: 4, borderLeftColor: "#F59E0B", marginBottom: 20,
-    },
-    errorBox: { backgroundColor: "#FEF2F2", borderLeftColor: COLORS.error },
-    warningTitle: { fontSize: 14, fontWeight: "700", color: "#92400E", marginBottom: 8 },
-    dupItem: { fontSize: 13, color: COLORS.textPrimary, marginBottom: 4 },
+    footer: { position: "absolute", bottom: 0, left: 0, right: 0, padding: 20, borderTopWidth: 1, flexDirection: "row", gap: 12, paddingBottom: Platform.OS === 'ios' ? 40 : 20 },
+    nextBtn: { flex: 1, height: 56, borderRadius: 18, justifyContent: "center", alignItems: "center", flexDirection: "row", elevation: 4, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8 },
+    nextBtnText: { color: "#fff", fontSize: 16, fontWeight: "800" },
+    prevBtn: { width: 100, height: 56, borderRadius: 18, justifyContent: "center", alignItems: "center", borderWidth: 1.5, borderColor: 'transparent' },
+    prevBtnText: { fontSize: 16, fontWeight: "700" },
+    saveBtn: { flex: 1, height: 56, borderRadius: 18, justifyContent: "center", alignItems: "center", flexDirection: "row", elevation: 4, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8 },
+    saveBtnText: { color: "#fff", fontSize: 16, fontWeight: "800" },
+    disabledBtn: { opacity: 0.6 },
+    warningBox: { padding: 16, borderRadius: 16, borderLeftWidth: 5, marginBottom: 20 },
+    warningTitle: { fontSize: 15, fontWeight: "800", marginBottom: 8 },
+    dupItem: { fontSize: 13, marginBottom: 4, fontWeight: '500' },
 });

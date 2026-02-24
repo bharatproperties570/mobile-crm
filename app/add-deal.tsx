@@ -17,6 +17,17 @@ const DEAL_LOOKUP_TYPES = [
 
 const FORM_STEPS = ["Property", "Financials", "Details", "System"];
 
+// ─── Reusable Components ──────────────────────────────────────────────────────
+
+function SectionTitle({ title, icon }: { title: string; icon: string }) {
+    return (
+        <View style={styles.sectionTitleRow}>
+            <Text style={styles.sectionIcon}>{icon}</Text>
+            <Text style={styles.sectionTitle}>{title}</Text>
+        </View>
+    );
+}
+
 function FormLabel({ label, required }: { label: string; required?: boolean }) {
     return (
         <View style={styles.labelContainer}>
@@ -26,12 +37,68 @@ function FormLabel({ label, required }: { label: string; required?: boolean }) {
     );
 }
 
-function SectionTitle({ title, icon }: { title: string; icon: string }) {
+function SelectButton({
+    value, placeholder, options, onSelect,
+}: {
+    value: string; placeholder: string; options: { label: string, value: string }[]; onSelect: (v: string) => void;
+}) {
+    if (options.length === 0) return <Text style={{ color: '#9CA3AF', fontSize: 13, padding: 8 }}>{placeholder}</Text>;
+
     return (
-        <View style={styles.sectionTitleRow}>
-            <Text style={styles.sectionIcon}>{icon}</Text>
-            <Text style={styles.sectionTitle}>{title}</Text>
-        </View>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow} contentContainerStyle={{ paddingRight: 20 }}>
+            {options.map((opt, idx) => (
+                <TouchableOpacity
+                    key={`${opt.value || idx}-${idx}`}
+                    style={[styles.chip, value === opt.value && styles.chipActive]}
+                    onPress={() => onSelect(opt.value === value ? "" : opt.value)}
+                >
+                    <Text style={[styles.chipText, value === opt.value && styles.chipTextActive]}>{opt.label}</Text>
+                </TouchableOpacity>
+            ))}
+        </ScrollView>
+    );
+}
+
+function SearchableDropdown({
+    visible, onClose, options, onSelect, placeholder
+}: {
+    visible: boolean; onClose: () => void; options: { label: string, value: string }[]; onSelect: (v: string) => void; placeholder: string;
+}) {
+    const [search, setSearch] = useState("");
+    const filtered = (options || []).filter(o =>
+        o?.label?.toString().toLowerCase().includes(search.toLowerCase())
+    );
+
+    return (
+        <Modal visible={visible} animationType="slide" transparent={true} onRequestClose={onClose}>
+            <View style={styles.modalOverlay}>
+                <View style={styles.modalContent}>
+                    <View style={styles.modalHeader}>
+                        <Text style={styles.modalTitle}>{placeholder}</Text>
+                        <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                            <Ionicons name="close" size={26} color="#64748b" />
+                        </TouchableOpacity>
+                    </View>
+                    <TextInput
+                        style={styles.modalSearchInput}
+                        placeholder="Search..."
+                        value={search}
+                        onChangeText={setSearch}
+                        placeholderTextColor="#9ca3af"
+                    />
+                    <FlatList
+                        data={filtered}
+                        keyExtractor={(item, idx) => `${item.value}-${idx}`}
+                        renderItem={({ item }) => (
+                            <TouchableOpacity style={styles.modalListItem} onPress={() => { onSelect(item.value); onClose(); }}>
+                                <Text style={styles.modalListItemText}>{item.label}</Text>
+                            </TouchableOpacity>
+                        )}
+                        keyboardShouldPersistTaps="handled"
+                    />
+                </View>
+            </View>
+        </Modal>
     );
 }
 
@@ -108,6 +175,8 @@ export default function AddDealScreen() {
         remarks: "",
         stage: "open",
     });
+
+    const [activeDropdown, setActiveDropdown] = useState<'project' | 'block' | 'unit' | 'status' | 'dealType' | 'transactionType' | 'source' | 'team' | 'agent' | 'visibility' | null>(null);
 
     const [units, setUnits] = useState<any[]>([]);
     const [isLoadingUnits, setIsLoadingUnits] = useState(false);
@@ -374,49 +443,37 @@ export default function AddDealScreen() {
 
                         <SectionTitle title="Property Details" icon="🏢" />
                         <FormLabel label="Project Name" required />
-                        <View style={styles.pickerContainer}>
-                            <select
-                                style={styles.nativeSelect}
-                                value={formData.projectName}
-                                onChange={e => handleProjectChange(e.target.value)}
-                            >
-                                <option value="">Select Project</option>
-                                {projects.map(p => <option key={p._id || p.id} value={p.name}>{p.name}</option>)}
-                            </select>
-                        </View>
+                        <TouchableOpacity style={styles.pickerContainer} onPress={() => setActiveDropdown('project')}>
+                            <Text style={[styles.nativeSelect, !formData.projectName && { color: '#94A3B8' }]}>
+                                {formData.projectName || "Select Project"}
+                            </Text>
+                            <Ionicons name="chevron-down" size={18} color="#64748B" style={{ position: 'absolute', right: 12 }} />
+                        </TouchableOpacity>
 
                         <View style={styles.row}>
                             <View style={{ flex: 1, marginRight: 8 }}>
                                 <FormLabel label="Block" />
-                                <View style={styles.pickerContainer}>
-                                    <select
-                                        style={styles.nativeSelect}
-                                        value={formData.block}
-                                        disabled={!formData.projectName}
-                                        onChange={e => setFormData({ ...formData, block: e.target.value, unitNo: "", propertyType: "", size: "" })}
-                                    >
-                                        <option value="">Select Block</option>
-                                        {projects.find(p => p.name === formData.projectName)?.blocks?.map((b: any) => (
-                                            <option key={typeof b === 'string' ? b : b.name} value={typeof b === 'string' ? b : b.name}>
-                                                {typeof b === 'string' ? b : b.name}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </View>
+                                <TouchableOpacity
+                                    style={[styles.pickerContainer, !formData.projectName && { opacity: 0.6 }]}
+                                    onPress={() => formData.projectName && setActiveDropdown('block')}
+                                >
+                                    <Text style={[styles.nativeSelect, !formData.block && { color: '#94A3B8' }]}>
+                                        {formData.block || "Select Block"}
+                                    </Text>
+                                    <Ionicons name="chevron-down" size={18} color="#64748B" style={{ position: 'absolute', right: 12 }} />
+                                </TouchableOpacity>
                             </View>
                             <View style={{ flex: 1 }}>
                                 <FormLabel label="Unit No." />
-                                <View style={styles.pickerContainer}>
-                                    <select
-                                        style={styles.nativeSelect}
-                                        value={formData.unitNo}
-                                        disabled={!formData.block || isLoadingUnits}
-                                        onChange={e => handleUnitChange(e.target.value)}
-                                    >
-                                        <option value="">{isLoadingUnits ? "Loading..." : "Select Unit"}</option>
-                                        {units.map(u => <option key={u._id} value={u.unitNo || u.unitNumber}>{u.unitNo || u.unitNumber}</option>)}
-                                    </select>
-                                </View>
+                                <TouchableOpacity
+                                    style={[styles.pickerContainer, (!formData.block || isLoadingUnits) && { opacity: 0.6 }]}
+                                    onPress={() => formData.block && !isLoadingUnits && setActiveDropdown('unit')}
+                                >
+                                    <Text style={[styles.nativeSelect, !formData.unitNo && { color: '#94A3B8' }]}>
+                                        {isLoadingUnits ? "Loading..." : (formData.unitNo || "Select Unit")}
+                                    </Text>
+                                    <Ionicons name="chevron-down" size={18} color="#64748B" style={{ position: 'absolute', right: 12 }} />
+                                </TouchableOpacity>
                             </View>
                         </View>
 
@@ -515,28 +572,16 @@ export default function AddDealScreen() {
                         <View style={styles.row}>
                             <View style={{ flex: 1, marginRight: 8 }}>
                                 <FormLabel label="Deal Status" />
-                                <View style={styles.pickerContainer}>
-                                    <select style={styles.nativeSelect} value={formData.status} onChange={e => setFormData({ ...formData, status: e.target.value })}>
-                                        {["Open", "Quote", "Negotiation", "Booked", "Won", "Lost"].map(s => <option key={s} value={s}>{s}</option>)}
-                                    </select>
-                                </View>
+                                <SelectButton value={formData.status} placeholder="Status" options={["Open", "Quote", "Negotiation", "Booked", "Won", "Lost"].map(s => ({ label: s, value: s }))} onSelect={v => setFormData({ ...formData, status: v })} />
                             </View>
                             <View style={{ flex: 1 }}>
                                 <FormLabel label="Deal Type" />
-                                <View style={styles.pickerContainer}>
-                                    <select style={styles.nativeSelect} value={formData.dealType} onChange={e => setFormData({ ...formData, dealType: e.target.value })}>
-                                        {["Hot", "Warm", "Cold"].map(s => <option key={s} value={s}>{s}</option>)}
-                                    </select>
-                                </View>
+                                <SelectButton value={formData.dealType} placeholder="Type" options={["Hot", "Warm", "Cold"].map(s => ({ label: s, value: s }))} onSelect={v => setFormData({ ...formData, dealType: v })} />
                             </View>
                         </View>
 
                         <FormLabel label="Transaction Type" />
-                        <View style={styles.pickerContainer}>
-                            <select style={styles.nativeSelect} value={formData.transactionType} onChange={e => setFormData({ ...formData, transactionType: e.target.value })}>
-                                {["Full White", "Collector Rate", "Flexible"].map(s => <option key={s} value={s}>{s}</option>)}
-                            </select>
-                        </View>
+                        <SelectButton value={formData.transactionType} placeholder="Select" options={["Full White", "Collector Rate", "Flexible"].map(s => ({ label: s, value: s }))} onSelect={v => setFormData({ ...formData, transactionType: v })} />
 
                         {formData.transactionType === "Flexible" && (
                             <View style={styles.sliderBox}>
@@ -560,12 +605,7 @@ export default function AddDealScreen() {
                         )}
 
                         <FormLabel label="Source" />
-                        <View style={styles.pickerContainer}>
-                            <select style={styles.nativeSelect} value={formData.source} onChange={e => setFormData({ ...formData, source: e.target.value })}>
-                                <option value="">Select Source</option>
-                                {["Walk-in", "Newspaper", "99acres", "Social Media", "Cold Calling", "Own Website"].map(s => <option key={s} value={s}>{s}</option>)}
-                            </select>
-                        </View>
+                        <SelectButton value={formData.source} placeholder="Select Source" options={["Walk-in", "Newspaper", "99acres", "Social Media", "Cold Calling", "Own Website"].map(s => ({ label: s, value: s }))} onSelect={v => setFormData({ ...formData, source: v })} />
                     </View>
                 )}
 
@@ -619,46 +659,68 @@ export default function AddDealScreen() {
 
                         <SectionTitle title="System & Assignment" icon="⚙️" />
                         <FormLabel label="Team" />
-                        <View style={styles.pickerContainer}>
-                            <select
-                                style={styles.nativeSelect}
-                                value={formData.team}
-                                onChange={e => setFormData({ ...formData, team: e.target.value, assignedTo: "" })}
-                            >
-                                <option value="">Select Team</option>
-                                {lookups["Team"]?.map(t => <option key={t._id || t.id} value={t._id || t.id}>{t.name}</option>)}
-                            </select>
-                        </View>
+                        <TouchableOpacity style={styles.pickerContainer} onPress={() => setActiveDropdown('team')}>
+                            <Text style={[styles.nativeSelect, !formData.team && { color: '#94A3B8' }]}>
+                                {lookups["Team"]?.find(t => (t._id || t.id) === formData.team)?.name || "Select Team"}
+                            </Text>
+                            <Ionicons name="chevron-down" size={18} color="#64748B" style={{ position: 'absolute', right: 12 }} />
+                        </TouchableOpacity>
 
                         <FormLabel label="Assigned RM" />
-                        <View style={styles.pickerContainer}>
-                            <select
-                                style={styles.nativeSelect}
-                                value={formData.assignedTo}
-                                onChange={e => setFormData({ ...formData, assignedTo: e.target.value })}
-                            >
-                                <option value="">Select Agent</option>
-                                {users
-                                    .filter(user => !formData.team || user.team === formData.team || user.team?._id === formData.team)
-                                    .map(user => <option key={user._id || user.id} value={user._id || user.id}>{user.name}</option>)
-                                }
-                            </select>
-                        </View>
+                        <TouchableOpacity style={styles.pickerContainer} onPress={() => setActiveDropdown('agent')}>
+                            <Text style={[styles.nativeSelect, !formData.assignedTo && { color: '#94A3B8' }]}>
+                                {users.find(u => (u._id || u.id) === formData.assignedTo)?.name || "Select Agent"}
+                            </Text>
+                            <Ionicons name="chevron-down" size={18} color="#64748B" style={{ position: 'absolute', right: 12 }} />
+                        </TouchableOpacity>
 
                         <FormLabel label="Visibility" />
-                        <View style={styles.pickerContainer}>
-                            <select style={styles.nativeSelect} value={formData.visibleTo} onChange={e => setFormData({ ...formData, visibleTo: e.target.value })}>
-                                <option value="Private">Private</option>
-                                <option value="Team">Team</option>
-                                <option value="Everyone">Everyone</option>
-                            </select>
-                        </View>
+                        <SelectButton value={formData.visibleTo} placeholder="Visibility" options={["Private", "Team", "Everyone"].map(v => ({ label: v, value: v }))} onSelect={v => setFormData({ ...formData, visibleTo: v })} />
 
                         <FormLabel label="Remarks / Notes" />
                         <TextInput style={[styles.input, { height: 120 }]} multiline value={formData.remarks} onChangeText={t => setFormData({ ...formData, remarks: t })} />
                     </View>
                 )}
             </ScrollView>
+
+            {/* Modals & Dropdowns */}
+            <SearchableDropdown
+                visible={activeDropdown === 'project'}
+                onClose={() => setActiveDropdown(null)}
+                options={projects.map(p => ({ label: p.name, value: p.name }))}
+                placeholder="Select Project"
+                onSelect={handleProjectChange}
+            />
+            <SearchableDropdown
+                visible={activeDropdown === 'block'}
+                onClose={() => setActiveDropdown(null)}
+                options={projects.find(p => p.name === formData.projectName)?.blocks?.map((b: any) => ({ label: typeof b === 'string' ? b : b.name, value: typeof b === 'string' ? b : b.name })) || []}
+                placeholder="Select Block"
+                onSelect={val => setFormData({ ...formData, block: val, unitNo: "", propertyType: "", size: "" })}
+            />
+            <SearchableDropdown
+                visible={activeDropdown === 'unit'}
+                onClose={() => setActiveDropdown(null)}
+                options={units.map(u => ({ label: u.unitNo || u.unitNumber, value: u.unitNo || u.unitNumber }))}
+                placeholder="Select Unit"
+                onSelect={handleUnitChange}
+            />
+            <SearchableDropdown
+                visible={activeDropdown === 'team'}
+                onClose={() => setActiveDropdown(null)}
+                options={lookups["Team"]?.map(t => ({ label: t.name, value: t._id || t.id })) || []}
+                placeholder="Select Team"
+                onSelect={val => setFormData({ ...formData, team: val, assignedTo: "" })}
+            />
+            <SearchableDropdown
+                visible={activeDropdown === 'agent'}
+                onClose={() => setActiveDropdown(null)}
+                options={users
+                    .filter(user => !formData.team || user.team === formData.team || user.team?._id === formData.team)
+                    .map(u => ({ label: u.name, value: u._id || u.id }))}
+                placeholder="Select Agent"
+                onSelect={val => setFormData({ ...formData, assignedTo: val })}
+            />
 
             {/* Footer Navigation */}
             <View style={styles.footer}>
@@ -723,18 +785,13 @@ const styles = StyleSheet.create({
     intentBtnActive: { backgroundColor: "#fff", shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, elevation: 2 },
     intentText: { fontSize: 14, fontWeight: "600", color: "#64748B" },
     intentTextActive: { color: "#1E3A8A", fontWeight: "700" },
-    pickerContainer: { backgroundColor: "#F8FAFC", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 12, overflow: "hidden" },
-    nativeSelect: { padding: 12, fontSize: 15, color: "#1E293B", backgroundColor: "transparent", borderWidth: 0, outlineWidth: 0 } as any,
-    partyBox: { backgroundColor: "#F8FAFC", padding: 16, borderRadius: 12, borderWidth: 1, borderColor: "#E2E8F0", marginVertical: 12 },
-    partyBoxTitle: { fontSize: 13, fontWeight: "700", color: "#475569", marginBottom: 12 },
-    partyItem: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 8 },
-    partyText: { fontSize: 14, fontWeight: "600", color: "#1E293B" },
-    wordsText: { fontSize: 12, color: "#10B981", fontStyle: "italic", marginTop: 4, marginLeft: 4 },
-    sliderBox: { marginTop: 16, padding: 16, backgroundColor: "#F8FAFC", borderRadius: 12, borderWidth: 1, borderColor: "#E2E8F0" },
-    sliderLabel: { fontSize: 13, fontWeight: "700", color: "#475569" },
-    sliderValue: { fontSize: 14, fontWeight: "800", color: "#2563EB" },
-    sliderHint: { fontSize: 11, color: "#64748B" },
-    gridContainer: { flexDirection: "row", flexWrap: "wrap", marginHorizontal: -4 },
-    gridBtn: { width: "31%", margin: "1.1%", padding: 10, borderRadius: 10, borderWidth: 1, borderColor: "#E2E8F0", backgroundColor: "#fff", alignItems: "center", justifyContent: "center", gap: 6 },
-    gridBtnText: { fontSize: 11, fontWeight: "600", color: "#64748B" },
+    pickerContainer: { backgroundColor: "#F8FAFC", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 12, height: 48, justifyContent: 'center' },
+    nativeSelect: { paddingHorizontal: 12, fontSize: 15, color: "#1E293B" },
+    modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: 'flex-end' },
+    modalContent: { backgroundColor: "#fff", borderTopLeftRadius: 24, borderTopRightRadius: 24, height: '80%', padding: 20 },
+    modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+    modalTitle: { fontSize: 18, fontWeight: '700', color: '#1E293B' },
+    modalSearchInput: { backgroundColor: '#F1F5F9', borderRadius: 12, padding: 12, marginBottom: 16, fontSize: 16 },
+    modalListItem: { paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+    modalListItemText: { fontSize: 16, color: '#1E293B' },
 });

@@ -134,25 +134,63 @@ export default function InventoryDetailScreen() {
 
                     <View style={styles.mainGrid}>
                         <View style={[styles.sectionCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                            <Text style={[styles.sectionTitle, { color: theme.text }]}>Pricing & Commercials</Text>
+                            <InfoRow label="Demand" value={inv.demand ? `₹${inv.demand.toLocaleString("en-IN")}` : "—"} icon="cash-outline" accent />
+                            <InfoRow label="Maintenance" value={inv.maintenance} icon="construct-outline" />
+                            <InfoRow label="Pricing Type" value={lv(inv.pricingType)} icon="pricetag-outline" />
+                        </View>
+
+                        <View style={[styles.sectionCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
                             <Text style={[styles.sectionTitle, { color: theme.text }]}>Unit Specifications</Text>
+                            <InfoRow label="Unit Number" value={inv.unitNumber || inv.unitNo} icon="business-outline" />
                             <InfoRow label="Floor" value={inv.floor?.toString()} icon="layers-outline" />
                             <InfoRow label="Unit Type" value={lv(inv.unitType)} icon="home-outline" />
+                            <InfoRow label="Property Type" value={lv(inv.propertyType)} icon="business-outline" />
                             <InfoRow label="Facing" value={lv(inv.facing)} icon="compass-outline" />
                             <InfoRow label="Road Width" value={inv.roadWidth} icon="git-merge-outline" />
                         </View>
 
                         <View style={[styles.sectionCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
                             <Text style={[styles.sectionTitle, { color: theme.text }]}>Area Breakdown</Text>
-                            <InfoRow label="Size" value={inv.size ? `${inv.size} ${inv.sizeUnit}` : "—"} icon="resize-outline" accent />
+                            <InfoRow label="Total Area" value={inv.size ? `${inv.size} ${inv.sizeUnit}` : "—"} icon="resize-outline" accent />
                             <InfoRow label="Built Up Area" value={inv.builtUpArea?.toString()} icon="cube-outline" />
                             <InfoRow label="Carpet Area" value={inv.carpetArea?.toString()} icon="grid-outline" />
                         </View>
+
+                        <View style={[styles.sectionCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                            <Text style={[styles.sectionTitle, { color: theme.text }]}>Status & Condition</Text>
+                            <InfoRow label="Construction" value={lv(inv.constructionStatus)} icon="construct-outline" />
+                            <InfoRow label="Possession" value={inv.possession} icon="key-outline" />
+                            <InfoRow label="Furnishing" value={lv(inv.furnishing)} icon="bed-outline" />
+                            <InfoRow label="Age of Property" value={inv.ageOfProperty} icon="calendar-outline" />
+                            <InfoRow label="Renovated" value={inv.renovated ? "Yes" : "No"} icon="refresh-outline" />
+                        </View>
+
+                        {inv.amenities && Object.keys(inv.amenities).length > 0 && (
+                            <View style={[styles.sectionCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                                <Text style={[styles.sectionTitle, { color: theme.text }]}>Amenities</Text>
+                                <View style={styles.chipRow}>
+                                    {Object.entries(inv.amenities).map(([key, val], i) => val ? (
+                                        <View key={i} style={[styles.chip, { backgroundColor: theme.primary + '15' }]}>
+                                            <Text style={[styles.chipText, { color: theme.primary }]}>{key.replace(/([A-Z])/g, ' $1').trim()}</Text>
+                                        </View>
+                                    ) : null)}
+                                </View>
+                            </View>
+                        )}
 
                         <View style={[styles.sectionCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
                             <Text style={[styles.sectionTitle, { color: theme.text }]}>Assignment</Text>
                             <InfoRow label="Assigned To" value={lv(inv.assignedTo)} icon="person-outline" />
                             <InfoRow label="Visible To" value={lv(inv.visibleTo)} icon="eye-outline" />
                         </View>
+
+                        {inv.remarks ? (
+                            <View style={[styles.sectionCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                                <Text style={[styles.sectionTitle, { color: theme.text }]}>Internal Remarks</Text>
+                                <Text style={[styles.remarksText, { color: theme.text }]}>{inv.remarks}</Text>
+                            </View>
+                        ) : null}
                     </View>
                 </Animated.View>
             </ScrollView>
@@ -196,4 +234,8 @@ const styles = StyleSheet.create({
     infoRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1 },
     infoLabel: { fontSize: 14, fontWeight: "600" },
     infoValue: { fontSize: 14, fontWeight: "700" },
+    remarksText: { fontSize: 14, color: "#475569", lineHeight: 20 },
+    chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+    chip: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 },
+    chipText: { fontSize: 11, fontWeight: '600' },
 });

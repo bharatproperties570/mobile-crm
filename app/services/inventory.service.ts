@@ -39,3 +39,8 @@ export const updateInventory = async (id: string, data: any) => {
     const res = await api.put(`/inventory/${id}`, data);
     return res.data;
 };
+
+export const getInventoryByContact = async (contactId: string) => {
+    const res = await api.get("/inventory", { params: { contactId, limit: "100" } });
+    return res.data;
+};

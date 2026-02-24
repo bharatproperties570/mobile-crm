@@ -20,13 +20,14 @@ function fmt(amount?: number): string {
 }
 
 function lv(field: unknown): string {
-    if (!field) return "—";
+    if (field === null || field === undefined || field === "" || field === "null" || field === "undefined") return "—";
     if (typeof field === "object" && field !== null) {
-        if ("lookup_value" in field) return (field as any).lookup_value ?? "—";
-        if ("fullName" in field) return (field as any).fullName ?? "—";
-        if ("name" in field) return (field as any).name ?? "—";
+        if ("lookup_value" in field && field.lookup_value) return (field as any).lookup_value;
+        if ("fullName" in field && field.fullName) return (field as any).fullName;
+        if ("name" in field && field.name) return (field as any).name;
     }
-    return String(field) || "—";
+    const str = String(field).trim();
+    return str || "—";
 }
 
 function formatTimeAgo(dateString?: string) {
@@ -96,7 +97,7 @@ export default function DealDetailScreen() {
                 api.get(`/deals/${id}`),
                 getActivities({ entityId: id, limit: 10 })
             ]);
-            const d = dealRes.data?.data ?? dealRes.data;
+            const d = dealRes.data?.deal ?? dealRes.data?.data ?? dealRes.data;
             setDeal(d);
             setActivities(actRes?.data ?? actRes);
             Animated.timing(fadeAnim, { toValue: 1, duration: 600, useNativeDriver: true }).start();
@@ -161,17 +162,23 @@ export default function DealDetailScreen() {
                             </View>
                         </View>
 
-                        <View style={[styles.heroSecondary, { backgroundColor: theme.background }]}>
-                            <View style={styles.chipRow}>
-                                <View style={[styles.chip, { backgroundColor: theme.card }]}>
-                                    <Text style={[styles.chipText, { color: theme.textLight }]}>{lv(deal.projectName)} • {lv(deal.unitNo || deal.unitNumber)}</Text>
+                        {(() => {
+                            const projectName = lv(deal.projectName) !== "—" ? lv(deal.projectName) : lv(deal.projectId);
+                            const unitNo = lv(deal.unitNo || deal.unitNumber) !== "—" ? lv(deal.unitNo || deal.unitNumber) : lv(deal.inventoryId?.unitNumber || deal.inventoryId?.unitNo);
+                            return (
+                                <View style={[styles.heroSecondary, { backgroundColor: theme.background }]}>
+                                    <View style={styles.chipRow}>
+                                        <View style={[styles.chip, { backgroundColor: theme.card }]}>
+                                            <Text style={[styles.chipText, { color: theme.textLight }]}>{projectName} • {unitNo}</Text>
+                                        </View>
+                                        <Text style={[styles.chipSeparator, { color: theme.border }]}>|</Text>
+                                        <View style={[styles.chip, { backgroundColor: theme.card }]}>
+                                            <Text style={[styles.chipText, { color: theme.textLight }]}>{fmt(deal.price)}</Text>
+                                        </View>
+                                    </View>
                                 </View>
-                                <Text style={[styles.chipSeparator, { color: theme.border }]}>|</Text>
-                                <View style={[styles.chip, { backgroundColor: theme.card }]}>
-                                    <Text style={[styles.chipText, { color: theme.textLight }]}>{fmt(deal.price)}</Text>
-                                </View>
-                            </View>
-                        </View>
+                            );
+                        })()}
                     </View>
 
                     <View style={styles.quickActions}>
@@ -220,17 +227,35 @@ export default function DealDetailScreen() {
                     <View style={styles.mainGrid}>
                         <View style={[styles.sectionCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
                             <Text style={[styles.sectionTitle, { color: theme.text }]}>Property Details</Text>
-                            <InfoRow label="Project" value={lv(deal.projectName)} icon="business-outline" accent />
-                            <InfoRow label="Block/Unit" value={`${lv(deal.block)} / ${lv(deal.unitNo || deal.unitNumber)}`} icon="grid-outline" />
-                            <InfoRow label="Unit Type" value={lv(deal.unitType)} icon="home-outline" />
-                            <InfoRow label="Size" value={deal.size ? `${deal.size} ${deal.sizeUnit ?? ""}` : "—"} icon="resize-outline" />
-                            <InfoRow label="Location" value={lv(deal.location)} icon="map-outline" />
+                            {(() => {
+                                const projectName = lv(deal.projectName) !== "—" ? lv(deal.projectName) : lv(deal.projectId);
+                                const unitNo = lv(deal.unitNo) !== "—" ? lv(deal.unitNo) : (lv(deal.unitNumber) !== "—" ? lv(deal.unitNumber) : lv(deal.inventoryId?.unitNo || deal.inventoryId?.unitNumber));
+                                const block = lv(deal.block) !== "—" ? lv(deal.block) : lv(deal.inventoryId?.block);
+                                const sizeVal = deal.size || deal.inventoryId?.size;
+                                const sizeUnitVal = deal.sizeUnit || deal.inventoryId?.sizeUnit || "";
+                                const size = sizeVal ? `${sizeVal} ${sizeUnitVal}`.trim() : "—";
+                                const unitType = lv(deal.unitType) !== "—" ? lv(deal.unitType) : lv(deal.inventoryId?.unitType);
+                                const location = lv(deal.location) !== "—" ? lv(deal.location) : lv(deal.inventoryId?.location);
+
+                                return (
+                                    <>
+                                        <InfoRow label="Project" value={projectName} icon="business-outline" accent />
+                                        <InfoRow label="Block/Unit" value={`${block} / ${unitNo}`} icon="grid-outline" />
+                                        <InfoRow label="Unit Type" value={unitType} icon="home-outline" />
+                                        <InfoRow label="Size" value={size} icon="resize-outline" />
+                                        <InfoRow label="Location" value={location} icon="map-outline" />
+                                    </>
+                                );
+                            })()}
                         </View>
 
                         <View style={[styles.sectionCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
                             <Text style={[styles.sectionTitle, { color: theme.text }]}>Financials</Text>
                             <InfoRow label="Listed Price" value={fmt(deal.price)} icon="cash-outline" accent />
                             <InfoRow label="Quote Price" value={fmt(deal.quotePrice)} icon="pricetag-outline" />
+                            {deal.ratePrice && (
+                                <InfoRow label="Rate Price" value={`${fmt(deal.ratePrice)} / unit`} icon="calculator-outline" />
+                            )}
                             <InfoRow label="Negotiable" value={deal.pricingNature?.negotiable ? "Yes" : "No"} icon="chatbubbles-outline" />
                             <InfoRow label="Transaction" value={lv(deal.transactionType)} icon="repeat-outline" />
                         </View>
@@ -242,6 +267,35 @@ export default function DealDetailScreen() {
                                 <InfoRow label="Brokerage" value={deal.commission.brokeragePercent ? `${deal.commission.brokeragePercent}%` : "—"} icon="calculator-outline" />
                             </View>
                         )}
+
+                        <View style={[styles.sectionCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                            <Text style={[styles.sectionTitle, { color: theme.text }]}>Assignment & System</Text>
+                            <InfoRow label="Intent" value={lv(deal.intent)} icon="flag-outline" accent />
+                            <InfoRow label="Status" value={lv(deal.status)} icon="stats-chart-outline" />
+                            <InfoRow label="Assigned To" value={lv(deal.assignedTo)} icon="person-outline" />
+                            <InfoRow label="Team" value={lv(deal.team)} icon="people-outline" />
+                            <InfoRow label="Visible To" value={lv(deal.visibleTo)} icon="eye-outline" />
+                        </View>
+
+                        {deal.publishOn && Object.values(deal.publishOn).some(v => v) && (
+                            <View style={[styles.sectionCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                                <Text style={[styles.sectionTitle, { color: theme.text }]}>Published On</Text>
+                                <View style={styles.chipRow}>
+                                    {Object.entries(deal.publishOn).map(([key, val], i) => val ? (
+                                        <View key={i} style={[styles.chip, { backgroundColor: theme.primary + '15' }]}>
+                                            <Text style={[styles.chipText, { color: theme.primary }]}>{key.charAt(0).toUpperCase() + key.slice(1)}</Text>
+                                        </View>
+                                    ) : null)}
+                                </View>
+                            </View>
+                        )}
+
+                        {deal.remarks ? (
+                            <View style={[styles.sectionCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                                <Text style={[styles.sectionTitle, { color: theme.text }]}>Remarks</Text>
+                                <Text style={[styles.remarksText, { color: theme.text }]}>{deal.remarks}</Text>
+                            </View>
+                        ) : null}
 
                         <View style={[styles.sectionCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
                             <Text style={[styles.sectionTitle, { color: theme.text }]}>Recent Activities</Text>
@@ -284,7 +338,7 @@ const styles = StyleSheet.create({
     statusCapsule: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, alignSelf: 'flex-start' },
     statusCapsuleText: { fontSize: 11, fontWeight: "800" },
     heroSecondary: { marginTop: 16, borderRadius: 16, padding: 12 },
-    chipRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
     chip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10 },
     chipText: { fontSize: 13, fontWeight: "600" },
     chipSeparator: { fontSize: 14, opacity: 0.3 },
@@ -306,6 +360,7 @@ const styles = StyleSheet.create({
     infoRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1 },
     infoLabel: { fontSize: 14, fontWeight: "600" },
     infoValue: { fontSize: 14, fontWeight: "700" },
+    remarksText: { fontSize: 14, color: "#475569", lineHeight: 20, marginTop: 4 },
     actMiniRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, borderBottomWidth: 1 },
     actDot: { width: 6, height: 6, borderRadius: 3 },
     actMiniSubject: { fontSize: 14, fontWeight: "600" },

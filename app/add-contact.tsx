@@ -5,70 +5,57 @@ import {
     Animated, Pressable, Modal, FlatList
 } from "react-native";
 import { useRouter } from "expo-router";
-import api from "./services/api";
 import { Ionicons } from "@expo/vector-icons";
-
-// ─── Design Tokens ──────────────────────────────────────────────────────────
-const COLORS = {
-    primary: "#2563EB",
-    primaryLight: "#DBEAFE",
-    bg: "#F8FAFC",
-    cardBg: "#FFFFFF",
-    border: "#E2E8F0",
-    textPrimary: "#1E293B",
-    textSecondary: "#64748B",
-    textMuted: "#94A3B8",
-    error: "#EF4444",
-    errorLight: "#FEE2E2",
-    inputBg: "#F1F5F9",
-};
-
-const SPACING = {
-    outer: 20,
-    card: 20,
-    section: 24,
-    field: 18,
-    inputHeight: 52,
-};
-
-const FORM_STEPS = ["Basic Info", "Professional", "Personal", "Source & Address"];
+import api from "./services/api";
+import { useTheme, SPACING } from "./context/ThemeContext";
 
 // ─── Reusable Components ──────────────────────────────────────────────────────
 
-function SectionHeader({ title, icon }: { title: string; icon: string }) {
+function SectionHeader({ title, icon, subtitle }: { title: string; icon: string; subtitle?: string }) {
+    const { theme } = useTheme();
     return (
         <View style={styles.sectionHeader}>
-            <View style={styles.sectionHeaderTop}>
-                <Text style={styles.sectionIcon}>{icon}</Text>
-                <Text style={styles.sectionTitle}>{title}</Text>
+            <View style={styles.sectionHeaderRow}>
+                <View style={[styles.sectionIconBox, { backgroundColor: theme.primary + '10' }]}>
+                    <Text style={styles.sectionIconText}>{icon}</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                    <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>{title}</Text>
+                    {subtitle && <Text style={[styles.sectionSubtitle, { color: theme.textSecondary }]}>{subtitle}</Text>}
+                </View>
             </View>
-            <View style={styles.headerDivider} />
+            <View style={[styles.sectionSeparator, { backgroundColor: theme.border }]} />
         </View>
     );
 }
 
-function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
+function Field({ label, required, children, helperText }: { label?: string; required?: boolean; children: React.ReactNode; helperText?: string }) {
+    const { theme } = useTheme();
     return (
         <View style={styles.field}>
-            <Text style={styles.fieldLabel}>
-                {label}
-                {required && <Text style={styles.required}> *</Text>}
-            </Text>
+            {label && (
+                <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>
+                    {label}
+                    {required && <Text style={{ color: theme.error }}> *</Text>}
+                </Text>
+            )}
             {children}
+            {helperText && <Text style={[styles.helperText, { color: theme.textMuted }]}>{helperText}</Text>}
         </View>
     );
 }
 
 function Input({
-    value, onChangeText, placeholder, keyboardType, multiline, numberOfLines, editable = true, label, leftIcon
+    value, onChangeText, placeholder, keyboardType, multiline, numberOfLines, editable = true, label, icon
 }: {
-    value: string; onChangeText: (t: string) => void; placeholder?: string; keyboardType?: any; multiline?: boolean; numberOfLines?: number; editable?: boolean; label?: string; leftIcon?: React.ReactNode;
+    value: string; onChangeText: (t: string) => void; placeholder?: string; keyboardType?: any; multiline?: boolean; numberOfLines?: number; editable?: boolean; label?: string; icon?: string;
 }) {
+    const { theme } = useTheme();
     const [isFocused, setIsFocused] = useState(false);
-    const animatedIsFocused = useRef(new Animated.Value(value ? 1 : 0)).current;
+    const labelAnim = useRef(new Animated.Value(value ? 1 : 0)).current;
 
     useEffect(() => {
-        Animated.timing(animatedIsFocused, {
+        Animated.timing(labelAnim, {
             toValue: (isFocused || value) ? 1 : 0,
             duration: 200,
             useNativeDriver: false,
@@ -77,41 +64,46 @@ function Input({
 
     const labelStyle = {
         position: 'absolute' as const,
-        left: leftIcon ? 44 : 16,
-        top: animatedIsFocused.interpolate({
+        left: 16,
+        top: labelAnim.interpolate({
             inputRange: [0, 1],
-            outputRange: [14, -10],
+            outputRange: [18, -10],
         }),
-        fontSize: animatedIsFocused.interpolate({
+        fontSize: labelAnim.interpolate({
             inputRange: [0, 1],
             outputRange: [15, 12],
         }),
-        color: animatedIsFocused.interpolate({
+        color: labelAnim.interpolate({
             inputRange: [0, 1],
-            outputRange: [COLORS.textMuted, COLORS.primary],
+            outputRange: [theme.textMuted, theme.primary],
         }),
-        backgroundColor: COLORS.cardBg,
+        backgroundColor: theme.cardBg,
         paddingHorizontal: 4,
         zIndex: 1,
     };
 
     return (
-        <View style={[styles.inputContainer, multiline && { height: 'auto' }, isFocused && styles.inputContainerFocused]}>
+        <View style={[
+            styles.inputWrapper,
+            { backgroundColor: theme.inputBg, borderColor: theme.border },
+            isFocused && { borderColor: theme.primary, backgroundColor: theme.cardBg },
+            !editable && { opacity: 0.6, backgroundColor: theme.border },
+            multiline && { height: 'auto', minHeight: 100 }
+        ]}>
             {label && <Animated.Text style={labelStyle}>{label}</Animated.Text>}
-            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                {leftIcon && <View style={{ marginLeft: 16, marginRight: -8 }}>{leftIcon}</View>}
+            <View style={styles.inputInner}>
+                {icon && <Ionicons name={icon as any} size={18} color={isFocused ? theme.primary : theme.textMuted} style={styles.inputIcon} />}
                 <TextInput
                     style={[
                         styles.input,
-                        multiline && { height: 100, textAlignVertical: "top", paddingTop: 12 },
-                        !editable && styles.inputDisabled,
-                        { flex: 1 }
+                        { color: theme.textPrimary },
+                        multiline && { height: 100, textAlignVertical: 'top', paddingTop: 16 }
                     ]}
                     value={value}
                     onChangeText={onChangeText}
                     placeholder={isFocused ? "" : placeholder}
-                    placeholderTextColor={COLORS.textMuted}
-                    keyboardType={keyboardType ?? "default"}
+                    placeholderTextColor={theme.textMuted}
+                    keyboardType={keyboardType}
                     multiline={multiline}
                     numberOfLines={numberOfLines}
                     editable={editable}
@@ -123,247 +115,105 @@ function Input({
     );
 }
 
-function FadeInView({ children, delay = 0 }: { children: React.ReactNode; delay?: number }) {
-    const fadeAnim = useRef(new Animated.Value(0)).current;
-    const slideAnim = useRef(new Animated.Value(20)).current;
-
-    useEffect(() => {
-        Animated.parallel([
-            Animated.timing(fadeAnim, {
-                toValue: 1,
-                duration: 400,
-                delay,
-                useNativeDriver: true,
-            }),
-            Animated.spring(slideAnim, {
-                toValue: 0,
-                tension: 50,
-                friction: 7,
-                delay,
-                useNativeDriver: true,
-            }),
-        ]).start();
-    }, [delay]);
-
-    return (
-        <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
-            {children}
-        </Animated.View>
-    );
-}
-
 function PressableChip({
-    opt, isSelected, onSelect
+    label, isSelected, onSelect, icon
 }: {
-    opt: { label: string, value: string }, isSelected: boolean, onSelect: (v: string) => void
+    label: string, isSelected: boolean, onSelect: () => void, icon?: string
 }) {
-    const scaleValue = useRef(new Animated.Value(1)).current;
-    const opacityValue = useRef(new Animated.Value(0)).current;
+    const { theme } = useTheme();
+    const scale = useRef(new Animated.Value(1)).current;
 
-    useEffect(() => {
-        Animated.timing(opacityValue, {
-            toValue: isSelected ? 1 : 0,
-            duration: 200,
-            useNativeDriver: true,
-        }).start();
-    }, [isSelected]);
-
-    const onPressIn = () => {
-        Animated.spring(scaleValue, {
-            toValue: 0.96,
-            useNativeDriver: true,
-        }).start();
-    };
-
-    const onPressOut = () => {
-        Animated.spring(scaleValue, {
-            toValue: 1,
-            useNativeDriver: true,
-        }).start();
-    };
+    const onPressIn = () => Animated.spring(scale, { toValue: 0.95, useNativeDriver: true }).start();
+    const onPressOut = () => Animated.spring(scale, { toValue: 1, useNativeDriver: true }).start();
 
     return (
         <Pressable
             onPressIn={onPressIn}
             onPressOut={onPressOut}
-            onPress={() => onSelect(opt.value)}
+            onPress={onSelect}
         >
             <Animated.View style={[
-                styles.chip,
-                isSelected && styles.chipSelected,
-                { transform: [{ scale: scaleValue }], flexDirection: 'row', alignItems: 'center' }
+                styles.selectableChip,
+                { borderColor: theme.border, backgroundColor: theme.cardBg },
+                isSelected && { backgroundColor: theme.primary + '08', borderColor: theme.primary },
+                { transform: [{ scale }] }
             ]}>
-                <Animated.View style={{ opacity: opacityValue, width: isSelected ? 'auto' : 0, overflow: 'hidden', flexDirection: 'row', alignItems: 'center' }}>
-                    <Ionicons name="checkmark" size={14} color={COLORS.primary} style={{ marginRight: 4 }} />
-                </Animated.View>
-                <Text style={[styles.chipText, isSelected && styles.chipTextSelected]}>{opt.label}</Text>
+                {icon && <Ionicons name={icon as any} size={16} color={isSelected ? theme.primary : theme.textSecondary} style={{ marginRight: 6 }} />}
+                <Text style={[styles.selectableChipText, { color: theme.textSecondary }, isSelected && { color: theme.primary }]}>{label}</Text>
+                {isSelected && <Ionicons name="checkmark-circle" size={16} color={theme.primary} style={{ marginLeft: 6 }} />}
             </Animated.View>
         </Pressable>
     );
 }
 
 function SelectButton({
-    value, placeholder, options, onSelect,
+    value, options, onSelect,
 }: {
-    value: string; placeholder: string; options: { label: string, value: string }[]; onSelect: (v: string) => void;
+    value: string; options: { label: string, value: string }[]; onSelect: (v: string) => void;
 }) {
-    if (options.length === 0) return <Text style={styles.placeholderText}>{placeholder}</Text>;
+    const { theme } = useTheme();
+    if (options.length === 0) return <Text style={{ color: theme.textSecondary, fontSize: 13, padding: 8 }}>No options available</Text>;
 
     return (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow} contentContainerStyle={styles.chipRowContent}>
             {options.map((opt, idx) => (
                 <PressableChip
                     key={`${opt.value || idx}-${idx}`}
-                    opt={opt}
+                    label={opt.label}
                     isSelected={value === opt.value}
-                    onSelect={(v) => onSelect(v === value ? "" : v)}
+                    onSelect={() => onSelect(opt.value === value ? "" : opt.value)}
                 />
             ))}
         </ScrollView>
     );
 }
 
-function SearchableDropdown({
-    visible, onClose, options, onSelect, placeholder
-}: {
-    visible: boolean; onClose: () => void; options: { label: string, value: string }[]; onSelect: (v: string) => void; placeholder: string;
-}) {
-    const [search, setSearch] = useState("");
-    const filtered = (options || []).filter(o =>
-        o?.label?.toString().toLowerCase().includes(search.toLowerCase())
-    );
-
-    return (
-        <Modal visible={visible} animationType="slide" transparent={true} onRequestClose={onClose}>
-            <View style={styles.modalOverlay}>
-                <View style={styles.modalContent}>
-                    <View style={styles.modalHeader}>
-                        <Text style={styles.modalTitle}>{placeholder}</Text>
-                        <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                            <Ionicons name="close" size={24} color="#64748b" />
-                        </TouchableOpacity>
-                    </View>
-                    <TextInput
-                        style={styles.modalSearchInput}
-                        placeholder="Search..."
-                        value={search}
-                        onChangeText={setSearch}
-                        placeholderTextColor="#9ca3af"
-                    />
-                    <FlatList
-                        data={filtered}
-                        keyExtractor={(item, idx) => `${item.value}-${idx}`}
-                        renderItem={({ item }) => (
-                            <TouchableOpacity style={styles.modalListItem} onPress={() => { onSelect(item.value); onClose(); }}>
-                                <Text style={styles.modalListItemText}>{item.label}</Text>
-                            </TouchableOpacity>
-                        )}
-                        ListEmptyComponent={
-                            <View style={{ alignItems: 'center', marginTop: 60 }}>
-                                <Ionicons name="search-outline" size={48} color={COLORS.border} />
-                                <Text style={styles.modalEmptyText}>No matching results found</Text>
-                                <Text style={{ fontSize: 13, color: COLORS.textSecondary, marginTop: 4 }}>Try adjusting your search terms</Text>
-                            </View>
-                        }
-                        keyboardShouldPersistTaps="handled"
-                    />
-                </View>
-            </View>
-        </Modal>
-    );
-}
-
 // ─── Main Form ────────────────────────────────────────────────────────────────
 
 interface ContactForm {
-    // Basic
+    title: string;
     name: string;
-    surname: string;
-    fatherName: string;
-    phone: string;
+    phone1: string;
     phone2: string;
-    email: string;
+    email1: string;
     email2: string;
     description: string;
-    // Professional
-    company: string;
-    workOffice: string;
-    designation: string;
-    // Personal
-    gender: string;
-    maritalStatus: string;
-    birthDate: string;
-    anniversaryDate: string;
-    // Source
     source: string;
-    campaign: string;
-    // Address
-    country: string;
-    state: string;
-    city: string;
-    hNo: string;
-    street: string;
-    pinCode: string;
+    tags: string;
 }
 
 const INITIAL: ContactForm = {
-    name: "", surname: "", fatherName: "", phone: "", phone2: "",
-    email: "", email2: "", description: "",
-    company: "", workOffice: "", designation: "",
-    gender: "", maritalStatus: "", birthDate: "", anniversaryDate: "",
-    source: "", campaign: "",
-    country: "India", state: "", city: "",
-    hNo: "", street: "", pinCode: "",
+    title: "", name: "", phone1: "", phone2: "",
+    email1: "", email2: "", description: "",
+    source: "", tags: "",
 };
 
 export default function AddContactScreen() {
     const router = useRouter();
-    const [form, setForm] = useState<ContactForm>(INITIAL);
+    const { theme } = useTheme();
     const [saving, setSaving] = useState(false);
-    const [step, setStep] = useState(0);
-    const shakeAnim = useRef(new Animated.Value(0)).current;
+    const [form, setForm] = useState<ContactForm>(INITIAL);
 
-    // Master Data
+    // Lookups
+    const [titles, setTitles] = useState<any[]>([]);
+    const [sources, setSources] = useState<any[]>([]);
     const [lookups, setLookups] = useState<any[]>([]);
-    const [countries, setCountries] = useState<any[]>([]);
-    const [states, setStates] = useState<any[]>([]);
-    const [cities, setCities] = useState<any[]>([]);
-    const [activeDropdown, setActiveDropdown] = useState<'country' | 'state' | 'city' | null>(null);
 
     useEffect(() => {
         const loadInitial = async () => {
             try {
-                const [lRes, cRes] = await Promise.all([
-                    api.get("/lookups", { params: { limit: 2000 } }),
-                    api.get("/lookups", { params: { lookup_type: "Country", limit: 100 } })
-                ]);
-                setLookups(lRes.data?.data || []);
-                setCountries((cRes.data?.data || []).map((l: any) => ({ label: l.lookup_value, value: l.lookup_value, _id: l._id })));
+                const res = await api.get("/lookups", { params: { limit: 2000 } });
+                const allLookups = res.data?.data || [];
+                setLookups(allLookups);
+
+                setTitles(allLookups.filter((l: any) => l.lookup_type === 'Title').map((l: any) => ({ label: l.lookup_value, value: l.lookup_value })));
+                setSources(allLookups.filter((l: any) => l.lookup_type === 'Source').map((l: any) => ({ label: l.lookup_value, value: l.lookup_value })));
             } catch (e) {
                 console.error("[ContactUI] Initial load failed", e);
             }
         };
         loadInitial();
     }, []);
-
-    const fetchChildLookups = async (type: string, parentVal: string) => {
-        try {
-            const parent = lookups.find(l => l.lookup_value === parentVal);
-            if (!parent) return [];
-            const res = await api.get("/lookups", { params: { lookup_type: type, parent_lookup_id: parent._id, limit: 500 } });
-            return (res.data?.data || []).map((l: any) => ({ label: l.lookup_value, value: l.lookup_value, _id: l._id }));
-        } catch (e) {
-            return [];
-        }
-    };
-
-    useEffect(() => {
-        if (form.country) fetchChildLookups("State", form.country).then(setStates);
-    }, [form.country, lookups]);
-
-    useEffect(() => {
-        if (form.state) fetchChildLookups("City", form.state).then(setCities);
-    }, [form.state, lookups]);
 
     const resolveId = (type: string, value: string) => {
         if (!value) return null;
@@ -375,72 +225,32 @@ export default function AddContactScreen() {
     };
 
     const set = (key: keyof ContactForm) => (val: string) => {
-        setForm((f) => {
-            const newForm = { ...f, [key]: val };
-            if (key === 'country') { newForm.state = ""; newForm.city = ""; }
-            if (key === 'state') { newForm.city = ""; }
-            return newForm;
-        });
-    };
-
-    const triggerShake = () => {
-        Animated.sequence([
-            Animated.timing(shakeAnim, { toValue: 10, duration: 50, useNativeDriver: true }),
-            Animated.timing(shakeAnim, { toValue: -10, duration: 50, useNativeDriver: true }),
-            Animated.timing(shakeAnim, { toValue: 10, duration: 50, useNativeDriver: true }),
-            Animated.timing(shakeAnim, { toValue: 0, duration: 50, useNativeDriver: true }),
-        ]).start();
-    };
-
-    const handleNext = () => {
-        if (step === 0) {
-            if (!form.name || !form.phone) {
-                triggerShake();
-                Alert.alert("Missing Fields", "Please enter at least a First Name and Mobile Number.");
-                return;
-            }
-        }
-        setStep(s => Math.min(s + 1, FORM_STEPS.length - 1));
+        setForm((f) => ({ ...f, [key]: val }));
     };
 
     const handleSave = async () => {
-        if (!form.name.trim() || !form.phone.trim()) {
-            Alert.alert("Required", "Please enter the contact's name and mobile number.");
+        if (!form.name.trim() || !form.phone1.trim()) {
+            Alert.alert("Required", "Please enter the contact's name and primary mobile number.");
             return;
         }
         setSaving(true);
         try {
             const payload = {
+                title: resolveId('Title', form.title),
                 name: form.name.trim(),
-                surname: form.surname.trim() || undefined,
-                fatherName: form.fatherName.trim() || undefined,
                 phones: [
-                    ...(form.phone ? [{ number: form.phone, type: "Personal" }] : []),
-                    ...(form.phone2 ? [{ number: form.phone2, type: "Work" }] : []),
+                    ...(form.phone1 ? [{ number: form.phone1, type: "Primary" }] : []),
+                    ...(form.phone2 ? [{ number: form.phone2, type: "Alternate" }] : []),
                 ],
                 emails: [
-                    ...(form.email ? [{ address: form.email, type: "Personal" }] : []),
-                    ...(form.email2 ? [{ address: form.email2, type: "Work" }] : []),
+                    ...(form.email1 ? [{ address: form.email1, type: "Primary" }] : []),
+                    ...(form.email2 ? [{ address: form.email2, type: "Alternate" }] : []),
                 ],
                 description: form.description || undefined,
-                company: form.company || undefined,
-                workOffice: form.workOffice || undefined,
-                designation: resolveId('Designation', form.designation),
-                gender: form.gender || undefined,
-                maritalStatus: form.maritalStatus || undefined,
-                personalAddress: {
-                    country: resolveId('Country', form.country),
-                    state: resolveId('State', form.state),
-                    city: resolveId('City', form.city),
-                    hNo: form.hNo || undefined,
-                    street: form.street || undefined,
-                    pinCode: form.pinCode || undefined,
-                },
                 source: resolveId('Source', form.source),
-                campaign: resolveId('Campaign', form.campaign),
+                tags: form.tags ? [form.tags] : undefined,
             };
 
-            console.log("[ContactSave] Submitting Payload:", JSON.stringify(payload, null, 2));
             const res = await api.post("/contacts", payload);
 
             if (res.data?.success || res.status === 201 || res.status === 200) {
@@ -458,419 +268,168 @@ export default function AddContactScreen() {
         }
     };
 
-    const renderStepContent = () => {
-        switch (step) {
-            case 0: // Basic Info
-                return (
-                    <FadeInView key="step0" delay={100}>
-                        <SectionHeader title="Basic Information" icon="👤" />
-                        <View style={styles.card}>
-                            <View style={{ flexDirection: 'row', gap: 12 }}>
-                                <View style={{ flex: 1 }}>
-                                    <Field label="First Name" required>
-                                        <Input value={form.name} onChangeText={set("name")} placeholder="Amit" label="First Name" />
-                                    </Field>
-                                </View>
-                                <View style={{ flex: 1 }}>
-                                    <Field label="Last Name">
-                                        <Input value={form.surname} onChangeText={set("surname")} placeholder="Sharma" label="Last Name" />
-                                    </Field>
-                                </View>
-                            </View>
-
-                            <Field label="Father's Name">
-                                <Input value={form.fatherName} onChangeText={set("fatherName")} placeholder="Raj Sharma" label="Father's Name" />
-                            </Field>
-
-                            <Field label="Mobile Number" required>
-                                <Input value={form.phone} onChangeText={set("phone")} placeholder="+91 98765 43210" keyboardType="phone-pad" label="Primary Mobile" />
-                            </Field>
-
-                            <Field label="Mobile Number 2">
-                                <Input value={form.phone2} onChangeText={set("phone2")} placeholder="Alternate / Work" keyboardType="phone-pad" label="Secondary Mobile" />
-                            </Field>
-
-                            <Field label="Email Address">
-                                <Input value={form.email} onChangeText={set("email")} placeholder="amit@example.com" keyboardType="email-address" label="Primary Email" />
-                            </Field>
-
-                            <Field label="Description">
-                                <Input value={form.description} onChangeText={set("description")} placeholder="Add notes about this contact..." multiline numberOfLines={3} label="Notes" />
-                            </Field>
-                        </View>
-                    </FadeInView>
-                );
-            case 1: // Professional
-                return (
-                    <FadeInView key="step1" delay={100}>
-                        <SectionHeader title="Professional Details" icon="💼" />
-                        <View style={styles.card}>
-                            <Field label="Company Name">
-                                <Input value={form.company} onChangeText={set("company")} placeholder="ABC Enterprises" label="Company" />
-                            </Field>
-                            <Field label="Work Office / Branch">
-                                <Input value={form.workOffice} onChangeText={set("workOffice")} placeholder="Head Office, Delhi" label="Office Location" />
-                            </Field>
-                            <Field label="Designation">
-                                <SelectButton value={form.designation} placeholder="Select Designation"
-                                    options={lookups.filter(l => l.lookup_type === 'Designation').map(l => ({ label: l.lookup_value, value: l.lookup_value }))}
-                                    onSelect={set("designation")} />
-                            </Field>
-                        </View>
-                    </FadeInView>
-                );
-            case 2: // Personal
-                return (
-                    <FadeInView key="step2" delay={100}>
-                        <SectionHeader title="Personal Attributes" icon="🪪" />
-                        <View style={styles.card}>
-                            <Field label="Gender">
-                                <SelectButton value={form.gender} placeholder="Select Gender"
-                                    options={["Male", "Female", "Other"].map(v => ({ label: v, value: v }))}
-                                    onSelect={set("gender")} />
-                            </Field>
-                            <Field label="Marital Status">
-                                <SelectButton value={form.maritalStatus} placeholder="Select Status"
-                                    options={["Single", "Married", "Divorced", "Widowed"].map(v => ({ label: v, value: v }))}
-                                    onSelect={set("maritalStatus")} />
-                            </Field>
-                            <Field label="Date of Birth">
-                                <Input value={form.birthDate} onChangeText={set("birthDate")} placeholder="DD/MM/YYYY" keyboardType="numbers-and-punctuation" label="Birthday" />
-                            </Field>
-                            <Field label="Anniversary Date">
-                                <Input value={form.anniversaryDate} onChangeText={set("anniversaryDate")} placeholder="DD/MM/YYYY" keyboardType="numbers-and-punctuation" label="Anniversary" />
-                            </Field>
-                        </View>
-                    </FadeInView>
-                );
-            case 3: // Source & Address
-                return (
-                    <FadeInView key="step3" delay={100}>
-                        <SectionHeader title="Source & Acquisition" icon="📣" />
-                        <View style={styles.card}>
-                            <Field label="Lead Source">
-                                <SelectButton value={form.source} placeholder="Select Source"
-                                    options={lookups.filter(l => l.lookup_type === 'Source').map(l => ({ label: l.lookup_value, value: l.lookup_value }))}
-                                    onSelect={set("source")} />
-                            </Field>
-                            <Field label="Campaign">
-                                <SelectButton value={form.campaign} placeholder="Select Campaign"
-                                    options={lookups.filter(l => l.lookup_type === 'Campaign').map(l => ({ label: l.lookup_value, value: l.lookup_value }))}
-                                    onSelect={set("campaign")} />
-                            </Field>
-                        </View>
-
-                        <SectionHeader title="Physical Address" icon="📍" />
-                        <View style={styles.card}>
-                            <Field label="Country">
-                                <TouchableOpacity style={styles.inputContainer} onPress={() => setActiveDropdown('country')}>
-                                    <Text style={[styles.input, { lineHeight: 52 }, !form.country && { color: COLORS.textMuted }]}>
-                                        {form.country || "Select Country"}
-                                    </Text>
-                                    <Ionicons name="chevron-down" size={18} color={COLORS.textSecondary} style={{ position: 'absolute', right: 16 }} />
-                                </TouchableOpacity>
-                            </Field>
-
-                            <View style={{ flexDirection: 'row', gap: 12 }}>
-                                <View style={{ flex: 1 }}>
-                                    <Field label="State">
-                                        <TouchableOpacity style={[styles.inputContainer, !form.country && styles.inputDisabled]} onPress={() => form.country && setActiveDropdown('state')}>
-                                            <Text style={[styles.input, { lineHeight: 52 }, !form.state && { color: COLORS.textMuted }]}>
-                                                {form.state || "State"}
-                                            </Text>
-                                        </TouchableOpacity>
-                                    </Field>
-                                </View>
-                                <View style={{ flex: 1 }}>
-                                    <Field label="City">
-                                        <TouchableOpacity style={[styles.inputContainer, !form.state && styles.inputDisabled]} onPress={() => form.state && setActiveDropdown('city')}>
-                                            <Text style={[styles.input, { lineHeight: 52 }, !form.city && { color: COLORS.textMuted }]}>
-                                                {form.city || "City"}
-                                            </Text>
-                                        </TouchableOpacity>
-                                    </Field>
-                                </View>
-                            </View>
-
-                            <Field label="House / Flat No.">
-                                <Input value={form.hNo} onChangeText={set("hNo")} placeholder="A-12, Sector 5" label="Unit / House No" />
-                            </Field>
-                            <Field label="Street / Colony">
-                                <Input value={form.street} onChangeText={set("street")} placeholder="MG Road" label="Street Name" />
-                            </Field>
-                            <Field label="Pin Code">
-                                <Input value={form.pinCode} onChangeText={set("pinCode")} placeholder="110001" keyboardType="number-pad" label="Pincode" />
-                            </Field>
-                        </View>
-
-                        {/* Modals */}
-                        <SearchableDropdown visible={activeDropdown === 'country'} onClose={() => setActiveDropdown(null)} options={countries} onSelect={set("country")} placeholder="Select Country" />
-                        <SearchableDropdown visible={activeDropdown === 'state'} onClose={() => setActiveDropdown(null)} options={states} onSelect={set("state")} placeholder="Select State" />
-                        <SearchableDropdown visible={activeDropdown === 'city'} onClose={() => setActiveDropdown(null)} options={cities} onSelect={set("city")} placeholder="Select City" />
-                    </FadeInView>
-                );
-            default: return null;
-        }
-    };
-
     return (
-        <SafeAreaView style={styles.container}>
-            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-                <View style={styles.header}>
+        <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+            <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+                <View style={[styles.header, { backgroundColor: theme.background }]}>
                     <TouchableOpacity
-                        activeOpacity={0.7}
-                        hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
                         onPress={() => {
-                            if (step > 0) {
-                                setStep(step - 1);
+                            const isDirty = JSON.stringify(form) !== JSON.stringify(INITIAL);
+                            if (isDirty) {
+                                Alert.alert("Discard Changes?", "You have unsaved changes. Are you sure you want to go back?", [
+                                    { text: "Keep Editing", style: "cancel" },
+                                    { text: "Discard", style: "destructive", onPress: () => router.back() }
+                                ]);
                             } else {
-                                const isDirty = JSON.stringify(form) !== JSON.stringify(INITIAL);
-                                if (isDirty) {
-                                    Alert.alert("Discard Changes?", "You have unsaved changes. Are you sure you want to go back?", [
-                                        { text: "Keep Editing", style: "cancel" },
-                                        { text: "Discard", style: "destructive", onPress: () => router.back() }
-                                    ]);
-                                } else {
-                                    router.back();
-                                }
+                                router.back();
                             }
                         }}
-                        style={{ padding: 4, zIndex: 10 }}
+                        style={styles.backBtn}
+                        hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
                     >
-                        <Ionicons name={step > 0 ? "arrow-back" : "close"} size={28} color={COLORS.textPrimary} />
+                        <Ionicons name="close" size={28} color={theme.textPrimary} />
                     </TouchableOpacity>
                     <View style={styles.headerTitleContainer}>
-                        <Text style={styles.headerTitle}>{FORM_STEPS[step]}</Text>
-                        <Text style={styles.headerSubtitle}>Step {step + 1} of {FORM_STEPS.length}</Text>
+                        <Text style={[styles.headerTitle, { color: theme.textPrimary }]}>Create Contact</Text>
+                        <Text style={[styles.headerSubtitle, { color: theme.textSecondary }]}>Individual Person</Text>
                     </View>
                     <View style={{ width: 28 }} />
                 </View>
 
-                {/* Progress Bar */}
-                <View style={styles.progressContainer}>
-                    <View style={styles.progressTrack}>
-                        <Animated.View
-                            style={[
-                                styles.progressFill,
-                                { width: `${((step + 1) / FORM_STEPS.length) * 100}%` }
-                            ]}
-                        />
+                <ScrollView style={styles.content} contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+                    <SectionHeader title="Basic Details" icon="👤" subtitle="Primary identity information" />
+                    <View style={[styles.card, { backgroundColor: theme.cardBg, borderColor: theme.border }]}>
+                        <Field label="Title" required>
+                            <SelectButton value={form.title} options={titles} onSelect={set("title")} />
+                        </Field>
+                        <Field required>
+                            <Input label="Full Name" value={form.name} onChangeText={set("name")} placeholder="John Doe" />
+                        </Field>
+                        <Field required>
+                            <Input label="Primary Mobile" value={form.phone1} onChangeText={set("phone1")} placeholder="+91 98765 43210" keyboardType="phone-pad" icon="call-outline" />
+                        </Field>
+                        <Field>
+                            <Input label="Alternate Mobile" value={form.phone2} onChangeText={set("phone2")} placeholder="Optional" keyboardType="phone-pad" icon="call-outline" />
+                        </Field>
+                        <Field>
+                            <Input label="Primary Email" value={form.email1} onChangeText={set("email1")} placeholder="john@example.com" keyboardType="email-address" icon="mail-outline" />
+                        </Field>
+                        <Field>
+                            <Input label="Alternate Email" value={form.email2} onChangeText={set("email2")} placeholder="Optional" keyboardType="email-address" icon="mail-outline" />
+                        </Field>
+                        <Field>
+                            <Input label="Personal Profile" value={form.description} onChangeText={set("description")} placeholder="Notes about this contact..." multiline numberOfLines={3} />
+                        </Field>
                     </View>
-                </View>
 
-                <ScrollView style={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-                    {renderStepContent()}
-                    <View style={{ height: 100 }} />
-                </ScrollView>
+                    <SectionHeader title="Source Details" icon="📣" subtitle="Lead acquisition tracking" />
+                    <View style={[styles.card, { backgroundColor: theme.cardBg, borderColor: theme.border }]}>
+                        <Field label="Contact Source">
+                            <SelectButton value={form.source} options={sources} onSelect={set("source")} />
+                        </Field>
+                        <Field label="Contact Tags">
+                            <SelectButton value={form.tags} options={[{ label: "Hot", value: "Hot" }, { label: "Warm", value: "Warm" }, { label: "Cold", value: "Cold" }]} onSelect={set("tags")} />
+                        </Field>
+                    </View>
 
-                <View style={styles.stickyFooter}>
-                    {step > 0 && (
-                        <TouchableOpacity style={styles.cancelBtn} onPress={() => setStep(step - 1)}>
-                            <Text style={styles.cancelBtnText}>Back</Text>
-                        </TouchableOpacity>
-                    )}
-                    <Animated.View style={{ flex: 1, transform: [{ translateX: shakeAnim }] }}>
-                        {step < FORM_STEPS.length - 1 ? (
-                            <Pressable
-                                onPress={handleNext}
-                                style={({ pressed }) => [
-                                    styles.saveBtn,
-                                    { transform: [{ scale: pressed ? 0.98 : 1 }] }
-                                ]}
-                            >
-                                {({ pressed }) => (
-                                    <>
-                                        <Text style={styles.saveBtnText}>Next Step</Text>
-                                        <Animated.View style={{ transform: [{ translateX: pressed ? 2 : 0 }] }}>
-                                            <Ionicons name="arrow-forward" size={18} color="#fff" style={{ marginLeft: 8 }} />
-                                        </Animated.View>
-                                    </>
-                                )}
-                            </Pressable>
+                    <TouchableOpacity
+                        style={[styles.bottomSaveBtn, { backgroundColor: theme.primary, shadowColor: theme.primary }, saving && styles.saveBtnDisabled]}
+                        onPress={handleSave}
+                        disabled={saving}
+                    >
+                        {saving ? (
+                            <ActivityIndicator color="#fff" />
                         ) : (
-                            <Pressable
-                                onPress={handleSave}
-                                disabled={saving}
-                                style={({ pressed }) => [
-                                    styles.saveBtn,
-                                    saving && styles.saveBtnDisabled,
-                                    { transform: [{ scale: pressed && !saving ? 0.98 : 1 }] }
-                                ]}
-                            >
-                                {saving ? (
-                                    <ActivityIndicator color="#fff" />
-                                ) : (
-                                    <Text style={styles.saveBtnText}>Save Contact</Text>
-                                )}
-                            </Pressable>
+                            <>
+                                <Ionicons name="person-add-outline" size={20} color="#fff" style={{ marginRight: 8 }} />
+                                <Text style={styles.bottomSaveBtnText}>Create Contact Profile</Text>
+                            </>
                         )}
-                    </Animated.View>
-                </View>
+                    </TouchableOpacity>
+                </ScrollView>
             </KeyboardAvoidingView>
         </SafeAreaView>
     );
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: COLORS.bg },
+    container: { flex: 1 },
     header: {
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "space-between",
-        paddingHorizontal: 16,
-        paddingBottom: 12,
-        backgroundColor: COLORS.bg,
-        paddingTop: Platform.OS === 'ios' ? 50 : 16,
+        paddingHorizontal: 20,
+        paddingBottom: 16,
+        paddingTop: Platform.OS === 'ios' ? 60 : 20,
         zIndex: 1000,
-        elevation: 10,
     },
-    headerTitleContainer: { flex: 1, alignItems: 'center', paddingRight: 40 },
-    headerTitle: { fontSize: 20, fontWeight: "700", color: COLORS.textPrimary },
-    headerSubtitle: { fontSize: 13, color: COLORS.textSecondary, marginTop: 2, fontWeight: '500' },
-    progressContainer: { paddingHorizontal: 20, marginBottom: 12 },
-    progressTrack: { height: 6, backgroundColor: COLORS.border, borderRadius: 3, overflow: 'hidden' },
-    progressFill: { height: '100%', backgroundColor: COLORS.primary, borderRadius: 3 },
-    content: { flex: 1, paddingHorizontal: SPACING.outer },
+    backBtn: { padding: 4, zIndex: 10 },
+    headerTitleContainer: { flex: 1, alignItems: 'center' },
+    headerTitle: { fontSize: 18, fontWeight: "800", letterSpacing: -0.5 },
+    headerSubtitle: { fontSize: 11, fontWeight: "600", marginTop: 2 },
+    content: { flex: 1 },
+    scroll: { padding: SPACING.outer, paddingBottom: 40 },
+    sectionHeader: { marginTop: 8, marginBottom: 20 },
+    sectionHeaderRow: { flexDirection: "row", alignItems: "center", gap: 14 },
+    sectionIconBox: { width: 44, height: 44, borderRadius: 14, alignItems: "center", justifyContent: "center" },
+    sectionIconText: { fontSize: 20 },
+    sectionTitle: { fontSize: 17, fontWeight: "800", letterSpacing: -0.3 },
+    sectionSubtitle: { fontSize: 12, marginTop: 2, fontWeight: '500' },
+    sectionSeparator: { height: 1, marginTop: 16, opacity: 0.5 },
     card: {
-        backgroundColor: COLORS.cardBg,
-        borderRadius: 18,
+        borderRadius: 24,
         padding: SPACING.card,
         marginBottom: 24,
-        ...Platform.select({
-            ios: {
-                shadowColor: "#000",
-                shadowOffset: { width: 0, height: 12 },
-                shadowOpacity: 0.05,
-                shadowRadius: 24,
-            },
-            android: { elevation: 3 },
-        }),
-    },
-    sectionHeader: { marginTop: 4, marginBottom: 16 },
-    sectionHeaderTop: { flexDirection: "row", alignItems: "center", marginBottom: 10 },
-    sectionIcon: { fontSize: 18, marginRight: 10 },
-    sectionTitle: { fontSize: 20, fontWeight: "600", color: COLORS.textPrimary },
-    headerDivider: { height: 1, backgroundColor: COLORS.border, width: '100%', opacity: 0.5 },
-    field: { marginBottom: SPACING.field },
-    fieldLabel: { fontSize: 14, fontWeight: "600", color: COLORS.textSecondary, marginBottom: 6 },
-    required: { color: COLORS.error },
-    inputContainer: {
-        position: 'relative',
-        height: SPACING.inputHeight,
-        marginBottom: 18,
-        backgroundColor: COLORS.inputBg,
-        borderRadius: 14,
         borderWidth: 1,
-        borderColor: COLORS.border,
-        justifyContent: 'center',
-    },
-    inputContainerFocused: {
-        borderColor: COLORS.primary,
-        backgroundColor: COLORS.cardBg,
-        shadowColor: COLORS.primary,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.04,
+        shadowRadius: 16,
         elevation: 2,
     },
+    field: { marginBottom: SPACING.field },
+    fieldLabel: { fontSize: 13, fontWeight: "700", marginBottom: 8, marginLeft: 4 },
+    helperText: { fontSize: 12, marginTop: 6, marginLeft: 4 },
+    inputWrapper: {
+        position: 'relative',
+        height: SPACING.inputHeight,
+        borderRadius: 16,
+        borderWidth: 1.5,
+        justifyContent: 'center',
+    },
+    inputInner: { flexDirection: 'row', alignItems: 'center', flex: 1, paddingHorizontal: 16 },
+    inputIcon: { marginRight: 12 },
     input: {
         fontSize: 16,
-        color: COLORS.textPrimary,
-        paddingHorizontal: 16,
         height: '100%',
-        fontWeight: '500',
+        fontWeight: '600',
+        flex: 1,
     },
-    inputDisabled: {
-        opacity: 0.6,
-        backgroundColor: COLORS.border,
-    },
-    chipRow: { flexDirection: "row" },
+    chipRow: { flexDirection: "row", marginTop: 4 },
     chipRowContent: { paddingRight: 20 },
-    chip: {
-        paddingHorizontal: 18,
+    selectableChip: {
+        paddingHorizontal: 16,
         paddingVertical: 10,
         borderRadius: 14,
         borderWidth: 1.5,
-        borderColor: COLORS.border,
         marginRight: 10,
-        backgroundColor: COLORS.cardBg,
-    },
-    chipSelected: {
-        backgroundColor: COLORS.primaryLight,
-        borderColor: COLORS.primary,
-    },
-    chipText: { fontSize: 14, fontWeight: "500", color: COLORS.textSecondary },
-    chipTextSelected: { color: COLORS.primary, fontWeight: "600" },
-    placeholderText: { color: COLORS.textSecondary, fontSize: 13, padding: 8 },
-    stickyFooter: {
-        position: 'absolute',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        backgroundColor: 'rgba(255,255,255,0.96)',
-        padding: 20,
-        paddingBottom: Platform.OS === 'ios' ? 34 : 20,
         flexDirection: 'row',
-        gap: 12,
-        borderTopWidth: 1,
-        borderTopColor: COLORS.border,
-    },
-    saveBtn: {
-        flex: 1,
-        backgroundColor: COLORS.primary,
-        height: 56,
-        borderRadius: 16,
-        flexDirection: 'row',
-        justifyContent: "center",
-        alignItems: "center",
-    },
-    saveBtnDisabled: { opacity: 0.5 },
-    saveBtnText: { color: "#fff", fontSize: 16, fontWeight: "600" },
-    cancelBtn: {
-        paddingHorizontal: 20,
-        height: 54,
-        borderRadius: 14,
-        justifyContent: "center",
-        alignItems: "center",
-        borderWidth: 1,
-        borderColor: COLORS.border,
-    },
-    cancelBtnText: { color: COLORS.textSecondary, fontWeight: "600" },
-
-    // Modal Styles
-    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-    modalContent: {
-        backgroundColor: '#fff',
-        borderTopLeftRadius: 24,
-        borderTopRightRadius: 24,
-        height: '80%',
-        paddingTop: 20
-    },
-    modalHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
         alignItems: 'center',
-        paddingHorizontal: 20,
-        marginBottom: 20
     },
-    modalTitle: { fontSize: 18, fontWeight: '700', color: COLORS.textPrimary },
-    modalSearchInput: {
-        backgroundColor: COLORS.inputBg,
-        marginHorizontal: 20,
-        height: 50,
-        borderRadius: 12,
-        paddingHorizontal: 16,
-        fontSize: 16,
-        color: COLORS.textPrimary,
-        marginBottom: 16
+    selectableChipText: { fontSize: 14, fontWeight: "600" },
+    bottomSaveBtn: {
+        borderRadius: 18,
+        padding: 18,
+        alignItems: "center",
+        flexDirection: 'row',
+        justifyContent: 'center',
+        marginTop: 12,
+        marginBottom: 20,
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.25,
+        shadowRadius: 16,
+        elevation: 6,
     },
-    modalListItem: {
-        paddingVertical: 16,
-        paddingHorizontal: 24,
-        borderBottomWidth: 1,
-        borderBottomColor: COLORS.border
-    },
-    modalListItemText: { fontSize: 16, color: COLORS.textPrimary, fontWeight: '500' },
-    modalEmptyText: { fontSize: 16, fontWeight: '600', color: COLORS.textSecondary, marginTop: 12 },
+    bottomSaveBtnText: { color: "#fff", fontSize: 16, fontWeight: "800" },
+    saveBtnDisabled: { opacity: 0.6 },
 });
-

@@ -153,9 +153,24 @@ export default function ProjectDetailScreen() {
                         <View style={[styles.sectionCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
                             <Text style={[styles.sectionTitle, { color: theme.text }]}>Technical Details</Text>
                             <InfoRow label="RERA Number" value={project.reraNumber} icon="document-text-outline" accent />
+                            <InfoRow label="Sub-Category" value={lookupVal(project.subCategory)} icon="list-outline" />
                             <InfoRow label="Land Area" value={project.landArea ? `${project.landArea} ${project.landAreaUnit}` : "—"} icon="resize-outline" />
                             <InfoRow label="City" value={project.address?.city} icon="location-outline" />
                         </View>
+
+                        {project.blocks && project.blocks.length > 0 && (
+                            <View style={[styles.sectionCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                                <Text style={[styles.sectionTitle, { color: theme.text }]}>Blocks / Phases</Text>
+                                <View style={styles.blockGrid}>
+                                    {project.blocks.map((b: any, i: number) => (
+                                        <View key={i} style={[styles.blockChip, { backgroundColor: theme.background }]}>
+                                            <Ionicons name="cube-outline" size={14} color={theme.primary} />
+                                            <Text style={[styles.blockText, { color: theme.text }]}>{typeof b === 'string' ? b : b.name}</Text>
+                                        </View>
+                                    ))}
+                                </View>
+                            </View>
+                        )}
 
                         <View style={[styles.sectionCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
                             <Text style={[styles.sectionTitle, { color: theme.text }]}>Location Summary</Text>
@@ -221,7 +236,9 @@ const styles = StyleSheet.create({
     locAddress: { fontSize: 14, fontWeight: "600", lineHeight: 22, marginBottom: 16 },
     mapLink: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 12, borderRadius: 12 },
     mapLinkText: { fontSize: 13, fontWeight: "800" },
-    amenityBox: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
     amenityChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 10 },
     amenityText: { fontSize: 12, fontWeight: "700" },
+    blockGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+    blockChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: '#F1F5F9' },
+    blockText: { fontSize: 12, fontWeight: "700" },
 });

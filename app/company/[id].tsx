@@ -187,11 +187,31 @@ export default function CompanyDetailScreen() {
                         {activeTab === "overview" && (
                             <>
                                 <View style={[styles.sectionCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
-                                    <Text style={[styles.sectionTitle, { color: theme.text }]}>General Information</Text>
+                                    <Text style={[styles.sectionTitle, { color: theme.text }]}>Corporate Identity</Text>
                                     <InfoRow label="Industry" value={lv(company.industry)} icon="business-outline" />
+                                    <InfoRow label="Sub-Category" value={lv(company.companySubCategory)} icon="list-outline" />
+                                    <InfoRow label="PAN Number" value={company.panNumber} icon="card-outline" />
+                                    <InfoRow label="GST Number" value={company.gstNumber} icon="receipt-outline" />
+                                    <InfoRow label="CIN Number" value={company.cinNumber} icon="finger-print-outline" />
+                                    <InfoRow label="TAN Number" value={company.tanNumber} icon="wallet-outline" />
+                                    <InfoRow label="Website" value={company.website} icon="globe-outline" />
+                                </View>
+
+                                <View style={[styles.sectionCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                                    <Text style={[styles.sectionTitle, { color: theme.text }]}>Relationship Management</Text>
                                     <InfoRow label="Source" value={lv(company.source)} icon="share-social-outline" />
                                     <InfoRow label="Assigned To" value={lv(company.owner)} icon="person-outline" />
+                                    <InfoRow label="Team" value={lv(company.team)} icon="people-outline" />
                                 </View>
+
+                                {company.authorizedSignatory && (
+                                    <View style={[styles.sectionCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                                        <Text style={[styles.sectionTitle, { color: theme.text }]}>Authorized Signatory</Text>
+                                        <InfoRow label="Name" value={company.authorizedSignatory.name} icon="person-circle-outline" accent />
+                                        <InfoRow label="Mobile" value={company.authorizedSignatory.mobile} icon="call-outline" />
+                                        <InfoRow label="Email" value={company.authorizedSignatory.email} icon="mail-outline" />
+                                    </View>
+                                )}
                                 <View style={[styles.sectionCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
                                     <Text style={[styles.sectionTitle, { color: theme.text }]}>Contact & Address</Text>
                                     <InfoRow label="Phone" value={company.phones?.[0]?.phoneNumber} icon="call-outline" accent />
@@ -200,7 +220,10 @@ export default function CompanyDetailScreen() {
                                         <Text style={[styles.addressLabel, { color: theme.textLight }]}>REGISTERED OFFICE</Text>
                                         <Text style={[styles.addressValue, { color: theme.text }]}>
                                             {company.addresses?.registeredOffice?.hNo} {company.addresses?.registeredOffice?.street}
+                                            {company.addresses?.registeredOffice?.area ? `, ${company.addresses?.registeredOffice?.area}` : ""}
                                             {"\n"}{lv(company.addresses?.registeredOffice?.city)}, {lv(company.addresses?.registeredOffice?.state)}
+                                            {company.addresses?.registeredOffice?.pincode ? ` - ${company.addresses?.registeredOffice?.pincode}` : ""}
+                                            {company.addresses?.registeredOffice?.country ? `\n${lv(company.addresses?.registeredOffice?.country)}` : ""}
                                         </Text>
                                     </View>
                                 </View>

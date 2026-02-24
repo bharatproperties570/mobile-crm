@@ -1,73 +1,168 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
-    View, Text, TextInput, TouchableOpacity, StyleSheet,
-    ScrollView, ActivityIndicator, Alert, KeyboardAvoidingView, Platform, SafeAreaView,
-    Modal
+    View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity,
+    ActivityIndicator, Alert, SafeAreaView, KeyboardAvoidingView,
+    Platform, Animated, Pressable
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import api from "./services/api";
+import { useTheme, SPACING } from "./context/ThemeContext";
 
 // ─── Reusable Components ──────────────────────────────────────────────────────
 
-function SectionHeader({ title, icon }: { title: string; icon: string }) {
+function SectionHeader({ title, icon, subtitle }: { title: string; icon: string; subtitle?: string }) {
+    const { theme } = useTheme();
     return (
         <View style={styles.sectionHeader}>
-            <Text style={styles.sectionIcon}>{icon}</Text>
-            <Text style={styles.sectionTitle}>{title}</Text>
+            <View style={styles.sectionHeaderRow}>
+                <View style={[styles.sectionIconBox, { backgroundColor: theme.primary + '10' }]}>
+                    <Text style={styles.sectionIconText}>{icon}</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                    <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>{title}</Text>
+                    {subtitle && <Text style={[styles.sectionSubtitle, { color: theme.textSecondary }]}>{subtitle}</Text>}
+                </View>
+            </View>
+            <View style={[styles.sectionSeparator, { backgroundColor: theme.border }]} />
         </View>
     );
 }
 
-function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
+function Field({ label, required, children, helperText }: { label?: string; required?: boolean; children: React.ReactNode; helperText?: string }) {
+    const { theme } = useTheme();
     return (
         <View style={styles.field}>
-            <Text style={styles.fieldLabel}>
-                {label}
-                {required && <Text style={styles.required}> *</Text>}
-            </Text>
+            {label && (
+                <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>
+                    {label}
+                    {required && <Text style={{ color: theme.error }}> *</Text>}
+                </Text>
+            )}
             {children}
+            {helperText && <Text style={[styles.helperText, { color: theme.textMuted }]}>{helperText}</Text>}
         </View>
     );
 }
 
 function Input({
-    value, onChangeText, placeholder, keyboardType, multiline, numberOfLines, editable = true,
+    value, onChangeText, placeholder, keyboardType, multiline, numberOfLines, editable = true, label, icon
 }: {
-    value: string; onChangeText: (t: string) => void; placeholder?: string;
-    keyboardType?: any; multiline?: boolean; numberOfLines?: number; editable?: boolean;
+    value: string; onChangeText: (t: string) => void; placeholder?: string; keyboardType?: any; multiline?: boolean; numberOfLines?: number; editable?: boolean; label?: string; icon?: string;
 }) {
+    const { theme } = useTheme();
+    const [isFocused, setIsFocused] = useState(false);
+    const labelAnim = useRef(new Animated.Value(value ? 1 : 0)).current;
+
+    useEffect(() => {
+        Animated.timing(labelAnim, {
+            toValue: (isFocused || value) ? 1 : 0,
+            duration: 200,
+            useNativeDriver: false,
+        }).start();
+    }, [isFocused, value]);
+
+    const labelStyle = {
+        position: 'absolute' as const,
+        left: 16,
+        top: labelAnim.interpolate({
+            inputRange: [0, 1],
+            outputRange: [18, -10],
+        }),
+        fontSize: labelAnim.interpolate({
+            inputRange: [0, 1],
+            outputRange: [15, 12],
+        }),
+        color: labelAnim.interpolate({
+            inputRange: [0, 1],
+            outputRange: [theme.textMuted, theme.primary],
+        }),
+        backgroundColor: theme.cardBg,
+        paddingHorizontal: 4,
+        zIndex: 1,
+    };
+
     return (
-        <TextInput
-            style={[styles.input, multiline && { height: 80, textAlignVertical: "top" }]}
-            value={value}
-            onChangeText={onChangeText}
-            placeholder={placeholder ?? ""}
-            placeholderTextColor="#9CA3AF"
-            keyboardType={keyboardType ?? "default"}
-            multiline={multiline}
-            numberOfLines={numberOfLines}
-            editable={editable}
-        />
+        <View style={[
+            styles.inputWrapper,
+            { backgroundColor: theme.inputBg, borderColor: theme.border },
+            isFocused && { borderColor: theme.primary, backgroundColor: theme.cardBg },
+            !editable && { opacity: 0.6, backgroundColor: theme.border },
+            multiline && { height: 'auto', minHeight: 100 }
+        ]}>
+            {label && <Animated.Text style={labelStyle}>{label}</Animated.Text>}
+            <View style={styles.inputInner}>
+                {icon && <Ionicons name={icon as any} size={18} color={isFocused ? theme.primary : theme.textMuted} style={styles.inputIcon} />}
+                <TextInput
+                    style={[
+                        styles.input,
+                        { color: theme.textPrimary },
+                        multiline && { height: 100, textAlignVertical: 'top', paddingTop: 16 }
+                    ]}
+                    value={value}
+                    onChangeText={onChangeText}
+                    placeholder={isFocused ? "" : placeholder}
+                    placeholderTextColor={theme.textMuted}
+                    keyboardType={keyboardType}
+                    multiline={multiline}
+                    numberOfLines={numberOfLines}
+                    editable={editable}
+                    onFocus={() => setIsFocused(true)}
+                    onBlur={() => setIsFocused(false)}
+                />
+            </View>
+        </View>
+    );
+}
+
+function PressableChip({
+    label, isSelected, onSelect, icon
+}: {
+    label: string, isSelected: boolean, onSelect: () => void, icon?: string
+}) {
+    const { theme } = useTheme();
+    const scale = useRef(new Animated.Value(1)).current;
+
+    const onPressIn = () => Animated.spring(scale, { toValue: 0.95, useNativeDriver: true }).start();
+    const onPressOut = () => Animated.spring(scale, { toValue: 1, useNativeDriver: true }).start();
+
+    return (
+        <Pressable
+            onPressIn={onPressIn}
+            onPressOut={onPressOut}
+            onPress={onSelect}
+        >
+            <Animated.View style={[
+                styles.selectableChip,
+                { borderColor: theme.border, backgroundColor: theme.cardBg },
+                isSelected && { backgroundColor: theme.primary + '08', borderColor: theme.primary },
+                { transform: [{ scale }] }
+            ]}>
+                {icon && <Ionicons name={icon as any} size={16} color={isSelected ? theme.primary : theme.textSecondary} style={{ marginRight: 6 }} />}
+                <Text style={[styles.selectableChipText, { color: theme.textSecondary }, isSelected && { color: theme.primary }]}>{label}</Text>
+                {isSelected && <Ionicons name="checkmark-circle" size={16} color={theme.primary} style={{ marginLeft: 6 }} />}
+            </Animated.View>
+        </Pressable>
     );
 }
 
 function SelectButton({
-    value, placeholder, options, onSelect,
+    value, options, onSelect,
 }: {
-    value: string; placeholder: string; options: { label: string, value: string }[]; onSelect: (v: string) => void;
+    value: string; options: { label: string, value: string }[]; onSelect: (v: string) => void;
 }) {
-    if (options.length === 0) return <Text style={{ color: '#9CA3AF', fontSize: 13, padding: 8 }}>No options available</Text>;
+    const { theme } = useTheme();
+    if (options.length === 0) return <Text style={{ color: theme.textSecondary, fontSize: 13, padding: 8 }}>No options available</Text>;
 
     return (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow} contentContainerStyle={styles.chipRowContent}>
             {options.map((opt, idx) => (
-                <TouchableOpacity
+                <PressableChip
                     key={`${opt.value || idx}-${idx}`}
-                    style={[styles.chip, value === opt.value && styles.chipSelected]}
-                    onPress={() => onSelect(opt.value === value ? "" : opt.value)}
-                >
-                    <Text style={[styles.chipText, value === opt.value && styles.chipTextSelected]}>{opt.label}</Text>
-                </TouchableOpacity>
+                    label={opt.label}
+                    isSelected={value === opt.value}
+                    onSelect={() => onSelect(opt.value === value ? "" : opt.value)}
+                />
             ))}
         </ScrollView>
     );
@@ -85,18 +180,14 @@ interface CompanyForm {
     industry: string;
     description: string;
     gstNumber: string;
-
     source: string;
     subSource: string;
-
     hNo: string;
     street: string;
     city: string;
     state: string;
     pinCode: string;
-
     employees: any[];
-
     team: string;
     owner: string;
     visibleTo: string;
@@ -113,6 +204,7 @@ const INITIAL: CompanyForm = {
 
 export default function AddCompanyScreen() {
     const router = useRouter();
+    const { theme } = useTheme();
     const [form, setForm] = useState<CompanyForm>(INITIAL);
     const [saving, setSaving] = useState(false);
 
@@ -124,7 +216,6 @@ export default function AddCompanyScreen() {
     const [profCategories, setProfCategories] = useState<{ label: string, value: string }[]>([]);
     const [profSubCategories, setProfSubCategories] = useState<{ label: string, value: string }[]>([]);
     const [profDesignations, setProfDesignations] = useState<{ label: string, value: string }[]>([]);
-
     const [teams, setTeams] = useState<{ label: string, value: string }[]>([]);
     const [users, setUsers] = useState<any[]>([]);
 
@@ -141,7 +232,6 @@ export default function AddCompanyScreen() {
     useEffect(() => {
         const fetchSystemData = async () => {
             try {
-                // Lookups
                 const fetchLookup = async (type: string) => {
                     const res = await api.get('/lookups', { params: { lookup_type: type, limit: 1000 } });
                     return res.data?.data?.map((l: any) => ({ label: l.lookup_value, value: l._id })) || [];
@@ -161,19 +251,16 @@ export default function AddCompanyScreen() {
                 setProfSubCategories(pSubCat);
                 setProfDesignations(pDesig);
 
-                // Master Fields (Company Types & Industries)
                 const configRes = await api.get('/system-settings/company_master_fields');
                 if (configRes.data?.data?.value) {
                     const val = configRes.data.data.value;
-                    if (val.companyTypes) setCompanyTypes(val.companyTypes.map((t: any) => typeof t === 'object' ? { label: t.lookup_value || t.name, value: t._id || t.id } : { label: t, value: t }));
-                    if (val.industries) setIndustries(val.industries.map((i: any) => typeof i === 'object' ? { label: i.lookup_value || i.name, value: i._id || i.id } : { label: i, value: i }));
+                    if (val.companyTypes) setCompanyTypes(val.companyTypes.map((t: any) => ({ label: t.lookup_value || t.name || t, value: t._id || t.id || t })));
+                    if (val.industries) setIndustries(val.industries.map((i: any) => ({ label: i.lookup_value || i.name || i, value: i._id || i.id || i })));
                 }
 
-                // Teams and Users
                 const teamsRes = await api.get('/teams');
                 if (teamsRes.data?.data) {
                     setTeams(teamsRes.data.data.map((t: any) => ({ label: t.name, value: t._id })));
-                    // Default to Sales if available
                     const sales = teamsRes.data.data.find((t: any) => t.name === 'Sales');
                     if (sales) setForm(f => ({ ...f, team: sales._id }));
                 }
@@ -182,29 +269,24 @@ export default function AddCompanyScreen() {
                 if (usersRes.data?.data) {
                     setUsers(Array.isArray(usersRes.data.data) ? usersRes.data.data : []);
                 }
-
             } catch (err) {
                 console.error("Failed to load company system data:", err);
             }
         };
-
         fetchSystemData();
     }, []);
 
-    // Employee Search Effect
     useEffect(() => {
         const searchContacts = async () => {
             if (employeeSearch.length < 2) {
                 setSearchResults([]);
                 return;
             }
-
             setSearching(true);
             try {
                 const res = await api.get('/contacts/search/duplicates', {
                     params: { name: employeeSearch, phone: employeeSearch }
                 });
-
                 if (res.data?.success) {
                     const results = res.data.data.filter((c: any) =>
                         !form.employees.some(emp => (emp._id || emp.id) === (c._id || c.id))
@@ -217,7 +299,6 @@ export default function AddCompanyScreen() {
                 setSearching(false);
             }
         };
-
         const timer = setTimeout(searchContacts, 300);
         return () => clearTimeout(timer);
     }, [employeeSearch, form.employees]);
@@ -227,7 +308,6 @@ export default function AddCompanyScreen() {
             Alert.alert("Required", "Please select Designation and Sub-Category");
             return;
         }
-
         const newEmployee = {
             ...selectedContact,
             category: linkData.category,
@@ -235,12 +315,7 @@ export default function AddCompanyScreen() {
             professionSubCategory: linkData.subCategory,
             isNew: true
         };
-
-        setForm(prev => ({
-            ...prev,
-            employees: [newEmployee, ...prev.employees]
-        }));
-
+        setForm(prev => ({ ...prev, employees: [newEmployee, ...prev.employees] }));
         setSelectedContact(null);
         setLinkData({ designation: "", category: "", subCategory: "" });
         setEmployeeSearch("");
@@ -252,12 +327,9 @@ export default function AddCompanyScreen() {
             Alert.alert("Required", "Please enter the company name.");
             return;
         }
-
         setSaving(true);
         try {
-            const getValidHexId = (val: string) => val?.length === 24 && /^[0-9a-fA-F]{24}$/.test(val) ? val : undefined;
-
-            // Mapping Flat Form to deeply nested Backend schema
+            const getValidHexId = (val: string) => val?.length === 24 ? val : undefined;
             const payload = {
                 name: form.name.trim(),
                 phones: [
@@ -272,10 +344,8 @@ export default function AddCompanyScreen() {
                 companyType: getValidHexId(form.companyType),
                 industry: getValidHexId(form.industry),
                 gstNumber: form.gstNumber || undefined,
-
                 source: getValidHexId(form.source),
                 subSource: getValidHexId(form.subSource),
-
                 addresses: {
                     registeredOffice: {
                         hNo: form.hNo || undefined,
@@ -285,25 +355,16 @@ export default function AddCompanyScreen() {
                         pinCode: form.pinCode || undefined,
                     }
                 },
-
                 employees: form.employees.map(emp => emp._id || emp.id).filter(Boolean),
-
                 team: form.team || undefined,
                 owner: form.owner || undefined,
                 visibleTo: form.visibleTo || "Everyone"
             };
-
             await api.post("/companies", payload);
-            if (Platform.OS === 'web') {
-                window.alert("✅ Company created successfully!");
-                router.back();
-            } else {
-                Alert.alert("✅ Success", "Company created successfully!", [
-                    { text: "OK", onPress: () => router.back() },
-                ]);
-            }
+            Alert.alert("✅ Success", "Company created successfully!", [
+                { text: "OK", onPress: () => router.back() },
+            ]);
         } catch (err: any) {
-            console.error("Save error:", err);
             const msg = err?.response?.data?.error || err?.response?.data?.message || "Failed to save company.";
             Alert.alert("Error", msg);
         } finally {
@@ -312,178 +373,107 @@ export default function AddCompanyScreen() {
     };
 
     return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
-            <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
-                {/* Header */}
-                <View style={styles.header}>
-                    <TouchableOpacity
-                        onPress={() => router.back()}
-                        style={styles.backBtn}
-                        hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
-                    >
-                        <Text style={styles.backIcon}>←</Text>
+        <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+            <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+                <View style={[styles.header, { backgroundColor: theme.background }]}>
+                    <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}>
+                        <Ionicons name="close" size={28} color={theme.textPrimary} />
                     </TouchableOpacity>
-                    <Text style={styles.headerTitle}>Create Company</Text>
-                    <TouchableOpacity
-                        style={[styles.saveBtn, saving && styles.saveBtnDisabled]}
-                        onPress={handleSave}
-                        disabled={saving}
-                        hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
-                    >
-                        {saving
-                            ? <ActivityIndicator color="#fff" size="small" />
-                            : <Text style={styles.saveBtnText}>Save</Text>}
-                    </TouchableOpacity>
+                    <View style={styles.headerTitleContainer}>
+                        <Text style={[styles.headerTitle, { color: theme.textPrimary }]}>Create Company</Text>
+                        <Text style={[styles.headerSubtitle, { color: theme.textSecondary }]}>Corporate Entity</Text>
+                    </View>
+                    <View style={{ width: 28 }} />
                 </View>
 
-                <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-
-                    {/* ── Basic Information ── */}
-                    <SectionHeader title="Basic Information" icon="🏢" />
-                    <View style={styles.card}>
-                        <Field label="Company Name" required>
-                            <Input value={form.name} onChangeText={set("name")} placeholder="Tech Innovators Inc." />
+                <ScrollView style={styles.content} contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+                    <SectionHeader title="Basic Information" icon="🏢" subtitle="Primary organizational details" />
+                    <View style={[styles.card, { backgroundColor: theme.cardBg, borderColor: theme.border }]}>
+                        <Field required>
+                            <Input label="Company Name" value={form.name} onChangeText={set("name")} placeholder="Tech Innovators Inc." />
                         </Field>
-
-                        <Field label="Primary Mobile" required>
-                            <Input value={form.phone1} onChangeText={set("phone1")} placeholder="+91 98765 43210" keyboardType="phone-pad" />
+                        <Field required>
+                            <Input label="Primary Mobile" value={form.phone1} onChangeText={set("phone1")} placeholder="+91 98765 43210" keyboardType="phone-pad" icon="call-outline" />
                         </Field>
-
-                        <Field label="Alternate Mobile">
-                            <Input value={form.phone2} onChangeText={set("phone2")} placeholder="Optional" keyboardType="phone-pad" />
+                        <Field>
+                            <Input label="Alternate Mobile" value={form.phone2} onChangeText={set("phone2")} placeholder="Optional" keyboardType="phone-pad" icon="call-outline" />
                         </Field>
-
-                        <Field label="Primary Email">
-                            <Input value={form.email1} onChangeText={set("email1")} placeholder="contact@company.com" keyboardType="email-address" />
+                        <Field>
+                            <Input label="Primary Email" value={form.email1} onChangeText={set("email1")} placeholder="contact@company.com" keyboardType="email-address" icon="mail-outline" />
                         </Field>
-
-                        <Field label="Alternate Email">
-                            <Input value={form.email2} onChangeText={set("email2")} placeholder="Optional" keyboardType="email-address" />
+                        <Field>
+                            <Input label="Alternate Email" value={form.email2} onChangeText={set("email2")} placeholder="Optional" keyboardType="email-address" icon="mail-outline" />
                         </Field>
-
-                        <Field label="GST Number">
-                            <Input value={form.gstNumber} onChangeText={set("gstNumber")} placeholder="Optional GSTIN" />
+                        <Field>
+                            <Input label="GST Number" value={form.gstNumber} onChangeText={set("gstNumber")} placeholder="Optional GSTIN" icon="document-text-outline" />
                         </Field>
-
-                        <Field label="Company Profile (Description)">
-                            <Input value={form.description} onChangeText={set("description")} placeholder="Notes about this company..." multiline numberOfLines={3} />
+                        <Field>
+                            <Input label="Company Profile" value={form.description} onChangeText={set("description")} placeholder="Notes about this company..." multiline numberOfLines={3} />
                         </Field>
-
                         <Field label="Company Type">
-                            <SelectButton
-                                value={form.companyType}
-                                placeholder="Select type"
-                                options={companyTypes}
-                                onSelect={set("companyType")}
-                            />
+                            <SelectButton value={form.companyType} options={companyTypes} onSelect={set("companyType")} />
                         </Field>
-
                         <Field label="Industry">
-                            <SelectButton
-                                value={form.industry}
-                                placeholder="Select industry"
-                                options={industries}
-                                onSelect={set("industry")}
-                            />
+                            <SelectButton value={form.industry} options={industries} onSelect={set("industry")} />
                         </Field>
                     </View>
 
-                    {/* ── Source ── */}
-                    <SectionHeader title="Source Details" icon="📣" />
-                    <View style={styles.card}>
+                    <SectionHeader title="Source Details" icon="📣" subtitle="Lead acquisition tracking" />
+                    <View style={[styles.card, { backgroundColor: theme.cardBg, borderColor: theme.border }]}>
                         <Field label="Lead Source">
-                            <SelectButton
-                                value={form.source}
-                                placeholder="Select source"
-                                options={sources}
-                                onSelect={set("source")}
-                            />
+                            <SelectButton value={form.source} options={sources} onSelect={set("source")} />
                         </Field>
                         {form.source ? (
                             <Field label="Sub Source">
-                                <SelectButton
-                                    value={form.subSource}
-                                    placeholder="Select sub-source"
-                                    options={subSources.filter((s: any) => s.parent === form.source || true)} // If parent linkage isn't perfect, show all
-                                    onSelect={set("subSource")}
-                                />
+                                <SelectButton value={form.subSource} options={subSources.filter((s: any) => !form.source || s.parent === form.source)} onSelect={set("subSource")} />
                             </Field>
                         ) : null}
                     </View>
 
-                    {/* ── Employees (Signatories) ── */}
-                    <SectionHeader title="Authorized Signatories" icon="👥" />
-                    <View style={styles.card}>
-                        <Field label="Search Contacts">
-                            <Input
-                                value={employeeSearch}
-                                onChangeText={setEmployeeSearch}
-                                placeholder="Type name or phone to find contacts..."
-                            />
-                            {searching && <ActivityIndicator style={{ marginTop: 8 }} size="small" color="#1E40AF" />}
+                    <SectionHeader title="Authorized Signatories" icon="👥" subtitle="Link contacts for legal signing" />
+                    <View style={[styles.card, { backgroundColor: theme.cardBg, borderColor: theme.border }]}>
+                        <Field>
+                            <Input label="Search Contacts" value={employeeSearch} onChangeText={setEmployeeSearch} placeholder="Type name or phone..." icon="search-outline" />
+                            {searching && <ActivityIndicator style={{ marginTop: 12 }} size="small" color={theme.primary} />}
                         </Field>
-
-                        {/* Search Results */}
                         {employeeSearch.length >= 2 && searchResults.length > 0 && !selectedContact && (
-                            <View style={styles.searchResultsContainer}>
+                            <View style={[styles.searchResultsContainer, { backgroundColor: theme.cardBg, borderColor: theme.border }]}>
                                 {searchResults.slice(0, 5).map(c => (
-                                    <TouchableOpacity
-                                        key={c._id}
-                                        style={styles.searchResultItem}
-                                        onPress={() => setSelectedContact(c)}
-                                    >
-                                        <Text style={styles.searchResultName}>{c.name}</Text>
-                                        <Text style={styles.searchResultPhone}>{c.mobile || c.phones?.[0]?.phoneNumber}</Text>
+                                    <TouchableOpacity key={c._id} style={[styles.searchResultItem, { borderBottomColor: theme.border }]} onPress={() => setSelectedContact(c)}>
+                                        <Text style={[styles.searchResultName, { color: theme.textPrimary }]}>{c.name}</Text>
+                                        <Text style={[styles.searchResultPhone, { color: theme.textSecondary }]}>{c.mobile || c.phones?.[0]?.phoneNumber}</Text>
                                     </TouchableOpacity>
                                 ))}
                             </View>
                         )}
-
                         {employeeSearch.length >= 2 && searchResults.length === 0 && !searching && !selectedContact && (
-                            <Text style={styles.hintText}>No contacts found.</Text>
+                            <Text style={[styles.hintText, { color: theme.textMuted }]}>No contacts found matching "{employeeSearch}"</Text>
                         )}
-
-                        {/* Selected Contact Configuration */}
                         {selectedContact && (
-                            <View style={styles.selectedContactCard}>
-                                <View style={styles.row}>
-                                    <Text style={styles.selectedContactTitle}>Link: {selectedContact.name}</Text>
-                                    <TouchableOpacity onPress={() => setSelectedContact(null)}>
-                                        <Text style={styles.cancelLinkText}>Cancel</Text>
-                                    </TouchableOpacity>
+                            <View style={[styles.selectedContactCard, { backgroundColor: theme.background, borderColor: theme.border }]}>
+                                <View style={[styles.row, { justifyContent: 'space-between', marginBottom: 12 }]}>
+                                    <View style={{ flex: 1 }}><Text style={[styles.selectedContactTitle, { color: theme.textPrimary }]}>Configure Link: {selectedContact.name}</Text></View>
+                                    <TouchableOpacity onPress={() => setSelectedContact(null)}><Text style={[styles.cancelLinkText, { color: theme.error }]}>Cancel</Text></TouchableOpacity>
                                 </View>
-
-                                <Field label="Category" required>
-                                    <SelectButton value={linkData.category} placeholder="Select" options={profCategories} onSelect={(val) => setLinkData(p => ({ ...p, category: val }))} />
-                                </Field>
-                                <Field label="Sub Category" required>
-                                    <SelectButton value={linkData.subCategory} placeholder="Select" options={profSubCategories} onSelect={(val) => setLinkData(p => ({ ...p, subCategory: val }))} />
-                                </Field>
-                                <Field label="Designation" required>
-                                    <SelectButton value={linkData.designation} placeholder="Select" options={profDesignations} onSelect={(val) => setLinkData(p => ({ ...p, designation: val }))} />
-                                </Field>
-
-                                <TouchableOpacity
-                                    style={[styles.linkBtn, (!linkData.category || !linkData.subCategory || !linkData.designation) && styles.saveBtnDisabled]}
-                                    onPress={handleLinkEmployee}
-                                >
+                                <Field label="Category" required><SelectButton value={linkData.category} options={profCategories} onSelect={(val) => setLinkData(p => ({ ...p, category: val }))} /></Field>
+                                <Field label="Sub Category" required><SelectButton value={linkData.subCategory} options={profSubCategories} onSelect={(val) => setLinkData(p => ({ ...p, subCategory: val }))} /></Field>
+                                <Field label="Designation" required><SelectButton value={linkData.designation} options={profDesignations} onSelect={(val) => setLinkData(p => ({ ...p, designation: val }))} /></Field>
+                                <TouchableOpacity style={[styles.linkBtn, { backgroundColor: theme.primary }, (!linkData.category || !linkData.subCategory || !linkData.designation) && styles.saveBtnDisabled]} onPress={handleLinkEmployee}>
                                     <Text style={styles.linkBtnText}>+ Link Employee</Text>
                                 </TouchableOpacity>
                             </View>
                         )}
-
-                        {/* Employee List */}
                         {form.employees.length > 0 && (
                             <View style={{ marginTop: 16 }}>
-                                <Text style={styles.fieldLabel}>Linked Employees ({form.employees.length})</Text>
+                                <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>Linked Employees ({form.employees.length})</Text>
                                 {form.employees.map((emp, i) => (
-                                    <View key={i} style={styles.linkedEmployeeCard}>
+                                    <View key={i} style={[styles.linkedEmployeeCard, { backgroundColor: theme.background, borderColor: theme.border }]}>
                                         <View style={{ flex: 1 }}>
-                                            <Text style={styles.linkedEmployeeName}>{emp.name}</Text>
-                                            <Text style={styles.linkedEmployeeSubtitle}>{emp.mobile || emp.phones?.[0]?.phoneNumber}</Text>
+                                            <Text style={[styles.linkedEmployeeName, { color: theme.textPrimary }]}>{emp.name}</Text>
+                                            <Text style={[styles.linkedEmployeeSubtitle, { color: theme.textSecondary }]}>{emp.mobile || emp.phones?.[0]?.phoneNumber}</Text>
                                         </View>
                                         <TouchableOpacity onPress={() => setForm(f => ({ ...f, employees: f.employees.filter((_, idx) => idx !== i) }))}>
-                                            <Text style={{ color: '#EF4444', fontWeight: 'bold' }}>Remove</Text>
+                                            <Text style={{ color: theme.error, fontWeight: 'bold' }}>Remove</Text>
                                         </TouchableOpacity>
                                     </View>
                                 ))}
@@ -491,72 +481,35 @@ export default function AddCompanyScreen() {
                         )}
                     </View>
 
-                    {/* ── Registered Office Address ── */}
-                    <SectionHeader title="Registered Office" icon="📍" />
-                    <View style={styles.card}>
-                        <Field label="House / Flat / Office No.">
-                            <Input value={form.hNo} onChangeText={set("hNo")} placeholder="Office 204, Tower B" />
-                        </Field>
-                        <Field label="Street / Colony / Sector">
-                            <Input value={form.street} onChangeText={set("street")} placeholder="Cyber City" />
-                        </Field>
+                    <SectionHeader title="Registered Office" icon="📍" subtitle="Official communication address" />
+                    <View style={[styles.card, { backgroundColor: theme.cardBg, borderColor: theme.border }]}>
+                        <Field><Input label="House / Flat / Office No" value={form.hNo} onChangeText={set("hNo")} placeholder="Office 204, Tower B" /></Field>
+                        <Field><Input label="Street / Colony / Sector" value={form.street} onChangeText={set("street")} placeholder="Cyber City" /></Field>
                         <View style={styles.row}>
-                            <View style={{ flex: 1, marginRight: 8 }}>
-                                <Field label="City">
-                                    <Input value={form.city} onChangeText={set("city")} placeholder="Gurugram" />
-                                </Field>
-                            </View>
-                            <View style={{ flex: 1, marginLeft: 8 }}>
-                                <Field label="State">
-                                    <Input value={form.state} onChangeText={set("state")} placeholder="Haryana" />
-                                </Field>
-                            </View>
+                            <View style={{ flex: 1 }}><Field><Input label="City" value={form.city} onChangeText={set("city")} placeholder="Gurugram" /></Field></View>
+                            <View style={{ flex: 1 }}><Field><Input label="State" value={form.state} onChangeText={set("state")} placeholder="Haryana" /></Field></View>
                         </View>
-                        <Field label="Pin Code">
-                            <Input value={form.pinCode} onChangeText={set("pinCode")} placeholder="122002" keyboardType="number-pad" />
+                        <Field><Input label="Pin Code" value={form.pinCode} onChangeText={set("pinCode")} placeholder="122002" keyboardType="number-pad" /></Field>
+                    </View>
+
+                    <SectionHeader title="System Assignment" icon="⚙️" subtitle="Internal routing & ownership" />
+                    <View style={[styles.card, { backgroundColor: theme.cardBg, borderColor: theme.border }]}>
+                        <Field label="Assigned Team"><SelectButton value={form.team} options={teams} onSelect={(val) => setForm(f => ({ ...f, team: val, owner: "" }))} /></Field>
+                        <Field label="Owner">
+                            <SelectButton value={form.owner} options={users.filter(u => !form.team || u.team === form.team).map(u => ({ label: u.name, value: u._id }))} onSelect={set("owner")} />
+                        </Field>
+                        <Field label="Data Visibility">
+                            <SelectButton value={form.visibleTo} options={[{ label: "Everyone", value: "Everyone" }, { label: "Team", value: "Team" }, { label: "Private", value: "Private" }]} onSelect={set("visibleTo")} />
                         </Field>
                     </View>
 
-                    {/* ── System Assignment ── */}
-                    <SectionHeader title="System Assignment" icon="⚙️" />
-                    <View style={styles.card}>
-                        <Field label="Team">
-                            <SelectButton
-                                value={form.team}
-                                placeholder="Select team"
-                                options={teams}
-                                onSelect={(val) => setForm(f => ({ ...f, team: val, owner: "" }))}
-                            />
-                        </Field>
-
-                        <Field label="Assign Owner To">
-                            <SelectButton
-                                value={form.owner}
-                                placeholder="Select owner"
-                                options={users.filter(u => !form.team || u.team === form.team).map(u => ({ label: u.name, value: u._id }))}
-                                onSelect={set("owner")}
-                            />
-                        </Field>
-
-                        <Field label="Visibility">
-                            <SelectButton
-                                value={form.visibleTo}
-                                placeholder="Visibility"
-                                options={[{ label: "Everyone", value: "Everyone" }, { label: "Team", value: "Team" }, { label: "Private", value: "Private" }]}
-                                onSelect={set("visibleTo")}
-                            />
-                        </Field>
-                    </View>
-
-                    {/* Bottom Save Button */}
-                    <TouchableOpacity
-                        style={[styles.bottomSaveBtn, saving && styles.saveBtnDisabled]}
-                        onPress={handleSave}
-                        disabled={saving}
-                    >
-                        {saving
-                            ? <ActivityIndicator color="#fff" />
-                            : <Text style={styles.bottomSaveBtnText}>✓ Create Company</Text>}
+                    <TouchableOpacity style={[styles.bottomSaveBtn, { backgroundColor: theme.primary, shadowColor: theme.primary }, saving && styles.saveBtnDisabled]} onPress={handleSave} disabled={saving}>
+                        {saving ? <ActivityIndicator color="#fff" /> : (
+                            <>
+                                <Ionicons name="business-outline" size={20} color="#fff" style={{ marginRight: 8 }} />
+                                <Text style={styles.bottomSaveBtnText}>Create Company Profile</Text>
+                            </>
+                        )}
                     </TouchableOpacity>
                 </ScrollView>
             </KeyboardAvoidingView>
@@ -565,77 +518,48 @@ export default function AddCompanyScreen() {
 }
 
 const styles = StyleSheet.create({
-    header: {
-        flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-        backgroundColor: "#fff", paddingTop: 12, paddingBottom: 14, paddingHorizontal: 16,
-        borderBottomWidth: 1, borderBottomColor: "#F1F5F9",
-        shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 3,
-    },
-    backBtn: { padding: 6 },
-    backIcon: { fontSize: 22, color: "#1E40AF", fontWeight: "700" },
-    headerTitle: { fontSize: 17, fontWeight: "800", color: "#1E293B" },
-    saveBtn: {
-        backgroundColor: "#1E40AF", paddingHorizontal: 16, paddingVertical: 8, borderRadius: 10,
-        minWidth: 60, alignItems: "center",
-    },
-    saveBtnDisabled: { opacity: 0.6 },
-    saveBtnText: { color: "#fff", fontWeight: "700", fontSize: 14 },
-    scroll: { padding: 16, paddingBottom: 40, backgroundColor: "#F0F4FF" },
-    sectionHeader: { flexDirection: "row", alignItems: "center", marginTop: 20, marginBottom: 10, marginLeft: 4 },
-    sectionIcon: { fontSize: 18, marginRight: 8 },
-    sectionTitle: { fontSize: 15, fontWeight: "800", color: "#1E293B", textTransform: "uppercase", letterSpacing: 0.5 },
-    card: {
-        backgroundColor: "#fff", borderRadius: 16, padding: 16, marginBottom: 4,
-        shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 2,
-    },
-    row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-    field: { marginBottom: 14 },
-    fieldLabel: { fontSize: 12, fontWeight: "600", color: "#475569", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.4 },
-    required: { color: "#EF4444" },
-    input: {
-        borderWidth: 1.5, borderColor: "#E2E8F0", borderRadius: 10,
-        paddingHorizontal: 12, paddingVertical: 11, fontSize: 14, color: "#1E293B", backgroundColor: "#F8FAFC",
-    },
-    chipRow: { flexDirection: "row" },
-    chip: {
-        paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1.5,
-        borderColor: "#E2E8F0", marginRight: 8, backgroundColor: "#F8FAFC",
-    },
-    chipSelected: { backgroundColor: "#1E40AF", borderColor: "#1E40AF" },
-    chipText: { fontSize: 13, color: "#64748B", fontWeight: "600" },
-    chipTextSelected: { color: "#fff" },
-    bottomSaveBtn: {
-        backgroundColor: "#1E40AF", borderRadius: 14, padding: 16, alignItems: "center", marginTop: 24, marginBottom: 8,
-        shadowColor: "#1E40AF", shadowOpacity: 0.35, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }, elevation: 5,
-    },
+    container: { flex: 1 },
+    header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingBottom: 16, paddingTop: Platform.OS === 'ios' ? 60 : 20, zIndex: 1000 },
+    backBtn: { padding: 4, zIndex: 10 },
+    headerTitleContainer: { flex: 1, alignItems: 'center' },
+    headerTitle: { fontSize: 18, fontWeight: "800", letterSpacing: -0.5 },
+    headerSubtitle: { fontSize: 11, fontWeight: "600", marginTop: 2 },
+    scroll: { padding: SPACING.outer, paddingBottom: 60 },
+    content: { flex: 1 },
+    sectionHeader: { marginTop: 8, marginBottom: 20 },
+    sectionHeaderRow: { flexDirection: "row", alignItems: "center", gap: 14 },
+    sectionIconBox: { width: 44, height: 44, borderRadius: 14, alignItems: "center", justifyContent: "center" },
+    sectionIconText: { fontSize: 20 },
+    sectionTitle: { fontSize: 17, fontWeight: "800", letterSpacing: -0.3 },
+    sectionSubtitle: { fontSize: 12, marginTop: 2, fontWeight: '500' },
+    sectionSeparator: { height: 1, marginTop: 16, opacity: 0.5 },
+    card: { borderRadius: 24, padding: SPACING.card, marginBottom: 24, borderWidth: 1, shadowColor: "#000", shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.04, shadowRadius: 16, elevation: 2 },
+    row: { flexDirection: "row", alignItems: "center", gap: 16 },
+    field: { marginBottom: SPACING.field },
+    fieldLabel: { fontSize: 13, fontWeight: "700", marginBottom: 8, marginLeft: 4 },
+    helperText: { fontSize: 12, marginTop: 6, marginLeft: 4 },
+    inputWrapper: { position: 'relative', height: SPACING.inputHeight, borderRadius: 16, borderWidth: 1.5, justifyContent: 'center' },
+    inputInner: { flexDirection: 'row', alignItems: 'center', flex: 1, paddingHorizontal: 16 },
+    inputIcon: { marginRight: 12 },
+    input: { fontSize: 16, height: '100%', fontWeight: '600', flex: 1 },
+    chipRow: { flexDirection: "row", marginTop: 4 },
+    chipRowContent: { paddingRight: 20 },
+    selectableChip: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 14, borderWidth: 1.5, marginRight: 10, flexDirection: 'row', alignItems: 'center' },
+    selectableChipText: { fontSize: 14, fontWeight: "600" },
+    bottomSaveBtn: { borderRadius: 18, padding: 18, alignItems: "center", flexDirection: 'row', justifyContent: 'center', marginTop: 12, marginBottom: 20, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.25, shadowRadius: 16, elevation: 6 },
     bottomSaveBtnText: { color: "#fff", fontSize: 16, fontWeight: "800" },
-
-    // Search Results UI
-    searchResultsContainer: {
-        backgroundColor: "#fff", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 10,
-        marginTop: 4, padding: 4,
-    },
-    searchResultItem: {
-        padding: 12, borderBottomWidth: 1, borderBottomColor: "#F1F5F9",
-    },
-    searchResultName: { fontSize: 14, fontWeight: "600", color: "#1E293B" },
-    searchResultPhone: { fontSize: 12, color: "#64748B", marginTop: 2 },
-    hintText: { fontSize: 13, color: "#9CA3AF", marginTop: 8, fontStyle: "italic" },
-
-    // Link Employee UI
-    selectedContactCard: {
-        backgroundColor: "#F0FDF4", padding: 12, borderRadius: 10, borderWidth: 1, borderColor: "#10B981", marginTop: 12,
-    },
-    selectedContactTitle: { fontSize: 15, fontWeight: "700", color: "#065F46", marginBottom: 12 },
-    cancelLinkText: { color: "#EF4444", fontWeight: "600", fontSize: 13 },
-    linkBtn: {
-        backgroundColor: "#10B981", padding: 12, borderRadius: 8, alignItems: "center", marginTop: 8
-    },
-    linkBtnText: { color: "#fff", fontWeight: "bold", fontSize: 14 },
-    linkedEmployeeCard: {
-        flexDirection: "row", alignItems: "center", padding: 12, backgroundColor: "#F8FAFC",
-        borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 8, marginBottom: 8
-    },
-    linkedEmployeeName: { fontSize: 14, fontWeight: "bold", color: "#1E293B" },
-    linkedEmployeeSubtitle: { fontSize: 12, color: "#64748B" }
+    saveBtnDisabled: { opacity: 0.6 },
+    searchResultsContainer: { borderWidth: 1.5, borderRadius: 16, marginTop: 8, overflow: 'hidden' },
+    searchResultItem: { padding: 16, borderBottomWidth: 1 },
+    searchResultName: { fontSize: 15, fontWeight: "700" },
+    searchResultPhone: { fontSize: 13, marginTop: 2 },
+    hintText: { fontSize: 13, marginTop: 10, fontStyle: "italic", marginLeft: 4 },
+    selectedContactCard: { marginTop: 16, padding: 16, borderRadius: 20, borderWidth: 1.5 },
+    selectedContactTitle: { fontSize: 15, fontWeight: "800", marginBottom: 4 },
+    cancelLinkText: { fontSize: 13, fontWeight: "700" },
+    linkBtn: { borderRadius: 14, padding: 14, alignItems: "center", marginTop: 8 },
+    linkBtnText: { color: "#fff", fontWeight: "800", fontSize: 14 },
+    linkedEmployeeCard: { flexDirection: 'row', alignItems: 'center', padding: 16, borderRadius: 18, borderWidth: 1, marginTop: 10 },
+    linkedEmployeeName: { fontSize: 15, fontWeight: "700" },
+    linkedEmployeeSubtitle: { fontSize: 12, marginTop: 2 },
 });
