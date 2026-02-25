@@ -17,7 +17,7 @@ import { useLookup } from "./context/LookupContext";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
-const TABS = ["Details", "Requirement", "Activities", "Match", "Inventory", "Assignment"];
+const TABS = ["Details", "Requirement", "Activities", "Match", "Inventory"];
 
 function lv(field: unknown): string {
     if (!field) return "";
@@ -181,19 +181,17 @@ export default function LeadDetailScreen() {
                 <View style={styles.marketingRow}>
                     <View style={[styles.marketingPill, { backgroundColor: theme.primary + '10' }]}>
                         <Ionicons name="megaphone" size={12} color={theme.primary} />
-                        <Text style={[styles.marketingText, { color: theme.primary }]}>
-                            {lv(lead.source) || lv(lead.contactDetails?.source) || "Direct"}
-                        </Text>
-                    </View>
-
-                    {(lv(lead.subSource) || lv(lead.contactDetails?.subSource)) && (
-                        <View style={[styles.marketingPill, { backgroundColor: '#10B981' + '10' }]}>
-                            <Ionicons name="git-branch" size={12} color="#10B981" />
-                            <Text style={[styles.marketingText, { color: '#10B981' }]}>
-                                {lv(lead.subSource) || lv(lead.contactDetails?.subSource)}
+                        <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
+                            <Text style={[styles.marketingText, { color: theme.primary }]}>
+                                {lv(lead.source) || lv(lead.contactDetails?.source) || "Direct"}
                             </Text>
+                            {(lv(lead.subSource) || lv(lead.contactDetails?.subSource)) && (
+                                <Text style={[styles.marketingSubText, { color: theme.primary + '80' }]}>
+                                    {` • ${lv(lead.subSource) || lv(lead.contactDetails?.subSource)}`}
+                                </Text>
+                            )}
                         </View>
-                    )}
+                    </View>
 
                     {(lv(lead.campaign) || lv(lead.contactDetails?.campaign)) && (
                         <View style={[styles.marketingPill, { backgroundColor: '#7C3AED' + '10' }]}>
@@ -362,10 +360,10 @@ export default function LeadDetailScreen() {
                             </View>
                         )}
                     </ScrollView>
-                </View >
+                </View>
 
                 {/* 2. Requirement */}
-                < View style={styles.tabContent} >
+                <View style={styles.tabContent}>
                     <ScrollView contentContainerStyle={styles.innerScroll}>
                         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
                             <Text style={[styles.cardTitle, { color: theme.text }]}>Core Requirements</Text>
@@ -387,10 +385,10 @@ export default function LeadDetailScreen() {
                             <InfoRow label="Timeline" value={lead.timeline} icon="time-outline" />
                         </View>
                     </ScrollView>
-                </View >
+                </View>
 
                 {/* 3. Activities */}
-                < View style={styles.tabContent} >
+                <View style={styles.tabContent}>
                     <ScrollView contentContainerStyle={styles.innerScroll}>
                         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
                             <View style={styles.sectionHeader}>
@@ -418,10 +416,10 @@ export default function LeadDetailScreen() {
                             )}
                         </View>
                     </ScrollView>
-                </View >
+                </View>
 
                 {/* 4. Match */}
-                < View style={styles.tabContent} >
+                <View style={styles.tabContent}>
                     <ScrollView contentContainerStyle={styles.innerScroll}>
                         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
                             <View style={styles.sectionHeader}>
@@ -456,10 +454,10 @@ export default function LeadDetailScreen() {
                             )}
                         </View>
                     </ScrollView>
-                </View >
+                </View>
 
                 {/* 5. Inventory */}
-                < View style={styles.tabContent} >
+                <View style={styles.tabContent}>
                     <ScrollView contentContainerStyle={styles.innerScroll}>
                         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
                             <Text style={[styles.cardTitle, { color: theme.text }]}>Owned / Associated Units</Text>
@@ -482,27 +480,10 @@ export default function LeadDetailScreen() {
                             )}
                         </View>
                     </ScrollView>
-                </View >
+                </View>
 
-                {/* 6. Assignment */}
-                < View style={styles.tabContent} >
-                    <ScrollView contentContainerStyle={styles.innerScroll}>
-                        <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-                            <Text style={[styles.cardTitle, { color: theme.text }]}>Assignment Tracking</Text>
-                            <InfoRow label="Method" value={lead.assignment?.method || "Manual"} icon="settings-outline" />
-                            <InfoRow label="Assigned To" value={lv(lead.assignment?.assignedTo) !== "—" ? lv(lead.assignment?.assignedTo) : lv(lead.owner)} icon="person-circle-outline" accent />
-                            <InfoRow label="Team" value={Array.isArray(lead.assignment?.team) ? lead.assignment.team.join(", ") : lead.assignment?.team} icon="people-circle-outline" />
-                        </View>
-                        <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-                            <Text style={[styles.cardTitle, { color: theme.text }]}>Campaign Info</Text>
-                            <InfoRow label="Source" value={lv(lead.source) || lv(lead.contactDetails?.source) || "Direct"} icon="compass-outline" />
-                            <InfoRow label="Sub Source" value={lv(lead.subSource) || lv(lead.contactDetails?.subSource) || "None"} icon="git-branch-outline" />
-                            <InfoRow label="Campaign" value={lv(lead.campaign) || lv(lead.contactDetails?.campaign) || "Direct"} icon="megaphone-outline" accent />
-                        </View>
-                    </ScrollView>
-                </View >
-            </ScrollView >
-        </View >
+            </ScrollView>
+        </View>
     );
 }
 
@@ -535,6 +516,7 @@ const styles = StyleSheet.create({
     marketingRow: { flexDirection: 'row', paddingHorizontal: 20, paddingVertical: 12, gap: 10, flexWrap: 'wrap' },
     marketingPill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
     marketingText: { fontSize: 11, fontWeight: '800' },
+    marketingSubText: { fontSize: 9, fontWeight: '600', marginLeft: 4 },
 
     modernActionHub: { flexDirection: 'row', justifyContent: 'center', gap: 20, paddingVertical: 15 },
     modernHubBtn: { width: 50, height: 50, borderRadius: 25, justifyContent: 'center', alignItems: 'center', elevation: 8, shadowOpacity: 0.3, shadowRadius: 10 },
