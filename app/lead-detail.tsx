@@ -210,6 +210,7 @@ export default function LeadDetailScreen() {
                 <View style={styles.modernActionHub}>
                     {[
                         { icon: 'call', color: theme.primary, onPress: () => trackCall(lead.mobile, id!, "Lead", name) },
+                        { icon: 'chatbubble-ellipses', color: '#3B82F6', onPress: () => Linking.openURL(`sms:${lead.mobile.replace(/\D/g, "")}`) },
                         { icon: 'logo-whatsapp', color: '#128C7E', onPress: () => Linking.openURL(`https://wa.me/${lead.mobile.replace(/\D/g, "")}`) },
                         { icon: 'mail', color: '#EA4335', onPress: () => Linking.openURL(`mailto:${lead.email}`) },
                         { icon: 'calendar', color: '#6366F1', onPress: () => router.push(`/add-activity?id=${id}&type=Lead`) },
