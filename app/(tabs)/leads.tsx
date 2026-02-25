@@ -225,7 +225,7 @@ function ActionSheet({ visible, onClose, lead, onUpdate, statuses, users }: {
                             <Text style={styles.actionLabel}>Match</Text>
                         </TouchableOpacity>
 
-                        <TouchableOpacity style={styles.actionItem} onPress={() => { router.push(`/documents?id=${lead._id}`); onClose(); }}>
+                        <TouchableOpacity style={styles.actionItem} onPress={() => { router.push(`/add-document?id=${lead._id}&type=Lead`); onClose(); }}>
                             <View style={[styles.actionIcon, { backgroundColor: "#F0F9FF" }]}>
                                 <Ionicons name="document-attach" size={24} color="#0EA5E9" />
                             </View>
@@ -567,10 +567,12 @@ const LeadCard = memo(({ lead, index, onPress, onMore, isSelected, onLongPress, 
                             </View>
                             <Text style={[styles.reqText, { color: theme.textMuted }]}>{getLookupValue("Requirement", lead.requirement)} • {getLookupValue("Unit Type", lead.unitType)}</Text>
                         </View>
-                        {lead.locCity && (
+                        {(lead.locCity || lead.locArea) && (
                             <View style={styles.locRow}>
                                 <Ionicons name="location-sharp" size={14} color={theme.textLight} />
-                                <Text style={[styles.locText, { color: theme.textLight }]} numberOfLines={1}>{lead.locCity}</Text>
+                                <Text style={[styles.locText, { color: theme.textLight }]} numberOfLines={1}>
+                                    {[getLookupValue("City", lead.locCity), getLookupValue("Location", lead.locArea)].filter(v => v && v !== "—").join(", ") || "No Location"}
+                                </Text>
                             </View>
                         )}
                         {lead.intent_tags && lead.intent_tags.length > 0 && (
@@ -593,7 +595,7 @@ const LeadCard = memo(({ lead, index, onPress, onMore, isSelected, onLongPress, 
                             {lead.source && (
                                 <View style={[styles.sourceBadge, { backgroundColor: theme.border }]}>
                                     <Ionicons name="radio-outline" size={10} color="#94A3B8" />
-                                    <Text style={[styles.sourceText, { color: theme.textLight }]}>{lookupVal(lead.source)}</Text>
+                                    <Text style={[styles.sourceText, { color: theme.textLight }]}>{getLookupValue("Source", lead.source)}</Text>
                                 </View>
                             )}
                         </View>
@@ -987,7 +989,7 @@ const styles = StyleSheet.create({
     segmentTextActive: { color: "#fff" },
 
     listContent: { paddingHorizontal: 20, paddingBottom: 120, paddingTop: 10 },
-    card: { backgroundColor: "#fff", borderRadius: 16, padding: 10, marginBottom: 8, borderWidth: 1, borderColor: "#F1F5F9", shadowColor: "#000", shadowOpacity: 0.03, shadowRadius: 10, shadowOffset: { width: 0, height: 4 } },
+    card: { backgroundColor: "#fff", borderRadius: 16, padding: 8, marginBottom: 6, borderWidth: 1, borderColor: "#F1F5F9", shadowColor: "#000", shadowOpacity: 0.03, shadowRadius: 10, shadowOffset: { width: 0, height: 4 } },
     cardSelected: { borderColor: "#2563EB", borderWidth: 2, backgroundColor: "#F8FAFF" },
     cardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
     leadInfo: { flex: 1 },

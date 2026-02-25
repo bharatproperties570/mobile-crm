@@ -12,6 +12,15 @@ import { safeApiCall, safeApiCallSingle } from "../services/api.helpers";
 import api from "../services/api";
 import { useCallTracking } from "../context/CallTrackingContext";
 import { useLookup } from "../context/LookupContext";
+import FilterModal, { FilterField } from "../components/FilterModal";
+
+const DEAL_FILTER_FIELDS: FilterField[] = [
+    { key: "stage", label: "Stage", type: "lookup", lookupType: "Stage" },
+    { key: "propertyType", label: "Property Type", type: "lookup", lookupType: "PropertyType" },
+    { key: "category", label: "Category", type: "lookup", lookupType: "Category" },
+    { key: "transactionType", label: "Transaction Type", type: "lookup", lookupType: "TransactionType" },
+    { key: "price", label: "Price Range", type: "range" },
+];
 
 const STAGE_COLORS: Record<string, string> = {
     open: "#6366F1",
@@ -187,6 +196,8 @@ export default function DealsScreen() {
     const { getLookupValue } = useLookup();
     const [deals, setDeals] = useState<Deal[]>([]);
     const [search, setSearch] = useState("");
+    const [showFilterModal, setShowFilterModal] = useState(false);
+    const [filters, setFilters] = useState<any>({});
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [page, setPage] = useState(1);
@@ -241,11 +252,25 @@ export default function DealsScreen() {
         }, [fetchDeals])
     );
 
-    const filtered = useMemo(() => {
-        if (!search) return deals;
-        const q = search.toLowerCase();
-        return deals.filter((d) => getDealTitle(d).toLowerCase().includes(q));
-    }, [deals, search]);
+    const filteredDeals = useMemo(() => {
+        return deals.filter(deal => {
+            // Search filter
+            if (search && !getDealTitle(deal).toLowerCase().includes(search.toLowerCase())) return false;
+            // Stage filter
+            if (filters.stage?.length > 0 && !filters.stage.includes(deal.stage)) return false;
+            // Range filters
+            if (filters.priceMin && (deal.price || 0) < Number(filters.priceMin)) return false;
+            if (filters.priceMax && (deal.price || 0) > Number(filters.priceMax)) return false;
+            // Lookup filters (category, etc)
+            if (filters.category?.length > 0 && !filters.category.includes(deal.category)) return false;
+            if (filters.propertyType?.length > 0 && !filters.propertyType.includes(deal.propertyType)) return false;
+            if (filters.transactionType?.length > 0 && !filters.transactionType.includes(deal.transactionType)) return false;
+
+            return true;
+        });
+    }, [deals, search, filters]);
+
+    const filtersCount = Object.keys(filters).filter(k => filters[k] && (Array.isArray(filters[k]) ? filters[k].length > 0 : true)).length;
 
     const handleSearch = (text: string) => {
         setSearch(text);
@@ -256,14 +281,14 @@ export default function DealsScreen() {
             <View style={styles.header}>
                 <View>
                     <Text style={styles.headerTitle}>Deals</Text>
-                    <Text style={styles.headerSubtitle}>{filtered.length} active opportunities</Text>
+                    <Text style={styles.headerSubtitle}>{filteredDeals.length} active opportunities</Text>
                 </View>
                 <TouchableOpacity style={styles.addBtn} onPress={() => router.push("/add-deal")}>
                     <Ionicons name="add" size={26} color="#fff" />
                 </TouchableOpacity>
             </View>
 
-            {filtered.length > 0 && (
+            {filteredDeals.length > 0 && (
                 <View style={styles.headerCard}>
                     <View>
                         <Text style={styles.summaryLabel}>PIPELINE VALUE</Text>
@@ -273,7 +298,7 @@ export default function DealsScreen() {
                     <View style={styles.summaryStats}>
                         <View style={styles.statItem}>
                             <Text style={styles.statLabel}>AVG</Text>
-                            <Text style={styles.statValue}>{formatAmount(totalValue / filtered.length)}</Text>
+                            <Text style={styles.statValue}>{formatAmount(totalValue / filteredDeals.length)}</Text>
                         </View>
                     </View>
                 </View>
@@ -288,11 +313,10 @@ export default function DealsScreen() {
                     value={search}
                     onChangeText={handleSearch}
                 />
-                {search.length > 0 && (
-                    <TouchableOpacity onPress={() => setSearch("")}>
-                        <Ionicons name="close-circle" size={18} color="#CBD5E1" />
-                    </TouchableOpacity>
-                )}
+                <TouchableOpacity onPress={() => setShowFilterModal(true)} style={[styles.filterBtn, filtersCount > 0 && { backgroundColor: '#2563EB15' }]}>
+                    <Ionicons name="filter" size={22} color={filtersCount > 0 ? "#2563EB" : "#94A3B8"} />
+                    {filtersCount > 0 && <View style={styles.filterBadge}><Text style={styles.filterBadgeText}>{filtersCount}</Text></View>}
+                </TouchableOpacity>
             </View>
         </SafeAreaView>
     );
@@ -416,7 +440,7 @@ export default function DealsScreen() {
                 <View style={styles.center}><ActivityIndicator color="#2563EB" size="large" /></View>
             ) : (
                 <FlatList
-                    data={filtered}
+                    data={filteredDeals}
                     keyExtractor={(item) => item._id}
                     ListHeaderComponent={renderHeader}
                     renderItem={({ item }) => (
@@ -612,6 +636,14 @@ export default function DealsScreen() {
             <TouchableOpacity style={styles.fab} onPress={() => router.push("/add-deal")}>
                 <Ionicons name="add" size={32} color="#fff" />
             </TouchableOpacity>
+
+            <FilterModal
+                visible={showFilterModal}
+                onClose={() => setShowFilterModal(false)}
+                onApply={setFilters}
+                initialFilters={filters}
+                fields={DEAL_FILTER_FIELDS}
+            />
         </GestureHandlerRootView >
     );
 }
@@ -640,9 +672,9 @@ const styles = StyleSheet.create({
     statValue: { color: "#10B981", fontSize: 13, fontWeight: "800" },
 
     commandBar: {
-        flexDirection: "row", alignItems: "center", marginHorizontal: 20, marginBottom: 4,
-        paddingHorizontal: 16, paddingVertical: 12, backgroundColor: "#F8FAFC",
-        borderRadius: 16, borderWidth: 1, borderColor: "#E2E8F0"
+        flexDirection: "row", alignItems: "center", marginHorizontal: 20, marginBottom: 8,
+        paddingHorizontal: 16, height: 48, backgroundColor: "#F8FAFC",
+        borderRadius: 12, borderWidth: 1, borderColor: "#E2E8F0"
     },
     commandInput: { flex: 1, marginLeft: 12, fontSize: 15, color: "#1E293B", fontWeight: "600" },
 
@@ -718,6 +750,9 @@ const styles = StyleSheet.create({
 
     empty: { alignItems: "center", marginTop: 100 },
     emptyText: { marginTop: 16, fontSize: 15, color: "#94A3B8", fontWeight: "700" },
+    filterBtn: { padding: 8, marginLeft: 8 },
+    filterBadge: { position: 'absolute', top: 4, right: 4, backgroundColor: '#2563EB', width: 14, height: 14, borderRadius: 7, justifyContent: 'center', alignItems: 'center' },
+    filterBadgeText: { color: '#fff', fontSize: 8, fontWeight: '900' },
     fab: {
         position: "absolute", bottom: 30, right: 20, width: 56, height: 56,
         borderRadius: 28, backgroundColor: "#2563EB", justifyContent: "center",

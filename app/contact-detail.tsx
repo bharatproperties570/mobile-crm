@@ -205,10 +205,9 @@ export default function ContactDetailScreen() {
                             <Text style={[styles.marketingText, { color: theme.primary }]}>
                                 {getLookupValue("Source", contact.source) || "Direct"}
                             </Text>
-                            {/* Note: Contact model might not have subSource in the same place as Lead, but keeping the UI pattern */}
-                            {(lv(contact.subSource)) && (
+                            {(lv(contact.subSource) || lv(contact.contactDetails?.subSource)) && (
                                 <Text style={[styles.marketingSubText, { color: theme.primary + '80' }]}>
-                                    {` • ${lv(contact.subSource)}`}
+                                    {` • ${lv(contact.subSource) || lv(contact.contactDetails?.subSource)}`}
                                 </Text>
                             )}
                         </View>
@@ -303,6 +302,7 @@ export default function ContactDetailScreen() {
                             <Text style={[styles.cardTitle, { color: theme.text }]}>Personal & Management</Text>
                             <InfoRow label="Gender" value={contact.gender} icon="person-outline" />
                             <InfoRow label="Owner" value={getLookupValue("Owner", contact.owner)} icon="shield-checkmark-outline" />
+                            <InfoRow label="Assigned To" value={lv(contact.assignment?.assignedTo) || lv(contact.assignedTo)} icon="person-circle-outline" />
                             <InfoRow label="Created On" value={new Date(contact.createdAt).toLocaleDateString()} icon="calendar-outline" />
                             {contact.tags && contact.tags.length > 0 && (
                                 <View style={styles.tagRow}>
@@ -339,7 +339,7 @@ export default function ContactDetailScreen() {
                                                 <Text style={styles.timelineDate}>{new Date(act.createdAt).toLocaleDateString()}</Text>
                                             </View>
                                             <Text style={[styles.timelineSubject, { color: theme.text }]}>{act.subject}</Text>
-                                            {act.details?.note && <Text style={[styles.timelineNote, { color: theme.textLight }]}>{act.details.note}</Text>}
+                                            {(act.description || act.details?.note) && <Text style={[styles.timelineNote, { color: theme.textLight }]}>{act.description || act.details.note}</Text>}
                                         </View>
                                     </View>
                                 ))
@@ -436,6 +436,14 @@ export default function ContactDetailScreen() {
                     </ScrollView>
                 </View>
             </ScrollView>
+
+            {/* Edit FAB */}
+            <TouchableOpacity
+                style={[styles.fab, { backgroundColor: theme.primary, shadowColor: theme.primary }]}
+                onPress={() => router.push(`/add-contact?id=${id}`)}
+            >
+                <Ionicons name="create" size={24} color="#fff" />
+            </TouchableOpacity>
         </View>
     );
 }
@@ -519,4 +527,18 @@ const styles = StyleSheet.create({
     docName: { fontSize: 14, fontWeight: '700' },
     docMeta: { fontSize: 11, marginTop: 2 },
     docProject: { fontSize: 10, marginTop: 2, opacity: 0.8 },
+    fab: {
+        position: 'absolute',
+        bottom: 30,
+        right: 20,
+        width: 56,
+        height: 56,
+        borderRadius: 28,
+        justifyContent: 'center',
+        alignItems: 'center',
+        elevation: 8,
+        shadowOpacity: 0.4,
+        shadowRadius: 12,
+        shadowOffset: { width: 0, height: 6 },
+    },
 });

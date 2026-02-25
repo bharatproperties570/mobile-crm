@@ -11,8 +11,11 @@ import { getLookups, type Lookup } from "./services/lookups.service";
 import { getTeams } from "./services/teams.service";
 import { getCompanies } from "./services/companies.service";
 import api from "./services/api";
-import { safeApiCall, lookupVal } from "./services/api.helpers";
+import { safeApiCall, lookupVal, safeApiCallSingle } from "./services/api.helpers";
 import { useTheme, SPACING } from "./context/ThemeContext";
+import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
+
+const GOOGLE_MAPS_API_KEY = "AIzaSyBd2gdMJVt5C_tgYqWoRbBiatzmevYdB9U";
 
 // ─── Reusable Components ──────────────────────────────────────────────────────
 
@@ -264,7 +267,7 @@ export default function AddProjectScreen() {
         expectedCompletionDate: "",
         possessionDate: "",
         description: "",
-        address: { city: "", location: "", state: "Punjab", country: "India", street: "", locality: "", area: "", pincode: "" },
+        address: { city: "", location: "", state: "", country: "", street: "", locality: "", area: "", pincode: "", tehsil: "", postOffice: "", hNo: "" },
         locationSearch: "",
         latitude: "",
         longitude: "",
@@ -293,16 +296,23 @@ export default function AddProjectScreen() {
 
             const devsRes = await safeApiCall<any>(() => getCompanies({ limit: "500" }));
             if (!devsRes.error) {
-                const records = devsRes.data?.records || devsRes.data?.data || [];
+                const records = devsRes.data || [];
                 setDevelopers(records.filter((c: any) => {
                     const typeValue = lookupVal(c.companyType || c.type || c.company_type).toLowerCase();
                     const industryValue = lookupVal(c.industry || c.category).toLowerCase();
 
-                    const typeMatch = [
+                    // Specific criteria as requested by the user
+                    const allowedTypes = [
                         'private ltd', 'pvt ltd', 'private limited',
-                        'public ltd', 'public limited'
-                    ].includes(typeValue);
-                    const industryMatch = industryValue === 'real estate';
+                        'public ltd', 'public limited',
+                        'llp', 'limited liability partnership',
+                        'one person company', 'opc',
+                        'partnership',
+                        'society'
+                    ];
+
+                    const typeMatch = allowedTypes.includes(typeValue) || typeValue === "—";
+                    const industryMatch = industryValue === 'real estate' || industryValue === "—";
 
                     return typeMatch && industryMatch;
                 }).map((c: any) => ({ label: c.name, value: c.name })));
@@ -490,18 +500,195 @@ function BasicStep({ data, update, lookups, developers }: any) {
 
 function LocationStep({ data, update }: any) {
     const { theme } = useTheme();
+    const [countries, setCountries] = useState<any[]>([]);
+    const [states, setStates] = useState<any[]>([]);
+    const [cities, setCities] = useState<any[]>([]);
+    const [locations, setLocations] = useState<any[]>([]);
+    const [tehsils, setTehsils] = useState<any[]>([]);
+    const [postOffices, setPostOffices] = useState<any[]>([]);
+    const [loadingField, setLoadingField] = useState<string | null>(null);
+
+    // Fetch Lookups
+    const fetchAddrLookup = async (type: string, parentId?: string) => {
+        const res = await safeApiCall<any>(() => getLookups(type, parentId));
+        return res.data || [];
+    };
+
+    // Initial Load: Country
+    useEffect(() => {
+        const load = async () => {
+            setLoadingField('country');
+            const data = await fetchAddrLookup('Country');
+            setCountries(data.map(i => ({ label: i.lookup_value, value: i._id })));
+            setLoadingField(null);
+        };
+        load();
+    }, []);
+
+    // Country -> State
+    useEffect(() => {
+        if (!data.address.country) { setStates([]); return; }
+        const load = async () => {
+            setLoadingField('state');
+            const res = await fetchAddrLookup('State', data.address.country);
+            setStates(res.map(i => ({ label: i.lookup_value, value: i._id })));
+            setLoadingField(null);
+        };
+        load();
+    }, [data.address.country]);
+
+    // State -> City
+    useEffect(() => {
+        if (!data.address.state) { setCities([]); return; }
+        const load = async () => {
+            setLoadingField('city');
+            const res = await fetchAddrLookup('City', data.address.state);
+            setCities(res.map(i => ({ label: i.lookup_value, value: i._id })));
+            setLoadingField(null);
+        };
+        load();
+    }, [data.address.state]);
+
+    // City -> Location & Tehsil
+    useEffect(() => {
+        if (!data.address.city) { setLocations([]); setTehsils([]); return; }
+        const load = async () => {
+            setLoadingField('location');
+            const locs = await fetchAddrLookup('Location', data.address.city);
+            setLocations(locs.map(i => ({ label: i.lookup_value, value: i._id })));
+
+            const tehs = await fetchAddrLookup('Tehsil', data.address.city);
+            setTehsils(tehs.map(i => ({ label: i.lookup_value, value: i._id })));
+            setLoadingField(null);
+        };
+        load();
+    }, [data.address.city]);
+
+    // Location -> Post Office
+    useEffect(() => {
+        if (!data.address.location) { setPostOffices([]); return; }
+        const load = async () => {
+            setLoadingField('postOffice');
+            const res = await fetchAddrLookup('PostOffice', data.address.location);
+            setPostOffices(res.map(i => ({ label: i.lookup_value, value: i._id })));
+            setLoadingField(null);
+        };
+        load();
+    }, [data.address.location]);
+
+    const updateAddr = (fields: any) => {
+        update({ ...data, address: { ...data.address, ...fields } });
+    };
+
     return (
         <View style={styles.stepContainer}>
             <SectionHeader title="Project Location" icon="📍" subtitle="Site and address details" />
+
+            <View style={[styles.card, { backgroundColor: theme.cardBg, borderColor: theme.border, padding: 10, zIndex: 1000 }]}>
+                <Text style={[styles.fieldLabel, { color: theme.textSecondary, marginBottom: 8 }]}>Search Location (Google Maps)</Text>
+                <GooglePlacesAutocomplete
+                    placeholder='Search address...'
+                    onPress={(addrData, details = null) => {
+                        if (details) {
+                            const lat = details.geometry.location.lat;
+                            const lng = details.geometry.location.lng;
+
+                            // Extract address components
+                            let city = "";
+                            let state = "";
+                            let pincode = "";
+                            let street = "";
+                            let area = "";
+
+                            details.address_components.forEach((c: any) => {
+                                if (c.types.includes("locality")) city = c.long_name;
+                                if (c.types.includes("administrative_area_level_1")) state = c.long_name;
+                                if (c.types.includes("postal_code")) pincode = c.long_name;
+                                if (c.types.includes("route")) street = c.long_name;
+                                if (c.types.includes("sublocality_level_1")) area = c.long_name;
+                            });
+
+                            update({
+                                ...data,
+                                locationSearch: addrData.description,
+                                latitude: String(lat),
+                                longitude: String(lng),
+                                address: {
+                                    ...data.address,
+                                    pincode: pincode || data.address.pincode,
+                                    street: street || data.address.street,
+                                    area: area || data.address.area
+                                }
+                            });
+                        }
+                    }}
+                    query={{ key: GOOGLE_MAPS_API_KEY, language: 'en', components: 'country:in' }}
+                    fetchDetails={true}
+                    styles={{
+                        container: { flex: 0 },
+                        textInput: {
+                            height: 44,
+                            color: theme.textPrimary,
+                            fontSize: 14,
+                            backgroundColor: theme.inputBg,
+                            borderRadius: 10,
+                            borderWidth: 1,
+                            borderColor: theme.border
+                        },
+                        listView: { backgroundColor: theme.cardBg, borderBottomLeftRadius: 10, borderBottomRightRadius: 10, elevation: 3 },
+                        row: { backgroundColor: 'transparent', padding: 12 },
+                        description: { color: theme.textSecondary }
+                    }}
+                />
+            </View>
+
             <View style={[styles.card, { backgroundColor: theme.cardBg, borderColor: theme.border }]}>
-                <Field label="Search Location (Google Maps)"><Input icon="search" placeholder="Search..." value={data.locationSearch} onChangeText={t => update({ ...data, locationSearch: t })} /></Field>
+                <Field label="Country">
+                    <ModernPicker label="Select Country" value={data.address.country} options={countries} onSelect={v => updateAddr({ country: v, state: "", city: "", location: "", tehsil: "", postOffice: "", pincode: "" })} />
+                </Field>
+                <Field label="State">
+                    <ModernPicker label="Select State" value={data.address.state} options={states} onSelect={v => updateAddr({ state: v, city: "", location: "", tehsil: "", postOffice: "", pincode: "" })} />
+                </Field>
+                <Field label="City">
+                    <ModernPicker label="Select City" value={data.address.city} options={cities} onSelect={v => updateAddr({ city: v, location: "", tehsil: "", postOffice: "", pincode: "" })} />
+                </Field>
+
                 <View style={styles.row}>
-                    <View style={{ flex: 1 }}><Field label="City"><Input value={data.address.city} onChangeText={t => update({ ...data, address: { ...data.address, city: t } })} /></Field></View>
-                    <View style={{ flex: 1 }}><Field label="State"><Input value={data.address.state} onChangeText={t => update({ ...data, address: { ...data.address, state: t } })} /></Field></View>
+                    <View style={{ flex: 1 }}>
+                        <Field label="Location">
+                            <ModernPicker label="Select Location" value={data.address.location} options={locations} onSelect={v => updateAddr({ location: v, postOffice: "", pincode: "" })} />
+                        </Field>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                        <Field label="Tehsil">
+                            <ModernPicker label="Select Tehsil" value={data.address.tehsil} options={tehsils} onSelect={v => updateAddr({ tehsil: v })} />
+                        </Field>
+                    </View>
                 </View>
-                <Field label="Location / Sector"><Input value={data.address.location} onChangeText={t => update({ ...data, address: { ...data.address, location: t } })} /></Field>
-                <Field label="Area"><Input value={data.address.area} onChangeText={t => update({ ...data, address: { ...data.address, area: t } })} /></Field>
-                <Field label="Pincode"><Input keyboardType="numeric" value={data.address.pincode} onChangeText={t => update({ ...data, address: { ...data.address, pincode: t } })} /></Field>
+
+                <View style={styles.row}>
+                    <View style={{ flex: 1 }}>
+                        <Field label="Post Office">
+                            <ModernPicker label="Select Post Office" value={data.address.postOffice} options={postOffices} onSelect={v => updateAddr({ postOffice: v, pincode: "" })} />
+                        </Field>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                        <Field label="Pincode">
+                            <Input keyboardType="numeric" value={data.address.pincode} onChangeText={t => updateAddr({ pincode: t })} />
+                        </Field>
+                    </View>
+                </View>
+
+                <Field label="House Number">
+                    <Input value={data.address.hNo} onChangeText={t => updateAddr({ hNo: t })} />
+                </Field>
+                <Field label="Street / Road / Landmark">
+                    <Input value={data.address.street} onChangeText={t => updateAddr({ street: t })} />
+                </Field>
+                <Field label="Area">
+                    <Input value={data.address.area} onChangeText={t => updateAddr({ area: t })} />
+                </Field>
+
                 <View style={styles.row}>
                     <View style={{ flex: 1 }}><Field label="Latitude"><Input value={data.latitude} editable={false} /></Field></View>
                     <View style={{ flex: 1 }}><Field label="Longitude"><Input value={data.longitude} editable={false} /></Field></View>
@@ -587,12 +774,25 @@ function BlockStep({ data, update, lookups }: any) {
                     <View style={{ flex: 1 }}><Field label="Units"><Input keyboardType="numeric" value={blockForm.units} onChangeText={t => setBlockForm({ ...blockForm, units: t })} /></Field></View>
                 </View>
 
+                <View style={styles.row}>
+                    <View style={{ flex: 1 }}><Field label="Land Area"><Input keyboardType="numeric" value={blockForm.landArea} onChangeText={t => setBlockForm({ ...blockForm, landArea: t })} /></Field></View>
+                    <View style={{ flex: 1 }}><Field label="Unit"><SelectButton value={blockForm.landAreaUnit} options={[{ label: "Acres", value: "Acres" }, { label: "Hectares", value: "Hectares" }, { label: "Sq Yards", value: "Sq Yards" }]} onSelect={v => setBlockForm({ ...blockForm, landAreaUnit: v })} /></Field></View>
+                </View>
+
                 <Field label="Status">
                     <SelectButton value={blockForm.status} options={lookups["ProjectStatus"]?.map((l: any) => ({ label: l.lookup_value, value: l.lookup_value })) || []} onSelect={v => setBlockForm({ ...blockForm, status: v })} />
                 </Field>
 
                 <Field label="Parking Type">
                     <SelectButton value={blockForm.parkingType} options={lookups["ParkingType"]?.map((l: any) => ({ label: l.lookup_value, value: l.lookup_value })) || []} onSelect={v => setBlockForm({ ...blockForm, parkingType: v })} />
+                </Field>
+
+                <View style={styles.row}>
+                    <View style={{ flex: 1 }}><Field label="Launch Date"><Input placeholder="YYYY-MM-DD" value={blockForm.launchDate} onChangeText={t => setBlockForm({ ...blockForm, launchDate: t })} icon="calendar-outline" /></Field></View>
+                    <View style={{ flex: 1 }}><Field label="Completion Date"><Input placeholder="YYYY-MM-DD" value={blockForm.expectedCompletionDate} onChangeText={t => setBlockForm({ ...blockForm, expectedCompletionDate: t })} icon="calendar-outline" /></Field></View>
+                </View>
+                <Field label="Possession Date">
+                    <Input placeholder="YYYY-MM-DD" value={blockForm.possessionDate} onChangeText={t => setBlockForm({ ...blockForm, possessionDate: t })} icon="calendar-outline" />
                 </Field>
 
                 <TouchableOpacity style={[styles.addBlockBtn, { backgroundColor: theme.primary }]} onPress={addBlock}>

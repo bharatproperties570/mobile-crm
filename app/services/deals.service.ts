@@ -69,7 +69,8 @@ export interface Deal {
         internalRM?: any;
     };
     source?: string;
-    team?: string;
+    category?: string;
+    propertyType?: string;
     score?: number;
 }
 

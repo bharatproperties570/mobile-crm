@@ -9,6 +9,14 @@ import { getProjects, type Project } from "../services/projects.service";
 import { lookupVal } from "../services/api.helpers";
 import { safeApiCall } from "../services/api.helpers";
 import { useTheme } from "../context/ThemeContext";
+import { useLookup } from "../context/LookupContext";
+import FilterModal, { FilterField } from "../components/FilterModal";
+
+const PROJECT_FILTER_FIELDS: FilterField[] = [
+    { key: "status", label: "Status", type: "lookup", lookupType: "ProjectStatus" },
+    { key: "category", label: "Category", type: "lookup", lookupType: "Category" },
+    { key: "city", label: "City", type: "lookup", lookupType: "City" },
+];
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -21,9 +29,10 @@ function getStatusProgress(status: string) {
 
 const ProjectCard = memo(({ project, onPress, onMenuPress }: { project: Project; onPress: () => void; onMenuPress: () => void }) => {
     const { theme } = useTheme();
-    const statusLabel = lookupVal(project.status);
+    const { getLookupValue } = useLookup();
+    const statusLabel = getLookupValue('ProjectStatus', project.status);
     const progress = getStatusProgress(statusLabel);
-    const categories = lookupVal(project.category);
+    const categories = getLookupValue('Category', project.category);
     const location = project.locationSearch || project.address?.location || project.address?.city || "No Location";
 
     return (
@@ -78,6 +87,8 @@ export default function ProjectsScreen() {
     const [refreshing, setRefreshing] = useState(false);
     const [page, setPage] = useState(1);
     const [hasMore, setHasMore] = useState(true);
+    const [filters, setFilters] = useState<any>({});
+    const [showFilterModal, setShowFilterModal] = useState(false);
 
     // Action Hub State
     const [selectedProject, setSelectedProject] = useState<Project | null>(null);
@@ -137,9 +148,21 @@ export default function ProjectsScreen() {
     const sections = useMemo(() => {
         const filtered = projects.filter(p => {
             const q = search.toLowerCase();
-            return p.name.toLowerCase().includes(q) ||
+            const matchesSearch = p.name.toLowerCase().includes(q) ||
                 (p.locationSearch || "").toLowerCase().includes(q) ||
                 (p.address?.city || "").toLowerCase().includes(q);
+
+            if (!matchesSearch) return false;
+
+            // Apply Filters
+            if (filters.status?.length > 0 && !filters.status.includes(p.status)) return false;
+            if (filters.category?.length > 0) {
+                const pCats = Array.isArray(p.category) ? p.category : [p.category];
+                if (!filters.category.some((c: string) => pCats.includes(c))) return false;
+            }
+            if (filters.city?.length > 0 && !filters.city.includes(p.address?.city)) return false;
+
+            return true;
         });
 
         const groups: Record<string, Project[]> = {};
@@ -179,6 +202,10 @@ export default function ProjectsScreen() {
                     value={search}
                     onChangeText={setSearch}
                 />
+                <TouchableOpacity onPress={() => setShowFilterModal(true)} style={styles.filterBtn}>
+                    <Ionicons name="filter" size={20} color={Object.keys(filters).length > 0 ? theme.primary : theme.textLight} />
+                    {Object.keys(filters).length > 0 && <View style={styles.filterBadge} />}
+                </TouchableOpacity>
             </View>
 
             {loading && page === 1 ? (
@@ -285,6 +312,14 @@ export default function ProjectsScreen() {
                     </Animated.View >
                 </Pressable >
             </Modal >
+
+            <FilterModal
+                visible={showFilterModal}
+                onClose={() => setShowFilterModal(false)}
+                onApply={setFilters}
+                initialFilters={filters}
+                fields={PROJECT_FILTER_FIELDS}
+            />
         </View>
     );
 }
@@ -304,6 +339,8 @@ const styles = StyleSheet.create({
         borderRadius: 16, borderWidth: 1, borderColor: "#E2E8F0"
     },
     commandInput: { flex: 1, marginLeft: 12, fontSize: 15, color: "#1E293B", fontWeight: "600" },
+    filterBtn: { padding: 4, marginLeft: 8, position: 'relative' },
+    filterBadge: { position: 'absolute', top: 2, right: 2, width: 8, height: 8, borderRadius: 4, backgroundColor: '#2563EB', borderWidth: 1.5, borderColor: '#fff' },
 
     list: { paddingBottom: 100 },
     sectionHeader: { backgroundColor: "#fff", paddingHorizontal: 20, paddingVertical: 12 },

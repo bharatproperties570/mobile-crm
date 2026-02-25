@@ -14,6 +14,7 @@ export interface Company {
     source?: any;
     subSource?: any;
     relationshipType: 'Developer' | 'Land Owner' | 'Channel Partner' | 'Vendor' | 'Institutional Owner' | 'Other';
+    category?: any;
     isPreferredPartner?: boolean;
     createdAt?: string;
 }

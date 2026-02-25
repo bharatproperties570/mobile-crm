@@ -195,12 +195,6 @@ export default function DealDetailScreen() {
                             )}
                         </View>
                     </View>
-                    <TouchableOpacity
-                        style={[styles.smallHeaderShare, { marginRight: 8 }]}
-                        onPress={() => router.push(`/add-activity?id=${id}&type=Deal`)}
-                    >
-                        <Ionicons name="calendar-outline" size={18} color={theme.primary} />
-                    </TouchableOpacity>
                     <View style={[styles.scoreRing, { borderColor: score.color + '40' }]}>
                         <Text style={[styles.scoreValue, { color: score.color }]}>{score.val}</Text>
                         <Text style={[styles.scoreLabel, { color: theme.textLight }]}>CONF.</Text>
@@ -430,7 +424,7 @@ export default function DealDetailScreen() {
                                                 <Text style={styles.timelineDate}>{new Date(act.createdAt).toLocaleDateString()}</Text>
                                             </View>
                                             <Text style={[styles.timelineSubject, { color: theme.text }]}>{act.subject}</Text>
-                                            {act.details?.note && <Text style={[styles.timelineNote, { color: theme.textLight }]}>{act.details.note}</Text>}
+                                            {(act.description || act.details?.note) && <Text style={[styles.timelineNote, { color: theme.textLight }]}>{act.description || act.details.note}</Text>}
                                         </View>
                                     </View>
                                 ))
@@ -519,6 +513,14 @@ export default function DealDetailScreen() {
                     </ScrollView>
                 </View>
             </ScrollView>
+
+            {/* Edit FAB */}
+            <TouchableOpacity
+                style={[styles.fab, { backgroundColor: theme.primary, shadowColor: theme.primary }]}
+                onPress={() => router.push(`/add-deal?id=${id}`)}
+            >
+                <Ionicons name="create" size={24} color="#fff" />
+            </TouchableOpacity>
         </View>
     );
 }
@@ -603,4 +605,18 @@ const styles = StyleSheet.create({
     relationBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 },
     googleMapsBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 12, borderRadius: 14, marginTop: 15 },
     googleMapsBtnText: { color: '#fff', fontSize: 14, fontWeight: '800' },
+    fab: {
+        position: 'absolute',
+        bottom: 30,
+        right: 20,
+        width: 56,
+        height: 56,
+        borderRadius: 28,
+        justifyContent: 'center',
+        alignItems: 'center',
+        elevation: 8,
+        shadowOpacity: 0.4,
+        shadowRadius: 12,
+        shadowOffset: { width: 0, height: 6 },
+    },
 });

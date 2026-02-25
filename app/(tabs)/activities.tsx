@@ -30,7 +30,7 @@ const PRIORITY_ICONS: Record<string, string> = {
 };
 
 const TYPE_TABS = ["All", "Call", "Meeting", "Site Visit", "Task", "Email"];
-const STATUS_TABS = ["All", "Pending", "Completed", "Overdue"];
+const STATUS_TABS = ["Pending", "Today", "Overdue", "Completed", "All"];
 
 export default function ActivitiesScreen() {
     const router = useRouter();
@@ -39,14 +39,18 @@ export default function ActivitiesScreen() {
     const [refreshing, setRefreshing] = useState(false);
     const [search, setSearch] = useState("");
     const [typeFilter, setTypeFilter] = useState("All");
-    const [statusFilter, setStatusFilter] = useState("All");
+    const [statusFilter, setStatusFilter] = useState("Pending");
 
     const fetchActivities = async (isRefreshing = false) => {
         if (!isRefreshing) setLoading(true);
         try {
-            const params: any = { search, limit: 200 };
+            const params: any = { search, limit: 500 };
             if (typeFilter !== "All") params.type = typeFilter;
-            if (statusFilter !== "All") params.status = statusFilter;
+
+            // Only send actual statuses to backend
+            if (["Pending", "Completed"].includes(statusFilter)) {
+                params.status = statusFilter;
+            }
 
             const res = await getActivities(params);
             if (res.data) {
@@ -94,6 +98,22 @@ export default function ActivitiesScreen() {
         if (!a.dueDate || a.status === "Completed") return false;
         return new Date(a.dueDate) < new Date();
     }).length;
+
+    const filteredActivities = useMemo(() => {
+        return activities.filter(a => {
+            if (statusFilter === "Pending") return a.status === "Pending";
+            if (statusFilter === "Completed") return a.status === "Completed";
+            if (statusFilter === "Today") {
+                if (!a.dueDate) return false;
+                return new Date(a.dueDate).toDateString() === new Date().toDateString();
+            }
+            if (statusFilter === "Overdue") {
+                if (!a.dueDate || a.status === "Completed") return false;
+                return new Date(a.dueDate) < new Date();
+            }
+            return true; // All
+        });
+    }, [activities, statusFilter]);
 
     const ActivityCard = memo(({ item, onPress, onDelete, onEdit, onReschedule }: {
         item: Activity;
@@ -265,7 +285,7 @@ export default function ActivitiesScreen() {
                 <View style={styles.center}><ActivityIndicator size="large" color="#2563EB" /></View>
             ) : (
                 <FlatList
-                    data={activities}
+                    data={filteredActivities}
                     keyExtractor={item => item._id || Math.random().toString()}
                     renderItem={({ item }) => (
                         <ActivityCard

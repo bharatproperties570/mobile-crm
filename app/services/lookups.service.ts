@@ -8,8 +8,10 @@ export interface Lookup {
     parent_id?: string;
 }
 
-export const getLookups = async (type?: string) => {
-    const params = type ? { lookup_type: type, limit: 1000 } : { limit: 1000 };
+export const getLookups = async (type?: string, parentId?: string) => {
+    const params: any = { limit: 1000 };
+    if (type) params.lookup_type = type;
+    if (parentId) params.parent_lookup_id = parentId;
     const res = await api.get("/lookups", { params });
     return res.data;
 };

@@ -14,6 +14,12 @@ import {
 import { safeApiCall } from "../services/api.helpers";
 import { useCallTracking } from "../context/CallTrackingContext";
 import { useLookup } from "../context/LookupContext";
+import FilterModal, { FilterField } from "../components/FilterModal";
+
+const CONTACT_FILTER_FIELDS: FilterField[] = [
+    { key: "stage", label: "Stage", type: "lookup", lookupType: "Stage" },
+    { key: "source", label: "Source", type: "lookup", lookupType: "Source" },
+];
 
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get("window");
 const AVATAR_COLORS = ["#6366F1", "#8B5CF6", "#EC4899", "#F59E0B", "#10B981", "#3B82F6"];
@@ -141,6 +147,8 @@ export default function ContactsScreen() {
     const [activeFilter, setActiveFilter] = useState("all");
     const [page, setPage] = useState(1);
     const [hasMore, setHasMore] = useState(true);
+    const [showFilterModal, setShowFilterModal] = useState(false);
+    const [filters, setFilters] = useState<any>({});
 
     // Action Hub State
     const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
@@ -208,14 +216,20 @@ export default function ContactsScreen() {
             const phone = contactPhone(c);
             const comp = (c.company || "").toLowerCase();
             const tags = (c.tags || []).join(" ").toLowerCase();
-            return name.includes(q) || phone.includes(q) || comp.includes(q) || tags.includes(q);
-        });
 
-        if (activeFilter === "business") {
-            filtered = filtered.filter(c => c.company && c.company.trim().length > 0);
-        } else if (activeFilter === "individual") {
-            filtered = filtered.filter(c => !c.company || c.company.trim().length === 0);
-        }
+            // Search match
+            const matchesSearch = name.includes(q) || phone.includes(q) || comp.includes(q) || tags.includes(q);
+            if (!matchesSearch) return false;
+
+            // Filter matches
+            if (activeFilter === "business" && !(c.company && c.company.trim().length > 0)) return false;
+            if (activeFilter === "individual" && (c.company && c.company.trim().length > 0)) return false;
+
+            if (filters.stage?.length > 0 && !filters.stage.includes(c.stage)) return false;
+            if (filters.source?.length > 0 && !filters.source.includes(c.source)) return false;
+
+            return true;
+        });
 
         const groups: Record<string, Contact[]> = {};
         filtered.forEach(c => {
@@ -231,7 +245,7 @@ export default function ContactsScreen() {
                 title: key,
                 data: groups[key].sort((a, b) => contactFullName(a).localeCompare(contactFullName(b)))
             }));
-    }, [contacts, search, activeFilter]);
+    }, [contacts, search, activeFilter, filters]);
 
     const renderHeader = () => (
         <View style={styles.header}>
@@ -258,11 +272,9 @@ export default function ContactsScreen() {
                         value={search}
                         onChangeText={setSearch}
                     />
-                    {search.length > 0 && (
-                        <TouchableOpacity onPress={() => setSearch("")}>
-                            <Ionicons name="close-circle" size={18} color="#94A3B8" />
-                        </TouchableOpacity>
-                    )}
+                    <TouchableOpacity onPress={() => setShowFilterModal(true)} style={styles.filterBtn}>
+                        <Ionicons name="filter" size={20} color={Object.keys(filters).length > 0 ? "#2563EB" : "#94A3B8"} />
+                    </TouchableOpacity>
                 </View>
             </View>
 
@@ -351,7 +363,7 @@ export default function ContactsScreen() {
                             </TouchableOpacity >
 
                             <TouchableOpacity style={styles.actionItem} onPress={() => {
-                                router.push(`/add-document?contactId=${selectedContact?._id}`); closeHub();
+                                router.push(`/add-document?id=${selectedContact?._id}&type=Contact`); closeHub();
                             }}>
                                 <View style={[styles.actionIcon, { backgroundColor: "#F0F9FF" }]}>
                                     <Ionicons name="document-attach" size={24} color="#0EA5E9" />
@@ -398,6 +410,14 @@ export default function ContactsScreen() {
                     </Animated.View >
                 </Pressable >
             </Modal >
+
+            <FilterModal
+                visible={showFilterModal}
+                onClose={() => setShowFilterModal(false)}
+                onApply={setFilters}
+                initialFilters={filters}
+                fields={CONTACT_FILTER_FIELDS}
+            />
         </View>
     );
 }
@@ -413,6 +433,7 @@ const styles = StyleSheet.create({
     commandBar: { marginBottom: 16 },
     searchBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: "#F1F5F9", borderRadius: 12, paddingHorizontal: 12, height: 48 },
     searchInput: { flex: 1, marginLeft: 10, fontSize: 15, color: "#1E293B", fontWeight: "500" },
+    filterBtn: { padding: 4, marginLeft: 8 },
 
     segmentContainer: { marginTop: 4 },
     segmentScroll: { gap: 8 },
@@ -426,7 +447,7 @@ const styles = StyleSheet.create({
     sectionTitle: { fontSize: 14, fontWeight: "800", color: "#2563EB" },
 
     card: {
-        flexDirection: "row", alignItems: "center", paddingHorizontal: 20, paddingVertical: 14,
+        flexDirection: "row", alignItems: "center", paddingHorizontal: 20, paddingVertical: 10,
         backgroundColor: "#fff", borderBottomWidth: 1, borderBottomColor: "#F1F5F9"
     },
     avatar: { width: 48, height: 48, borderRadius: 24, justifyContent: "center", alignItems: "center", marginRight: 16 },

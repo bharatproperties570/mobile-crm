@@ -4,10 +4,11 @@ import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../context/ThemeContext";
 import api from "../services/api";
+import { getActivities } from "../services/activities.service";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
-const TABS = ["Overview", "Address", "Employees", "Deals", "Inventory", "Projects"];
+const TABS = ["Overview", "Address", "Employees", "Activities", "Deals", "Inventory", "Projects"];
 
 const formatCurrency = (value: number) => {
     if (!value) return "₹0";
@@ -59,6 +60,7 @@ export default function CompanyDetailScreen() {
     const [inventory, setInventory] = useState<any[]>([]);
     const [deals, setDeals] = useState<any[]>([]);
     const [employees, setEmployees] = useState<any[]>([]);
+    const [activities, setActivities] = useState<any[]>([]);
 
     const scrollX = useRef(new Animated.Value(0)).current;
     const tabScrollViewRef = useRef<ScrollView>(null);
@@ -73,37 +75,23 @@ export default function CompanyDetailScreen() {
             setEmployees(emps);
 
             // 2. Fetch Projects developed by this company
-            const projRes = await api.get(`/projects`, { params: { developerId: compId } });
-            const projs = projRes.data?.data || [];
-            setProjects(projs);
-
             // 3. Aggregate Deal & Inventory data
-            // We search for items where ANY of these IDs are listed as owners/associates:
-            // [companyId, employeeId1, employeeId2, ...]
-            const allLinkIds = emps.map((e: any) => e._id);
-            const linkIdStr = allLinkIds.join(',');
-
-            if (allLinkIds.length === 0) {
-                setDeals([]);
-                setInventory([]);
-                setStats({ projects: projs.length, inventory: 0, deals: 0, revenue: 0 });
-                return;
-            }
-
-            // Fetch deals and inventory using these IDs
-            // Note: The backend search param for owners/associates might vary, but usually 'ownerId' or similar
-            // For now, we fetch by projecting project IDs if any, OR by searching company/employee links directly if supported.
-            // Since the user specificied aggregation based on "add owner form" selection:
-            const [dRes, iRes] = await Promise.all([
-                api.get(`/deals`, { params: { contactId: linkIdStr, limit: '200' } }),
-                api.get(`/inventory`, { params: { contactId: linkIdStr, limit: '200' } })
+            // 4. Fetch Activities
+            const [projRes, dRes, iRes, actRes] = await Promise.all([
+                api.get(`/projects`, { params: { developerId: compId } }),
+                api.get(`/deals`, { params: { contactId: emps.map((e: any) => e._id).join(','), limit: '200' } }),
+                api.get(`/inventory`, { params: { contactId: emps.map((e: any) => e._id).join(','), limit: '200' } }),
+                getActivities({ entityId: compId, limit: 100 })
             ]);
 
+            const projs = projRes.data?.data || [];
             const fetchedDeals = dRes.data?.records || [];
             const fetchedInv = iRes.data?.records || iRes.data?.data || [];
 
+            setProjects(projs);
             setDeals(fetchedDeals);
             setInventory(fetchedInv);
+            setActivities(Array.isArray(actRes?.data) ? actRes.data : (Array.isArray(actRes) ? actRes : []));
 
             const rev = fetchedDeals.filter((d: any) => d.stage === 'Closed').reduce((acc: number, curr: any) => acc + (curr.price || curr.amount || 0), 0);
             setStats({ projects: projs.length, inventory: fetchedInv.length, deals: fetchedDeals.length, revenue: rev });
@@ -176,21 +164,6 @@ export default function CompanyDetailScreen() {
                     </View>
                 </View>
 
-                {/* Professional Action Hub */}
-                <View style={styles.modernActionHub}>
-                    {[
-                        { icon: 'call', color: theme.primary, onPress: () => primaryPhone ? Linking.openURL(`tel:${primaryPhone}`) : Alert.alert("No Phone", "No contact number available") },
-                        { icon: 'chatbox-ellipses', color: '#8B5CF6', onPress: () => primaryPhone ? Linking.openURL(`sms:${primaryPhone}`) : Alert.alert("No Phone", "No contact number available") },
-                        { icon: 'logo-whatsapp', color: '#10B981', onPress: () => primaryPhone ? Linking.openURL(`https://wa.me/${primaryPhone.replace(/\D/g, '')}`) : Alert.alert("No WhatsApp", "No mobile number available") },
-                        { icon: 'mail', color: '#F59E0B', onPress: () => primaryEmail ? Linking.openURL(`mailto:${primaryEmail}`) : Alert.alert("No Email", "No email address available") },
-                        { icon: 'calendar', color: '#EC4899', onPress: () => router.push(`/add-activity?id=${id}&type=Company`) },
-                    ].map((action, i) => (
-                        <TouchableOpacity key={i} style={[styles.modernHubBtn, { backgroundColor: action.color }]} onPress={action.onPress}>
-                            <Ionicons name={action.icon as any} size={20} color={"#fff"} />
-                        </TouchableOpacity>
-                    ))}
-                </View>
-
                 {/* Information Strategy Bar */}
                 <View style={[styles.strategyBar, { borderTopColor: theme.border, borderBottomColor: theme.border }]}>
                     <View style={styles.strategyBlock}>
@@ -214,6 +187,21 @@ export default function CompanyDetailScreen() {
                             </Text>
                         </View>
                     </View>
+                </View>
+
+                {/* Professional Action Hub */}
+                <View style={styles.modernActionHub}>
+                    {[
+                        { icon: 'call', color: theme.primary, onPress: () => primaryPhone ? Linking.openURL(`tel:${primaryPhone}`) : Alert.alert("No Phone", "No contact number available") },
+                        { icon: 'chatbox-ellipses', color: '#8B5CF6', onPress: () => primaryPhone ? Linking.openURL(`sms:${primaryPhone}`) : Alert.alert("No Phone", "No contact number available") },
+                        { icon: 'logo-whatsapp', color: '#10B981', onPress: () => primaryPhone ? Linking.openURL(`https://wa.me/${primaryPhone.replace(/\D/g, '')}`) : Alert.alert("No WhatsApp", "No mobile number available") },
+                        { icon: 'mail', color: '#F59E0B', onPress: () => primaryEmail ? Linking.openURL(`mailto:${primaryEmail}`) : Alert.alert("No Email", "No email address available") },
+                        { icon: 'calendar', color: '#EC4899', onPress: () => router.push(`/add-activity?id=${id}&type=Company`) },
+                    ].map((action, i) => (
+                        <TouchableOpacity key={i} style={[styles.modernHubBtn, { backgroundColor: action.color }]} onPress={action.onPress}>
+                            <Ionicons name={action.icon as any} size={20} color={"#fff"} />
+                        </TouchableOpacity>
+                    ))}
                 </View>
 
                 {/* Tabs Selector */}
@@ -378,7 +366,38 @@ export default function CompanyDetailScreen() {
                     </ScrollView>
                 </View>
 
-                {/* 4. Deals */}
+                {/* 4. Activities */}
+                <View style={styles.tabContent}>
+                    <ScrollView contentContainerStyle={styles.innerScroll} showsVerticalScrollIndicator={false}>
+                        <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                            <View style={styles.sectionHeader}>
+                                <Text style={[styles.cardTitle, { color: theme.text, marginBottom: 0 }]}>Activity Timeline</Text>
+                                <TouchableOpacity onPress={() => router.push(`/add-activity?id=${id}&type=Company`)}>
+                                    <Text style={{ color: theme.primary, fontWeight: '700' }}>+ Add</Text>
+                                </TouchableOpacity>
+                            </View>
+                            {activities.length === 0 ? (
+                                <Text style={styles.emptyText}>No activities recorded yet.</Text>
+                            ) : (
+                                activities.map((act, i) => (
+                                    <View key={i} style={[styles.timelineItem, { borderLeftColor: theme.border }]}>
+                                        <View style={[styles.timelineDot, { backgroundColor: theme.primary }]} />
+                                        <View style={styles.timelineBody}>
+                                            <View style={styles.timelineHeader}>
+                                                <Text style={[styles.timelineType, { color: theme.primary }]}>{act.type?.toUpperCase() || "ACTIVITY"}</Text>
+                                                <Text style={styles.timelineDate}>{new Date(act.createdAt).toLocaleDateString()}</Text>
+                                            </View>
+                                            <Text style={[styles.timelineSubject, { color: theme.text }]}>{act.subject}</Text>
+                                            {(act.description || act.details?.note) && <Text style={[styles.timelineNote, { color: theme.textLight }]}>{act.description || act.details.note}</Text>}
+                                        </View>
+                                    </View>
+                                ))
+                            )}
+                        </View>
+                    </ScrollView>
+                </View>
+
+                {/* 5. Deals */}
                 <View style={styles.tabContent}>
                     <ScrollView contentContainerStyle={styles.innerScroll}>
                         {deals.length === 0 ? (
@@ -400,7 +419,7 @@ export default function CompanyDetailScreen() {
                     </ScrollView>
                 </View>
 
-                {/* 5. Inventory */}
+                {/* 6. Inventory */}
                 <View style={styles.tabContent}>
                     <ScrollView contentContainerStyle={styles.innerScroll}>
                         {inventory.length === 0 ? (
@@ -422,7 +441,7 @@ export default function CompanyDetailScreen() {
                     </ScrollView>
                 </View>
 
-                {/* 6. Projects */}
+                {/* 7. Projects */}
                 <View style={styles.tabContent}>
                     <ScrollView contentContainerStyle={styles.innerScroll}>
                         {projects.length === 0 ? (
@@ -496,4 +515,12 @@ const styles = StyleSheet.create({
     strategyLabel: { fontSize: 10, fontWeight: '800', letterSpacing: 1, marginBottom: 4 },
     strategyValueRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
     strategyValue: { fontSize: 13, fontWeight: '700' },
+    timelineItem: { borderLeftWidth: 2, marginLeft: 10, paddingLeft: 20, paddingBottom: 25 },
+    timelineDot: { width: 12, height: 12, borderRadius: 6, position: 'absolute', left: -7, top: 0 },
+    timelineBody: { marginTop: -4 },
+    timelineHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
+    timelineType: { fontSize: 10, fontWeight: '800' },
+    timelineDate: { fontSize: 10, color: '#94a3b8', fontWeight: '600' },
+    timelineSubject: { fontSize: 14, fontWeight: '700', marginBottom: 4 },
+    timelineNote: { fontSize: 12, lineHeight: 18 },
 });

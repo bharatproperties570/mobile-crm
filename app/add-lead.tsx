@@ -257,7 +257,7 @@ function MultiSelectButton({
 export default function AddLeadScreen() {
     const router = useRouter();
     const { theme } = useTheme();
-    const { id } = useLocalSearchParams<{ id: string }>();
+    const { id, refContact } = useLocalSearchParams<{ id: string; refContact: string }>();
     const [step, setStep] = useState(0);
     const [loading, setLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
@@ -294,6 +294,7 @@ export default function AddLeadScreen() {
                     getTeams(),
                     api.get("/users"),
                     id ? getLeadById(id) : Promise.resolve(null),
+                    refContact ? getContactById(refContact) : Promise.resolve(null),
                 ]);
 
                 const lookupMap: Record<string, any[]> = {};
@@ -358,6 +359,20 @@ export default function AddLeadScreen() {
                         description: l.description || "",
                         tags: Array.isArray(l.tags) ? l.tags : [],
                     });
+                }
+
+                const contactRes = results[LEAD_LOOKUP_TYPES.length + 4];
+                if (contactRes) {
+                    const c = contactRes.data || contactRes;
+                    setFormData(prev => ({
+                        ...prev,
+                        firstName: c.name || "",
+                        lastName: c.surname || "",
+                        mobile: c.phones?.[0]?.number || "",
+                        email: c.emails?.[0]?.address || "",
+                        owner: c.owner?._id || c.owner || prev.owner,
+                        source: c.source?._id || c.source || prev.source,
+                    }));
                 }
             } catch (error) {
                 console.error("Failed to load form data", error);

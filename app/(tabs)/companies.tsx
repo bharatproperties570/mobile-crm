@@ -9,7 +9,16 @@ import { Swipeable } from "react-native-gesture-handler";
 import { getCompanies, type Company } from "../services/companies.service";
 import { lookupVal, safeApiCall } from "../services/api.helpers";
 import { useTheme } from "../context/ThemeContext";
+import { useLookup } from "../context/LookupContext";
 import { useCallTracking } from "../context/CallTrackingContext";
+import FilterModal, { FilterField } from "../components/FilterModal";
+
+const COMPANY_FILTER_FIELDS: FilterField[] = [
+    { key: "relationshipType", label: "Relationship Type", type: "lookup", lookupType: "RelationshipType" },
+    { key: "industry", label: "Industry", type: "lookup", lookupType: "Industry" },
+    { key: "category", label: "Category", type: "lookup", lookupType: "Category" },
+    { key: "source", label: "Source", type: "lookup", lookupType: "Source" },
+];
 
 const RELATIONSHIP_COLORS: Record<string, string> = {
     'Developer': '#3B82F6',
@@ -124,6 +133,8 @@ export default function CompaniesScreen() {
     const [refreshing, setRefreshing] = useState(false);
     const [page, setPage] = useState(1);
     const [hasMore, setHasMore] = useState(true);
+    const [showFilterModal, setShowFilterModal] = useState(false);
+    const [filters, setFilters] = useState<any>({});
 
     // Action Hub State
     const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
@@ -182,12 +193,22 @@ export default function CompaniesScreen() {
 
     const filtered = useMemo(() => {
         const q = search.toLowerCase();
-        return companies.filter(c =>
-            c.name.toLowerCase().includes(q) ||
-            (c.relationshipType || "").toLowerCase().includes(q) ||
-            lookupVal(c.industry).toLowerCase().includes(q)
-        );
-    }, [companies, search]);
+        return companies.filter(c => {
+            // Search match
+            const matchesSearch = c.name.toLowerCase().includes(q) ||
+                (c.relationshipType || "").toLowerCase().includes(q) ||
+                lookupVal(c.industry).toLowerCase().includes(q);
+            if (!matchesSearch) return false;
+
+            // Filter matches
+            if (filters.relationshipType?.length > 0 && !filters.relationshipType.includes(c.relationshipType)) return false;
+            if (filters.industry?.length > 0 && !filters.industry.includes(c.industry)) return false;
+            if (filters.category?.length > 0 && !filters.category.includes(c.category)) return false;
+            if (filters.source?.length > 0 && !filters.source.includes(c.source)) return false;
+
+            return true;
+        });
+    }, [companies, search, filters]);
 
     return (
         <View style={[styles.container, { backgroundColor: theme.background }]}>
@@ -213,6 +234,9 @@ export default function CompaniesScreen() {
                     value={search}
                     onChangeText={setSearch}
                 />
+                <TouchableOpacity onPress={() => setShowFilterModal(true)} style={styles.filterBtn}>
+                    <Ionicons name="filter" size={20} color={Object.keys(filters).length > 0 ? theme.primary : theme.textLight} />
+                </TouchableOpacity>
             </View>
 
             {loading && page === 1 ? (
@@ -302,6 +326,14 @@ export default function CompaniesScreen() {
                     </Animated.View >
                 </Pressable >
             </Modal >
+
+            <FilterModal
+                visible={showFilterModal}
+                onClose={() => setShowFilterModal(false)}
+                onApply={setFilters}
+                initialFilters={filters}
+                fields={COMPANY_FILTER_FIELDS}
+            />
         </View>
     );
 }
@@ -321,13 +353,14 @@ const styles = StyleSheet.create({
         paddingHorizontal: 16, paddingVertical: 12, borderRadius: 16, borderWidth: 1
     },
     searchInput: { flex: 1, marginLeft: 12, fontSize: 15, fontWeight: "600" },
+    filterBtn: { padding: 4, marginLeft: 8 },
     list: { paddingBottom: 100 },
     card: {
-        marginHorizontal: 16, marginBottom: 14, padding: 16, borderRadius: 24,
+        marginHorizontal: 16, marginBottom: 10, padding: 12, borderRadius: 20,
         borderWidth: 1
     },
-    cardHeader: { flexDirection: "row", alignItems: "center", marginBottom: 14, justifyContent: 'space-between' },
-    companyName: { fontSize: 17, fontWeight: "800", marginBottom: 10 },
+    cardHeader: { flexDirection: "row", alignItems: "center", marginBottom: 8, justifyContent: 'space-between' },
+    companyName: { fontSize: 16, fontWeight: "800", marginBottom: 6 },
     typeBadge: { paddingHorizontal: 10, paddingVertical: 3, borderRadius: 8 },
     typeText: { fontSize: 10, fontWeight: "900", letterSpacing: 0.5 },
     statsRow: { flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 10 },

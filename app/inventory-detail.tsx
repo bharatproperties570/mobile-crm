@@ -136,12 +136,6 @@ export default function InventoryDetailScreen() {
                         </View>
                     </View>
                     <View style={styles.statusContainer}>
-                        <TouchableOpacity
-                            style={[styles.smallHeaderShare, { marginRight: 8 }]}
-                            onPress={() => router.push(`/add-activity?id=${id}&type=Inventory`)}
-                        >
-                            <Ionicons name="calendar-outline" size={18} color={theme.primary} />
-                        </TouchableOpacity>
                         <View style={[styles.statusRing, { borderColor: statusColor + '40' }]}>
                             <Ionicons name="home" size={20} color={statusColor} />
                             <Text style={[styles.statusLabel, { color: theme.textLight }]}>{statusLabel.toUpperCase()}</Text>
@@ -335,10 +329,11 @@ export default function InventoryDetailScreen() {
                                         <View style={[styles.timelineDot, { backgroundColor: theme.primary }]} />
                                         <View style={styles.timelineBody}>
                                             <View style={styles.timelineHeader}>
-                                                <Text style={[styles.timelineType, { color: theme.primary }]}>{act.type.toUpperCase()}</Text>
+                                                <Text style={[styles.timelineType, { color: theme.primary }]}>{act.type?.toUpperCase() || "ACTIVITY"}</Text>
                                                 <Text style={styles.timelineDate}>{new Date(act.createdAt).toLocaleDateString()}</Text>
                                             </View>
                                             <Text style={[styles.timelineSubject, { color: theme.text }]}>{act.subject}</Text>
+                                            {(act.description || act.details?.note) && <Text style={[styles.timelineNote, { color: theme.textLight }]}>{act.description || act.details.note}</Text>}
                                         </View>
                                     </View>
                                 ))
@@ -461,6 +456,14 @@ export default function InventoryDetailScreen() {
                     </ScrollView>
                 </View>
             </ScrollView>
+
+            {/* Edit FAB */}
+            <TouchableOpacity
+                style={[styles.fab, { backgroundColor: theme.primary, shadowColor: theme.primary }]}
+                onPress={() => router.push(`/add-inventory?id=${id}`)}
+            >
+                <Ionicons name="create" size={24} color="#fff" />
+            </TouchableOpacity>
         </View>
     );
 }
@@ -538,4 +541,19 @@ const styles = StyleSheet.create({
 
     googleMapsBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 12, borderRadius: 14, marginTop: 10 },
     googleMapsBtnText: { color: '#fff', fontSize: 14, fontWeight: '800' },
+    timelineNote: { fontSize: 12, lineHeight: 18 },
+    fab: {
+        position: 'absolute',
+        bottom: 30,
+        right: 20,
+        width: 56,
+        height: 56,
+        borderRadius: 28,
+        justifyContent: 'center',
+        alignItems: 'center',
+        elevation: 8,
+        shadowOpacity: 0.4,
+        shadowRadius: 12,
+        shadowOffset: { width: 0, height: 6 },
+    },
 });

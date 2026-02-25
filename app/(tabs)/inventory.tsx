@@ -9,6 +9,15 @@ import { Swipeable } from 'react-native-gesture-handler';
 import { getInventory, type Inventory } from "../services/inventory.service";
 import { lookupVal, safeApiCall } from "../services/api.helpers";
 import { useCallTracking } from "../context/CallTrackingContext";
+import { useLookup } from "../context/LookupContext";
+import FilterModal, { FilterField } from "../components/FilterModal";
+
+const INVENTORY_FILTER_FIELDS: FilterField[] = [
+    { key: "status", label: "Status", type: "lookup", lookupType: "InventoryStatus" },
+    { key: "category", label: "Category", type: "lookup", lookupType: "Category" },
+    { key: "subCategory", label: "Sub Category", type: "lookup", lookupType: "SubCategory" },
+    { key: "unitType", label: "Unit Type", type: "lookup", lookupType: "UnitType" },
+];
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const COLUMN_WIDTH = (SCREEN_WIDTH - 48) / 2;
@@ -39,11 +48,12 @@ const InventoryCard = memo(({ item, onPress, onCall, onWhatsApp, onSMS, onEmail,
     onMenuPress: () => void;
     viewMode: 'list' | 'grid'
 }) => {
-    const status = lookupVal(item.status);
+    const { getLookupValue } = useLookup();
+    const status = getLookupValue('InventoryStatus', item.status);
     const color = STATUS_COLORS[status] || '#64748B';
-    const type = lookupVal(item.category);
-    const subCat = lookupVal(item.subCategory);
-    const unitType = lookupVal(item.unitType);
+    const type = getLookupValue('Category', item.category);
+    const subCat = getLookupValue('SubCategory', item.subCategory);
+    const unitType = getLookupValue('UnitType', item.unitType);
     const iconName = TYPE_ICONS[type] || 'cube';
 
     const displayType = [subCat, unitType].filter(v => v && v !== "—").join(' · ');
@@ -95,36 +105,43 @@ const InventoryCard = memo(({ item, onPress, onCall, onWhatsApp, onSMS, onEmail,
     return (
         <Swipeable renderRightActions={renderRightActions} renderLeftActions={renderLeftActions} friction={2}>
             <TouchableOpacity style={styles.listCard} onPress={onPress} activeOpacity={0.8}>
+                <View style={[styles.cardAccent, { backgroundColor: color }]} />
                 <View style={styles.listMain}>
                     <View style={styles.listHeader}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                            <Text style={styles.listUnitNumber}>{item.unitNumber || item.unitNo || "N/A"}</Text>
-                            <View style={[styles.typePill, { backgroundColor: color + '10' }]}>
-                                <Text style={[styles.typePillText, { color: color }]}>{displayType || "Property"}</Text>
+                        <View style={{ flex: 1 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+                                <Text style={styles.listUnitNumber}>{item.unitNumber || item.unitNo || "N/A"}</Text>
+                                <View style={[styles.typePill, { backgroundColor: color + '10' }]}>
+                                    <Text style={[styles.typePillText, { color: color }]}>{displayType || "Property"}</Text>
+                                </View>
                             </View>
+                            <Text numberOfLines={1} style={styles.listProjectContainer}>
+                                <Text style={styles.listProjectName}>{item.projectName || "N/A"}</Text>
+                                <Text style={styles.listBlockName}> • {item.block || "No Block"}</Text>
+                            </Text>
                         </View>
-                        <View style={[styles.statusPill, { backgroundColor: color + "10" }]}>
-                            <Text style={[styles.statusPillText, { color: color }]}>{status}</Text>
+                        <View style={{ alignItems: 'flex-end' }}>
+                            <View style={[styles.statusPill, { backgroundColor: color + "10" }]}>
+                                <View style={[styles.statusDot, { backgroundColor: color }]} />
+                                <Text style={[styles.statusPillText, { color: color }]}>{status}</Text>
+                            </View>
+                            <TouchableOpacity style={styles.menuTrigger} onPress={onMenuPress}>
+                                <Ionicons name="ellipsis-vertical" size={18} color="#94A3B8" />
+                            </TouchableOpacity>
                         </View>
-                    </View>
-
-                    <View style={styles.listProjectContainer}>
-                        <Text numberOfLines={1}>
-                            <Text style={styles.listProjectName}>{item.projectName || "N/A"}</Text>
-                            <Text style={styles.listBlockName}> • {item.block || "No Block"}</Text>
-                        </Text>
                     </View>
 
                     <View style={styles.listFooter}>
-                        <View style={styles.listMetaContainer}>
-                            <View style={styles.listMeta}>
-                                <Ionicons name="expand" size={12} color="#94A3B8" />
-                                <Text style={styles.listMetaText}>{item.size} {item.sizeUnit}</Text>
-                            </View>
+                        <View style={styles.listMeta}>
+                            <Ionicons name="expand-outline" size={14} color="#64748B" />
+                            <Text style={styles.listMetaText}>{item.size} {item.sizeUnit}</Text>
                         </View>
-                        <TouchableOpacity style={styles.menuTrigger} onPress={onMenuPress}>
-                            <Ionicons name="ellipsis-vertical" size={18} color="#94A3B8" />
-                        </TouchableOpacity>
+                        {item.price && (
+                            <View style={styles.listMeta}>
+                                <Ionicons name="cash-outline" size={14} color="#64748B" />
+                                <Text style={styles.listMetaText}>₹{item.price.toLocaleString()}</Text>
+                            </View>
+                        )}
                     </View>
                 </View>
             </TouchableOpacity>
@@ -140,6 +157,8 @@ export default function InventoryScreen() {
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+    const [filters, setFilters] = useState<any>({});
+    const [showFilterModal, setShowFilterModal] = useState(false);
 
     // Action Hub State
     const [selectedInv, setSelectedInv] = useState<Inventory | null>(null);
@@ -185,13 +204,23 @@ export default function InventoryScreen() {
 
     const filtered = useMemo(() => {
         const q = search.toLowerCase();
-        return inventory.filter(i =>
-            (i.projectName || "").toLowerCase().includes(q) ||
-            (i.unitNumber || "").toLowerCase().includes(q) ||
-            (i.unitNo || "").toLowerCase().includes(q) ||
-            (i.block || "").toLowerCase().includes(q)
-        );
-    }, [inventory, search]);
+        return inventory.filter(i => {
+            const matchesSearch = (i.projectName || "").toLowerCase().includes(q) ||
+                (i.unitNumber || "").toLowerCase().includes(q) ||
+                (i.unitNo || "").toLowerCase().includes(q) ||
+                (i.block || "").toLowerCase().includes(q);
+
+            if (!matchesSearch) return false;
+
+            // Apply Filters
+            if (filters.status?.length > 0 && !filters.status.includes(i.status)) return false;
+            if (filters.category?.length > 0 && !filters.category.includes(i.category)) return false;
+            if (filters.subCategory?.length > 0 && !filters.subCategory.includes(i.subCategory)) return false;
+            if (filters.unitType?.length > 0 && !filters.unitType.includes(i.unitType)) return false;
+
+            return true;
+        });
+    }, [inventory, search, filters]);
 
     // Communication Handlers - Prioritize Owner for Swipe Actions
     const handleCall = (item: Inventory) => {
@@ -233,12 +262,6 @@ export default function InventoryScreen() {
                     <Text style={styles.headerSubtitle}>{filtered.length} total units available</Text>
                 </View>
                 <View style={styles.headerActions}>
-                    <TouchableOpacity
-                        style={styles.actionBtn}
-                        onPress={() => setViewMode(viewMode === 'list' ? 'grid' : 'list')}
-                    >
-                        <Ionicons name={viewMode === 'list' ? "grid-outline" : "list-outline"} size={20} color="#1E293B" />
-                    </TouchableOpacity>
                     <TouchableOpacity style={[styles.actionBtn, styles.actionBtnPrimary]} onPress={() => router.push("/add-inventory")}>
                         <Ionicons name="add" size={24} color="#fff" />
                     </TouchableOpacity>
@@ -254,13 +277,17 @@ export default function InventoryScreen() {
                     value={search}
                     onChangeText={setSearch}
                 />
+                <TouchableOpacity onPress={() => setShowFilterModal(true)} style={styles.filterBtn}>
+                    <Ionicons name="filter" size={20} color={Object.keys(filters).length > 0 ? "#2563EB" : "#94A3B8"} />
+                    {Object.keys(filters).length > 0 && <View style={styles.filterBadge} />}
+                </TouchableOpacity>
                 {search.length > 0 && (
-                    <TouchableOpacity onPress={() => setSearch("")}>
+                    <TouchableOpacity onPress={() => setSearch("")} style={{ marginLeft: 8 }}>
                         <Ionicons name="close-circle" size={18} color="#CBD5E1" />
                     </TouchableOpacity>
                 )}
             </View>
-        </View>
+        </View >
     );
 
     return (
@@ -384,6 +411,14 @@ export default function InventoryScreen() {
                     </Animated.View >
                 </Pressable >
             </Modal >
+
+            <FilterModal
+                visible={showFilterModal}
+                onClose={() => setShowFilterModal(false)}
+                onApply={setFilters}
+                initialFilters={filters}
+                fields={INVENTORY_FILTER_FIELDS}
+            />
         </SafeAreaView>
     );
 }
@@ -409,32 +444,36 @@ const styles = StyleSheet.create({
         borderRadius: 16, borderWidth: 1, borderColor: "#E2E8F0"
     },
     commandInput: { flex: 1, marginLeft: 12, fontSize: 15, color: "#1E293B", fontWeight: "600" },
+    filterBtn: { padding: 4, marginLeft: 8, position: 'relative' },
+    filterBadge: { position: 'absolute', top: 2, right: 2, width: 8, height: 8, borderRadius: 4, backgroundColor: '#2563EB', borderWidth: 1.5, borderColor: '#fff' },
 
     list: { padding: 16, paddingBottom: 100 },
     gridRow: { justifyContent: 'space-between' },
 
     // List Card Styles
     listCard: {
-        flexDirection: 'row', alignItems: 'center', backgroundColor: "#fff",
-        borderRadius: 24, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: "#F1F5F9",
-        shadowColor: "#000", shadowOpacity: 0.02, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }
+        flexDirection: 'row', backgroundColor: "#fff",
+        borderRadius: 20, marginBottom: 12, borderWidth: 1, borderColor: "#F1F5F9",
+        overflow: 'hidden', shadowColor: "#000", shadowOpacity: 0.02, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }
     },
+    cardAccent: { width: 4 },
     listIconBox: { width: 48, height: 48, borderRadius: 16, justifyContent: 'center', alignItems: 'center' },
-    listMain: { flex: 1 },
-    listHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
-    listProjectContainer: { marginBottom: 8 },
-    listProjectName: { fontSize: 16, fontWeight: "800", color: "#0F172A" },
-    listBlockName: { fontSize: 10, fontWeight: "500", color: "#CBD5E1" },
-    listUnitNumber: { fontSize: 18, fontWeight: "900", color: "#0F172A" },
-    typePill: { paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4 },
-    typePillText: { fontSize: 9, fontWeight: "800" },
-    statusPill: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
-    statusPillText: { fontSize: 10, fontWeight: "800" },
+    listMain: { flex: 1, padding: 12 },
+    listHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+    listProjectContainer: { marginTop: 2 },
+    listProjectName: { fontSize: 13, fontWeight: "700", color: "#64748B" },
+    listBlockName: { fontSize: 13, fontWeight: "600", color: "#94A3B8" },
+    listUnitNumber: { fontSize: 20, fontWeight: "900", color: "#0F172A" },
+    typePill: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
+    typePillText: { fontSize: 10, fontWeight: "800", textTransform: 'uppercase' },
+    statusPill: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 20, gap: 6 },
+    statusDot: { width: 6, height: 6, borderRadius: 3 },
+    statusPillText: { fontSize: 10, fontWeight: "800", textTransform: 'uppercase' },
     listUnit: { fontSize: 13, color: "#64748B", fontWeight: "600", marginBottom: 8 },
-    listFooter: { flexDirection: 'row', gap: 16 },
-    listMeta: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-    listPrice: { fontSize: 13, fontWeight: "800", color: "#0F172A" },
-    listMetaText: { fontSize: 12, color: "#64748B", fontWeight: "600" },
+    listFooter: { flexDirection: 'row', gap: 12, marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#F8FAFC' },
+    listMeta: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    listPrice: { fontSize: 14, fontWeight: "800", color: "#0F172A" },
+    listMetaText: { fontSize: 12, color: "#475569", fontWeight: "700" },
 
     // Grid Card Styles
     gridCard: {

@@ -262,19 +262,25 @@ export default function LeadDetailScreen() {
                             <InfoRow label="Main Need" value={getLookupValue("Requirement", lead.requirement)} icon="cart-outline" accent />
                             <InfoRow label="Sub Category" value={getLookupValue("Sub Requirement", lead.subRequirement)} icon="list-outline" />
                             <InfoRow label="Project" value={lv(lead.project)} icon="business-outline" />
-                            <InfoRow label="Property Type" value={Array.isArray(lead.propertyType) ? lead.propertyType.map((t: any) => getLookupValue("Property Type", t)).join(", ") : getLookupValue("Property Type", lead.propertyType)} icon="business-outline" />
+                            <InfoRow label="Property Category" value={Array.isArray(lead.propertyType) ? lead.propertyType.map((t: any) => getLookupValue("Property Type", t) !== "—" ? getLookupValue("Property Type", t) : lv(t)).join(", ") : getLookupValue("Property Type", lead.propertyType)} icon="grid-outline" />
+                            <InfoRow label="Sub Types" value={Array.isArray(lead.subType) ? lead.subType.map((t: any) => getLookupValue("SubCategory", t) !== "—" ? getLookupValue("SubCategory", t) : lv(t)).join(", ") : getLookupValue("SubCategory", lead.subType)} icon="layers-outline" />
                             <InfoRow label="Budget" value={getLookupValue("Budget", lead.budget)} icon="wallet-outline" accent />
+                            <InfoRow label="Min - Max" value={(lead.budgetMin || lead.budgetMax) ? `₹${lead.budgetMin || 0} - ₹${lead.budgetMax || 0}` : ""} icon="cash-outline" />
                             <InfoRow label="Location Pref" value={getLookupValue("Project Location", lead.location)} icon="map-outline" />
                         </View>
 
                         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
                             <Text style={[styles.cardTitle, { color: theme.text }]}>Specifications</Text>
-                            <InfoRow label="Unit Type" value={lead.unitType?.map((t: any) => getLookupValue("Unit Type", t)).join(", ")} icon="grid-outline" />
-                            <InfoRow label="Facing" value={lead.facing?.map((t: any) => getLookupValue("Facing", t)).join(", ")} icon="compass-outline" />
+                            <InfoRow label="Unit Type" value={Array.isArray(lead.unitType) ? lead.unitType.map((t: any) => getLookupValue("Unit Type", t) !== "—" ? getLookupValue("Unit Type", t) : lv(t)).join(", ") : getLookupValue("Unit Type", lead.unitType)} icon="cube-outline" />
+                            <InfoRow label="Facing" value={Array.isArray(lead.facing) ? lead.facing.map((t: any) => getLookupValue("Facing", t) !== "—" ? getLookupValue("Facing", t) : lv(t)).join(", ") : getLookupValue("Facing", lead.facing)} icon="compass-outline" />
+                            <InfoRow label="Direction" value={Array.isArray(lead.direction) ? lead.direction.map((t: any) => getLookupValue("Direction", t) !== "—" ? getLookupValue("Direction", t) : lv(t)).join(", ") : getLookupValue("Direction", lead.direction)} icon="navigate-outline" />
+                            <InfoRow label="Road Width" value={Array.isArray(lead.roadWidth) ? lead.roadWidth.map((t: any) => getLookupValue("RoadWidth", t) !== "—" ? getLookupValue("RoadWidth", t) : lv(t)).join(", ") : getLookupValue("RoadWidth", lead.roadWidth)} icon="swap-horizontal-outline" />
 
-                            <InfoRow label="Area Range" value={`${lead.areaMin || 0} - ${lead.areaMax || 0} ${lead.areaMetric || ''}`} icon="resize-outline" />
+                            <InfoRow label="Area Range" value={(lead.areaMin || lead.areaMax) ? `${lead.areaMin || 0} - ${lead.areaMax || 0} ${lead.areaMetric || ''}` : ""} icon="resize-outline" />
                             <InfoRow label="Purpose" value={lead.purpose} icon="bulb-outline" />
                             <InfoRow label="Timeline" value={lead.timeline} icon="time-outline" />
+                            <InfoRow label="Furnishing" value={lead.furnishing} icon="bed-outline" />
+                            <InfoRow label="Funding" value={lead.funding} icon="analytics-outline" />
                         </View>
                     </ScrollView>
                 </View>
@@ -290,7 +296,10 @@ export default function LeadDetailScreen() {
 
                         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
                             <Text style={[styles.cardTitle, { color: theme.text }]}>Personal & Address</Text>
+                            <InfoRow label="Title" value={getLookupValue("Title", lead.contactDetails?.title)} icon="person-circle-outline" />
                             <InfoRow label="Father's Name" value={lead.contactDetails?.fatherName} icon="people-outline" />
+                            <InfoRow label="Gender" value={lead.contactDetails?.gender} icon="transgender-outline" />
+                            <InfoRow label="Date of Birth" value={lead.contactDetails?.birthDate ? new Date(lead.contactDetails.birthDate).toLocaleDateString() : ""} icon="calendar-outline" />
 
                             <View style={{ marginTop: 12, borderTopWidth: 1, borderTopColor: theme.border, paddingTop: 12 }}>
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
@@ -299,14 +308,14 @@ export default function LeadDetailScreen() {
                                 </View>
                                 <Text style={{ fontSize: 13, color: theme.text, lineHeight: 20 }}>
                                     {[
-                                        lead.contactDetails?.personalAddress?.hNo || " ",
-                                        lead.contactDetails?.personalAddress?.street || " ",
-                                        lead.contactDetails?.personalAddress?.area || " ",
-                                        lv(lead.contactDetails?.personalAddress?.location) || " ",
-                                        lv(lead.contactDetails?.personalAddress?.city) || " ",
-                                        lv(lead.contactDetails?.personalAddress?.state) || " ",
-                                        lead.contactDetails?.personalAddress?.pinCode || " "
-                                    ].join(", ").replace(/, , /g, ", ").replace(/ , /g, " ").trim().replace(/^, |,$/g, "") || "No address provided"}
+                                        lead.contactDetails?.personalAddress?.hNo || "",
+                                        lead.contactDetails?.personalAddress?.street || "",
+                                        lead.contactDetails?.personalAddress?.area || "",
+                                        lv(lead.contactDetails?.personalAddress?.location) || "",
+                                        lv(lead.contactDetails?.personalAddress?.city) || "",
+                                        lv(lead.contactDetails?.personalAddress?.state) || "",
+                                        lead.contactDetails?.personalAddress?.pinCode || ""
+                                    ].filter(Boolean).join(", ") || "No address provided"}
                                 </Text>
                             </View>
                         </View>
@@ -413,7 +422,7 @@ export default function LeadDetailScreen() {
                                                 <Text style={styles.timelineDate}>{new Date(act.createdAt).toLocaleDateString()}</Text>
                                             </View>
                                             <Text style={[styles.timelineSubject, { color: theme.text }]}>{act.subject}</Text>
-                                            {act.details?.note && <Text style={[styles.timelineNote, { color: theme.textLight }]}>{act.details.note}</Text>}
+                                            {(act.description || act.details?.note) && <Text style={[styles.timelineNote, { color: theme.textLight }]}>{act.description || act.details.note}</Text>}
                                         </View>
                                     </View>
                                 ))
@@ -487,6 +496,14 @@ export default function LeadDetailScreen() {
                 </View>
 
             </ScrollView>
+
+            {/* Edit FAB */}
+            <TouchableOpacity
+                style={[styles.fab, { backgroundColor: theme.primary, shadowColor: theme.primary }]}
+                onPress={() => router.push(`/add-lead?id=${id}`)}
+            >
+                <Ionicons name="create" size={24} color="#fff" />
+            </TouchableOpacity>
         </View>
     );
 }
@@ -558,5 +575,19 @@ const styles = StyleSheet.create({
     matchRight: { alignItems: 'flex-end' },
     matchPrice: { fontSize: 13, fontWeight: '700' },
     matchStatus: { fontSize: 10, fontWeight: '800', marginTop: 2 },
-    relationBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 }
+    relationBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
+    fab: {
+        position: 'absolute',
+        bottom: 30,
+        right: 20,
+        width: 56,
+        height: 56,
+        borderRadius: 28,
+        justifyContent: 'center',
+        alignItems: 'center',
+        elevation: 8,
+        shadowOpacity: 0.4,
+        shadowRadius: 12,
+        shadowOffset: { width: 0, height: 6 },
+    },
 });
