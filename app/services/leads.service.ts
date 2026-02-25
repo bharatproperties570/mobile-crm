@@ -103,3 +103,8 @@ export const updateLead = async (id: string, data: Partial<Lead>) => {
     const res = await api.put(`/leads/${id}`, data);
     return res.data;
 };
+
+export const getMatchingLeads = async (dealId: string) => {
+    const res = await api.get("/leads/match", { params: { dealId } });
+    return res.data;
+};
