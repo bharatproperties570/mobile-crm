@@ -14,6 +14,7 @@ import api from "../services/api";
 import { useCallTracking } from "../context/CallTrackingContext";
 import { useTheme } from "../context/ThemeContext";
 import { Colors } from "../context/ThemeContext";
+import { useLookup } from "../context/LookupContext";
 
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -461,13 +462,14 @@ const StaggeredLeadItem = memo(({ item, index, renderItem }: any) => {
     );
 });
 
-const LeadCard = memo(({ lead, index, onPress, onMore, isSelected, onLongPress }: {
+const LeadCard = memo(({ lead, index, onPress, onMore, isSelected, onLongPress, getLookupValue }: {
     lead: Lead;
     index: number;
     onPress: () => void;
     onMore: () => void;
     isSelected?: boolean;
     onLongPress?: () => void;
+    getLookupValue: (type: string, id: any) => string;
 }) => {
     const { theme } = useTheme();
     const { trackCall } = useCallTracking();
@@ -563,7 +565,7 @@ const LeadCard = memo(({ lead, index, onPress, onMore, isSelected, onLongPress }
                             <View style={{ backgroundColor: req.color + '15', padding: 6, borderRadius: 8 }}>
                                 <Ionicons name={req.icon} size={14} color={req.color} />
                             </View>
-                            <Text style={[styles.reqText, { color: theme.textMuted }]}>{lookupVal(lead.requirement)} • {lookupVal(lead.unitType)}</Text>
+                            <Text style={[styles.reqText, { color: theme.textMuted }]}>{getLookupValue("Requirement", lead.requirement)} • {getLookupValue("Unit Type", lead.unitType)}</Text>
                         </View>
                         {lead.locCity && (
                             <View style={styles.locRow}>
@@ -606,6 +608,7 @@ const LeadCard = memo(({ lead, index, onPress, onMore, isSelected, onLongPress }
 export default function LeadsScreen() {
     const router = useRouter();
     const { theme } = useTheme();
+    const { getLookupValue } = useLookup();
     const [leads, setLeads] = useState<Lead[]>([]);
     const [search, setSearch] = useState("");
     const [loading, setLoading] = useState(true);
@@ -867,6 +870,7 @@ export default function LeadsScreen() {
                             index={index}
                             isSelected={selectedIds.includes(item._id)}
                             onLongPress={() => toggleSelection(item._id)}
+                            getLookupValue={getLookupValue}
                             onPress={() => {
                                 if (selectedIds.length > 0) toggleSelection(item._id);
                                 else router.push(`/lead-detail?id=${item._id}`);
@@ -1021,7 +1025,7 @@ const styles = StyleSheet.create({
     bulkActionText: { color: "#fff", fontWeight: "700", fontSize: 13 },
     bulkDivider: { width: 1, height: 20, backgroundColor: "rgba(255,255,255,0.2)" },
 
-    modalOverlay: { flex: 1, backgroundColor: "rgba(15, 23, 42, 0.4)", justifyContent: "center", alignItems: 'center' },
+    modalOverlay: { flex: 1, backgroundColor: "rgba(15, 23, 42, 0.4)", justifyContent: "flex-end", alignItems: 'center' },
     bulkModalContent: { backgroundColor: "#fff", width: "90%", borderRadius: 24, padding: 24 },
     bulkModalTitle: { fontSize: 18, fontWeight: "700", color: "#0F172A", marginBottom: 20, textAlign: 'center' },
     bulkUserItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: "#F1F5F9" },

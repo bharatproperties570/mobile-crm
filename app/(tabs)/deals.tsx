@@ -11,6 +11,7 @@ import { getDeals, type Deal, updateDeal } from "../services/deals.service";
 import { safeApiCall, safeApiCallSingle } from "../services/api.helpers";
 import api from "../services/api";
 import { useCallTracking } from "../context/CallTrackingContext";
+import { useLookup } from "../context/LookupContext";
 
 const STAGE_COLORS: Record<string, string> = {
     open: "#6366F1",
@@ -62,6 +63,7 @@ const DealCard = memo(({
     onSMS,
     onEmail,
     onMenuPress,
+    getLookupValue,
 }: {
     deal: Deal;
     onPress: () => void;
@@ -71,6 +73,7 @@ const DealCard = memo(({
     onSMS: () => void;
     onEmail: () => void;
     onMenuPress: () => void;
+    getLookupValue: (type: string, id: any) => string;
 }) => {
     const stageStr = (resolveName(deal.stage) || "open").toLowerCase();
     const color = STAGE_COLORS[stageStr] ?? "#6366F1";
@@ -127,8 +130,8 @@ const DealCard = memo(({
                                 <View style={[styles.typePill, { backgroundColor: color + '15' }]}>
                                     <Text style={[styles.typePillText, { color: color }]}>
                                         {[
-                                            resolveName(deal.unitType || (typeof deal.inventoryId === 'object' ? deal.inventoryId?.unitType : "")),
-                                            resolveName(deal.subCategory || (typeof deal.inventoryId === 'object' ? deal.inventoryId?.subCategory : ""))
+                                            getLookupValue("Unit Type", deal.unitType || (typeof deal.inventoryId === 'object' ? deal.inventoryId?.unitType : "")),
+                                            getLookupValue("Property Type", deal.subCategory || (typeof deal.inventoryId === 'object' ? deal.inventoryId?.subCategory : ""))
                                         ].filter(t => t && t !== "—").join(' · ') || "Property"}
                                     </Text>
                                 </View>
@@ -181,6 +184,7 @@ const DealCard = memo(({
 export default function DealsScreen() {
     const { trackCall } = useCallTracking();
     const router = useRouter();
+    const { getLookupValue } = useLookup();
     const [deals, setDeals] = useState<Deal[]>([]);
     const [search, setSearch] = useState("");
     const [loading, setLoading] = useState(true);
@@ -425,6 +429,7 @@ export default function DealsScreen() {
                             onSMS={() => handleSMS(item)}
                             onEmail={() => handleEmail(item)}
                             onMenuPress={() => openHub(item)}
+                            getLookupValue={getLookupValue}
                         />
                     )}
                     contentContainerStyle={styles.list}
@@ -534,33 +539,6 @@ export default function DealsScreen() {
                                 <Text style={styles.actionLabel}>Dormant</Text>
                             </TouchableOpacity>
 
-                            <TouchableOpacity style={styles.actionItem} onPress={() => { if (selectedDeal) handleCall(selectedDeal); closeHub(); }}>
-                                <View style={[styles.actionIcon, { backgroundColor: "#EFF6FF" }]}>
-                                    <Ionicons name="call" size={24} color="#3B82F6" />
-                                </View>
-                                <Text style={styles.actionLabel}>Call</Text>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity style={styles.actionItem} onPress={() => { if (selectedDeal) handleWhatsApp(selectedDeal); closeHub(); }}>
-                                <View style={[styles.actionIcon, { backgroundColor: "#F0FDF4" }]}>
-                                    <Ionicons name="logo-whatsapp" size={24} color="#10B981" />
-                                </View>
-                                <Text style={styles.actionLabel}>WhatsApp</Text>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity style={styles.actionItem} onPress={() => { if (selectedDeal) handleSMS(selectedDeal); closeHub(); }}>
-                                <View style={[styles.actionIcon, { backgroundColor: "#FFF7ED" }]}>
-                                    <Ionicons name="chatbubble" size={24} color="#F97316" />
-                                </View>
-                                <Text style={styles.actionLabel}>SMS</Text>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity style={styles.actionItem} onPress={() => { if (selectedDeal) handleEmail(selectedDeal); closeHub(); }}>
-                                <View style={[styles.actionIcon, { backgroundColor: "#EEF2FF" }]}>
-                                    <Ionicons name="mail" size={24} color="#6366F1" />
-                                </View>
-                                <Text style={styles.actionLabel}>Email</Text>
-                            </TouchableOpacity>
                         </View >
 
                         {showStagePicker && (

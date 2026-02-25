@@ -8,7 +8,9 @@ import { Ionicons } from "@expo/vector-icons";
 import { getDealById, addDeal, updateDeal, type Deal } from "./services/deals.service";
 import { getLookups } from "./services/lookups.service";
 import { getProjects } from "./services/projects.service";
+import { getTeams } from "./services/teams.service";
 import api from "./services/api";
+import { useLookup } from "./context/LookupContext";
 
 const DEAL_LOOKUP_TYPES = [
     "Property Type", "Unit Type", "Pricing Mode", "Transaction Type",
@@ -108,6 +110,7 @@ export default function AddDealScreen() {
     const [step, setStep] = useState(0);
     const [loading, setLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
+    const { getLookupValue } = useLookup();
 
     const [formData, setFormData] = useState<any>({
         // Property & Intent
@@ -173,7 +176,7 @@ export default function AddDealScreen() {
         assignedTo: "",
         visibleTo: "Public",
         remarks: "",
-        stage: "open",
+        stage: "Open",
     });
 
     const [activeDropdown, setActiveDropdown] = useState<'project' | 'block' | 'unit' | 'status' | 'dealType' | 'transactionType' | 'source' | 'team' | 'agent' | 'visibility' | null>(null);
@@ -184,6 +187,7 @@ export default function AddDealScreen() {
     const [lookups, setLookups] = useState<Record<string, any[]>>({});
     const [projects, setProjects] = useState<any[]>([]);
     const [users, setUsers] = useState<any[]>([]);
+    const [teams, setTeams] = useState<any[]>([]);
 
     useEffect(() => {
         const loadData = async () => {
@@ -192,6 +196,7 @@ export default function AddDealScreen() {
                     ...DEAL_LOOKUP_TYPES.map(t => getLookups(t)),
                     getProjects(),
                     api.get("/users?limit=50"),
+                    getTeams(),
                     id ? getDealById(id) : Promise.resolve(null)
                 ]);
 
@@ -206,7 +211,10 @@ export default function AddDealScreen() {
                 const uRes = results[DEAL_LOOKUP_TYPES.length + 1];
                 setUsers(uRes?.data?.data || uRes?.records || []);
 
-                const existing = results[DEAL_LOOKUP_TYPES.length + 2];
+                const tRes = results[DEAL_LOOKUP_TYPES.length + 2];
+                setTeams(tRes?.data || tRes || []);
+
+                const existing = results[DEAL_LOOKUP_TYPES.length + 3];
                 if (existing) {
                     const d = existing.data || existing;
                     setFormData({
@@ -217,7 +225,7 @@ export default function AddDealScreen() {
                         ratePrice: String(d.ratePrice || ""),
                         dealProbability: String(d.dealProbability || "50"),
                         projectName: d.projectName || "",
-                        stage: d.stage || "open",
+                        stage: d.stage || "Open",
                     });
                 }
             } catch (e) {
@@ -478,7 +486,7 @@ export default function AddDealScreen() {
                         </View>
 
                         <FormLabel label="Property Type" />
-                        <TextInput style={[styles.input, { backgroundColor: '#F1F5F9', color: '#64748B' }]} value={formData.propertyType} editable={false} placeholder="Auto-filled from unit" />
+                        <TextInput style={[styles.input, { backgroundColor: '#F1F5F9', color: '#64748B' }]} value={getLookupValue("Property Type", formData.propertyType)} editable={false} placeholder="Auto-filled from unit" />
 
                         <View style={styles.row}>
                             <View style={{ flex: 1, marginRight: 8 }}>
@@ -661,7 +669,7 @@ export default function AddDealScreen() {
                         <FormLabel label="Team" />
                         <TouchableOpacity style={styles.pickerContainer} onPress={() => setActiveDropdown('team')}>
                             <Text style={[styles.nativeSelect, !formData.team && { color: '#94A3B8' }]}>
-                                {lookups["Team"]?.find(t => (t._id || t.id) === formData.team)?.name || "Select Team"}
+                                {teams.find(t => (t._id || t.id) === formData.team)?.name || "Select Team"}
                             </Text>
                             <Ionicons name="chevron-down" size={18} color="#64748B" style={{ position: 'absolute', right: 12 }} />
                         </TouchableOpacity>
@@ -708,7 +716,7 @@ export default function AddDealScreen() {
             <SearchableDropdown
                 visible={activeDropdown === 'team'}
                 onClose={() => setActiveDropdown(null)}
-                options={lookups["Team"]?.map(t => ({ label: t.name, value: t._id || t.id })) || []}
+                options={teams.map(t => ({ label: t.name, value: t._id || t.id }))}
                 placeholder="Select Team"
                 onSelect={val => setFormData({ ...formData, team: val, assignedTo: "" })}
             />

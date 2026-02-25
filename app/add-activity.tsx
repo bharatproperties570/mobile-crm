@@ -21,6 +21,7 @@ import { getLeadById, leadName, getLeads, type Lead } from "./services/leads.ser
 import { getDeals, getDealById } from "./services/deals.service";
 import { getContacts, getContactById, contactFullName } from "./services/contacts.service";
 import { getProjects, type Project } from "./services/projects.service";
+import { getCompanyById } from "./services/companies.service";
 import { safeApiCall, safeApiCallSingle, extractList } from "./services/api.helpers";
 
 const TYPES = ["Call", "Meeting", "Site Visit", "Task", "Email"];
@@ -33,7 +34,7 @@ const VISIT_TYPES = ["Initial Visit", "Second Visit", "Follow-up", "Booking Visi
 interface RelatedItem {
     id: string;
     name: string;
-    type: "Lead" | "Deal" | "Contact";
+    type: "Lead" | "Deal" | "Contact" | "Company";
 }
 
 export default function AddActivityScreen() {
@@ -151,6 +152,10 @@ export default function AddActivityScreen() {
             } else if (params.type === "Contact") {
                 const conRes = await getContactById(params.id);
                 if (!conRes.error && conRes.data) name = contactFullName(conRes.data);
+            } else if (params.type === "Company") {
+                const compRes = await getCompanyById(params.id);
+                if (compRes?.success && compRes.data) name = compRes.data.name;
+                else if (compRes?.name) name = compRes.name;
             }
             setSelectedEntity({ id: params.id, type: params.type as any, name });
             if (!params.subject) {

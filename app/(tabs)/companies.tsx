@@ -5,9 +5,11 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { Swipeable } from "react-native-gesture-handler";
 import { getCompanies, type Company } from "../services/companies.service";
 import { lookupVal, safeApiCall } from "../services/api.helpers";
 import { useTheme } from "../context/ThemeContext";
+import { useCallTracking } from "../context/CallTrackingContext";
 
 const RELATIONSHIP_COLORS: Record<string, string> = {
     'Developer': '#3B82F6',
@@ -18,60 +20,100 @@ const RELATIONSHIP_COLORS: Record<string, string> = {
     'Other': '#64748B'
 };
 
-function CompanyCard({ company, onPress, onMenuPress, index }: { company: Company; onPress: () => void; onMenuPress: () => void; index: number }) {
+const CompanyCard = ({ company, onPress, onMenuPress, idx }: { company: Company, onPress: () => void, onMenuPress: () => void, idx: number }) => {
     const { theme } = useTheme();
-    const industry = lookupVal(company.industry);
-    const type = company.relationshipType || 'Other';
-    const color = RELATIONSHIP_COLORS[type] || '#64748B';
-    const firstPhone = company.phones?.[0]?.phoneNumber;
+    const { trackCall } = useCallTracking();
+    const color = RELATIONSHIP_COLORS[lookupVal(company.relationshipType)] || '#64748B';
 
-    const handleCall = () => {
-        if (firstPhone) Linking.openURL(`tel:${firstPhone}`);
+    const phone = company.phones?.[0]?.phoneNumber;
+    const email = company.emails?.[0]?.address;
+
+    const fadeAnim = useRef(new Animated.Value(0)).current;
+    const scaleValue = useRef(new Animated.Value(1)).current;
+
+    useEffect(() => {
+        Animated.timing(fadeAnim, {
+            toValue: 1,
+            duration: 400,
+            delay: idx * 30,
+            useNativeDriver: true,
+        }).start();
+    }, [idx]);
+
+    const openWhatsApp = () => {
+        if (!phone) return;
+        const cleanPhone = phone.replace(/[^0-9]/g, "");
+        Linking.openURL(`whatsapp://send?phone=${cleanPhone.length === 10 ? "91" + cleanPhone : cleanPhone}`);
     };
 
+    const renderRightActions = () => (
+        <View style={styles.rightActions}>
+            <TouchableOpacity style={[styles.swipeAction, { backgroundColor: "#2563EB" }]} onPress={() => trackCall(phone || "", company._id, "Company", company.name)}>
+                <Ionicons name="call" size={20} color="#fff" />
+                <Text style={styles.swipeLabel}>Call</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.swipeAction, { backgroundColor: "#F59E0B" }]} onPress={() => phone && Linking.openURL(`sms:${phone}`)}>
+                <Ionicons name="chatbubble" size={20} color="#fff" />
+                <Text style={styles.swipeLabel}>SMS</Text>
+            </TouchableOpacity>
+        </View>
+    );
+
+    const renderLeftActions = () => (
+        <View style={styles.leftActions}>
+            <TouchableOpacity style={[styles.swipeAction, { backgroundColor: "#10B981" }]} onPress={openWhatsApp}>
+                <Ionicons name="logo-whatsapp" size={20} color="#fff" />
+                <Text style={styles.swipeLabel}>WhatsApp</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.swipeAction, { backgroundColor: "#6366F1" }]} onPress={() => email && Linking.openURL(`mailto:${email}`)}>
+                <Ionicons name="mail" size={20} color="#fff" />
+                <Text style={styles.swipeLabel}>Email</Text>
+            </TouchableOpacity>
+        </View>
+    );
+
+    const onPressIn = () => Animated.spring(scaleValue, { toValue: 0.98, useNativeDriver: true }).start();
+    const onPressOut = () => Animated.spring(scaleValue, { toValue: 1, useNativeDriver: true }).start();
+
     return (
-        <Animated.View style={{ opacity: 1 }}>
-            <TouchableOpacity
-                style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}
-                onPress={onPress}
-                activeOpacity={0.8}
-            >
-                <View style={styles.cardHeader}>
-                    <View style={[styles.avatar, { backgroundColor: color + "15" }]}>
-                        <Text style={[styles.avatarText, { color: color }]}>{company.name.charAt(0).toUpperCase()}</Text>
+        <Swipeable renderRightActions={renderRightActions} renderLeftActions={renderLeftActions}>
+            <Animated.View style={{ opacity: fadeAnim, transform: [{ scale: scaleValue }, { translateY: fadeAnim.interpolate({ inputRange: [0, 1], outputRange: [20, 0] }) }] }}>
+                <TouchableOpacity activeOpacity={1} onPressIn={onPressIn} onPressOut={onPressOut} onPress={onPress} style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                    <View style={styles.cardHeader}>
+                        <View style={[styles.typeBadge, { backgroundColor: color + '15' }]}>
+                            <Text style={[styles.typeText, { color }]}>{lookupVal(company.relationshipType)?.toUpperCase()}</Text>
+                        </View>
+                        <TouchableOpacity style={styles.menuTrigger} onPress={(e) => { e.stopPropagation(); onMenuPress(); }}>
+                            <Ionicons name="ellipsis-vertical" size={18} color={theme.textLight} />
+                        </TouchableOpacity>
                     </View>
-                    <View style={styles.headerInfo}>
-                        <Text style={[styles.companyName, { color: theme.text }]} numberOfLines={1}>{company.name}</Text>
-                        <View style={styles.row}>
-                            <View style={[styles.typeBadge, { backgroundColor: color + "10" }]}>
-                                <Text style={[styles.typeText, { color: color }]}>{type.toUpperCase()}</Text>
-                            </View>
-                            <Text style={[styles.industryText, { color: theme.textLight }]}>{industry}</Text>
+
+                    <Text style={[styles.companyName, { color: theme.text }]} numberOfLines={1}>{company.name}</Text>
+
+                    <View style={styles.statsRow}>
+                        <View style={styles.stat}>
+                            <Ionicons name="people-outline" size={14} color={theme.textLight} />
+                            <Text style={[styles.statText, { color: theme.textLight }]}>{(company as any).employeeCount || 0} Employees</Text>
+                        </View>
+                        <View style={styles.stat}>
+                            <Ionicons name="business-outline" size={14} color={theme.textLight} />
+                            <Text style={[styles.statText, { color: theme.textLight }]}>{lookupVal((company as any).category)}</Text>
                         </View>
                     </View>
-                    <TouchableOpacity style={styles.menuTrigger} onPress={(e) => { e.stopPropagation(); onMenuPress(); }}>
-                        <Ionicons name="ellipsis-vertical" size={18} color="#94A3B8" />
-                    </TouchableOpacity>
-                </View>
 
-                <View style={[styles.divider, { backgroundColor: theme.border }]} />
-
-                <View style={styles.footer}>
-                    <View style={styles.meta}>
-                        <Ionicons name="mail-outline" size={14} color={theme.textLight} />
-                        <Text style={[styles.metaText, { color: theme.textLight }]} numberOfLines={1}>{company.emails?.[0]?.address || "No Email Registered"}</Text>
-                    </View>
-                    {company.isPreferredPartner && (
-                        <View style={[styles.preferredBadge, { backgroundColor: "#FFFBEB" }]}>
-                            <Ionicons name="star" size={10} color="#F59E0B" />
-                            <Text style={styles.preferredText}>PREFERRED</Text>
+                    {(company as any).addresses && (company as any).addresses.registeredOffice && (
+                        <View style={styles.locationRow}>
+                            <Ionicons name="location-outline" size={14} color={theme.primary} />
+                            <Text style={[styles.locationText, { color: theme.textLight }]} numberOfLines={1}>
+                                {lookupVal((company as any).addresses.registeredOffice.city)}, {lookupVal((company as any).addresses.registeredOffice.state)}
+                            </Text>
                         </View>
                     )}
-                </View>
-            </TouchableOpacity>
-        </Animated.View>
+                </TouchableOpacity>
+            </Animated.View>
+        </Swipeable>
     );
-}
+};
 
 export default function CompaniesScreen() {
     const { theme } = useTheme();
@@ -179,10 +221,10 @@ export default function CompaniesScreen() {
                 <FlatList
                     data={filtered}
                     keyExtractor={(item) => item._id}
-                    renderItem={({ item, index }) => (
+                    renderItem={({ item, index: idx }) => (
                         <CompanyCard
                             company={item}
-                            index={index}
+                            idx={idx}
                             onPress={() => router.push(`/company/${item._id}`)}
                             onMenuPress={() => openHub(item)}
                         />
@@ -222,25 +264,12 @@ export default function CompaniesScreen() {
                             </TouchableOpacity >
 
                             <TouchableOpacity style={styles.actionItem} onPress={() => {
-                                const phone = selectedCompany?.phones?.[0]?.phoneNumber;
-                                if (phone) Linking.openURL(`tel:${phone}`);
-                                closeHub();
+                                router.push(`/add-employee?companyId=${selectedCompany?._id}`); closeHub();
                             }}>
-                                <View style={[styles.actionIcon, { backgroundColor: "#EFF6FF" }]}>
-                                    <Ionicons name="call" size={24} color="#3B82F6" />
+                                <View style={[styles.actionIcon, { backgroundColor: "#F5F3FF" }]}>
+                                    <Ionicons name="person-add" size={24} color="#7C3AED" />
                                 </View>
-                                <Text style={styles.actionLabel}>Call</Text>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity style={styles.actionItem} onPress={() => {
-                                const email = selectedCompany?.emails?.[0]?.address;
-                                if (email) Linking.openURL(`mailto:${email}`);
-                                closeHub();
-                            }}>
-                                <View style={[styles.actionIcon, { backgroundColor: "#EEF2FF" }]}>
-                                    <Ionicons name="mail" size={24} color="#4F46E5" />
-                                </View>
-                                <Text style={styles.actionLabel}>Email</Text>
+                                <Text style={styles.actionLabel}>Add Employee</Text>
                             </TouchableOpacity>
 
                             <TouchableOpacity style={styles.actionItem} onPress={() => {
@@ -295,32 +324,24 @@ const styles = StyleSheet.create({
     list: { paddingBottom: 100 },
     card: {
         marginHorizontal: 16, marginBottom: 14, padding: 16, borderRadius: 24,
-        borderWidth: 1, shadowColor: "#000", shadowOpacity: 0.02, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }
+        borderWidth: 1
     },
-    cardHeader: { flexDirection: "row", alignItems: "center", marginBottom: 14 },
-    avatar: {
-        width: 44, height: 44, borderRadius: 12,
-        justifyContent: "center", alignItems: "center"
-    },
-    avatarText: { fontSize: 18, fontWeight: "900" },
-    headerInfo: { flex: 1, marginLeft: 12 },
-    companyName: { fontSize: 17, fontWeight: "800" },
-    row: { flexDirection: "row", alignItems: "center", marginTop: 4, gap: 8 },
+    cardHeader: { flexDirection: "row", alignItems: "center", marginBottom: 14, justifyContent: 'space-between' },
+    companyName: { fontSize: 17, fontWeight: "800", marginBottom: 10 },
     typeBadge: { paddingHorizontal: 10, paddingVertical: 3, borderRadius: 8 },
     typeText: { fontSize: 10, fontWeight: "900", letterSpacing: 0.5 },
-    industryText: { fontSize: 12, fontWeight: "600" },
-    callBtn: { width: 36, height: 36, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
-    divider: { height: 1, marginBottom: 14 },
-    footer: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-    meta: { flexDirection: "row", alignItems: "center", gap: 8, flex: 1 },
-    metaText: { fontSize: 12, fontWeight: "600" },
-    preferredBadge: {
-        flexDirection: "row", alignItems: "center", gap: 4,
-        paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10
-    },
-    preferredText: { fontSize: 10, fontWeight: "900", color: "#B45309" },
+    statsRow: { flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 10 },
+    stat: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    statText: { fontSize: 12, fontWeight: '600' },
+    locationRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    locationText: { fontSize: 12, fontWeight: '600', flex: 1 },
     empty: { alignItems: "center", marginTop: 120, paddingHorizontal: 40 },
-    emptyText: { marginTop: 16, fontSize: 15, fontWeight: "700", textAlign: 'center' },
+    emptyText: { textAlign: 'center', marginTop: 100, fontSize: 16 },
+
+    rightActions: { flexDirection: 'row', width: 140 },
+    leftActions: { flexDirection: 'row', width: 140 },
+    swipeAction: { flex: 1, justifyContent: 'center', alignItems: 'center', marginBottom: 16 },
+    swipeLabel: { color: '#fff', fontSize: 10, fontWeight: '700', marginTop: 4 },
 
     // Action Hub Styles
     menuTrigger: { padding: 8, marginRight: -8 },

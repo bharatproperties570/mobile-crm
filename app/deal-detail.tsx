@@ -15,7 +15,7 @@ import { useLookup } from "./context/LookupContext";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
-const TABS = ["Details", "Financial", "Activities", "Match", "Owner"];
+const TABS = ["Financial", "Details", "Location", "Activities", "Match", "Owner"];
 
 function fmt(amount?: number): string {
     if (!amount) return "—";
@@ -89,6 +89,7 @@ export default function DealDetailScreen() {
     const router = useRouter();
     const { theme } = useTheme();
     const { trackCall } = useCallTracking();
+    const { getLookupValue } = useLookup();
     const [deal, setDeal] = useState<any>(null);
     const [activities, setActivities] = useState<any[]>([]);
     const [matchingLeads, setMatchingLeads] = useState<any[]>([]);
@@ -103,16 +104,18 @@ export default function DealDetailScreen() {
     const fetchData = useCallback(async () => {
         if (!id) return;
         try {
-            const [dealRes, actRes, matchRes] = await Promise.all([
-                getDealById(id as string),
+            const dealRes = await getDealById(id as string).catch(e => { console.error("Deal fetch error:", e); return null; });
+            const currentDeal = dealRes?.data ?? dealRes?.deal ?? dealRes;
+            setDeal(currentDeal);
+
+            // Fetch other data in parallel
+            Promise.all([
                 getActivities({ entityId: id, limit: 20 }),
                 getMatchingLeads(id as string)
-            ]);
-
-            const currentDeal = dealRes?.data?.deal || dealRes?.data || dealRes;
-            setDeal(currentDeal);
-            setActivities(Array.isArray(actRes?.data) ? actRes.data : (Array.isArray(actRes) ? actRes : []));
-            setMatchingLeads(Array.isArray(matchRes?.data) ? matchRes.data : (Array.isArray(matchRes) ? matchRes : []));
+            ]).then(([actRes, matchRes]) => {
+                setActivities(Array.isArray(actRes?.data) ? actRes.data : (Array.isArray(actRes) ? actRes : []));
+                setMatchingLeads(Array.isArray(matchRes?.data) ? matchRes.data : (Array.isArray(matchRes) ? matchRes : []));
+            }).catch(e => console.error("Suppplementary fetch error:", e));
 
             Animated.timing(fadeAnim, { toValue: 1, duration: 600, useNativeDriver: true }).start();
         } catch (error) {
@@ -165,7 +168,11 @@ export default function DealDetailScreen() {
             {/* Premium SaaS Header */}
             <SafeAreaView style={[styles.headerCard, { backgroundColor: theme.card }]}>
                 <View style={styles.headerTop}>
-                    <TouchableOpacity onPress={() => router.back()} style={styles.backBtnCircle}>
+                    <TouchableOpacity
+                        onPress={() => router.canGoBack() ? router.back() : router.push("/(tabs)/deals")}
+                        style={styles.backBtnCircle}
+                        hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
+                    >
                         <Ionicons name="chevron-back" size={22} color={theme.text} />
                     </TouchableOpacity>
                     <View style={styles.headerTitleContainer}>
@@ -188,11 +195,15 @@ export default function DealDetailScreen() {
                             )}
                         </View>
                     </View>
-                    <View style={styles.scoreContainer}>
-                        <View style={[styles.scoreRing, { borderColor: score.color + '40' }]}>
-                            <Text style={[styles.scoreValue, { color: score.color }]}>{score.val}</Text>
-                            <Text style={[styles.scoreLabel, { color: theme.textLight }]}>CONF.</Text>
-                        </View>
+                    <TouchableOpacity
+                        style={[styles.smallHeaderShare, { marginRight: 8 }]}
+                        onPress={() => router.push(`/add-activity?id=${id}&type=Deal`)}
+                    >
+                        <Ionicons name="calendar-outline" size={18} color={theme.primary} />
+                    </TouchableOpacity>
+                    <View style={[styles.scoreRing, { borderColor: score.color + '40' }]}>
+                        <Text style={[styles.scoreValue, { color: score.color }]}>{score.val}</Text>
+                        <Text style={[styles.scoreLabel, { color: theme.textLight }]}>CONF.</Text>
                     </View>
                 </View>
 
@@ -247,7 +258,7 @@ export default function DealDetailScreen() {
                         { icon: 'chatbubble-ellipses', color: '#3B82F6', onPress: () => Linking.openURL(`sms:${buyerPhone.replace(/\D/g, "")}`) },
                         { icon: 'logo-whatsapp', color: '#128C7E', onPress: () => Linking.openURL(`https://wa.me/${buyerPhone.replace(/\D/g, "")}`) },
                         { icon: 'mail', color: '#EA4335', onPress: () => Linking.openURL(`mailto:${buyerEmail}`) },
-                        { icon: 'calendar', color: '#6366F1', onPress: () => router.push(`/add-activity?id=${id}&type=Deal`) },
+                        { icon: 'share-social', color: '#6366F1', onPress: () => Alert.alert("Share Wall", `Sharing details for Deal ${unitNo} at ${projectName}`) },
                     ].map((action, i) => (
                         <TouchableOpacity key={i} style={[styles.modernHubBtn, { backgroundColor: action.color }]} onPress={action.onPress}>
                             <Ionicons name={action.icon as any} size={20} color="#fff" />
@@ -285,35 +296,7 @@ export default function DealDetailScreen() {
                 onMomentumScrollEnd={onScroll}
                 style={{ flex: 1 }}
             >
-                {/* 1. Details */}
-                <View style={styles.tabContent}>
-                    <ScrollView contentContainerStyle={styles.innerScroll}>
-                        {/* AI Insight Card */}
-                        <View style={[styles.insightCard, { backgroundColor: theme.primary + '08', borderColor: theme.primary + '20' }]}>
-                            <View style={[styles.insightIconBox, { backgroundColor: theme.primary + '20' }]}>
-                                <Ionicons name="sparkles-outline" size={16} color={theme.primary} />
-                            </View>
-                            <Text style={[styles.insightText, { color: theme.text }]}>{getDealInsight(deal, activities)}</Text>
-                        </View>
-
-                        <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-                            <Text style={[styles.cardTitle, { color: theme.text }]}>Property Configuration</Text>
-                            <InfoRow label="Category" value={lv(deal.category || deal.inventoryId?.category)} icon="list-outline" />
-                            <InfoRow label="Sub-Category" value={lv(deal.subCategory || deal.inventoryId?.subCategory)} icon="layers-outline" />
-                            <InfoRow label="Orientation" value={lv(deal.orientation || deal.inventoryId?.orientation)} icon="compass-outline" />
-                            <InfoRow label="Built-up Details" value={lv(deal.builtupDetails || deal.inventoryId?.builtupDetails)} icon="construct-outline" />
-                        </View>
-
-                        <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-                            <Text style={[styles.cardTitle, { color: theme.text }]}>Property Size</Text>
-                            <InfoRow label="Length" value={lv(deal.length || deal.inventoryId?.length)} icon="resize-outline" />
-                            <InfoRow label="Width" value={lv(deal.width || deal.inventoryId?.width)} icon="resize-outline" />
-                            <InfoRow label="Total Size" value={deal.size || deal.inventoryId?.size ? `${deal.size || deal.inventoryId?.size} ${deal.sizeUnit || deal.inventoryId?.sizeUnit || ""}` : "—"} icon="cube-outline" accent />
-                        </View>
-                    </ScrollView>
-                </View>
-
-                {/* 2. Financial */}
+                {/* 1. Financial */}
                 <View style={styles.tabContent}>
                     <ScrollView contentContainerStyle={styles.innerScroll}>
                         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
@@ -340,7 +323,92 @@ export default function DealDetailScreen() {
                     </ScrollView>
                 </View>
 
-                {/* 3. Activities */}
+                {/* 2. Details */}
+                <View style={styles.tabContent}>
+                    <ScrollView contentContainerStyle={styles.innerScroll}>
+                        {/* AI Insight Card */}
+                        <View style={[styles.insightCard, { backgroundColor: theme.primary + '08', borderColor: theme.primary + '20' }]}>
+                            <View style={[styles.insightIconBox, { backgroundColor: theme.primary + '20' }]}>
+                                <Ionicons name="sparkles-outline" size={16} color={theme.primary} />
+                            </View>
+                            <Text style={[styles.insightText, { color: theme.text }]}>{getDealInsight(deal, activities)}</Text>
+                        </View>
+
+                        <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                            <Text style={[styles.cardTitle, { color: theme.text }]}>Property Configuration</Text>
+                            <InfoRow label="Category" value={lv(deal.category || deal.inventoryId?.category)} icon="list-outline" />
+                            <InfoRow label="Sub-Category" value={lv(deal.subCategory || deal.inventoryId?.subCategory)} icon="layers-outline" />
+                            <InfoRow label="Direction" value={lv(deal.direction || deal.inventoryId?.direction)} icon="compass-outline" />
+                            <InfoRow label="Facing" value={lv(deal.facing || deal.inventoryId?.facing)} icon="navigate-outline" />
+                            <InfoRow label="Road" value={lv(deal.roadWidth || deal.inventoryId?.roadWidth)} icon="trail-sign-outline" />
+                            <InfoRow label="Ownership" value={lv(deal.ownership || deal.inventoryId?.ownership)} icon="document-text-outline" />
+                        </View>
+
+                        <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                            <Text style={[styles.cardTitle, { color: theme.text }]}>Size & Dimensions</Text>
+                            <InfoRow label="Size Label" value={deal.size || deal.inventoryId?.size ? `${deal.size || deal.inventoryId?.size} ${deal.sizeUnit || deal.inventoryId?.sizeUnit || ""}` : "—"} icon="cube-outline" accent />
+                            <InfoRow label="Width" value={lv(deal.width || deal.inventoryId?.width || deal.inventoryId?.dimensions?.split('x')?.[0]?.trim())} icon="resize-outline" />
+                            <InfoRow label="Length" value={lv(deal.length || deal.inventoryId?.length || deal.inventoryId?.dimensions?.split('x')?.[1]?.trim())} icon="resize-outline" />
+                        </View>
+
+                        {deal.inventoryId?.builtupDetails?.length > 0 && (
+                            <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                                <Text style={[styles.cardTitle, { color: theme.text }]}>Built-up Details</Text>
+                                {deal.inventoryId.builtupDetails.map((item: any, idx: number) => (
+                                    <View key={idx} style={{ paddingVertical: 8, borderBottomWidth: idx === deal.inventoryId.builtupDetails.length - 1 ? 0 : 1, borderBottomColor: theme.border }}>
+                                        <Text style={{ fontSize: 13, fontWeight: '700', color: theme.text }}>{item.floor || "Floor"}</Text>
+                                        <Text style={{ fontSize: 12, color: theme.textLight }}>{item.width} x {item.length} = {item.totalArea} SqFt</Text>
+                                    </View>
+                                ))}
+                            </View>
+                        )}
+
+                        <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                            <Text style={[styles.cardTitle, { color: theme.text }]}>Furnishing & Status</Text>
+                            <InfoRow label="Furnish Type" value={lv(deal.furnishType || deal.inventoryId?.furnishType)} icon="bed-outline" />
+                            <InfoRow label="Furnished Items" value={lv(deal.furnishedItems || deal.inventoryId?.furnishedItems)} icon="apps-outline" />
+                            <InfoRow label="Possession" value={lv(deal.possessionStatus || deal.inventoryId?.possessionStatus)} icon="key-outline" />
+                        </View>
+                    </ScrollView>
+                </View>
+
+                {/* 3. Location */}
+                <View style={styles.tabContent}>
+                    <ScrollView contentContainerStyle={styles.innerScroll}>
+                        <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                            <Text style={[styles.cardTitle, { color: theme.text }]}>Property Location</Text>
+                            <InfoRow label="City" value={lv(deal.city || deal.inventoryId?.city || deal.inventoryId?.address?.city)} icon="business-outline" />
+                            <InfoRow label="Sector/Locality" value={lv(deal.sector || deal.inventoryId?.sector || deal.inventoryId?.address?.locality)} icon="map-outline" />
+                            <InfoRow label="Address" value={lv(deal.address || deal.inventoryId?.address?.street || deal.inventoryId?.address?.hNo)} icon="location-outline" />
+                            <InfoRow label="Tehsil" value={lv(deal.inventoryId?.address?.tehsil)} icon="trail-sign-outline" />
+                            <InfoRow label="ZIP Code" value={lv(deal.inventoryId?.address?.pinCode || deal.inventoryId?.address?.zip)} icon="mail-unread-outline" />
+                        </View>
+
+                        {(deal.inventoryId?.address?.lat || deal.inventoryId?.latitude) && (
+                            <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                                <Text style={[styles.cardTitle, { color: theme.text }]}>Coordinates</Text>
+                                <InfoRow label="Latitude" value={lv(deal.inventoryId?.address?.lat || deal.inventoryId?.latitude)} icon="navigate-outline" />
+                                <InfoRow label="Longitude" value={lv(deal.inventoryId?.address?.lng || deal.inventoryId?.longitude)} icon="navigate-circle-outline" />
+
+                                <TouchableOpacity
+                                    style={[styles.googleMapsBtn, { backgroundColor: theme.primary }]}
+                                    onPress={() => {
+                                        const lat = deal.inventoryId?.address?.lat || deal.inventoryId?.latitude;
+                                        const lng = deal.inventoryId?.address?.lng || deal.inventoryId?.longitude;
+                                        const label = `${unitNo}, ${projectName}`;
+                                        const url = `geo:${lat},${lng}?q=${lat},${lng}(${label})`;
+                                        Linking.openURL(url);
+                                    }}
+                                >
+                                    <Ionicons name="map" size={18} color="#fff" />
+                                    <Text style={styles.googleMapsBtnText}>Open in Google Maps</Text>
+                                </TouchableOpacity>
+                            </View>
+                        )}
+                    </ScrollView>
+                </View>
+
+                {/* 4. Activities */}
                 <View style={styles.tabContent}>
                     <ScrollView contentContainerStyle={styles.innerScroll}>
                         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
@@ -371,7 +439,7 @@ export default function DealDetailScreen() {
                     </ScrollView>
                 </View>
 
-                {/* 4. Match */}
+                {/* 5. Match */}
                 <View style={styles.tabContent}>
                     <ScrollView contentContainerStyle={styles.innerScroll}>
                         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
@@ -397,44 +465,57 @@ export default function DealDetailScreen() {
                     </ScrollView>
                 </View>
 
-                {/* 5. Owner */}
+                {/* 6. Owner */}
                 <View style={styles.tabContent}>
                     <ScrollView contentContainerStyle={styles.innerScroll}>
+                        {/* Owners Section */}
                         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-                            <Text style={[styles.cardTitle, { color: theme.text }]}>Associated Parties</Text>
-                            {/* Buyer Party */}
-                            <TouchableOpacity style={[styles.partyCard, { backgroundColor: theme.background }]} onPress={() => {
-                                const buyerId = deal.partyStructure?.buyer?._id || deal.owner?._id;
-                                if (buyerId) router.push(`/contact-detail?id=${buyerId}`);
-                            }}>
-                                <View style={styles.matchLeft}>
-                                    <Text style={[styles.matchUnit, { color: theme.text }]}>{buyer}</Text>
-                                    <Text style={[styles.matchProject, { color: theme.textLight }]}>Buyer / Primary Contact</Text>
-                                </View>
-                                <View style={[styles.relationBadge, { backgroundColor: '#10B981' + '10' }]}>
-                                    <Text style={{ fontSize: 10, color: '#10B981', fontWeight: '700' }}>BUYER</Text>
-                                </View>
-                            </TouchableOpacity>
+                            <Text style={[styles.cardTitle, { color: theme.text }]}>Property Owners</Text>
+                            {(!deal.inventoryId?.owners || deal.inventoryId.owners.length === 0) ? (
+                                <Text style={styles.emptyText}>No owners linked to this property.</Text>
+                            ) : (
+                                deal.inventoryId.owners.map((owner: any, idx: number) => (
+                                    <View key={idx} style={{ marginBottom: 12 }}>
+                                        <TouchableOpacity
+                                            style={[styles.partyCard, { backgroundColor: theme.background }]}
+                                            onPress={() => owner._id && router.push(`/contact-detail?id=${owner._id}`)}
+                                        >
+                                            <View style={styles.matchLeft}>
+                                                <Text style={[styles.matchUnit, { color: theme.text }]}>{lv(owner)}</Text>
+                                                <Text style={[styles.matchProject, { color: theme.textLight }]}>{owner.phones?.[0]?.number || owner.mobile || "N/A"}</Text>
+                                            </View>
+                                            <View style={[styles.relationBadge, { backgroundColor: '#10B981' + '10' }]}>
+                                                <Text style={{ fontSize: 10, color: '#10B981', fontWeight: '700' }}>OWNER</Text>
+                                            </View>
+                                        </TouchableOpacity>
+                                    </View>
+                                ))
+                            )}
+                        </View>
 
-                            {/* Associate RM */}
-                            <View style={[styles.partyCard, { backgroundColor: theme.background, marginTop: 12 }]}>
-                                <View style={styles.matchLeft}>
-                                    <Text style={[styles.matchUnit, { color: theme.text }]}>{lv(deal.assignedTo?.name || deal.assignedTo?.fullName || deal.assignedTo)}</Text>
-                                    <Text style={[styles.matchProject, { color: theme.textLight }]}>Assigned Relationship Manager</Text>
-                                </View>
-                                <View style={[styles.relationBadge, { backgroundColor: theme.primary + '10' }]}>
-                                    <Text style={{ fontSize: 10, color: theme.primary, fontWeight: '700' }}>RM</Text>
-                                </View>
+                        {/* Associates Section */}
+                        {deal.inventoryId?.associates?.length > 0 && (
+                            <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                                <Text style={[styles.cardTitle, { color: theme.text }]}>Property Associates</Text>
+                                {deal.inventoryId.associates.map((assoc: any, idx: number) => (
+                                    <View key={idx} style={{ marginBottom: 12 }}>
+                                        <TouchableOpacity
+                                            style={[styles.partyCard, { backgroundColor: theme.background }]}
+                                            onPress={() => assoc._id && router.push(`/contact-detail?id=${assoc._id}`)}
+                                        >
+                                            <View style={styles.matchLeft}>
+                                                <Text style={[styles.matchUnit, { color: theme.text }]}>{lv(assoc)}</Text>
+                                                <Text style={[styles.matchProject, { color: theme.textLight }]}>{assoc.phones?.[0]?.number || assoc.mobile || "N/A"}</Text>
+                                            </View>
+                                            <View style={[styles.relationBadge, { backgroundColor: theme.primary + '10' }]}>
+                                                <Text style={{ fontSize: 10, color: theme.primary, fontWeight: '700' }}>ASSOCIATE</Text>
+                                            </View>
+                                        </TouchableOpacity>
+                                    </View>
+                                ))}
                             </View>
-                        </View>
+                        )}
 
-                        <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-                            <Text style={[styles.cardTitle, { color: theme.text }]}>System Info</Text>
-                            <InfoRow label="Deal ID" value={deal.dealId} icon="finger-print-outline" />
-                            <InfoRow label="Created By" value={lv(deal.owner?.name || deal.owner)} icon="shield-checkmark-outline" />
-                            <InfoRow label="Visible To" value={lv(deal.visibleTo)} icon="eye-outline" />
-                            <InfoRow label="Created On" value={new Date(deal.createdAt).toLocaleDateString()} icon="calendar-outline" />
-                        </View>
                     </ScrollView>
                 </View>
             </ScrollView>
@@ -458,10 +539,11 @@ const styles = StyleSheet.create({
     miniBadgeText: { fontSize: 10, fontWeight: '800' },
 
     // Score/Insight Ring
-    scoreContainer: { width: 50, height: 50 },
+    scoreContainer: { width: 90, alignItems: 'center', flexDirection: 'row', gap: 10, justifyContent: 'flex-end' },
     scoreRing: { width: 50, height: 50, borderRadius: 25, borderWidth: 3, alignItems: 'center', justifyContent: 'center' },
     scoreValue: { fontSize: 16, fontWeight: '900' },
     scoreLabel: { fontSize: 7, fontWeight: '800', marginTop: -2 },
+    smallHeaderShare: { width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(0,0,0,0.03)', alignItems: 'center', justifyContent: 'center' },
 
     // Strategy Bar
     strategyBar: { flexDirection: 'row', borderTopWidth: 1, borderBottomWidth: 1, paddingVertical: 12, marginHorizontal: 20 },
@@ -477,8 +559,8 @@ const styles = StyleSheet.create({
     marketingText: { fontSize: 11, fontWeight: '800' },
 
     // Modern Action Hub
-    modernActionHub: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 25, paddingVertical: 15 },
-    modernHubBtn: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', shadowColor: "#000", shadowOpacity: 0.2, shadowRadius: 5, elevation: 4 },
+    modernActionHub: { flexDirection: 'row', justifyContent: 'center', gap: 20, paddingVertical: 15 },
+    modernHubBtn: { width: 50, height: 50, borderRadius: 25, justifyContent: 'center', alignItems: 'center', elevation: 8, shadowOpacity: 0.3, shadowRadius: 10 },
 
     // Tabs
     tabsScroll: { paddingHorizontal: 20, gap: 25 },
@@ -519,4 +601,6 @@ const styles = StyleSheet.create({
     matchProject: { fontSize: 12, fontWeight: '600' },
     matchRight: { alignItems: 'flex-end' },
     relationBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 },
+    googleMapsBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 12, borderRadius: 14, marginTop: 15 },
+    googleMapsBtnText: { color: '#fff', fontSize: 14, fontWeight: '800' },
 });

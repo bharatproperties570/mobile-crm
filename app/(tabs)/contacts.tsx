@@ -351,62 +351,21 @@ export default function ContactsScreen() {
                             </TouchableOpacity >
 
                             <TouchableOpacity style={styles.actionItem} onPress={() => {
-                                if (selectedContact) {
-                                    const phone = contactPhone(selectedContact);
-                                    if (phone) {
-                                        const { trackCall } = useCallTracking(); // This might be tricky if not in scope, but hook is used in screen
-                                        // Wait, trackCall is in the screen context
-                                        Alert.alert("Call", `Dialing ${phone}...`);
-                                    }
-                                }
-                                closeHub();
+                                router.push(`/add-document?contactId=${selectedContact?._id}`); closeHub();
                             }}>
-                                <View style={[styles.actionIcon, { backgroundColor: "#EFF6FF" }]}>
-                                    <Ionicons name="call" size={24} color="#3B82F6" />
+                                <View style={[styles.actionIcon, { backgroundColor: "#F0F9FF" }]}>
+                                    <Ionicons name="document-attach" size={24} color="#0EA5E9" />
                                 </View>
-                                <Text style={styles.actionLabel}>Call</Text>
+                                <Text style={styles.actionLabel}>Document</Text>
                             </TouchableOpacity>
 
                             <TouchableOpacity style={styles.actionItem} onPress={() => {
-                                if (selectedContact) {
-                                    const phone = contactPhone(selectedContact);
-                                    if (phone) {
-                                        const cleanPhone = phone.replace(/[^0-9]/g, "");
-                                        Linking.openURL(`whatsapp://send?phone=${cleanPhone.length === 10 ? "91" + cleanPhone : cleanPhone}`);
-                                    }
-                                }
-                                closeHub();
+                                router.push(`/sequences?id=${selectedContact?._id}`); closeHub();
                             }}>
-                                <View style={[styles.actionIcon, { backgroundColor: "#F0FDF4" }]}>
-                                    <Ionicons name="logo-whatsapp" size={24} color="#10B981" />
+                                <View style={[styles.actionIcon, { backgroundColor: "#F5F3FF" }]}>
+                                    <Ionicons name="repeat" size={24} color="#8B5CF6" />
                                 </View>
-                                <Text style={styles.actionLabel}>WhatsApp</Text>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity style={styles.actionItem} onPress={() => {
-                                if (selectedContact) {
-                                    const phone = contactPhone(selectedContact);
-                                    if (phone) Linking.openURL(`sms:${phone}`);
-                                }
-                                closeHub();
-                            }}>
-                                <View style={[styles.actionIcon, { backgroundColor: "#FFF7ED" }]}>
-                                    <Ionicons name="chatbubble" size={24} color="#EA580C" />
-                                </View>
-                                <Text style={styles.actionLabel}>SMS</Text>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity style={styles.actionItem} onPress={() => {
-                                if (selectedContact) {
-                                    const email = contactEmail(selectedContact);
-                                    if (email) Linking.openURL(`mailto:${email}`);
-                                }
-                                closeHub();
-                            }}>
-                                <View style={[styles.actionIcon, { backgroundColor: "#EEF2FF" }]}>
-                                    <Ionicons name="mail" size={24} color="#4F46E5" />
-                                </View>
-                                <Text style={styles.actionLabel}>Email</Text>
+                                <Text style={styles.actionLabel}>Sequence</Text>
                             </TouchableOpacity>
 
                             <TouchableOpacity style={styles.actionItem} onPress={() => {

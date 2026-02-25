@@ -11,6 +11,9 @@ import { lookupVal, safeApiCall } from "./services/api.helpers";
 
 function lv(field: unknown): string {
     if (!field) return "—";
+    if (Array.isArray(field)) {
+        return field.map(item => lv(item)).filter(v => v !== "—").join(", ") || "—";
+    }
     if (typeof field === "object" && field !== null) {
         if ("lookup_value" in field) return (field as any).lookup_value ?? "—";
         if ("fullName" in field) return (field as any).fullName ?? "—";
@@ -156,6 +159,7 @@ export default function ProjectDetailScreen() {
                             <InfoRow label="Sub-Category" value={lookupVal(project.subCategory)} icon="list-outline" />
                             <InfoRow label="Land Area" value={project.landArea ? `${project.landArea} ${project.landAreaUnit}` : "—"} icon="resize-outline" />
                             <InfoRow label="City" value={project.address?.city} icon="location-outline" />
+                            <InfoRow label="Team" value={lv(project.team)} icon="people-outline" />
                         </View>
 
                         {project.blocks && project.blocks.length > 0 && (

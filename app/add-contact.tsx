@@ -4,7 +4,7 @@ import {
     ScrollView, ActivityIndicator, Alert, KeyboardAvoidingView, Platform, SafeAreaView,
     Animated, Pressable, Modal, FlatList
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import api from "./services/api";
 import { useTheme, SPACING } from "./context/ThemeContext";
@@ -189,6 +189,7 @@ const INITIAL: ContactForm = {
 };
 
 export default function AddContactScreen() {
+    const { id, companyId } = useLocalSearchParams<{ id?: string, companyId?: string }>();
     const router = useRouter();
     const { theme } = useTheme();
     const [saving, setSaving] = useState(false);
@@ -249,6 +250,7 @@ export default function AddContactScreen() {
                 description: form.description || undefined,
                 source: resolveId('Source', form.source),
                 tags: form.tags ? [form.tags] : undefined,
+                company: companyId || undefined,
             };
 
             const res = await api.post("/contacts", payload);

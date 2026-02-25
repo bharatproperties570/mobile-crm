@@ -15,7 +15,7 @@ import { useLookup } from "./context/LookupContext";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
-const TABS = ["Details", "Activities", "Inventory"];
+const TABS = ["Details", "Activities", "Inventory", "Documents"];
 
 function lv(field: unknown): string {
     if (!field) return "—";
@@ -187,11 +187,11 @@ export default function ContactDetailScreen() {
                     <View style={[styles.strategyDivider, { backgroundColor: theme.border }]} />
 
                     <View style={styles.strategyBlock}>
-                        <Text style={[styles.strategyLabel, { color: theme.textLight }]}>ACTIVITIES</Text>
+                        <Text style={[styles.strategyLabel, { color: theme.textLight }]}>TEAM</Text>
                         <View style={styles.strategyValueRow}>
-                            <Ionicons name="analytics-outline" size={14} color="#6366F1" />
-                            <Text style={[styles.strategyValue, { color: theme.text }]}>
-                                {activities.length} Tracked
+                            <Ionicons name="people-outline" size={14} color="#6366F1" />
+                            <Text style={[styles.strategyValue, { color: theme.text }]} numberOfLines={1}>
+                                {lv(contact.team)}
                             </Text>
                         </View>
                     </View>
@@ -373,6 +373,68 @@ export default function ContactDetailScreen() {
                         </View>
                     </ScrollView>
                 </View>
+
+                {/* 4. Documents */}
+                <View style={styles.tabContent}>
+                    <ScrollView contentContainerStyle={styles.innerScroll}>
+                        <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                            <View style={styles.sectionHeader}>
+                                <Text style={[styles.cardTitle, { color: theme.text, marginBottom: 0 }]}>Contact Documents</Text>
+                                <TouchableOpacity onPress={() => router.push(`/add-document?id=${id}&type=Contact`)}>
+                                    <Text style={{ color: theme.primary, fontWeight: '700' }}>+ Add</Text>
+                                </TouchableOpacity>
+                            </View>
+                            {(() => {
+                                // Aggregate Contact Docs + Inventory Docs
+                                const contactDocs = Array.isArray(contact.documents) ? contact.documents : [];
+                                const invDocs = ownedInventory.reduce((acc: any[], inv: any) => {
+                                    const docs = (Array.isArray(inv.inventoryDocuments) ? inv.inventoryDocuments : []).map((d: any) => ({
+                                        ...d,
+                                        projectName: inv.projectName,
+                                        block: inv.block,
+                                        unitNumber: inv.unitNumber || inv.unitNo,
+                                        isInventoryDoc: true
+                                    }));
+                                    return [...acc, ...docs];
+                                }, []);
+
+                                const allDocs = [...contactDocs, ...invDocs];
+
+                                if (allDocs.length === 0) {
+                                    return <Text style={styles.emptyText}>No documents uploaded for this contact or their properties.</Text>;
+                                }
+
+                                return allDocs.map((doc: any, i: number) => (
+                                    <View key={i} style={[styles.docItem, { borderBottomColor: theme.border }]}>
+                                        <View style={[styles.docIcon, { backgroundColor: doc.isInventoryDoc ? theme.primary + '15' : theme.primary + '10' }]}>
+                                            <Ionicons name={doc.isInventoryDoc ? "business" : "document-text"} size={20} color={theme.primary} />
+                                        </View>
+                                        <View style={styles.docInfo}>
+                                            <Text style={[styles.docName, { color: theme.text }]}>
+                                                {lv(doc.documentType) || lv(doc.documentName) || "Unnamed Document"}
+                                            </Text>
+                                            <Text style={[styles.docMeta, { color: theme.textLight }]}>
+                                                {doc.documentNo ? `No: ${doc.documentNo}` : ""}
+                                                {doc.documentCategory ? ` • ${lv(doc.documentCategory)}` : ""}
+                                                {doc.isInventoryDoc && <Text style={{ color: theme.primary, fontWeight: '700' }}> • Property Doc</Text>}
+                                            </Text>
+                                            {(doc.projectName || doc.block || doc.unitNumber) && (
+                                                <Text style={[styles.docProject, { color: theme.textLight }]}>
+                                                    {doc.projectName}{doc.block ? ` • ${doc.block}` : ""}{doc.unitNumber ? ` • ${doc.unitNumber}` : ""}
+                                                </Text>
+                                            )}
+                                        </View>
+                                        {(doc.documentPicture || doc.fileUrl || doc.file) && (
+                                            <TouchableOpacity onPress={() => Linking.openURL(doc.documentPicture || doc.fileUrl || doc.file)}>
+                                                <Ionicons name="eye-outline" size={20} color={theme.primary} />
+                                            </TouchableOpacity>
+                                        )}
+                                    </View>
+                                ));
+                            })()}
+                        </View>
+                    </ScrollView>
+                </View>
             </ScrollView>
         </View>
     );
@@ -450,4 +512,11 @@ const styles = StyleSheet.create({
     tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
     tag: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 },
     tagText: { fontSize: 12, fontWeight: "700" },
+
+    docItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, gap: 12 },
+    docIcon: { width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+    docInfo: { flex: 1 },
+    docName: { fontSize: 14, fontWeight: '700' },
+    docMeta: { fontSize: 11, marginTop: 2 },
+    docProject: { fontSize: 10, marginTop: 2, opacity: 0.8 },
 });

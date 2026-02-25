@@ -5,8 +5,9 @@ import {
 } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { getActivities, Activity, deleteActivity } from "../services/activities.service";
+import { getActivities, Activity, deleteActivity, updateActivity } from "../services/activities.service";
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Swipeable from "react-native-gesture-handler/Swipeable";
 
 const TYPE_META: Record<string, { color: string; icon: string; emoji: string }> = {
     "Call": { color: "#3B82F6", icon: "call", emoji: "📞" },
@@ -66,18 +67,21 @@ export default function ActivitiesScreen() {
         }, [search, typeFilter, statusFilter])
     );
 
-    const handleDelete = (id: string) => {
-        Alert.alert("Delete Activity", "Are you sure? This cannot be undone.", [
-            { text: "Cancel", style: "cancel" },
-            {
-                text: "Delete", style: "destructive", onPress: async () => {
-                    try {
-                        await deleteActivity(id);
-                        setActivities(prev => prev.filter(a => a._id !== id));
-                    } catch (e) { Alert.alert("Error", "Failed to delete"); }
-                }
-            }
-        ]);
+    const handleReschedule = async (item: Activity, timeframe: 'tomorrow' | 'nextWeek') => {
+        try {
+            const nextDate = new Date();
+            if (timeframe === 'tomorrow') nextDate.setDate(nextDate.getDate() + 1);
+            else nextDate.setDate(nextDate.getDate() + 7);
+
+            await updateActivity(item._id!, {
+                dueDate: nextDate.toISOString(),
+                status: 'Pending'
+            });
+            fetchActivities(true);
+            Vibration.vibrate(15);
+        } catch (e) {
+            Alert.alert("Error", "Failed to reschedule activity");
+        }
     };
 
     // Stats
@@ -91,65 +95,96 @@ export default function ActivitiesScreen() {
         return new Date(a.dueDate) < new Date();
     }).length;
 
-    const ActivityCard = memo(({ item, onPress, onDelete }: { item: Activity; onPress: () => void; onDelete: (id: string) => void }) => {
+    const ActivityCard = memo(({ item, onPress, onDelete, onEdit, onReschedule }: {
+        item: Activity;
+        onPress: () => void;
+        onDelete: (id: string) => void;
+        onEdit: (id: string | undefined) => void;
+        onReschedule: (item: Activity) => void;
+    }) => {
         const meta = TYPE_META[item.type] || { color: "#64748B", icon: "list", emoji: "📌" };
         const statusStyle = STATUS_COLORS[item.status] || { bg: "#F1F5F9", text: "#64748B" };
         const dueDate = item.dueDate ? new Date(item.dueDate) : null;
         const isToday = dueDate?.toDateString() === new Date().toDateString();
         const isOverdue = dueDate && dueDate < new Date() && item.status !== "Completed";
         const relatedName = (item as any).relatedTo?.[0]?.name || (item as any).entityName || "";
-        const router = useRouter();
+
+        const renderLeftActions = () => (
+            <View style={styles.leftActions}>
+                <TouchableOpacity style={[styles.swipeAction, { backgroundColor: "#2563EB" }]} onPress={() => onEdit(item._id)}>
+                    <Ionicons name="create" size={22} color="#fff" />
+                    <Text style={styles.swipeLabel}>Edit</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.swipeAction, { backgroundColor: "#EF4444" }]} onPress={() => onDelete(item._id!)}>
+                    <Ionicons name="trash" size={22} color="#fff" />
+                    <Text style={styles.swipeLabel}>Delete</Text>
+                </TouchableOpacity>
+            </View>
+        );
+
+        const renderRightActions = () => (
+            <View style={styles.rightActions}>
+                <TouchableOpacity style={[styles.swipeAction, { backgroundColor: "#F59E0B" }]} onPress={() => onReschedule(item)}>
+                    <Ionicons name="calendar" size={22} color="#fff" />
+                    <Text style={styles.swipeLabel}>Reschedule</Text>
+                </TouchableOpacity>
+            </View>
+        );
 
         return (
-            <TouchableOpacity
-                style={[styles.card, isOverdue && styles.cardOverdue]}
-                activeOpacity={0.9}
-                onPress={onPress}
-            >
-                <View style={[styles.cardAccent, { backgroundColor: meta.color }]} />
-                <View style={styles.cardMain}>
-                    <View style={styles.cardHeader}>
-                        <View style={[styles.typeBadge, { backgroundColor: meta.color + "15" }]}>
-                            <Text style={styles.typeEmoji}>{meta.emoji}</Text>
-                            <Text style={[styles.typeText, { color: meta.color }]}>{item.type.toUpperCase()}</Text>
+            <Swipeable renderLeftActions={renderLeftActions} renderRightActions={renderRightActions} overshootLeft={false} overshootRight={false}>
+                <TouchableOpacity
+                    style={[styles.card, isOverdue && styles.cardOverdue]}
+                    activeOpacity={0.9}
+                    onPress={onPress}
+                >
+                    <View style={[styles.cardAccent, { backgroundColor: meta.color }]} />
+                    <View style={styles.cardMain}>
+                        <View style={styles.cardHeader}>
+                            <View style={[styles.typeBadge, { backgroundColor: meta.color + "15" }]}>
+                                <Text style={styles.typeEmoji}>{meta.emoji}</Text>
+                                <Text style={[styles.typeText, { color: meta.color }]}>{item.type.toUpperCase()}</Text>
+                            </View>
+                            <View style={[styles.statusBadge, { backgroundColor: statusStyle.bg }]}>
+                                <Text style={[styles.statusBadgeText, { color: statusStyle.text }]}>{item.status}</Text>
+                            </View>
                         </View>
-                        <View style={[styles.statusBadge, { backgroundColor: statusStyle.bg }]}>
-                            <Text style={[styles.statusBadgeText, { color: statusStyle.text }]}>{item.status}</Text>
+
+                        <Text style={styles.subject} numberOfLines={2}>{item.subject}</Text>
+
+                        {relatedName ? (
+                            <View style={styles.clientRow}>
+                                <Ionicons name="person-circle-outline" size={14} color="#64748B" />
+                                <Text style={styles.clientName}>{relatedName}</Text>
+                            </View>
+                        ) : null}
+
+                        <View style={styles.cardFooter}>
+                            <View style={styles.metaGroup}>
+                                <Ionicons name={isOverdue ? "alert-circle" : "calendar-outline"} size={13} color={isOverdue ? "#EF4444" : "#94A3B8"} />
+                                <Text style={[styles.metaText, isOverdue && { color: "#EF4444", fontWeight: "800" }]}>
+                                    {isToday ? "Today" : dueDate?.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                                    {item.dueTime ? ` @ ${item.dueTime}` : ""}
+                                </Text>
+                            </View>
+                            <View style={styles.metaGroup}>
+                                <Text style={styles.priorityEmoji}>{PRIORITY_ICONS[item.priority] || "🟡"}</Text>
+                                <Text style={styles.metaText}>{item.priority}</Text>
+                            </View>
+                            <View style={styles.assigneeContainer}>
+                                <View style={styles.assigneeTextContent}>
+                                    <Text style={styles.assigneeName} numberOfLines={1}>{item.assignedTo?.name || "Unassigned"}</Text>
+                                    {item.assignedTo?.team && (
+                                        <View style={styles.teamBadge}>
+                                            <Text style={styles.teamBadgeText}>{item.assignedTo.team.substring(0, 3).toUpperCase()}</Text>
+                                        </View>
+                                    )}
+                                </View>
+                            </View>
                         </View>
                     </View>
-
-                    <Text style={styles.subject} numberOfLines={2}>{item.subject}</Text>
-
-                    {relatedName ? (
-                        <View style={styles.clientRow}>
-                            <Ionicons name="person-circle-outline" size={14} color="#64748B" />
-                            <Text style={styles.clientName}>{relatedName}</Text>
-                        </View>
-                    ) : null}
-
-                    <View style={styles.cardFooter}>
-                        <View style={styles.metaGroup}>
-                            <Ionicons name={isOverdue ? "alert-circle" : "calendar-outline"} size={13} color={isOverdue ? "#EF4444" : "#94A3B8"} />
-                            <Text style={[styles.metaText, isOverdue && { color: "#EF4444", fontWeight: "800" }]}>
-                                {isToday ? "Today" : dueDate?.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
-                                {item.dueTime ? ` @ ${item.dueTime}` : ""}
-                            </Text>
-                        </View>
-                        <View style={styles.metaGroup}>
-                            <Text style={styles.priorityEmoji}>{PRIORITY_ICONS[item.priority] || "🟡"}</Text>
-                            <Text style={styles.metaText}>{item.priority}</Text>
-                        </View>
-                        <View style={styles.actionGroup}>
-                            <TouchableOpacity style={styles.iconBtn} onPress={() => router.push({ pathname: "/add-activity", params: { id: item._id } } as any)}>
-                                <Ionicons name="create-outline" size={18} color="#64748B" />
-                            </TouchableOpacity>
-                            <TouchableOpacity style={[styles.iconBtn, { marginLeft: 8 }]} onPress={() => onDelete(item._id!)}>
-                                <Ionicons name="trash-outline" size={18} color="#EF4444" />
-                            </TouchableOpacity>
-                        </View>
-                    </View>
-                </View>
-            </TouchableOpacity>
+                </TouchableOpacity>
+            </Swipeable>
         );
     });
 
@@ -236,7 +271,28 @@ export default function ActivitiesScreen() {
                         <ActivityCard
                             item={item}
                             onPress={() => router.push(`/activity/${item._id}` as any)}
-                            onDelete={(id) => handleDelete(id)}
+                            onDelete={(id) => {
+                                Alert.alert("Delete Activity", "Are you sure? This cannot be undone.", [
+                                    { text: "Cancel", style: "cancel" },
+                                    {
+                                        text: "Delete", style: "destructive", onPress: async () => {
+                                            try {
+                                                await deleteActivity(id);
+                                                setActivities(prev => prev.filter(a => a._id !== id));
+                                            } catch (e) { Alert.alert("Error", "Failed to delete"); }
+                                        }
+                                    }
+                                ]);
+                            }}
+                            onEdit={(id) => router.push({ pathname: "/add-activity", params: { id } } as any)}
+                            onReschedule={(act) => {
+                                Alert.alert("Reschedule", "When would you like to move this to?", [
+                                    { text: "Tomorrow", onPress: () => handleReschedule(act, 'tomorrow') },
+                                    { text: "Next Week", onPress: () => handleReschedule(act, 'nextWeek') },
+                                    { text: "Custom", onPress: () => router.push({ pathname: "/add-activity", params: { id: act._id } } as any) },
+                                    { text: "Cancel", style: "cancel" }
+                                ]);
+                            }}
                         />
                     )}
                     contentContainerStyle={styles.list}
@@ -330,4 +386,15 @@ const styles = StyleSheet.create({
 
     empty: { alignItems: "center", marginTop: 80, paddingHorizontal: 40 },
     emptyText: { marginTop: 16, fontSize: 16, color: "#94A3B8", fontWeight: "700", textAlign: 'center' },
+
+    leftActions: { flexDirection: 'row', marginBottom: 16 },
+    rightActions: { flexDirection: 'row', marginBottom: 16 },
+    swipeAction: { width: 80, height: '100%', justifyContent: 'center', alignItems: 'center' },
+    swipeLabel: { color: '#fff', fontSize: 10, fontWeight: '800', marginTop: 4 },
+
+    assigneeContainer: { flex: 1, flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center' },
+    assigneeTextContent: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8FAFC', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, borderWidth: 1, borderColor: '#F1F5F9', gap: 6 },
+    assigneeName: { fontSize: 11, fontWeight: '700', color: '#475569', maxWidth: 80 },
+    teamBadge: { backgroundColor: '#EEF2FF', paddingHorizontal: 4, paddingVertical: 2, borderRadius: 4, borderWidth: 1, borderColor: '#E0E7FF' },
+    teamBadgeText: { fontSize: 8, fontWeight: '800', color: '#4F46E5' },
 });

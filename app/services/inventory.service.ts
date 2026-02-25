@@ -22,6 +22,7 @@ export interface Inventory {
     associates?: any[];
     ownerName?: string;
     ownerPhone?: string;
+    inventoryDocuments?: any[];
     createdAt?: string;
 }
 

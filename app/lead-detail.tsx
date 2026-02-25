@@ -17,10 +17,13 @@ import { useLookup } from "./context/LookupContext";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
-const TABS = ["Details", "Requirement", "Activities", "Match", "Inventory"];
+const TABS = ["Requirement", "Details", "Activities", "Match", "Inventory"];
 
 function lv(field: unknown): string {
     if (!field) return "";
+    if (Array.isArray(field)) {
+        return field.map(item => lv(item)).filter(Boolean).join(", ");
+    }
     if (typeof field === "object" && field !== null) {
         if ("lookup_value" in field) return (field as any).lookup_value || "";
         if ("fullName" in field) return (field as any).fullName || "";
@@ -167,11 +170,11 @@ export default function LeadDetailScreen() {
                     <View style={[styles.strategyDivider, { backgroundColor: theme.border }]} />
 
                     <View style={styles.strategyBlock}>
-                        <Text style={[styles.strategyLabel, { color: theme.textLight }]}>VISIBILITY</Text>
+                        <Text style={[styles.strategyLabel, { color: theme.textLight }]}>TEAM</Text>
                         <View style={styles.strategyValueRow}>
-                            <Ionicons name={lead.assignment?.visibleTo === 'Everyone' ? 'eye-outline' : 'lock-closed-outline'} size={14} color="#6366F1" />
-                            <Text style={[styles.strategyValue, { color: theme.text }]}>
-                                {lead.assignment?.visibleTo || "Everyone"}
+                            <Ionicons name="people-outline" size={14} color="#6366F1" />
+                            <Text style={[styles.strategyValue, { color: theme.text }]} numberOfLines={1}>
+                                {lv(lead.assignment?.team) || "General"}
                             </Text>
                         </View>
                     </View>
@@ -251,7 +254,32 @@ export default function LeadDetailScreen() {
                 onMomentumScrollEnd={onScroll}
                 style={{ flex: 1 }}
             >
-                {/* 1. Details */}
+                {/* 1. Requirement */}
+                <View style={styles.tabContent}>
+                    <ScrollView contentContainerStyle={styles.innerScroll}>
+                        <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                            <Text style={[styles.cardTitle, { color: theme.text }]}>Core Requirements</Text>
+                            <InfoRow label="Main Need" value={getLookupValue("Requirement", lead.requirement)} icon="cart-outline" accent />
+                            <InfoRow label="Sub Category" value={getLookupValue("Sub Requirement", lead.subRequirement)} icon="list-outline" />
+                            <InfoRow label="Project" value={lv(lead.project)} icon="business-outline" />
+                            <InfoRow label="Property Type" value={Array.isArray(lead.propertyType) ? lead.propertyType.map((t: any) => getLookupValue("Property Type", t)).join(", ") : getLookupValue("Property Type", lead.propertyType)} icon="business-outline" />
+                            <InfoRow label="Budget" value={getLookupValue("Budget", lead.budget)} icon="wallet-outline" accent />
+                            <InfoRow label="Location Pref" value={getLookupValue("Project Location", lead.location)} icon="map-outline" />
+                        </View>
+
+                        <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                            <Text style={[styles.cardTitle, { color: theme.text }]}>Specifications</Text>
+                            <InfoRow label="Unit Type" value={lead.unitType?.map((t: any) => getLookupValue("Unit Type", t)).join(", ")} icon="grid-outline" />
+                            <InfoRow label="Facing" value={lead.facing?.map((t: any) => getLookupValue("Facing", t)).join(", ")} icon="compass-outline" />
+
+                            <InfoRow label="Area Range" value={`${lead.areaMin || 0} - ${lead.areaMax || 0} ${lead.areaMetric || ''}`} icon="resize-outline" />
+                            <InfoRow label="Purpose" value={lead.purpose} icon="bulb-outline" />
+                            <InfoRow label="Timeline" value={lead.timeline} icon="time-outline" />
+                        </View>
+                    </ScrollView>
+                </View>
+
+                {/* 2. Details */}
                 <View style={styles.tabContent}>
                     <ScrollView contentContainerStyle={styles.innerScroll}>
                         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
@@ -360,31 +388,6 @@ export default function LeadDetailScreen() {
                                 ))}
                             </View>
                         )}
-                    </ScrollView>
-                </View>
-
-                {/* 2. Requirement */}
-                <View style={styles.tabContent}>
-                    <ScrollView contentContainerStyle={styles.innerScroll}>
-                        <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-                            <Text style={[styles.cardTitle, { color: theme.text }]}>Core Requirements</Text>
-                            <InfoRow label="Main Need" value={getLookupValue("Requirement", lead.requirement)} icon="cart-outline" accent />
-                            <InfoRow label="Sub Category" value={getLookupValue("Sub Requirement", lead.subRequirement)} icon="list-outline" />
-                            <InfoRow label="Project" value={lv(lead.project)} icon="business-outline" />
-                            <InfoRow label="Property Type" value={Array.isArray(lead.propertyType) ? lead.propertyType.map((t: any) => getLookupValue("Property Type", t)).join(", ") : getLookupValue("Property Type", lead.propertyType)} icon="business-outline" />
-                            <InfoRow label="Budget" value={getLookupValue("Budget", lead.budget)} icon="wallet-outline" accent />
-                            <InfoRow label="Location Pref" value={getLookupValue("Project Location", lead.location)} icon="map-outline" />
-                        </View>
-
-                        <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-                            <Text style={[styles.cardTitle, { color: theme.text }]}>Specifications</Text>
-                            <InfoRow label="Unit Type" value={lead.unitType?.map((t: any) => getLookupValue("Unit Type", t)).join(", ")} icon="grid-outline" />
-                            <InfoRow label="Facing" value={lead.facing?.map((t: any) => getLookupValue("Facing", t)).join(", ")} icon="compass-outline" />
-
-                            <InfoRow label="Area Range" value={`${lead.areaMin || 0} - ${lead.areaMax || 0} ${lead.areaMetric || ''}`} icon="resize-outline" />
-                            <InfoRow label="Purpose" value={lead.purpose} icon="bulb-outline" />
-                            <InfoRow label="Timeline" value={lead.timeline} icon="time-outline" />
-                        </View>
                     </ScrollView>
                 </View>
 

@@ -318,10 +318,6 @@ export default function MissionControlScreen() {
                 </View>
             </View>
 
-            <TouchableOpacity style={[styles.actionBtn, { backgroundColor: "#2563EB" }]} onPress={() => router.push("/add-lead")}>
-                <Ionicons name="sparkles" size={20} color="#fff" />
-                <Text style={styles.actionBtnText}>New Lead Entry</Text>
-            </TouchableOpacity>
         </View>
     );
 
