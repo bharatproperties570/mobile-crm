@@ -232,7 +232,7 @@ const styles = StyleSheet.create({
     },
     activeIndicator: {
         position: 'absolute',
-        bottom: 12,
+        bottom: 8,
         width: 16,
         height: 4,
         borderRadius: 2,
