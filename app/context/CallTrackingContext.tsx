@@ -65,9 +65,9 @@ export function CallTrackingProvider({ children }: { children: React.ReactNode }
                             text: "Log Outcome",
                             onPress: () => {
                                 setLastCall(null);
-                                // Navigate to completion screen
+                                // Navigate to outcome screen
                                 router.push({
-                                    pathname: "/complete-activity",
+                                    pathname: "/outcome",
                                     params: {
                                         id: pendingActivities[0]._id,
                                         entityId: lastCall.entityId,
@@ -92,10 +92,12 @@ export function CallTrackingProvider({ children }: { children: React.ReactNode }
                             onPress: () => {
                                 setLastCall(null);
                                 router.push({
-                                    pathname: "/add-activity",
+                                    pathname: "/outcome",
                                     params: {
-                                        id: lastCall.entityId,
-                                        type: lastCall.entityType,
+                                        id: 'new',
+                                        entityId: lastCall.entityId,
+                                        entityType: lastCall.entityType,
+                                        entityName: lastCall.entityName,
                                         actType: 'Call',
                                         status: 'Completed'
                                     }

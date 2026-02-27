@@ -12,11 +12,12 @@ import { safeApiCall, safeApiCallSingle } from "../services/api.helpers";
 import api from "../services/api";
 import { useCallTracking } from "../context/CallTrackingContext";
 import { useLookup } from "../context/LookupContext";
+import { useTheme } from "../context/ThemeContext";
 import FilterModal, { FilterField } from "../components/FilterModal";
 import { getDealScores } from "../services/stageEngine.service";
 
 if (Platform.OS === 'android' && UIManager?.setLayoutAnimationEnabledExperimental) {
-  try { UIManager.setLayoutAnimationEnabledExperimental(true); } catch(e) {}
+    try { UIManager.setLayoutAnimationEnabledExperimental(true); } catch (e) { }
 }
 
 const DEAL_FILTER_FIELDS: FilterField[] = [
@@ -108,29 +109,29 @@ const SHORT_NAMES: Record<string, string> = {
     "closed lost": "Lost",
 };
 
-const ChevronSegment = memo(({ 
-    label, 
-    count, 
+const ChevronSegment = memo(({
+    label,
+    count,
     percentage,
-    color, 
-    isSelected, 
+    color,
+    isSelected,
     isFirst = false,
     isLast = false,
-    onPress 
-}: { 
-    label: string; 
-    count: number; 
+    onPress
+}: {
+    label: string;
+    count: number;
     percentage: number;
-    color: string; 
-    isSelected: boolean; 
+    color: string;
+    isSelected: boolean;
     isFirst?: boolean;
     isLast?: boolean;
     onPress: () => void;
 }) => {
     const shortLabel = SHORT_NAMES[label.toLowerCase()] || label;
-    
+
     return (
-        <TouchableOpacity 
+        <TouchableOpacity
             activeOpacity={0.9}
             onPress={onPress}
             style={[
@@ -154,12 +155,12 @@ const ChevronSegment = memo(({
     );
 });
 
-const DealPipelineHorizontal = memo(({ 
-    stages, 
-    activeStage, 
-    onStagePress 
-}: { 
-    stages: any[]; 
+const DealPipelineHorizontal = memo(({
+    stages,
+    activeStage,
+    onStagePress
+}: {
+    stages: any[];
     activeStage: string | null;
     onStagePress: (label: string | null) => void;
 }) => {
@@ -171,7 +172,7 @@ const DealPipelineHorizontal = memo(({
 
     const primaryStages = stages.filter(s => !['closed won', 'closed lost'].includes(s.label));
     const closedSubStages = stages.filter(s => ['closed won', 'closed lost'].includes(s.label));
-    
+
     // Aggregated Closed Data
     const closedTotal = closedSubStages.reduce((sum, s) => sum + s.count, 0);
     const totalCount = stages.reduce((sum, s) => sum + s.count, 0) || 1;
@@ -181,7 +182,7 @@ const DealPipelineHorizontal = memo(({
         <View style={styles.horizontalPipelineWrapper}>
             <View style={styles.chevronContainer}>
                 {primaryStages.map((s, idx) => (
-                    <ChevronSegment 
+                    <ChevronSegment
                         key={idx}
                         label={s.label}
                         count={s.count}
@@ -192,8 +193,8 @@ const DealPipelineHorizontal = memo(({
                         onPress={() => onStagePress(s.label)}
                     />
                 ))}
-                
-                <TouchableOpacity 
+
+                <TouchableOpacity
                     onPress={toggleClosed}
                     activeOpacity={0.9}
                     style={[
@@ -207,10 +208,10 @@ const DealPipelineHorizontal = memo(({
                         <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 2 }}>
                             <Text style={[styles.chevronCount, { color: activeStage?.includes('closed') ? '#fff' : '#10B981' }]}>{closedTotal}</Text>
                             <Text style={[styles.chevronPercent, { color: activeStage?.includes('closed') ? '#ffffff90' : '#10B98190' }]}>{closedPercent}%</Text>
-                            <Ionicons 
-                                name={isClosedExpanded ? "chevron-up" : "chevron-down"} 
-                                size={10} 
-                                color={activeStage?.includes('closed') ? '#fff' : '#10B981'} 
+                            <Ionicons
+                                name={isClosedExpanded ? "chevron-up" : "chevron-down"}
+                                size={10}
+                                color={activeStage?.includes('closed') ? '#fff' : '#10B981'}
                                 style={{ marginLeft: 2 }}
                             />
                         </View>
@@ -221,7 +222,7 @@ const DealPipelineHorizontal = memo(({
             {isClosedExpanded && (
                 <View style={styles.compactSubRow}>
                     {closedSubStages.map((s, idx) => (
-                        <TouchableOpacity 
+                        <TouchableOpacity
                             key={idx}
                             onPress={() => onStagePress(s.label)}
                             style={[
@@ -271,6 +272,7 @@ const DealCard = memo(({
     getLookupValue: (type: string, id: any) => string;
     liveScore?: { score: number; color: string; label: string };
 }) => {
+    const { theme } = useTheme();
     const stageStr = (resolveName(deal.stage) || "open").toLowerCase();
     const color = STAGE_COLORS[stageStr] ?? "#6366F1";
     const amount = deal.price || deal.amount || 0;
@@ -341,43 +343,61 @@ const DealCard = memo(({
                                     <Text style={styles.dealBlockName}> • {deal.block || (typeof deal.inventoryId === 'object' ? deal.inventoryId?.block : "") || "No Block"}</Text>
                                 </Text>
                             </View>
+                            {/* Size label below Project Name */}
+                            {(deal.size || deal.sizeUnit || (typeof deal.inventoryId === 'object' && (deal.inventoryId?.size || deal.inventoryId?.sizeUnit))) && (
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                                    <Ionicons name="expand-outline" size={10} color={theme.textLight} />
+                                    <Text style={{ fontSize: 10, color: theme.textLight, fontWeight: '600' }}>
+                                        {deal.size || (typeof deal.inventoryId === 'object' ? deal.inventoryId?.size : "")} {deal.sizeUnit || (typeof deal.inventoryId === 'object' ? deal.inventoryId?.sizeUnit : "")}
+                                    </Text>
+                                </View>
+                            )}
                         </View>
                         <View style={styles.headerRight}>
                             <View style={styles.qualityBox}>
-                                <DealScoreRing score={rawScore} color={typeColor} size={36} />
+                                <DealScoreRing score={rawScore} color={typeColor} size={32} />
                             </View>
                             <View style={{ alignItems: 'flex-end', gap: 2 }}>
-                                <Text style={[styles.dealAmount, { color: color }]}>{formatAmount(amount)}</Text>
+                                <Text style={[styles.dealAmount, { color: color, fontSize: 14 }]}>{formatAmount(amount)}</Text>
                                 <TouchableOpacity style={styles.menuTrigger} onPress={onMenuPress}>
-                                    <Ionicons name="ellipsis-vertical" size={20} color="#94A3B8" />
+                                    <Ionicons name="ellipsis-vertical" size={18} color="#94A3B8" />
                                 </TouchableOpacity>
                             </View>
                         </View>
                     </View>
 
-                    <View style={styles.cardBody}>
-                        <View style={[styles.stagePill, { backgroundColor: color + "15" }]}>
-                            <View style={[styles.stageDot, { backgroundColor: color }]} />
-                            <Text style={[styles.stageText, { color }]}>{resolveName(deal.stage)}</Text>
-                        </View>
-                        <View style={styles.clientRow}>
-                            <Ionicons name="person-circle-outline" size={14} color="#64748B" />
-                            <Text style={styles.clientName} numberOfLines={1}>
-                                {resolveName(deal.associatedContact || (deal as any).partyStructure?.buyer || deal.owner)}
-                            </Text>
-                        </View>
-                    </View>
-
                     <View style={styles.cardFooter}>
-                        <View style={styles.locationGroup}>
-                            <Ionicons name="location-outline" size={12} color="#94A3B8" />
-                            <Text style={styles.locationText} numberOfLines={1}>
-                                {deal.location || (typeof deal.inventoryId === 'object' ? deal.inventoryId?.location : "") || deal.projectName || "Property"}
-                            </Text>
+                        {/* Owner/Associate Data (Marquee) */}
+                        <View style={{ flex: 1, overflow: 'hidden', marginRight: 12 }}>
+                            <ScrollView
+                                horizontal
+                                showsHorizontalScrollIndicator={false}
+                                contentContainerStyle={{ alignItems: 'center' }}
+                            >
+                                <Ionicons name="people-outline" size={12} color="#94A3B8" />
+                                <Text style={[styles.locationText, { marginLeft: 4 }]} numberOfLines={1}>
+                                    {(() => {
+                                        const owner = resolveName(deal.owner);
+                                        const associate = resolveName(deal.associatedContact);
+                                        const parts = [];
+                                        if (owner && owner !== "—") parts.push(`Owner: ${owner}`);
+                                        if (associate && associate !== "—") parts.push(`Associate: ${associate}`);
+                                        return parts.join(" | ") || "No Owner/Associate";
+                                    })()}
+                                </Text>
+                            </ScrollView>
                         </View>
-                        {deal.createdAt && (
-                            <Text style={styles.dateText}>{new Date(deal.createdAt).toLocaleDateString("en-IN")}</Text>
-                        )}
+
+                        {/* Stage + Date Stack on the Right */}
+                        <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                            <View style={[styles.stagePill, { backgroundColor: color + "15", paddingVertical: 2, paddingHorizontal: 6 }]}>
+                                <View style={[styles.stageDot, { backgroundColor: color, width: 4, height: 4 }]} />
+                                <Text style={[styles.stageText, { color, fontSize: 9 }]}>{resolveName(deal.stage)}</Text>
+                            </View>
+                            {deal.createdAt && (
+                                <Text style={styles.dateText}>{new Date(deal.createdAt).toLocaleDateString("en-IN")}</Text>
+                            )}
+                        </View>
                     </View>
                 </View>
             </TouchableOpacity>
@@ -424,7 +444,7 @@ export default function DealsScreen() {
             if (stage === 'closed lost') stage = 'closed lost';
             stats[stage] = (stats[stage] || 0) + 1;
         });
-        
+
         // Logical pipeline sequence
         const order = ['open', 'quote', 'negotiation', 'booked', 'closed won', 'closed lost'];
         return order.map(s => ({
@@ -512,8 +532,8 @@ export default function DealsScreen() {
     const renderHeader = () => (
         <SafeAreaView style={styles.safeArea}>
             <View style={styles.header}>
-                <TouchableOpacity 
-                    activeOpacity={0.7} 
+                <TouchableOpacity
+                    activeOpacity={0.7}
                     onPress={() => setActivePipelineStage(null)}
                 >
                     <Text style={styles.headerTitle}>Deals</Text>
@@ -525,10 +545,10 @@ export default function DealsScreen() {
             </View>
 
             {pipelineStats.length > 0 && (
-                <DealPipelineHorizontal 
-                    stages={pipelineStats} 
-                    activeStage={activePipelineStage} 
-                    onStagePress={setActivePipelineStage} 
+                <DealPipelineHorizontal
+                    stages={pipelineStats}
+                    activeStage={activePipelineStage}
+                    onStagePress={setActivePipelineStage}
                 />
             )}
 
@@ -1012,20 +1032,20 @@ const styles = StyleSheet.create({
         shadowColor: "#000", shadowOpacity: 0.03, shadowRadius: 10, shadowOffset: { width: 0, height: 5 }
     },
     cardAccent: { width: 6 },
-    cardMain: { flex: 1, padding: 12 },
-    cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 },
+    cardMain: { flex: 1, padding: 8 },
+    cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 },
     cardIdentity: { flex: 1 },
     dealId: { fontSize: 10, fontWeight: "900", color: "#94A3B8", textTransform: "uppercase", marginBottom: 2 },
     dealProjectContainer: { marginTop: 2 },
-    dealProjectName: { fontSize: 16, fontWeight: "800", color: "#0F172A" },
+    dealProjectName: { fontSize: 14, fontWeight: "800", color: "#0F172A" },
     dealBlockName: { fontSize: 10, fontWeight: "500", color: "#CBD5E1" },
-    dealUnitNumber: { fontSize: 18, fontWeight: "900", color: "#0F172A" },
+    dealUnitNumber: { fontSize: 16, fontWeight: "900", color: "#0F172A" },
     typePill: { paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4 },
     typePillText: { fontSize: 9, fontWeight: "800" },
     dealTitle: { fontSize: 16, fontWeight: "800", color: "#1E293B" },
     dealAmount: { fontSize: 16, fontWeight: "900" },
 
-    cardBody: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+    cardBody: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
     stagePill: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, gap: 6 },
     stageDot: { width: 6, height: 6, borderRadius: 3 },
     stageText: { fontSize: 11, fontWeight: "800", textTransform: 'uppercase' },
@@ -1047,9 +1067,9 @@ const styles = StyleSheet.create({
     pipelineChipTextActive: { color: '#2563EB' },
     // Compact Arrow Pipeline Styles
     horizontalPipelineWrapper: { marginHorizontal: 16, marginBottom: 12 },
-    chevronContainer: { 
-        flexDirection: 'row', 
-        height: 48, 
+    chevronContainer: {
+        flexDirection: 'row',
+        height: 64,
         backgroundColor: '#fff',
         borderRadius: 8,
         overflow: 'hidden',
@@ -1088,8 +1108,8 @@ const styles = StyleSheet.create({
         height: '100%',
         backgroundColor: 'transparent',
         borderLeftWidth: 10,
-        borderTopWidth: 24,
-        borderBottomWidth: 24,
+        borderTopWidth: 32,
+        borderBottomWidth: 32,
         borderTopColor: 'transparent',
         borderBottomColor: 'transparent',
         zIndex: 2

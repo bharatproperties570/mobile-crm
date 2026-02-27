@@ -42,19 +42,40 @@ export const LookupProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const getLookupValue = useCallback((type: string, idOrValue: any): string => {
         if (!idOrValue) return "—";
 
-        // Handle object if already populated
-        if (typeof idOrValue === 'object') {
-            return idOrValue.lookup_value || idOrValue.name || idOrValue.fullName || "—";
-        }
+        const resolve = (t: string, val: any): string => {
+            if (!val) return "—";
 
-        // If it's a string, try to find it in the cached lookups
-        const normalizedType = type.toLowerCase();
-        const found = lookups.find(l =>
-            l.lookup_type.toLowerCase() === normalizedType &&
-            (l._id === idOrValue || l.lookup_value === idOrValue)
-        );
+            // 1. Handle arrays recursively
+            if (Array.isArray(val)) {
+                if (val.length === 0) return "—";
+                return val
+                    .map(item => resolve(t, item))
+                    .filter(x => x && x !== "—")
+                    .join(", ") || "—";
+            }
 
-        return found ? found.lookup_value : String(idOrValue);
+            // 2. Handle objects (already populated by backend)
+            if (typeof val === 'object' && val !== null) {
+                return val.lookup_value || val.name || val.fullName || "—";
+            }
+
+            // 3. Handle IDs/Strings
+            const normalizedType = t.toLowerCase();
+            let found = lookups.find(l =>
+                l.lookup_type.toLowerCase() === normalizedType &&
+                (l._id === val || l.lookup_value === val)
+            );
+
+            // ─── Robust Fallback ───
+            // If not found by type, search globally by ID (very useful during schema migrations/misalignments)
+            if (!found && typeof val === 'string' && (val.length === 24 || val.startsWith('lk_'))) {
+                found = lookups.find(l => l._id === val);
+            }
+
+            return found ? found.lookup_value : String(val);
+        };
+
+        return resolve(type, idOrValue);
     }, [lookups]);
 
     return (

@@ -1,15 +1,21 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 
-Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-        shouldShowAlert: true,
-        shouldPlaySound: true,
-        shouldSetBadge: true,
-    }),
-});
+const isAndroidExpoGo = Platform.OS === 'android' && Constants.appOwnership === 'expo';
+
+if (!isAndroidExpoGo) {
+    Notifications.setNotificationHandler({
+        handleNotification: async () => ({
+            shouldShowAlert: true,
+            shouldPlaySound: true,
+            shouldSetBadge: true,
+        }),
+    });
+}
 
 export const requestNotificationPermissions = async () => {
+    if (isAndroidExpoGo) return false;
     const { status: existingStatus } = await Notifications.getPermissionsAsync();
     let finalStatus = existingStatus;
     if (existingStatus !== 'granted') {
@@ -47,5 +53,6 @@ export const scheduleActivityReminder = async (activity: any) => {
 };
 
 export const cancelAllReminders = async () => {
+    if (isAndroidExpoGo) return;
     await Notifications.cancelAllScheduledNotificationsAsync();
 };

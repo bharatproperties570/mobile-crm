@@ -24,6 +24,7 @@ export interface Lead {
     salutation?: string;
     // Extended fields
     locCity?: string;
+    locArea?: string;
     budgetMin?: number;
     budgetMax?: number;
     projectName?: string[];

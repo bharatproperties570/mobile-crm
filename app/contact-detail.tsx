@@ -231,14 +231,6 @@ export default function ContactDetailScreen() {
                         { icon: 'logo-whatsapp', color: '#128C7E', onPress: () => Linking.openURL(`https://wa.me/${phone.replace(/\D/g, "")}`) },
                         { icon: 'mail', color: '#EA4335', onPress: () => Linking.openURL(`mailto:${email}`) },
                         { icon: 'calendar', color: '#6366F1', onPress: () => router.push(`/add-activity?id=${id}&type=Contact`) },
-                        {
-                            icon: 'checkmark-circle-outline', color: '#10B981', onPress: async () => {
-                                try {
-                                    const act = await getOrCreateCallActivity(id!, "Contact", fullName);
-                                    if (act?._id) router.push(`/outcome?id=${act._id}`);
-                                } catch (e) { Alert.alert("Error", "Failed to prepare outcome"); }
-                            }
-                        },
                     ].map((action, i) => (
                         <TouchableOpacity key={i} style={[styles.modernHubBtn, { backgroundColor: action.color }]} onPress={action.onPress}>
                             <Ionicons name={action.icon as any} size={20} color="#fff" />
@@ -376,6 +368,36 @@ export default function ContactDetailScreen() {
                                                     </Text>
                                                 )}
                                                 {act.actor && <Text style={{ fontSize: 9, color: theme.textLight, marginTop: 4 }}>By {act.actor}</Text>}
+                                                {!isAudit && act.status !== 'Completed' && (
+                                                    <TouchableOpacity
+                                                        onPress={() => router.push({
+                                                            pathname: '/outcome',
+                                                            params: {
+                                                                id: act._id,
+                                                                entityId: id,
+                                                                entityType: 'Contact',
+                                                                entityName: fullName,
+                                                                actType: act.type
+                                                            }
+                                                        })}
+                                                        style={{
+                                                            marginTop: 10,
+                                                            paddingVertical: 6,
+                                                            paddingHorizontal: 12,
+                                                            backgroundColor: color + '15',
+                                                            borderRadius: 8,
+                                                            alignSelf: 'flex-start',
+                                                            flexDirection: 'row',
+                                                            alignItems: 'center',
+                                                            gap: 6,
+                                                            borderWidth: 1,
+                                                            borderColor: color + '30'
+                                                        }}
+                                                    >
+                                                        <Ionicons name="checkmark-circle" size={14} color={color} />
+                                                        <Text style={{ color: color, fontSize: 11, fontWeight: '700' }}>Complete</Text>
+                                                    </TouchableOpacity>
+                                                )}
                                             </View>
                                         </View>
                                     );

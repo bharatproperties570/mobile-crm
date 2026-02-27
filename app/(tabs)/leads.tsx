@@ -495,7 +495,7 @@ const LeadCard = memo(({ lead, index, onPress, onMore, isSelected, onLongPress, 
     const { trackCall } = useCallTracking();
     const router = useRouter();
     const name = leadName(lead);
-    const stageLabel = lookupVal(lead.stage);
+    const stageLabel = getLookupValue("Stage", lead.stage);
     // Use backend live score if available; fallback to local intent_index heuristic
     const score = liveScore ? { val: liveScore.score, color: liveScore.color } : getLeadScore(lead);
     const req = REQ_CONFIG[lookupVal(lead.requirement).toLowerCase()] || REQ_CONFIG.default;
@@ -548,6 +548,14 @@ const LeadCard = memo(({ lead, index, onPress, onMore, isSelected, onLongPress, 
         </View>
     );
 
+    const intent = getLookupValue("Requirement", lead.requirement).toLowerCase();
+    const intentConfig: Record<string, { bg: string; text: string }> = {
+        buy: { bg: '#DCFCE7', text: '#15803D' },
+        rent: { bg: '#FFEDD5', text: '#C2410C' },
+        lease: { bg: '#E0F2FE', text: '#0369A1' }
+    };
+    const currentIntent = intentConfig[intent] || null;
+
     return (
         <Swipeable renderRightActions={renderRightActions} renderLeftActions={renderLeftActions}>
             <Animated.View style={{ opacity: fadeAnim, transform: [{ scale: scaleValue }, { translateY: fadeAnim.interpolate({ inputRange: [0, 1], outputRange: [20, 0] }) }] }}>
@@ -557,70 +565,93 @@ const LeadCard = memo(({ lead, index, onPress, onMore, isSelected, onLongPress, 
                     onPressOut={onPressOut}
                     onPress={onPress}
                     onLongPress={onLongPress}
-                    style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }, isSelected && styles.cardSelected]}
+                    style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border, position: 'relative' }, isSelected && styles.cardSelected]}
                 >
-                    <View style={styles.cardHeader}>
-                        <View style={styles.leadInfo}>
-                            <Text style={[styles.leadName, { color: theme.text }]} numberOfLines={1}>{leadName(lead)}</Text>
-                            <View style={styles.mobileRow}>
-                                <Ionicons name="call-outline" size={12} color={theme.textLight} />
-                                <Text style={[styles.leadMobile, { color: theme.textMuted }]}>{lead.mobile}</Text>
-                            </View>
-                            {lead.lead_classification && (
-                                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
-                                    <Ionicons name="shield-checkmark" size={10} color="#F59E0B" />
-                                    <Text style={{ fontSize: 9, fontWeight: '700', color: '#F59E0B', marginLeft: 4 }}>{lead.lead_classification.toUpperCase()}</Text>
-                                </View>
-                            )}
+                    {/* Intent Ribbon / Gift Wrap Style */}
+                    {currentIntent && (
+                        <View style={[styles.intentRibbon, { backgroundColor: currentIntent.bg }]}>
+                            <Text style={[styles.intentRibbonText, { color: currentIntent.text }]}>{intent.toUpperCase()}</Text>
                         </View>
-                        <View style={styles.qualityBox}>
-                            <LeadScoreRing score={score.val} color={score.color} size={36} />
-                        </View>
-                        <TouchableOpacity onPress={onMore} style={styles.moreBtn}>
-                            <Ionicons name="ellipsis-vertical" size={16} color="#CBD5E1" />
-                        </TouchableOpacity>
-                    </View>
+                    )}
 
-                    <View style={styles.cardBody}>
-                        <View style={styles.reqRow}>
-                            <View style={{ backgroundColor: req.color + '15', padding: 6, borderRadius: 8 }}>
-                                <Ionicons name={req.icon} size={14} color={req.color} />
-                            </View>
-                            <Text style={[styles.reqText, { color: theme.textMuted }]}>{getLookupValue("Requirement", lead.requirement)} • {getLookupValue("Unit Type", lead.unitType)}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        {/* Score Round Icon - Left Centered */}
+                        <View style={styles.leftScoreContainer}>
+                            <LeadScoreRing score={score.val} color={score.color} size={42} />
                         </View>
-                        {(lead.locCity || lead.location) && (
-                            <View style={styles.locRow}>
-                                <Ionicons name="location-sharp" size={14} color={theme.textLight} />
-                                <Text style={[styles.locText, { color: theme.textLight }]} numberOfLines={1}>
-                                    {[getLookupValue("City", lead.locCity), getLookupValue("Location", lead.location)].filter(v => v && v !== "—").join(", ") || "No Location"}
-                                </Text>
-                            </View>
-                        )}
-                        {lead.intent_tags && lead.intent_tags.length > 0 && (
-                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 8 }}>
-                                {lead.intent_tags.slice(0, 3).map((tag, i) => (
-                                    <View key={i} style={{ backgroundColor: theme.primary + '10', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, borderWidth: 1, borderColor: theme.primary + '20' }}>
-                                        <Text style={{ fontSize: 8, fontWeight: '700', color: theme.primary }}>#{tag.toUpperCase()}</Text>
+
+                        <View style={{ flex: 1 }}>
+                            <View style={styles.cardHeader}>
+                                <View style={styles.leadInfo}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                        <Text style={[styles.leadName, { color: theme.text }]} numberOfLines={1}>{name}</Text>
                                     </View>
-                                ))}
-                                {lead.intent_tags.length > 3 && <Text style={{ fontSize: 8, color: theme.textLight }}>+{lead.intent_tags.length - 3}</Text>}
-                            </View>
-                        )}
-                    </View>
-
-                    <View style={[styles.cardFooter, theme.background === '#0F172A' ? { borderTopColor: theme.border } : {}]}>
-                        <View style={styles.badgeGroup}>
-                            <View style={[styles.statusBadge, { backgroundColor: (STATUS_COLORS[stageLabel.toLowerCase()] || "#64748B") + '15' }]}>
-                                <Text style={[styles.statusText, { color: STATUS_COLORS[stageLabel.toLowerCase()] || '#64748B' }]}>{stageLabel}</Text>
-                            </View>
-                            {lead.source && (
-                                <View style={[styles.sourceBadge, { backgroundColor: theme.border }]}>
-                                    <Ionicons name="radio-outline" size={10} color="#94A3B8" />
-                                    <Text style={[styles.sourceText, { color: theme.textLight }]}>{getLookupValue("Source", lead.source)}</Text>
+                                    <View style={styles.mobileRow}>
+                                        <Ionicons name="call-outline" size={12} color={theme.textLight} />
+                                        <Text style={[styles.leadMobile, { color: theme.textMuted }]}>{lead.mobile}</Text>
+                                    </View>
                                 </View>
-                            )}
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                                    <View style={[styles.statusBadge, { backgroundColor: (STATUS_COLORS[stageLabel.toLowerCase()] || "#64748B") + '15' }]}>
+                                        <Text style={[styles.statusText, { color: STATUS_COLORS[stageLabel.toLowerCase()] || '#64748B' }]}>{stageLabel}</Text>
+                                    </View>
+                                    <TouchableOpacity onPress={onMore} style={styles.moreBtn}>
+                                        <Ionicons name="ellipsis-vertical" size={16} color="#CBD5E1" />
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
+
+                            <View style={styles.cardBody}>
+                                {(lead.propertyType || lead.subType || lead.subRequirement) && (
+                                    <View style={styles.reqRow}>
+                                        <Ionicons name="business-outline" size={12} color={theme.textLight} />
+                                        <Text style={[styles.reqText, { color: theme.textMuted }]}>
+                                            {getLookupValue("Category", lead.propertyType)}
+                                            {(lead.subType && lead.subType.length > 0) || lead.subRequirement ? ` • ${getLookupValue("SubCategory", lead.subType || lead.subRequirement)}` : ''}
+                                        </Text>
+                                    </View>
+                                )}
+                                <View style={styles.reqRow}>
+                                    <Ionicons name="home-outline" size={12} color={theme.textLight} />
+                                    <Text style={[styles.reqText, { color: theme.textMuted }]}>{getLookupValue("PropertyType", lead.unitType)}</Text>
+                                </View>
+                                {(lead.locCity || lead.location || lead.locArea) && (
+                                    <View style={styles.locRow}>
+                                        <Ionicons name="location-outline" size={12} color={theme.textLight} />
+                                        <Text style={[styles.locText, { color: theme.textLight }]} numberOfLines={1}>
+                                            {[getLookupValue("City", lead.locCity), lead.locArea, getLookupValue("ProjectLocation", lead.location)].filter(v => v && v !== "—").join(", ") || "No Location"}
+                                        </Text>
+                                    </View>
+                                )}
+                            </View>
+
+                            <View style={[styles.cardFooter, theme.background === '#0F172A' ? { borderTopColor: theme.border } : {}]}>
+                                <View style={styles.footerLeftTicker}>
+                                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ alignItems: 'center', gap: 6 }}>
+                                        {lead.lead_classification && (
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFBEB', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, borderWidth: 1, borderColor: '#FEF3C7' }}>
+                                                <Ionicons name="shield-checkmark" size={10} color="#F59E0B" />
+                                                <Text style={{ fontSize: 8, fontWeight: '800', color: '#F59E0B', marginLeft: 3 }}>{lead.lead_classification.toUpperCase()}</Text>
+                                            </View>
+                                        )}
+                                        {lead.intent_tags?.map((tag, i) => (
+                                            <View key={i} style={{ backgroundColor: theme.primary + '08', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, borderWidth: 1, borderColor: theme.primary + '15' }}>
+                                                <Text style={{ fontSize: 8, fontWeight: '800', color: theme.primary }}>#{tag.toUpperCase()}</Text>
+                                            </View>
+                                        ))}
+                                    </ScrollView>
+                                </View>
+                                <View style={styles.footerRight}>
+                                    {lead.source && (
+                                        <View style={[styles.sourceBadge, { backgroundColor: theme.border }]}>
+                                            <Ionicons name="radio-outline" size={10} color="#94A3B8" />
+                                            <Text style={[styles.sourceText, { color: theme.textLight }]}>{getLookupValue("Source", lead.source)}</Text>
+                                        </View>
+                                    )}
+                                    <Text style={[styles.timeLabel, { color: theme.textLight }]}>{formatTimeAgo(lead.createdAt)}</Text>
+                                </View>
+                            </View>
                         </View>
-                        <Text style={[styles.timeLabel, { color: theme.textLight }]}>{formatTimeAgo(lead.createdAt)}</Text>
                     </View>
                 </TouchableOpacity>
             </Animated.View>
@@ -1015,29 +1046,33 @@ const styles = StyleSheet.create({
     segmentText: { fontSize: 13, fontWeight: "700", color: "#64748B" },
     segmentTextActive: { color: "#fff" },
 
-    listContent: { paddingHorizontal: 20, paddingBottom: 120, paddingTop: 10 },
-    card: { backgroundColor: "#fff", borderRadius: 16, padding: 8, marginBottom: 6, borderWidth: 1, borderColor: "#F1F5F9", shadowColor: "#000", shadowOpacity: 0.03, shadowRadius: 10, shadowOffset: { width: 0, height: 4 } },
+    card: { backgroundColor: "#fff", borderRadius: 16, paddingHorizontal: 3, paddingBottom: 3, paddingTop: 8, marginBottom: 6, borderWidth: 1, borderColor: "#F1F5F9", shadowColor: "#000", shadowOpacity: 0.03, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, overflow: 'hidden' },
     cardSelected: { borderColor: "#2563EB", borderWidth: 2, backgroundColor: "#F8FAFF" },
-    cardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
+    cardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 2 },
     leadInfo: { flex: 1 },
-    leadName: { fontSize: 15, fontWeight: "700", color: "#0F172A", marginBottom: 1 },
+    leadName: { fontSize: 17, fontWeight: "700", color: "#0F172A", marginBottom: 1 },
     mobileRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-    leadMobile: { fontSize: 12, color: "#64748B", fontWeight: "500" },
-    qualityBox: { marginRight: 12 },
-    moreBtn: { width: 32, height: 32, justifyContent: 'center', alignItems: 'center' },
+    leadMobile: { fontSize: 13.5, color: "#64748B", fontWeight: "500" },
+    qualityBox: { marginRight: 0 },
+    leftScoreContainer: { width: 48, justifyContent: 'center', alignItems: 'center', marginRight: 10 },
+    intentRibbon: { position: 'absolute', top: 5, left: -22, width: 80, height: 20, justifyContent: 'center', alignItems: 'center', transform: [{ rotate: '-45deg' }], zIndex: 10 },
+    intentRibbonText: { fontSize: 10, fontWeight: "900", letterSpacing: 0.8 },
+    moreBtn: { width: 32, height: 32, justifyContent: 'center', alignItems: 'center', zIndex: 11 },
 
-    cardBody: { marginBottom: 6, gap: 2 },
-    reqRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-    reqText: { fontSize: 12, color: "#475569", fontWeight: "600" },
-    locRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-    locText: { fontSize: 11, color: "#94A3B8", fontWeight: "500" },
+    cardBody: { marginBottom: 0, gap: 1.5 },
+    reqRow: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 20 },
+    reqText: { fontSize: 12.5, color: "#475569", fontWeight: "600" },
+    locRow: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 20 },
+    locText: { fontSize: 11.5, color: "#94A3B8", fontWeight: "500" },
 
-    cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1, borderTopColor: "#F8FAFC", paddingTop: 6 },
+    cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1, borderTopColor: "#F8FAFC", paddingTop: 1 },
+    footerLeftTicker: { flex: 1, height: 24, marginRight: 8, justifyContent: 'center' },
+    footerRight: { alignItems: 'flex-end', gap: 1 },
     badgeGroup: { flexDirection: 'row', gap: 6 },
-    statusBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+    statusBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 },
     statusText: { fontSize: 10, fontWeight: "800", textTransform: 'uppercase' },
-    sourceBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: "#F8FAFC", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, borderWidth: 1, borderColor: "#F1F5F9" },
-    sourceText: { fontSize: 10, color: "#94A3B8", fontWeight: "700", textTransform: 'uppercase' },
+    sourceBadge: { flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: "#F8FAFC", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, borderWidth: 1, borderColor: "#F1F5F9" },
+    sourceText: { fontSize: 9, color: "#94A3B8", fontWeight: "700", textTransform: 'uppercase' },
     timeLabel: { fontSize: 11, color: "#CBD5E1", fontWeight: "500" },
 
     rightActions: { flexDirection: 'row', gap: 8, paddingLeft: 10, marginBottom: 12 },

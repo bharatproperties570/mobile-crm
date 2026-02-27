@@ -149,9 +149,8 @@ export default function LeadDetailScreen() {
                         </View>
                     </View>
                     <View style={styles.scoreContainer}>
-                        <View style={[styles.scoreRing, { borderColor: score.color + '40' }]}>
+                        <View style={[styles.scoreRing, { borderColor: score.color + '20' }]}>
                             <Text style={[styles.scoreValue, { color: score.color }]}>{score.val}</Text>
-                            <Text style={[styles.scoreLabel, { color: theme.textLight }]}>INTENT</Text>
                         </View>
                     </View>
                 </View>
@@ -237,14 +236,6 @@ export default function LeadDetailScreen() {
                         { icon: 'logo-whatsapp', color: '#128C7E', onPress: () => Linking.openURL(`https://wa.me/${lead.mobile.replace(/\D/g, "")}`) },
                         { icon: 'mail', color: '#EA4335', onPress: () => Linking.openURL(`mailto:${lead.email}`) },
                         { icon: 'calendar', color: '#6366F1', onPress: () => router.push(`/add-activity?id=${id}&type=Lead`) },
-                        {
-                            icon: 'checkmark-circle-outline', color: '#10B981', onPress: async () => {
-                                try {
-                                    const act = await getOrCreateCallActivity(id!, "Lead", name);
-                                    if (act?._id) router.push(`/outcome?id=${act._id}`);
-                                } catch (e) { Alert.alert("Error", "Failed to prepare outcome"); }
-                            }
-                        },
                     ].map((action, i) => (
                         <TouchableOpacity key={i} style={[styles.modernHubBtn, { backgroundColor: action.color }]} onPress={action.onPress}>
                             <Ionicons name={action.icon as any} size={20} color="#fff" />
@@ -288,18 +279,17 @@ export default function LeadDetailScreen() {
                         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
                             <Text style={[styles.cardTitle, { color: theme.text }]}>Core Requirements</Text>
                             <InfoRow label="Main Need" value={getLookupValue("Requirement", lead.requirement)} icon="cart-outline" accent />
-                            <InfoRow label="Sub Category" value={getLookupValue("Sub Requirement", lead.subRequirement)} icon="list-outline" />
+                            <InfoRow label="Category" value={getLookupValue("Category", lead.propertyType)} icon="grid-outline" />
+                            <InfoRow label="Sub Category" value={getLookupValue("SubCategory", lead.subType)} icon="list-outline" />
                             <InfoRow label="Project" value={lv(lead.project)} icon="business-outline" />
-                            <InfoRow label="Property Category" value={Array.isArray(lead.propertyType) ? lead.propertyType.map((t: any) => getLookupValue("Property Type", t) !== "—" ? getLookupValue("Property Type", t) : lv(t)).join(", ") : getLookupValue("Property Type", lead.propertyType)} icon="grid-outline" />
-                            <InfoRow label="Sub Types" value={Array.isArray(lead.subType) ? lead.subType.map((t: any) => getLookupValue("SubCategory", t) !== "—" ? getLookupValue("SubCategory", t) : lv(t)).join(", ") : getLookupValue("SubCategory", lead.subType)} icon="layers-outline" />
                             <InfoRow label="Budget" value={getLookupValue("Budget", lead.budget)} icon="wallet-outline" accent />
                             <InfoRow label="Min - Max" value={(lead.budgetMin || lead.budgetMax) ? `₹${lead.budgetMin || 0} - ₹${lead.budgetMax || 0}` : ""} icon="cash-outline" />
-                            <InfoRow label="Location Pref" value={getLookupValue("Project Location", lead.location)} icon="map-outline" />
+                            <InfoRow label="Location Preference" value={[getLookupValue("City", lead.locCity), lead.locArea, getLookupValue("ProjectLocation", lead.location)].filter(v => v && v !== "—").join(", ")} icon="map-outline" />
                         </View>
 
                         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
                             <Text style={[styles.cardTitle, { color: theme.text }]}>Specifications</Text>
-                            <InfoRow label="Unit Type" value={Array.isArray(lead.unitType) ? lead.unitType.map((t: any) => getLookupValue("Unit Type", t) !== "—" ? getLookupValue("Unit Type", t) : lv(t)).join(", ") : getLookupValue("Unit Type", lead.unitType)} icon="cube-outline" />
+                            <InfoRow label="Unit Type" value={getLookupValue("PropertyType", lead.unitType)} icon="cube-outline" />
                             <InfoRow label="Facing" value={Array.isArray(lead.facing) ? lead.facing.map((t: any) => getLookupValue("Facing", t) !== "—" ? getLookupValue("Facing", t) : lv(t)).join(", ") : getLookupValue("Facing", lead.facing)} icon="compass-outline" />
                             <InfoRow label="Direction" value={Array.isArray(lead.direction) ? lead.direction.map((t: any) => getLookupValue("Direction", t) !== "—" ? getLookupValue("Direction", t) : lv(t)).join(", ") : getLookupValue("Direction", lead.direction)} icon="navigate-outline" />
                             <InfoRow label="Road Width" value={Array.isArray(lead.roadWidth) ? lead.roadWidth.map((t: any) => getLookupValue("RoadWidth", t) !== "—" ? getLookupValue("RoadWidth", t) : lv(t)).join(", ") : getLookupValue("RoadWidth", lead.roadWidth)} icon="swap-horizontal-outline" />
@@ -479,6 +469,36 @@ export default function LeadDetailScreen() {
                                                     </Text>
                                                 )}
                                                 {act.actor && <Text style={{ fontSize: 9, color: theme.textLight, marginTop: 4 }}>By {act.actor}</Text>}
+                                                {!isAudit && act.status !== 'Completed' && (
+                                                    <TouchableOpacity
+                                                        onPress={() => router.push({
+                                                            pathname: '/outcome',
+                                                            params: {
+                                                                id: act._id,
+                                                                entityId: id,
+                                                                entityType: 'Lead',
+                                                                entityName: name,
+                                                                actType: act.type
+                                                            }
+                                                        })}
+                                                        style={{
+                                                            marginTop: 10,
+                                                            paddingVertical: 6,
+                                                            paddingHorizontal: 12,
+                                                            backgroundColor: color + '15',
+                                                            borderRadius: 8,
+                                                            alignSelf: 'flex-start',
+                                                            flexDirection: 'row',
+                                                            alignItems: 'center',
+                                                            gap: 6,
+                                                            borderWidth: 1,
+                                                            borderColor: color + '30'
+                                                        }}
+                                                    >
+                                                        <Ionicons name="checkmark-circle" size={14} color={color} />
+                                                        <Text style={{ color: color, fontSize: 11, fontWeight: '700' }}>Complete</Text>
+                                                    </TouchableOpacity>
+                                                )}
                                             </View>
                                         </View>
                                     );
@@ -580,8 +600,8 @@ const styles = StyleSheet.create({
     miniBadgeText: { fontSize: 10, fontWeight: '700' },
 
     scoreContainer: { alignItems: 'center', justifyContent: 'center' },
-    scoreRing: { width: 54, height: 54, borderRadius: 27, borderWidth: 3, alignItems: 'center', justifyContent: 'center' },
-    scoreValue: { fontSize: 18, fontWeight: '900' },
+    scoreRing: { width: 48, height: 48, borderRadius: 24, borderWidth: 2.5, alignItems: 'center', justifyContent: 'center' },
+    scoreValue: { fontSize: 20, fontWeight: '900' },
     scoreLabel: { fontSize: 7, fontWeight: '900', marginTop: -2 },
 
     strategyBar: { flexDirection: 'row', paddingVertical: 15, paddingHorizontal: 20, borderTopWidth: 1, borderBottomWidth: 1, marginTop: 5 },
