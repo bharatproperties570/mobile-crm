@@ -13,6 +13,7 @@ import {
 } from "../services/contacts.service";
 import { safeApiCall } from "../services/api.helpers";
 import { useCallTracking } from "../context/CallTrackingContext";
+import { getOrCreateCallActivity } from "../services/activities.service";
 import { useLookup } from "../context/LookupContext";
 import FilterModal, { FilterField } from "../components/FilterModal";
 
@@ -405,6 +406,24 @@ export default function ContactsScreen() {
                                     <Ionicons name="people" size={24} color="#7C3AED" />
                                 </View>
                                 <Text style={styles.actionLabel}>Assign</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity style={styles.actionItem} onPress={async () => {
+                                if (!selectedContact) return;
+                                try {
+                                    const act = await getOrCreateCallActivity(selectedContact._id, "Contact", contactFullName(selectedContact));
+                                    if (act?._id) {
+                                        router.push(`/outcome?id=${act._id}`);
+                                        closeHub();
+                                    }
+                                } catch (e) {
+                                    Alert.alert("Error", "Failed to prepare call outcome");
+                                }
+                            }}>
+                                <View style={[styles.actionIcon, { backgroundColor: "#ECFDF5" }]}>
+                                    <Ionicons name="checkmark-done-circle" size={24} color="#10B981" />
+                                </View>
+                                <Text style={styles.actionLabel}>Outcome</Text>
                             </TouchableOpacity>
                         </View >
                     </Animated.View >

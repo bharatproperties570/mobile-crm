@@ -23,7 +23,12 @@ export interface Inventory {
     ownerName?: string;
     ownerPhone?: string;
     inventoryDocuments?: any[];
+    tags?: string[];
+    media?: any[];
+    assignedTo?: any;
     createdAt?: string;
+    associatedContact?: string;
+    associatedPhone?: string;
 }
 
 export const getInventory = async (params?: Record<string, string>) => {

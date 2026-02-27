@@ -257,7 +257,7 @@ function MultiSelectButton({
 export default function AddLeadScreen() {
     const router = useRouter();
     const { theme } = useTheme();
-    const { id, refContact } = useLocalSearchParams<{ id: string; refContact: string }>();
+    const { id, refContact, prefill, location: pfLocation, price: pfPrice, size: pfSize, unitNo: pfUnitNo, mobile: pfMobile, name: pfName, type: pfType } = useLocalSearchParams<any>();
     const [step, setStep] = useState(0);
     const [loading, setLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
@@ -380,8 +380,25 @@ export default function AddLeadScreen() {
                 setLoading(false);
             }
         };
-        loadInitialData();
-    }, [id]);
+        if (id) {
+            loadInitialData();
+        } else if (prefill === 'true') {
+            // Handle pre-fill from Intake or other sources
+            setFormData(prev => ({
+                ...prev,
+                firstName: pfName || prev.firstName,
+                mobile: pfMobile || prev.mobile,
+                location: pfLocation || prev.location,
+                unitNo: pfUnitNo || prev.unitNo,
+                areaMin: pfSize ? parseFloat(pfSize.replace(/[^0-9.]/g, '')) || prev.areaMin : prev.areaMin,
+                budgetMax: pfPrice ? parseFloat(pfPrice.replace(/[^0-9.]/g, '')) || prev.budgetMax : prev.budgetMax,
+                propertyType: pfType || prev.propertyType,
+            }));
+            setLoading(false);
+        } else {
+            loadInitialData();
+        }
+    }, [id, prefill]);
 
     useEffect(() => {
         const delayDebounce = setTimeout(async () => {

@@ -12,6 +12,62 @@ import { getDashboardStats, DashboardStats } from "../services/dashboard.service
 import { extractTotal, lookupVal, extractList } from "../services/api.helpers";
 import { useTheme, Colors } from "../context/ThemeContext";
 
+const STAGE_COLORS: Record<string, string> = {
+    incoming: "#6366F1",
+    prospect: "#8B5CF6",
+    opportunity: "#F59E0B",
+    negotiation: "#F97316",
+    closed: "#10B981",
+};
+
+const SHORT_NAMES: Record<string, string> = {
+    incoming: "New",
+    prospect: "Pros",
+    opportunity: "Oppr",
+    negotiation: "Nego",
+    closed: "Won",
+};
+
+const ChevronSegment = memo(({ 
+    label, 
+    count, 
+    percentage,
+    color, 
+    isFirst = false,
+    isLast = false
+}: { 
+    label: string; 
+    count: number; 
+    percentage: number;
+    color: string; 
+    isFirst?: boolean;
+    isLast?: boolean;
+}) => {
+    const { theme } = useTheme();
+    const shortLabel = SHORT_NAMES[label.toLowerCase()] || label;
+    const isDark = theme.background === '#0F172A';
+    
+    return (
+        <View style={[
+            styles.dashChevronSegment,
+            { backgroundColor: isDark ? color + '25' : color + '15' },
+            isFirst && { borderTopLeftRadius: 10, borderBottomLeftRadius: 10 },
+            isLast && { borderTopRightRadius: 10, borderBottomRightRadius: 10 }
+        ]}>
+            <View style={styles.chevronContentCompact}>
+                <Text style={[styles.dashChevronLabel, { color: color }]}>{shortLabel}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 2 }}>
+                    <Text style={[styles.dashChevronCount, { color: color }]}>{count}</Text>
+                    <Text style={[styles.dashChevronPercent, { color: color + '90' }]}>{percentage}%</Text>
+                </View>
+            </View>
+            {!isLast && (
+                <View style={[styles.dashChevronArrow, { borderLeftColor: isDark ? '#1E293B' : '#fff' }]} />
+            )}
+        </View>
+    );
+});
+
 function Counter({ value, style, prefix = "", suffix = "" }: { value: number; style?: any; prefix?: string; suffix?: string }) {
     const [displayValue, setDisplayValue] = useState(0);
     useEffect(() => {
@@ -104,7 +160,16 @@ const CommandLogItem = memo(({ act, idx, config, router }: any) => {
 
     return (
         <Animated.View style={{ opacity: itemFade, transform: [{ translateY: itemFade.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) }] }}>
-            <TouchableOpacity style={[styles.logRow, { backgroundColor: theme.card, borderColor: theme.border }]} onPress={() => router.push(`/activity/${act._id}`)}>
+            <TouchableOpacity
+                style={[styles.logRow, { backgroundColor: theme.card, borderColor: theme.border }]}
+                onPress={() => {
+                    if (act.entityId && act.entityType) {
+                        const type = act.entityType.toLowerCase();
+                        const route = `/${type}-detail` as any;
+                        router.push({ pathname: route, params: { id: act.entityId } });
+                    }
+                }}
+            >
                 <View style={[styles.logIndicator, { backgroundColor: config.color, zIndex: 10 }]}>
                     <View style={styles.timelineDot} />
                 </View>
@@ -184,43 +249,34 @@ export default function MissionControlScreen() {
 
     const fetchData = useCallback(async () => {
         try {
-            const [l, d, p, i, co, b, a, ds, lu] = await Promise.allSettled([
-                api.get("/leads"),
-                api.get("/deals"),
-                api.get("/projects"),
-                api.get("/inventory"),
-                api.get("/companies"),
-                api.get("/bookings"),
-                getActivities({ status: 'Pending', limit: 3 }),
+            const [ds, lu, actv] = await Promise.allSettled([
                 getDashboardStats(),
-                api.get("/lookups")
+                api.get("/lookups"),
+                getActivities({ status: 'Pending', limit: 5 })
             ]);
-
-            const getCount = (res: PromiseSettledResult<any>) => (res.status === "fulfilled" ? extractTotal(res.value) : 0);
-            const getRecords = (res: PromiseSettledResult<any>) => (res.status === "fulfilled" ? extractList(res.value) : []);
 
             if (lu.status === "fulfilled") {
                 setLookups(extractList(lu.value));
             }
 
-            setStats({
-                leads: getCount(l),
-                deals: getCount(d),
-                projects: getCount(p),
-                inventory: getCount(i),
-                companies: getCount(co),
-                bookings: getCount(b),
-                rawProjects: getRecords(p),
-                rawInventory: getRecords(i)
-            });
-
-            if (a.status === "fulfilled") {
-                const actData = a.value?.data ?? a.value?.records ?? [];
-                setActivities(Array.isArray(actData) ? actData : []);
+            if (ds.status === "fulfilled" && ds.value.data) {
+                const data = ds.value.data;
+                setDashboardData(data);
+                
+                // Keep sync with general stats for other components
+                setStats({
+                    leads: (data.leads || []).reduce((s: number, l: any) => s + l.count, 0),
+                    deals: (data.deals || []).reduce((s: number, d: any) => s + d.count, 0),
+                    inventory: (data.inventoryHealth || []).reduce((s: number, i: any) => s + i.count, 0),
+                    projects: 0,
+                    rawProjects: [],
+                    rawInventory: []
+                });
             }
 
-            if (ds.status === "fulfilled" && ds.value.data) {
-                setDashboardData(ds.value.data);
+            if (actv.status === "fulfilled") {
+                const actData = actv.value?.data ?? actv.value?.records ?? [];
+                setActivities(Array.isArray(actData) ? actData : []);
             }
 
             Animated.timing(fadeAnim, {
@@ -245,13 +301,49 @@ export default function MissionControlScreen() {
         <View>
             {/* 3. Activity Monitor (Urgency Based) */}
             <View style={styles.monitorContainer}>
-                <Text style={[styles.sectionHeader, { color: theme.textMuted }]}>Activity Monitor</Text>
+                <View style={styles.sectionHeaderRow}>
+                    <Text style={[styles.sectionHeader, { color: theme.textMuted }]}>Activity Monitor</Text>
+                    <View style={styles.liveIndicator}>
+                        <View style={styles.dot} />
+                        <Text style={styles.liveText}>LIVE</Text>
+                    </View>
+                </View>
                 <View style={styles.monitorGrid}>
-                    <PulseTile count={dashboardData?.activities?.overdue || 0} label="Overdue" icon="time" color="#EF4444" bgColor="#FEE2E2" filter="Overdue" />
-                    <PulseTile count={dashboardData?.activities?.today || 0} label="Today" icon="today" color="#F59E0B" bgColor="#FEF3C7" filter="Today" />
-                    <PulseTile count={dashboardData?.activities?.upcoming || 0} label="Upcoming" icon="calendar" color="#6366F1" bgColor="#E0E7FF" filter="Upcoming" />
+                    <PulseTile count={dashboardData?.activities?.overdue || 0} label="Overdue" icon="time" color="#EF4444" bgColor="#FEE2E2" filter="Overdue" router={router} />
+                    <PulseTile count={dashboardData?.activities?.today || 0} label="Today" icon="today" color="#F59E0B" bgColor="#FEF3C7" filter="Today" router={router} />
+                    <PulseTile count={dashboardData?.activities?.upcoming || 0} label="Upcoming" icon="calendar" color="#6366F1" bgColor="#E0E7FF" filter="Upcoming" router={router} />
                 </View>
             </View>
+
+            {/* AI Alert Hub Section */}
+            {dashboardData?.aiAlertHub && (
+                <View style={styles.alertHubContainer}>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12 }}>
+                        {dashboardData.aiAlertHub.followupFailure?.length > 0 && dashboardData.aiAlertHub.followupFailure.map((alert: any) => (
+                            <TouchableOpacity key={alert.id} style={[styles.alertCard, { borderColor: '#EF4444' }]}>
+                                <View style={[styles.alertIcon, { backgroundColor: '#FEE2E2' }]}>
+                                    <Ionicons name="warning" size={16} color="#EF4444" />
+                                </View>
+                                <View>
+                                    <Text style={styles.alertTitle}>{alert.title}</Text>
+                                    <Text style={styles.alertMsg} numberOfLines={1}>{alert.message}</Text>
+                                </View>
+                            </TouchableOpacity>
+                        ))}
+                        {dashboardData.aiAlertHub.hotLeads?.length > 0 && dashboardData.aiAlertHub.hotLeads.map((alert: any) => (
+                            <TouchableOpacity key={alert.id} style={[styles.alertCard, { borderColor: '#F59E0B' }]}>
+                                <View style={[styles.alertIcon, { backgroundColor: '#FEF3C7' }]}>
+                                    <Ionicons name="flame" size={16} color="#F59E0B" />
+                                </View>
+                                <View>
+                                    <Text style={styles.alertTitle}>{alert.title}</Text>
+                                    <Text style={styles.alertMsg} numberOfLines={1}>{alert.message}</Text>
+                                </View>
+                            </TouchableOpacity>
+                        ))}
+                    </ScrollView>
+                </View>
+            )}
 
             {/* 4. Lead Pipeline Section (Visual) */}
             <View style={[styles.pipelineContainer, { backgroundColor: theme.card, borderColor: theme.border }]}>
@@ -260,15 +352,14 @@ export default function MissionControlScreen() {
                     <View style={[styles.pipeBadge, { backgroundColor: theme.background }]}><Text style={[styles.pipeBadgeText, { color: theme.textMuted }]}>{stats.leads || 0}</Text></View>
                 </View>
                 <View style={styles.segmentedPipeline}>
-                    {(dashboardData?.leads || []).slice(0, 4).map((item, idx) => {
-                        const total = stats.leads || 1;
-                        const percent = (item.count / total) * 100;
-                        const colors = ["#2563EB", "#3B82F6", "#60A5FA", "#10B981"];
+                    {['INCOMING', 'PROSPECT', 'OPPORTUNITY', 'NEGOTIATION', 'CLOSED'].map((cat, idx) => {
+                        const item = (dashboardData?.leads || []).find(l => l.status === cat) || { count: 0 };
+                        const colors = ["#2563EB", "#3B82F6", "#60A5FA", "#8B5CF6", "#10B981"];
                         return (
-                            <View key={idx} style={{ flex: item.count || 1, minWidth: 20 }}>
+                            <View key={idx} style={{ flex: Math.max(item.count, 0.5), minWidth: 20 }}>
                                 <View style={styles.segHeader}>
                                     <Text style={[styles.segCount, { color: theme.text }]}>{item.count}</Text>
-                                    <Text style={[styles.segLabel, { color: theme.textMuted }]} numberOfLines={1}>{item.status[0]}</Text>
+                                    <Text style={[styles.segLabel, { color: theme.textMuted }]} numberOfLines={1}>{cat[0]}</Text>
                                 </View>
                                 <View style={[styles.segBar, { backgroundColor: colors[idx % colors.length] }]} />
                             </View>
@@ -276,47 +367,84 @@ export default function MissionControlScreen() {
                     })}
                 </View>
                 <View style={styles.segLabelsRow}>
-                    {['New', 'Contacted', 'Qualified', 'Won'].map((s, i) => (
+                    {['Inc.', 'Pros.', 'Opp.', 'Neg.', 'Won'].map((s, i) => (
                         <Text key={i} style={[styles.segLabelMuted, { color: theme.textMuted }]}>{s}</Text>
                     ))}
                 </View>
             </View>
 
-            {/* 5. Deal Funnel Section */}
+            {/* 5. Deal Pipeline Section (Arrow Redesign) */}
             <View style={[styles.pipelineContainer, { backgroundColor: theme.card, borderColor: theme.border }]}>
                 <View style={styles.pipeHeaderRow}>
-                    <Text style={[styles.sectionHeader, { color: theme.textMuted }]}>Deal Funnel</Text>
-                    <View style={[styles.pipeBadge, { backgroundColor: theme.background }]}><Text style={[styles.pipeBadgeText, { color: theme.textMuted }]}>Active</Text></View>
+                    <Text style={[styles.sectionHeader, { color: theme.textMuted }]}>Deal Pipeline</Text>
+                    <TouchableOpacity onPress={() => router.push("/(tabs)/deals")}>
+                        <Text style={[styles.pipeTotal, { color: '#2563EB', fontWeight: '800' }]}>View All</Text>
+                    </TouchableOpacity>
                 </View>
-                <View style={styles.funnelRow}>
-                    <View style={styles.funnelChart}>
-                        <MiniDonut value={dashboardData?.performance?.achieved || 0} total={dashboardData?.performance?.target || 1} color="#10B981" size={70} />
+                
+                <View style={styles.dashboardChevronContainer}>
+                    {['INCOMING', 'PROSPECT', 'OPPORTUNITY', 'NEGOTIATION', 'CLOSED'].map((cat, idx) => {
+                        const item = (dashboardData?.deals || []).find(d => d.stage.toLowerCase() === cat.toLowerCase()) || { count: 0 };
+                        const total = dashboardData?.deals?.reduce((acc: number, d: any) => acc + d.count, 0) || 1;
+                        return (
+                            <ChevronSegment 
+                                key={idx}
+                                label={cat}
+                                count={item.count}
+                                percentage={Math.round((item.count / total) * 100)}
+                                color={STAGE_COLORS[cat.toLowerCase()] || '#6366F1'}
+                                isFirst={idx === 0}
+                                isLast={idx === 4}
+                            />
+                        );
+                    })}
+                </View>
+
+                <View style={styles.funnelFooterRow}>
+                    <View style={styles.funnelStatItem}>
+                         <Text style={[styles.funnelStatVal, { color: theme.text }]}>₹{((dashboardData?.performance?.achieved || 0) / 10000000).toFixed(1)}Cr</Text>
+                         <Text style={styles.funnelStatLab}>Won Value</Text>
                     </View>
-                    <View style={styles.funnelData}>
-                        <View style={styles.funnelStats}>
-                            <View style={styles.funnelItem}>
-                                <Text style={[styles.funnelVal, { color: theme.text }]}>{stats.deals || 0}</Text>
-                                <Text style={[styles.funnelLab, { color: theme.textMuted }]}>Active Deals</Text>
-                            </View>
-                            <View style={[styles.funnelDivider, { backgroundColor: theme.border }]} />
-                            <View style={styles.funnelItem}>
-                                <Text style={[styles.funnelVal, { color: "#10B981" }]}>₹{((dashboardData?.performance?.achieved || 0) / 10000000).toFixed(1)}Cr</Text>
-                                <Text style={[styles.funnelLab, { color: theme.textMuted }]}>Won Value</Text>
-                            </View>
-                        </View>
-                        <View style={[styles.funnelFooter, { borderTopColor: theme.border }]}>
-                            <View style={styles.funnelSub}>
-                                <Ionicons name="trending-up" size={14} color="#10B981" />
-                                <Text style={[styles.funnelSubText, { color: theme.textMuted }]}>Won: {dashboardData?.deals?.find(d => d.stage.toLowerCase().includes('closed') || d.stage.toLowerCase().includes('booked'))?.count || 0}</Text>
-                            </View>
-                            <View style={styles.funnelSub}>
-                                <Ionicons name="trending-down" size={14} color="#EF4444" />
-                                <Text style={[styles.funnelSubText, { color: theme.textMuted }]}>Lost: {dashboardData?.deals?.find(d => d.stage.toLowerCase().includes('cancelled'))?.count || 0}</Text>
-                            </View>
-                        </View>
+                    <View style={styles.funnelStatDivider} />
+                    <View style={styles.funnelStatItem}>
+                         <Text style={[styles.funnelStatVal, { color: theme.text }]}>{dashboardData?.performance?.conversion || 0}%</Text>
+                         <Text style={styles.funnelStatLab}>Win Rate</Text>
                     </View>
                 </View>
             </View>
+
+            {/* High-Value Agenda Section */}
+            {(dashboardData?.agenda?.tasks?.length > 0 || dashboardData?.agenda?.siteVisits?.length > 0) && (
+                <View style={[styles.pipelineContainer, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                    <Text style={[styles.sectionHeader, { color: theme.textMuted }]}>High-Value Agenda</Text>
+                    {dashboardData.agenda.siteVisits.map((sv: any) => (
+                        <View key={sv.id} style={styles.agendaItem}>
+                            <View style={[styles.agendaIcon, { backgroundColor: '#F0FDF4' }]}>
+                                <Ionicons name="navigate" size={16} color="#10B981" />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={[styles.agendaTitle, { color: theme.text }]}>{sv.target}</Text>
+                                <Text style={styles.agendaSub}>{sv.client} • {sv.time}</Text>
+                            </View>
+                            <View style={styles.activeTag}><Text style={styles.activeTagText}>VISIT</Text></View>
+                        </View>
+                    ))}
+                    {dashboardData.agenda.tasks.map((t: any) => (
+                        <View key={t.id} style={styles.agendaItem}>
+                            <View style={[styles.agendaIcon, { backgroundColor: '#F0F9FF' }]}>
+                                <Ionicons name="call" size={16} color="#3B82F6" />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={[styles.agendaTitle, { color: theme.text }]}>{t.title}</Text>
+                                <Text style={styles.agendaSub}>{t.target} • {t.time}</Text>
+                            </View>
+                            <View style={[styles.statusTag, { backgroundColor: t.status === 'overdue' ? '#FEE2E2' : '#F1F5F9' }]}>
+                                <Text style={[styles.statusTagText, { color: t.status === 'overdue' ? '#EF4444' : '#64748B' }]}>{t.status.toUpperCase()}</Text>
+                            </View>
+                        </View>
+                    ))}
+                </View>
+            )}
 
         </View>
     );
@@ -618,8 +746,32 @@ const styles = StyleSheet.create({
     logSubject: { fontSize: 14, fontWeight: "700", color: "#334155" },
     logTime: { fontSize: 11, color: "#94A3B8", fontWeight: "600", marginTop: 2 },
     emptyText: { textAlign: "center", color: "#CBD5E1", fontSize: 13, marginVertical: 20 },
-    systemNote: { marginTop: 30, padding: 20, backgroundColor: "#EEF2FF", borderRadius: 16 },
     systemNoteText: { fontSize: 12, color: "#4F46E5", fontWeight: "600", textAlign: "center", lineHeight: 18 },
+
+    // Alert Hub
+    alertHubContainer: { marginBottom: 24 },
+    alertCard: {
+        width: 200, padding: 12, borderRadius: 16, borderLeftWidth: 4,
+        backgroundColor: '#fff', flexDirection: 'row', alignItems: 'center', gap: 10,
+        elevation: 2, shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 8
+    },
+    alertIcon: { width: 32, height: 32, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
+    alertTitle: { fontSize: 12, fontWeight: '800', color: '#0F172A' },
+    alertMsg: { fontSize: 10, color: '#64748B', fontWeight: '600', marginTop: 2 },
+
+    // Agenda
+    sectionHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
+    liveIndicator: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#FEE2E2', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+    dot: { width: 4, height: 4, borderRadius: 2, backgroundColor: '#EF4444' },
+    liveText: { fontSize: 8, fontWeight: '900', color: '#EF4444' },
+    agendaItem: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#F8FAFC' },
+    agendaIcon: { width: 36, height: 36, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+    agendaTitle: { fontSize: 14, fontWeight: '700' },
+    agendaSub: { fontSize: 11, color: '#94A3B8', fontWeight: '600', marginTop: 2 },
+    statusTag: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+    statusTagText: { fontSize: 8, fontWeight: '900' },
+    activeTag: { backgroundColor: '#F0FDF4', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+    activeTagText: { fontSize: 8, fontWeight: '900', color: '#10B981' },
 
     // New Dashboard 2.0 Styles
     monitorContainer: { marginBottom: 24 },
@@ -717,4 +869,22 @@ const styles = StyleSheet.create({
     targetCell: { minWidth: '45%', paddingVertical: 4 },
     targetValSmall: { fontSize: 13, fontWeight: '800', color: '#1E293B' },
     targetLabelSmall: { fontSize: 10, fontWeight: '700', color: '#94A3B8' },
+
+    // Dashboard Arrow Pipeline
+    dashboardChevronContainer: { flexDirection: 'row', width: '100%', height: 54, marginBottom: 20 },
+    dashChevronSegment: { flex: 1, height: '100%', justifyContent: 'center', alignItems: 'center', position: 'relative' },
+    chevronContentCompact: { alignItems: 'center' },
+    dashChevronLabel: { fontSize: 9, fontWeight: '800', textTransform: 'uppercase', marginBottom: 2 },
+    dashChevronCount: { fontSize: 14, fontWeight: '900' },
+    dashChevronPercent: { fontSize: 9, fontWeight: '700', opacity: 0.8 },
+    dashChevronArrow: {
+        position: 'absolute', right: -8, width: 16, height: 16,
+        transform: [{ rotate: '45deg' }], zIndex: 10,
+        borderTopWidth: 2, borderRightWidth: 2, borderRadius: 2
+    },
+    funnelFooterRow: { flexDirection: 'row', alignItems: 'center', paddingTop: 16, borderTopWidth: 1, borderTopColor: '#F1F5F9' },
+    funnelStatItem: { flex: 1, alignItems: 'center' },
+    funnelStatVal: { fontSize: 16, fontWeight: '800' },
+    funnelStatLab: { fontSize: 10, fontWeight: '700', color: '#94A3B8', marginTop: 2 },
+    funnelStatDivider: { width: 1, height: 20, backgroundColor: '#F1F5F9' },
 });

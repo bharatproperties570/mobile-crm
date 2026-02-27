@@ -22,6 +22,7 @@ export default function AddDocumentScreen() {
     const [saving, setSaving] = useState(false);
     const [entityName, setEntityName] = useState("");
     const [existingDocs, setExistingDocs] = useState<any[]>([]);
+    const [entityData, setEntityData] = useState<any>(null);
 
     // Form State
     const [categories, setCategories] = useState<any[]>([]);
@@ -62,7 +63,7 @@ export default function AddDocumentScreen() {
         setLoading(true);
         try {
             const [catRes, projRes, entityRes] = await Promise.all([
-                getLookups("Document-Category"),
+                getLookups("DocumentCategory"),
                 getProjects(),
                 type === "Contact" ? getContactById(id!) : getInventoryById(id!)
             ]);
@@ -71,6 +72,7 @@ export default function AddDocumentScreen() {
             setProjects(projRes?.data || (Array.isArray(projRes) ? projRes : []));
 
             const data = entityRes?.data ?? entityRes;
+            setEntityData(data);
             if (type === "Contact") {
                 setEntityName([data.name, data.surname].filter(Boolean).join(" ") || "Contact");
                 setExistingDocs(data.documents || []);
@@ -105,7 +107,7 @@ export default function AddDocumentScreen() {
 
     const fetchTypes = async (categoryId: string) => {
         try {
-            const res = await api.get("/lookups", { params: { lookup_type: "Document-Type", parent_id: categoryId } });
+            const res = await api.get("/lookups", { params: { lookup_type: "DocumentType", parent_lookup_id: categoryId } });
             setTypes(res.data?.data || (Array.isArray(res.data) ? res.data : []));
         } catch (error) {
             console.error("Fetch types error:", error);
@@ -190,9 +192,9 @@ export default function AddDocumentScreen() {
                 documentPicture: fileUrl,
                 file: fileUrl,
                 // Metadata for cross-linking
-                projectName: type === "Contact" ? (linkToInventory ? (selectedProject?.name || "") : "") : (data?.projectName || ""),
-                block: type === "Contact" ? (linkToInventory ? (selectedBlock?.name || selectedBlock || "") : "") : (data?.block || ""),
-                unitNumber: type === "Contact" ? (linkToInventory ? (selectedUnit?.unitNumber || "") : "") : (data?.unitNumber || data?.unitNo || ""),
+                projectName: type === "Contact" ? (linkToInventory ? (selectedProject?.name || "") : "") : (entityData?.projectName || ""),
+                block: type === "Contact" ? (linkToInventory ? (selectedBlock?.name || selectedBlock || "") : "") : (entityData?.block || ""),
+                unitNumber: type === "Contact" ? (linkToInventory ? (selectedUnit?.unitNumber || "") : "") : (entityData?.unitNumber || entityData?.unitNo || ""),
                 linkedContactId: type === "Inventory" && linkToOwner ? selectedContact?._id : (type === "Contact" ? id : null)
             };
 

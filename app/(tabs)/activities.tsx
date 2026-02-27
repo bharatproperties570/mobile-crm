@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, memo, useMemo } from "react";
 import {
     View, Text, StyleSheet, FlatList, TouchableOpacity,
-    ActivityIndicator, RefreshControl, TextInput, Alert
+    ActivityIndicator, RefreshControl, TextInput, Alert, Vibration
 } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -115,12 +115,13 @@ export default function ActivitiesScreen() {
         });
     }, [activities, statusFilter]);
 
-    const ActivityCard = memo(({ item, onPress, onDelete, onEdit, onReschedule }: {
+    const ActivityCard = memo(({ item, onPress, onDelete, onEdit, onReschedule, onComplete }: {
         item: Activity;
         onPress: () => void;
         onDelete: (id: string) => void;
         onEdit: (id: string | undefined) => void;
         onReschedule: (item: Activity) => void;
+        onComplete: (item: Activity) => void;
     }) => {
         const meta = TYPE_META[item.type] || { color: "#64748B", icon: "list", emoji: "📌" };
         const statusStyle = STATUS_COLORS[item.status] || { bg: "#F1F5F9", text: "#64748B" };
@@ -145,8 +146,12 @@ export default function ActivitiesScreen() {
         const renderRightActions = () => (
             <View style={styles.rightActions}>
                 <TouchableOpacity style={[styles.swipeAction, { backgroundColor: "#F59E0B" }]} onPress={() => onReschedule(item)}>
-                    <Ionicons name="calendar" size={22} color="#fff" />
+                    <Ionicons name="calendar-outline" size={22} color="#fff" />
                     <Text style={styles.swipeLabel}>Reschedule</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.swipeAction, { backgroundColor: "#10B981" }]} onPress={() => onComplete(item)}>
+                    <Ionicons name="checkmark-circle-outline" size={22} color="#fff" />
+                    <Text style={styles.swipeLabel}>Complete</Text>
                 </TouchableOpacity>
             </View>
         );
@@ -290,7 +295,13 @@ export default function ActivitiesScreen() {
                     renderItem={({ item }) => (
                         <ActivityCard
                             item={item}
-                            onPress={() => router.push(`/activity/${item._id}` as any)}
+                            onPress={() => {
+                                if (item.entityId && item.entityType) {
+                                    const type = item.entityType.toLowerCase();
+                                    const route = `/${type}-detail` as any;
+                                    router.push({ pathname: route, params: { id: item.entityId } });
+                                }
+                            }}
                             onDelete={(id) => {
                                 Alert.alert("Delete Activity", "Are you sure? This cannot be undone.", [
                                     { text: "Cancel", style: "cancel" },
@@ -312,6 +323,10 @@ export default function ActivitiesScreen() {
                                     { text: "Custom", onPress: () => router.push({ pathname: "/add-activity", params: { id: act._id } } as any) },
                                     { text: "Cancel", style: "cancel" }
                                 ]);
+                            }}
+                            onComplete={(act) => {
+                                console.log("[Activities] complete pressed for", act._id);
+                                router.push(`/outcome?id=${act._id}` as any);
                             }}
                         />
                     )}

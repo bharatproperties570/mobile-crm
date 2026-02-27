@@ -19,6 +19,7 @@ const TABS_CONFIG = [
     { name: 'bookings', label: 'Booking', icon: 'newspaper-outline', iconActive: 'newspaper' },
     { name: 'accounts', label: 'Account', icon: 'cash-outline', iconActive: 'cash' },
     { name: 'marketing', label: 'Marketing', icon: 'megaphone-outline', iconActive: 'megaphone' },
+    { name: 'intake', label: 'Intake', icon: 'scan-outline', iconActive: 'scan' },
 ];
 
 const AnimatedTabItem = ({ route, isFocused, activeColor, navigation, config }: any) => {

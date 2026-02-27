@@ -19,19 +19,19 @@ export const getLookups = async (type?: string, parentId?: string) => {
 // Common types for leads
 export const LEAD_LOOKUP_TYPES = [
     "Requirement",
-    "Sub Requirement",
+    "SubRequirement",
     "Budget",
     "Source",
     "Status",
-    "Property Type",
-    "Sub Type",
-    "Unit Type",
+    "PropertyType",
+    "SubType",
+    "UnitType",
     "Facing",
-    "Road Width",
+    "RoadWidth",
     "Direction",
     "Campaign",
-    "Sub Campaign",
+    "SubCampaign",
     "SubSource",
     "Title",
-    "Project Location"
+    "ProjectLocation"
 ];

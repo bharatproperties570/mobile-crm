@@ -7,12 +7,13 @@ import {
 import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { getLeadById, leadName, getMatchingInventory, type Lead } from "./services/leads.service";
-import { getActivities } from "./services/activities.service";
+import { getActivities, getOrCreateCallActivity, getUnifiedTimeline } from "./services/activities.service";
 import { getInventoryByContact } from "./services/inventory.service";
 import { getMatchingDeals } from "./services/deals.service";
 import { useCallTracking } from "./context/CallTrackingContext";
 import { useTheme } from "./context/ThemeContext";
 import { useLookup } from "./context/LookupContext";
+import { STAGE_COLORS } from "./services/stageEngine.service";
 
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -86,12 +87,12 @@ export default function LeadDetailScreen() {
             const currentLead = leadRes?.data ?? leadRes;
             setLead(currentLead);
 
-            const [actRes, matchRes] = await Promise.all([
-                getActivities({ entityId: id, limit: 20 }),
+            const [timelineRes, matchRes] = await Promise.all([
+                getUnifiedTimeline("lead", id as string),
                 getMatchingDeals(id as string)
             ]);
 
-            setActivities(Array.isArray(actRes?.data) ? actRes.data : (Array.isArray(actRes) ? actRes : []));
+            setActivities(Array.isArray(timelineRes?.data) ? timelineRes.data : (Array.isArray(timelineRes) ? timelineRes : []));
             setMatchingDeals(Array.isArray(matchRes?.data) ? matchRes.data : (Array.isArray(matchRes) ? matchRes : []));
 
             if (currentLead.contactDetails?._id) {
@@ -178,6 +179,25 @@ export default function LeadDetailScreen() {
                             </Text>
                         </View>
                     </View>
+
+                    <View style={[styles.strategyDivider, { backgroundColor: theme.border }]} />
+
+                    {/* ── Stage Badge (from Stage Engine) ── */}
+                    <View style={styles.strategyBlock}>
+                        <Text style={[styles.strategyLabel, { color: theme.textLight }]}>STAGE</Text>
+                        {(() => {
+                            const stageStr = lv(lead.stage) !== '' ? lv(lead.stage) : 'New';
+                            const stageColor = STAGE_COLORS[stageStr] || theme.primary;
+                            return (
+                                <View style={[styles.strategyValueRow]}>
+                                    <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: stageColor, marginRight: 4 }} />
+                                    <Text style={[styles.strategyValue, { color: stageColor }]} numberOfLines={1}>
+                                        {stageStr}
+                                    </Text>
+                                </View>
+                            );
+                        })()}
+                    </View>
                 </View>
 
                 {/* Marketing & Acquisition Row */}
@@ -217,6 +237,14 @@ export default function LeadDetailScreen() {
                         { icon: 'logo-whatsapp', color: '#128C7E', onPress: () => Linking.openURL(`https://wa.me/${lead.mobile.replace(/\D/g, "")}`) },
                         { icon: 'mail', color: '#EA4335', onPress: () => Linking.openURL(`mailto:${lead.email}`) },
                         { icon: 'calendar', color: '#6366F1', onPress: () => router.push(`/add-activity?id=${id}&type=Lead`) },
+                        {
+                            icon: 'checkmark-circle-outline', color: '#10B981', onPress: async () => {
+                                try {
+                                    const act = await getOrCreateCallActivity(id!, "Lead", name);
+                                    if (act?._id) router.push(`/outcome?id=${act._id}`);
+                                } catch (e) { Alert.alert("Error", "Failed to prepare outcome"); }
+                            }
+                        },
                     ].map((action, i) => (
                         <TouchableOpacity key={i} style={[styles.modernHubBtn, { backgroundColor: action.color }]} onPress={action.onPress}>
                             <Ionicons name={action.icon as any} size={20} color="#fff" />
@@ -413,19 +441,48 @@ export default function LeadDetailScreen() {
                             {Array.isArray(activities) && activities.length === 0 ? (
                                 <Text style={styles.emptyText}>No activities recorded yet.</Text>
                             ) : (
-                                Array.isArray(activities) && activities.map((act, i) => (
-                                    <View key={i} style={[styles.timelineItem, { borderLeftColor: theme.border }]}>
-                                        <View style={[styles.timelineDot, { backgroundColor: theme.primary }]} />
-                                        <View style={styles.timelineBody}>
-                                            <View style={styles.timelineHeader}>
-                                                <Text style={[styles.timelineType, { color: theme.primary }]}>{act.type.toUpperCase()}</Text>
-                                                <Text style={styles.timelineDate}>{new Date(act.createdAt).toLocaleDateString()}</Text>
+                                Array.isArray(activities) && activities.map((act, i) => {
+                                    const isAudit = act.source === "audit";
+                                    let icon: any = "time-outline";
+                                    let color = theme.primary;
+
+                                    if (isAudit) {
+                                        icon = "history-outline";
+                                        color = "#8B5CF6";
+                                    } else if (act.type.toLowerCase().includes("call")) {
+                                        icon = "call-outline";
+                                        color = "#3B82F6";
+                                    } else if (act.type.toLowerCase().includes("task")) {
+                                        icon = "checkbox-outline";
+                                        color = "#F59E0B";
+                                    } else if (act.type.toLowerCase().includes("email")) {
+                                        icon = "mail-outline";
+                                        color = "#EF4444";
+                                    }
+
+                                    return (
+                                        <View key={i} style={[styles.timelineItem, { borderLeftColor: theme.border }]}>
+                                            <View style={[styles.timelineDot, { backgroundColor: color }]}>
+                                                <Ionicons name={icon} size={8} color="#fff" />
                                             </View>
-                                            <Text style={[styles.timelineSubject, { color: theme.text }]}>{act.subject}</Text>
-                                            {(act.description || act.details?.note) && <Text style={[styles.timelineNote, { color: theme.textLight }]}>{act.description || act.details.note}</Text>}
+                                            <View style={[styles.timelineBody, isAudit && { borderLeftWidth: 3, borderLeftColor: color }]}>
+                                                <View style={styles.timelineHeader}>
+                                                    <Text style={[styles.timelineType, { color: color }]}>
+                                                        {isAudit ? "AUDIT LOG" : act.type.toUpperCase()}
+                                                    </Text>
+                                                    <Text style={styles.timelineDate}>{new Date(act.timestamp || act.createdAt).toLocaleDateString()}</Text>
+                                                </View>
+                                                <Text style={[styles.timelineSubject, { color: theme.text }]}>{act.title || act.subject}</Text>
+                                                {(act.description || act.details?.note) && (
+                                                    <Text style={[styles.timelineNote, { color: theme.textLight }]}>
+                                                        {act.description || act.details?.note}
+                                                    </Text>
+                                                )}
+                                                {act.actor && <Text style={{ fontSize: 9, color: theme.textLight, marginTop: 4 }}>By {act.actor}</Text>}
+                                            </View>
                                         </View>
-                                    </View>
-                                ))
+                                    );
+                                })
                             )}
                         </View>
                     </ScrollView>

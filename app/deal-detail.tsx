@@ -12,6 +12,7 @@ import { getActivities } from "./services/activities.service";
 import { getMatchingLeads } from "./services/leads.service";
 import { getDealById, type Deal } from "./services/deals.service";
 import { useLookup } from "./context/LookupContext";
+import { getDealHealth } from "./services/stageEngine.service";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -95,6 +96,7 @@ export default function DealDetailScreen() {
     const [matchingLeads, setMatchingLeads] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState(0);
+    const [dealHealth, setDealHealth] = useState<{ score: number; label: string; color: string } | null>(null);
 
     const scrollX = useRef(new Animated.Value(0)).current;
     const tabScrollViewRef = useRef<ScrollView>(null);
@@ -108,14 +110,16 @@ export default function DealDetailScreen() {
             const currentDeal = dealRes?.data ?? dealRes?.deal ?? dealRes;
             setDeal(currentDeal);
 
-            // Fetch other data in parallel
+            // Fetch other data in parallel (including deal health from stage engine)
             Promise.all([
                 getActivities({ entityId: id, limit: 20 }),
-                getMatchingLeads(id as string)
-            ]).then(([actRes, matchRes]) => {
+                getMatchingLeads(id as string),
+                getDealHealth(id as string)
+            ]).then(([actRes, matchRes, healthRes]) => {
                 setActivities(Array.isArray(actRes?.data) ? actRes.data : (Array.isArray(actRes) ? actRes : []));
                 setMatchingLeads(Array.isArray(matchRes?.data) ? matchRes.data : (Array.isArray(matchRes) ? matchRes : []));
-            }).catch(e => console.error("Suppplementary fetch error:", e));
+                if (healthRes?.score !== undefined) setDealHealth(healthRes);
+            }).catch(e => console.error("Supplementary fetch error:", e));
 
             Animated.timing(fadeAnim, { toValue: 1, duration: 600, useNativeDriver: true }).start();
         } catch (error) {
@@ -195,9 +199,20 @@ export default function DealDetailScreen() {
                             )}
                         </View>
                     </View>
-                    <View style={[styles.scoreRing, { borderColor: score.color + '40' }]}>
-                        <Text style={[styles.scoreValue, { color: score.color }]}>{score.val}</Text>
-                        <Text style={[styles.scoreLabel, { color: theme.textLight }]}>CONF.</Text>
+                    {/* Health + Confidence Scores */}
+                    <View style={{ alignItems: 'center', gap: 6 }}>
+                        {/* Deal Health from Stage Engine */}
+                        {dealHealth ? (
+                            <View style={[styles.scoreRing, { borderColor: dealHealth.color + '50', borderWidth: 3 }]}>
+                                <Text style={[styles.scoreValue, { color: dealHealth.color, fontSize: 14 }]}>{dealHealth.score}</Text>
+                                <Text style={[styles.scoreLabel, { color: dealHealth.color }]}>{dealHealth.label.toUpperCase().slice(0, 6)}</Text>
+                            </View>
+                        ) : (
+                            <View style={[styles.scoreRing, { borderColor: score.color + '40' }]}>
+                                <Text style={[styles.scoreValue, { color: score.color }]}>{score.val}</Text>
+                                <Text style={[styles.scoreLabel, { color: theme.textLight }]}>CONF.</Text>
+                            </View>
+                        )}
                     </View>
                 </View>
 

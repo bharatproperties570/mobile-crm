@@ -10,8 +10,10 @@ import Swipeable from "react-native-gesture-handler/Swipeable";
 import { getLeads, leadName, updateLead, deleteLead, type Lead } from "../services/leads.service";
 import { getLookups, type Lookup } from "../services/lookups.service";
 import { safeApiCall, lookupVal } from "../services/api.helpers";
+import { getLeadScores } from "../services/stageEngine.service";
 import api from "../services/api";
 import { useCallTracking } from "../context/CallTrackingContext";
+import { getOrCreateCallActivity } from "../services/activities.service";
 import { useTheme } from "../context/ThemeContext";
 import { Colors } from "../context/ThemeContext";
 import { useLookup } from "../context/LookupContext";
@@ -266,6 +268,23 @@ function ActionSheet({ visible, onClose, lead, onUpdate, statuses, users }: {
                             </View>
                             <Text style={styles.actionLabel}>Dormant</Text>
                         </TouchableOpacity>
+
+                        <TouchableOpacity style={styles.actionItem} onPress={async () => {
+                            try {
+                                const act = await getOrCreateCallActivity(lead._id, "Lead", leadName(lead));
+                                if (act?._id) {
+                                    router.push(`/outcome?id=${act._id}`);
+                                    onClose();
+                                }
+                            } catch (e) {
+                                Alert.alert("Error", "Failed to prepare call outcome");
+                            }
+                        }}>
+                            <View style={[styles.actionIcon, { backgroundColor: "#ECFDF5" }]}>
+                                <Ionicons name="checkmark-done-circle" size={24} color="#10B981" />
+                            </View>
+                            <Text style={styles.actionLabel}>Outcome</Text>
+                        </TouchableOpacity>
                     </View>
 
                     {showReassign && (
@@ -462,7 +481,7 @@ const StaggeredLeadItem = memo(({ item, index, renderItem }: any) => {
     );
 });
 
-const LeadCard = memo(({ lead, index, onPress, onMore, isSelected, onLongPress, getLookupValue }: {
+const LeadCard = memo(({ lead, index, onPress, onMore, isSelected, onLongPress, getLookupValue, liveScore }: {
     lead: Lead;
     index: number;
     onPress: () => void;
@@ -470,13 +489,15 @@ const LeadCard = memo(({ lead, index, onPress, onMore, isSelected, onLongPress, 
     isSelected?: boolean;
     onLongPress?: () => void;
     getLookupValue: (type: string, id: any) => string;
+    liveScore?: { score: number; color: string; label: string };
 }) => {
     const { theme } = useTheme();
     const { trackCall } = useCallTracking();
     const router = useRouter();
     const name = leadName(lead);
     const stageLabel = lookupVal(lead.stage);
-    const score = getLeadScore(lead);
+    // Use backend live score if available; fallback to local intent_index heuristic
+    const score = liveScore ? { val: liveScore.score, color: liveScore.color } : getLeadScore(lead);
     const req = REQ_CONFIG[lookupVal(lead.requirement).toLowerCase()] || REQ_CONFIG.default;
 
     const scaleValue = useRef(new Animated.Value(1)).current;
@@ -567,11 +588,11 @@ const LeadCard = memo(({ lead, index, onPress, onMore, isSelected, onLongPress, 
                             </View>
                             <Text style={[styles.reqText, { color: theme.textMuted }]}>{getLookupValue("Requirement", lead.requirement)} • {getLookupValue("Unit Type", lead.unitType)}</Text>
                         </View>
-                        {(lead.locCity || lead.locArea) && (
+                        {(lead.locCity || lead.location) && (
                             <View style={styles.locRow}>
                                 <Ionicons name="location-sharp" size={14} color={theme.textLight} />
                                 <Text style={[styles.locText, { color: theme.textLight }]} numberOfLines={1}>
-                                    {[getLookupValue("City", lead.locCity), getLookupValue("Location", lead.locArea)].filter(v => v && v !== "—").join(", ") || "No Location"}
+                                    {[getLookupValue("City", lead.locCity), getLookupValue("Location", lead.location)].filter(v => v && v !== "—").join(", ") || "No Location"}
                                 </Text>
                             </View>
                         )}
@@ -629,6 +650,7 @@ export default function LeadsScreen() {
 
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
     const [bulkAssignVisible, setBulkAssignVisible] = useState(false);
+    const [liveScores, setLiveScores] = useState<Record<string, { score: number; color: string; label: string }>>({});
 
     const filterScale = useRef(new Animated.Value(1)).current;
     const searchFocusAnim = useRef(new Animated.Value(0)).current;
@@ -670,6 +692,10 @@ export default function LeadsScreen() {
             setLeads(prev => shouldAppend ? [...prev, ...newLeads] : newLeads);
             setHasMore(newLeads.length === 50);
             setPage(pageNum);
+            // Fetch live scores from Stage Engine (fire-and-forget)
+            if (!shouldAppend) {
+                getLeadScores().then(scores => setLiveScores(scores)).catch(() => { });
+            }
         }
         setLoading(false);
         setRefreshing(false);
@@ -871,8 +897,9 @@ export default function LeadsScreen() {
                             lead={item}
                             index={index}
                             isSelected={selectedIds.includes(item._id)}
-                            onLongPress={() => toggleSelection(item._id)}
+                            onLongPress={() => { toggleSelection(item._id); }}
                             getLookupValue={getLookupValue}
+                            liveScore={liveScores[item._id]}
                             onPress={() => {
                                 if (selectedIds.length > 0) toggleSelection(item._id);
                                 else router.push(`/lead-detail?id=${item._id}`);

@@ -8,7 +8,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "./context/ThemeContext";
 import { useCallTracking } from "./context/CallTrackingContext";
 import { getContactById } from "./services/contacts.service";
-import { getActivities } from "./services/activities.service";
+import { getActivities, getOrCreateCallActivity, getUnifiedTimeline } from "./services/activities.service";
 import { getInventoryByContact } from "./services/inventory.service";
 import { useLookup } from "./context/LookupContext";
 
@@ -93,14 +93,14 @@ export default function ContactDetailScreen() {
     const fetchData = useCallback(async () => {
         if (!id) return;
         try {
-            const [contactRes, actRes] = await Promise.all([
+            const [contactRes, timelineRes] = await Promise.all([
                 getContactById(id as string),
-                getActivities({ entityId: id, limit: 20 })
+                getUnifiedTimeline("contact", id as string)
             ]);
 
             const currentContact = contactRes?.data ?? contactRes;
             setContact(currentContact);
-            setActivities(actRes?.data ?? actRes);
+            setActivities(Array.isArray(timelineRes?.data) ? timelineRes.data : (Array.isArray(timelineRes) ? timelineRes : []));
 
             const ownedRes = await getInventoryByContact(id);
             setOwnedInventory(Array.isArray(ownedRes?.data) ? ownedRes.data : (Array.isArray(ownedRes) ? ownedRes : []));
@@ -231,6 +231,14 @@ export default function ContactDetailScreen() {
                         { icon: 'logo-whatsapp', color: '#128C7E', onPress: () => Linking.openURL(`https://wa.me/${phone.replace(/\D/g, "")}`) },
                         { icon: 'mail', color: '#EA4335', onPress: () => Linking.openURL(`mailto:${email}`) },
                         { icon: 'calendar', color: '#6366F1', onPress: () => router.push(`/add-activity?id=${id}&type=Contact`) },
+                        {
+                            icon: 'checkmark-circle-outline', color: '#10B981', onPress: async () => {
+                                try {
+                                    const act = await getOrCreateCallActivity(id!, "Contact", fullName);
+                                    if (act?._id) router.push(`/outcome?id=${act._id}`);
+                                } catch (e) { Alert.alert("Error", "Failed to prepare outcome"); }
+                            }
+                        },
                     ].map((action, i) => (
                         <TouchableOpacity key={i} style={[styles.modernHubBtn, { backgroundColor: action.color }]} onPress={action.onPress}>
                             <Ionicons name={action.icon as any} size={20} color="#fff" />
@@ -330,19 +338,48 @@ export default function ContactDetailScreen() {
                             {Array.isArray(activities) && activities.length === 0 ? (
                                 <Text style={styles.emptyText}>No activities recorded yet.</Text>
                             ) : (
-                                Array.isArray(activities) && activities.map((act, i) => (
-                                    <View key={i} style={[styles.timelineItem, { borderLeftColor: theme.border }]}>
-                                        <View style={[styles.timelineDot, { backgroundColor: theme.primary }]} />
-                                        <View style={styles.timelineBody}>
-                                            <View style={styles.timelineHeader}>
-                                                <Text style={[styles.timelineType, { color: theme.primary }]}>{act.type.toUpperCase()}</Text>
-                                                <Text style={styles.timelineDate}>{new Date(act.createdAt).toLocaleDateString()}</Text>
+                                Array.isArray(activities) && activities.map((act, i) => {
+                                    const isAudit = act.source === "audit";
+                                    let icon: any = "time-outline";
+                                    let color = theme.primary;
+
+                                    if (isAudit) {
+                                        icon = "history-outline";
+                                        color = "#8B5CF6";
+                                    } else if (act.type.toLowerCase().includes("call")) {
+                                        icon = "call-outline";
+                                        color = "#3B82F6";
+                                    } else if (act.type.toLowerCase().includes("task")) {
+                                        icon = "checkbox-outline";
+                                        color = "#F59E0B";
+                                    } else if (act.type.toLowerCase().includes("email")) {
+                                        icon = "mail-outline";
+                                        color = "#EF4444";
+                                    }
+
+                                    return (
+                                        <View key={i} style={[styles.timelineItem, { borderLeftColor: theme.border }]}>
+                                            <View style={[styles.timelineDot, { backgroundColor: color }]}>
+                                                <Ionicons name={icon} size={8} color="#fff" />
                                             </View>
-                                            <Text style={[styles.timelineSubject, { color: theme.text }]}>{act.subject}</Text>
-                                            {(act.description || act.details?.note) && <Text style={[styles.timelineNote, { color: theme.textLight }]}>{act.description || act.details.note}</Text>}
+                                            <View style={[styles.timelineBody, isAudit && { borderLeftWidth: 3, borderLeftColor: color }]}>
+                                                <View style={styles.timelineHeader}>
+                                                    <Text style={[styles.timelineType, { color: color }]}>
+                                                        {isAudit ? "AUDIT LOG" : act.type.toUpperCase()}
+                                                    </Text>
+                                                    <Text style={styles.timelineDate}>{new Date(act.timestamp || act.createdAt).toLocaleDateString()}</Text>
+                                                </View>
+                                                <Text style={[styles.timelineSubject, { color: theme.text }]}>{act.title || act.subject}</Text>
+                                                {(act.description || act.details?.note) && (
+                                                    <Text style={[styles.timelineNote, { color: theme.textLight }]}>
+                                                        {act.description || act.details?.note}
+                                                    </Text>
+                                                )}
+                                                {act.actor && <Text style={{ fontSize: 9, color: theme.textLight, marginTop: 4 }}>By {act.actor}</Text>}
+                                            </View>
                                         </View>
-                                    </View>
-                                ))
+                                    );
+                                })
                             )}
                         </View>
                     </ScrollView>

@@ -50,10 +50,22 @@ export function extractTotal(res: any): number {
 /**
  * Safe API call wrapper for list endpoints.
  */
-export async function safeApiCall<T>(fn: () => Promise<any>): Promise<{ data: T[]; total: number; error: string | null }> {
+export async function safeApiCall<T>(fn: () => Promise<any>): Promise<{
+    data: T[];
+    total: number;
+    activeCount?: number;
+    inactiveCount?: number;
+    error: string | null
+}> {
     try {
         const res = await fn();
-        return { data: extractList(res), total: extractTotal(res), error: null };
+        return {
+            data: extractList(res),
+            total: extractTotal(res),
+            activeCount: res.activeCount ?? res.data?.activeCount,
+            inactiveCount: res.inactiveCount ?? res.data?.inactiveCount,
+            error: null
+        };
     } catch (err: any) {
         const msg =
             err?.response?.data?.message ||

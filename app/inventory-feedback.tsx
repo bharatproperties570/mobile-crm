@@ -118,7 +118,8 @@ export default function InventoryFeedbackScreen() {
             }
 
             let newStatus = inventory.status;
-            if (formData.markAsSold && formData.reason) {
+            const rule = masterFields?.feedbackRules?.[formData.result]?.[formData.reason];
+            if (rule?.inventoryStatus === 'InActive' && formData.markAsSold) {
                 if (String(formData.reason).includes('Sold Out')) newStatus = 'Sold Out';
                 else if (String(formData.reason).includes('Rented Out')) newStatus = 'Rented Out';
                 else newStatus = 'Inactive';
@@ -232,8 +233,9 @@ export default function InventoryFeedbackScreen() {
                                 <TouchableOpacity
                                     key={opt}
                                     onPress={() => {
-                                        const isSold = ['Sold Out', 'Rented Out'].some(k => opt.includes(k));
-                                        setFormData({ ...formData, reason: opt, markAsSold: isSold });
+                                        const rule = masterFields?.feedbackRules?.[formData.result]?.[opt];
+                                        const isInactive = rule?.inventoryStatus === 'InActive';
+                                        setFormData({ ...formData, reason: opt, markAsSold: isInactive });
                                     }}
                                     style={[
                                         styles.pillSmall,
@@ -254,7 +256,10 @@ export default function InventoryFeedbackScreen() {
                     <View style={[styles.alertCard, { backgroundColor: '#F0F9FF', borderColor: '#BBF7D0' }]}>
                         <Ionicons name="information-circle" size={20} color="#0EA5E9" />
                         <Text style={styles.alertText}>
-                            Setting status to {formData.reason.includes('Sold') ? 'Sold Out' : 'Rented Out'} automatically.
+                            {formData.reason.includes('Sold') || formData.reason.includes('Rented')
+                                ? `Setting status to ${formData.reason.includes('Sold') ? 'Sold Out' : 'Rented Out'} automatically.`
+                                : `Marking property as InActive based on feedback outcome.`
+                            }
                         </Text>
                     </View>
                 )}

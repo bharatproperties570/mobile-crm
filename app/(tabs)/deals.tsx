@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useState, useRef, useMemo, memo } from "react";
+import React, { useCallback, useEffect, useState, useRef, useMemo, memo, Fragment } from "react";
 import {
-    View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity,
+    View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, ScrollView,
     RefreshControl, ActivityIndicator, Alert, Linking, Modal, Pressable, Animated,
-    SafeAreaView, Dimensions, Vibration
+    SafeAreaView, Dimensions, Vibration, Platform, UIManager
 } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -13,6 +13,11 @@ import api from "../services/api";
 import { useCallTracking } from "../context/CallTrackingContext";
 import { useLookup } from "../context/LookupContext";
 import FilterModal, { FilterField } from "../components/FilterModal";
+import { getDealScores } from "../services/stageEngine.service";
+
+if (Platform.OS === 'android' && UIManager?.setLayoutAnimationEnabledExperimental) {
+  try { UIManager.setLayoutAnimationEnabledExperimental(true); } catch(e) {}
+}
 
 const DEAL_FILTER_FIELDS: FilterField[] = [
     { key: "stage", label: "Stage", type: "lookup", lookupType: "Stage" },
@@ -27,8 +32,9 @@ const STAGE_COLORS: Record<string, string> = {
     quote: "#8B5CF6",
     negotiation: "#F59E0B",
     booked: "#F97316",
-    closed: "#10B981",
-    cancelled: "#EF4444",
+    "closed won": "#10B981",
+    "closed lost": "#EF4444",
+    cancelled: "#64748B",
 };
 
 function resolveName(field: unknown): string {
@@ -56,11 +62,190 @@ function getDealTitle(deal: Deal): string {
     return titleParts.join(" - ") || deal.dealId || deal.name || deal.title || "Untitled Deal";
 }
 
-function formatAmount(amount?: number): string {
-    if (!amount || amount === 0) return "—";
-    if (amount >= 10000000) return `₹${(amount / 10000000).toFixed(2)}Cr`;
-    if (amount >= 100000) return `₹${(amount / 100000).toFixed(2)}L`;
-    return `₹${amount.toLocaleString("en-IN")}`;
+const DealScoreRing = memo(({ score, color = "#2563EB", size = 44 }: { score: number; color?: string; size?: number }) => {
+    const strokeWidth = 3;
+    const radius = (size - strokeWidth) / 2;
+    const circumference = radius * 2 * Math.PI;
+    const animatedValue = useRef(new Animated.Value(0)).current;
+
+    useEffect(() => {
+        const toVal = (Number(score) || 0) / 100;
+        Animated.timing(animatedValue, {
+            toValue: isFinite(toVal) ? toVal : 0,
+            duration: 1000,
+            useNativeDriver: true,
+        }).start();
+    }, [score]);
+
+    return (
+        <View style={{ width: size, height: size, justifyContent: 'center', alignItems: 'center' }}>
+            <View style={{
+                width: size, height: size, borderRadius: size / 2,
+                borderWidth: strokeWidth, borderColor: 'rgba(241, 245, 249, 1)',
+                position: 'absolute'
+            }} />
+            <View style={{
+                width: size, height: size, borderRadius: size / 2,
+                borderWidth: strokeWidth,
+                borderColor: color,
+                borderLeftColor: score > 75 ? color : 'transparent',
+                borderBottomColor: score > 50 ? color : 'transparent',
+                borderRightColor: score > 25 ? color : 'transparent',
+                borderTopColor: color,
+                transform: [{ rotate: '-45deg' }]
+            }} />
+            <Text style={{ fontSize: 9, fontWeight: '800', color: '#1E293B', position: 'absolute' }}>{score}</Text>
+        </View>
+    );
+});
+
+const SHORT_NAMES: Record<string, string> = {
+    open: "Open",
+    quote: "Quote",
+    negotiation: "Nego",
+    booked: "Book",
+    "closed won": "Won",
+    "closed lost": "Lost",
+};
+
+const ChevronSegment = memo(({ 
+    label, 
+    count, 
+    percentage,
+    color, 
+    isSelected, 
+    isFirst = false,
+    isLast = false,
+    onPress 
+}: { 
+    label: string; 
+    count: number; 
+    percentage: number;
+    color: string; 
+    isSelected: boolean; 
+    isFirst?: boolean;
+    isLast?: boolean;
+    onPress: () => void;
+}) => {
+    const shortLabel = SHORT_NAMES[label.toLowerCase()] || label;
+    
+    return (
+        <TouchableOpacity 
+            activeOpacity={0.9}
+            onPress={onPress}
+            style={[
+                styles.chevronSegment,
+                { backgroundColor: isSelected ? color : color + '15' },
+                isFirst && { borderTopLeftRadius: 8, borderBottomLeftRadius: 8 },
+                isLast && { borderTopRightRadius: 8, borderBottomRightRadius: 8 }
+            ]}
+        >
+            <View style={styles.chevronContent}>
+                <Text style={[styles.chevronLabel, { color: isSelected ? '#fff' : color }]}>{shortLabel}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 2 }}>
+                    <Text style={[styles.chevronCount, { color: isSelected ? '#fff' : color }]}>{count}</Text>
+                    <Text style={[styles.chevronPercent, { color: isSelected ? '#ffffff90' : color + '90' }]}>{percentage}%</Text>
+                </View>
+            </View>
+            {!isLast && (
+                <View style={[styles.chevronArrow, { borderLeftColor: isSelected ? color : color + '15' }]} />
+            )}
+        </TouchableOpacity>
+    );
+});
+
+const DealPipelineHorizontal = memo(({ 
+    stages, 
+    activeStage, 
+    onStagePress 
+}: { 
+    stages: any[]; 
+    activeStage: string | null;
+    onStagePress: (label: string | null) => void;
+}) => {
+    const [isClosedExpanded, setIsClosedExpanded] = useState(false);
+
+    const toggleClosed = () => {
+        setIsClosedExpanded(!isClosedExpanded);
+    };
+
+    const primaryStages = stages.filter(s => !['closed won', 'closed lost'].includes(s.label));
+    const closedSubStages = stages.filter(s => ['closed won', 'closed lost'].includes(s.label));
+    
+    // Aggregated Closed Data
+    const closedTotal = closedSubStages.reduce((sum, s) => sum + s.count, 0);
+    const totalCount = stages.reduce((sum, s) => sum + s.count, 0) || 1;
+    const closedPercent = Math.round((closedTotal / totalCount) * 100);
+
+    return (
+        <View style={styles.horizontalPipelineWrapper}>
+            <View style={styles.chevronContainer}>
+                {primaryStages.map((s, idx) => (
+                    <ChevronSegment 
+                        key={idx}
+                        label={s.label}
+                        count={s.count}
+                        percentage={Math.round((s.count / totalCount) * 100)}
+                        color={s.color}
+                        isSelected={activeStage === s.label}
+                        isFirst={idx === 0}
+                        onPress={() => onStagePress(s.label)}
+                    />
+                ))}
+                
+                <TouchableOpacity 
+                    onPress={toggleClosed}
+                    activeOpacity={0.9}
+                    style={[
+                        styles.chevronSegment,
+                        { backgroundColor: activeStage?.includes('closed') ? '#10B981' : '#10B98115' },
+                        { borderTopRightRadius: 8, borderBottomRightRadius: 8, borderLeftWidth: 0 }
+                    ]}
+                >
+                    <View style={styles.chevronContent}>
+                        <Text style={[styles.chevronLabel, { color: activeStage?.includes('closed') ? '#fff' : '#10B981' }]}>Closed</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 2 }}>
+                            <Text style={[styles.chevronCount, { color: activeStage?.includes('closed') ? '#fff' : '#10B981' }]}>{closedTotal}</Text>
+                            <Text style={[styles.chevronPercent, { color: activeStage?.includes('closed') ? '#ffffff90' : '#10B98190' }]}>{closedPercent}%</Text>
+                            <Ionicons 
+                                name={isClosedExpanded ? "chevron-up" : "chevron-down"} 
+                                size={10} 
+                                color={activeStage?.includes('closed') ? '#fff' : '#10B981'} 
+                                style={{ marginLeft: 2 }}
+                            />
+                        </View>
+                    </View>
+                </TouchableOpacity>
+            </View>
+
+            {isClosedExpanded && (
+                <View style={styles.compactSubRow}>
+                    {closedSubStages.map((s, idx) => (
+                        <TouchableOpacity 
+                            key={idx}
+                            onPress={() => onStagePress(s.label)}
+                            style={[
+                                styles.subStageChip,
+                                { backgroundColor: activeStage === s.label ? s.color : s.color + '15' }
+                            ]}
+                        >
+                            <Text style={[styles.subStageText, { color: activeStage === s.label ? '#fff' : s.color }]}>
+                                {SHORT_NAMES[s.label] || s.label}: {s.count}
+                            </Text>
+                        </TouchableOpacity>
+                    ))}
+                </View>
+            )}
+        </View>
+    );
+});
+
+function formatAmount(amount?: any): string {
+    const val = Number(amount) || 0;
+    if (val === 0) return "—";
+    if (val >= 10000000) return `₹${(val / 10000000).toFixed(2)}Cr`;
+    if (val >= 100000) return `₹${(val / 100000).toFixed(2)}L`;
+    return `₹${val.toLocaleString("en-IN")}`;
 }
 
 const DealCard = memo(({
@@ -73,6 +258,7 @@ const DealCard = memo(({
     onEmail,
     onMenuPress,
     getLookupValue,
+    liveScore,
 }: {
     deal: Deal;
     onPress: () => void;
@@ -83,6 +269,7 @@ const DealCard = memo(({
     onEmail: () => void;
     onMenuPress: () => void;
     getLookupValue: (type: string, id: any) => string;
+    liveScore?: { score: number; color: string; label: string };
 }) => {
     const stageStr = (resolveName(deal.stage) || "open").toLowerCase();
     const color = STAGE_COLORS[stageStr] ?? "#6366F1";
@@ -121,11 +308,14 @@ const DealCard = memo(({
     );
 
     const dealTypeStr = resolveName(deal.intent || deal.dealType || deal.transactionType || "Sell").toUpperCase();
-    const score = deal.score || (deal as any).dealScore || 0;
-    let typeColor = "#64748B"; // cold (0-30)
-    if (score >= 81) typeColor = "#7C3AED"; // superHot
-    else if (score >= 61) typeColor = "#EF4444"; // hot
-    else if (score >= 31) typeColor = "#F59E0B"; // warm
+    // Live backend score wins; fallback to deal.score (usually 0) if not yet loaded
+    const rawScore = liveScore ? liveScore.score : (deal.score || (deal as any).dealScore || 0);
+    let typeColor = liveScore ? liveScore.color : "#64748B"; // cold
+    if (!liveScore) {
+        if (rawScore >= 81) typeColor = "#7C3AED";
+        else if (rawScore >= 61) typeColor = "#EF4444";
+        else if (rawScore >= 31) typeColor = "#F59E0B";
+    }
 
     return (
         <Swipeable renderRightActions={renderRightActions} renderLeftActions={renderLeftActions} friction={2}>
@@ -153,10 +343,15 @@ const DealCard = memo(({
                             </View>
                         </View>
                         <View style={styles.headerRight}>
-                            <Text style={[styles.dealAmount, { color: color }]}>{formatAmount(amount)}</Text>
-                            <TouchableOpacity style={styles.menuTrigger} onPress={onMenuPress}>
-                                <Ionicons name="ellipsis-vertical" size={20} color="#94A3B8" />
-                            </TouchableOpacity>
+                            <View style={styles.qualityBox}>
+                                <DealScoreRing score={rawScore} color={typeColor} size={36} />
+                            </View>
+                            <View style={{ alignItems: 'flex-end', gap: 2 }}>
+                                <Text style={[styles.dealAmount, { color: color }]}>{formatAmount(amount)}</Text>
+                                <TouchableOpacity style={styles.menuTrigger} onPress={onMenuPress}>
+                                    <Ionicons name="ellipsis-vertical" size={20} color="#94A3B8" />
+                                </TouchableOpacity>
+                            </View>
                         </View>
                     </View>
 
@@ -213,6 +408,32 @@ export default function DealsScreen() {
     const [newTag, setNewTag] = useState("");
     const slideAnim = useRef(new Animated.Value(350)).current;
 
+    const [selectedIds, setSelectedIds] = useState<string[]>([]);
+    const [bulkAssignVisible, setBulkAssignVisible] = useState(false);
+    const [dealScores, setDealScores] = useState<Record<string, { score: number; color: string; label: string }>>({});
+    const [contactPickerVisible, setContactPickerVisible] = useState(false);
+    const [availableContacts, setAvailableContacts] = useState<any[]>([]);
+    const [pendingAction, setPendingAction] = useState<{ type: string; deal: Deal } | null>(null);
+    const [activePipelineStage, setActivePipelineStage] = useState<string | null>(null);
+
+    const pipelineStats = useMemo(() => {
+        const stats: Record<string, number> = {};
+        deals.forEach(d => {
+            let stage = (resolveName(d.stage) || "open").toLowerCase();
+            if (stage === 'closed' || stage === 'closed won') stage = 'closed won';
+            if (stage === 'closed lost') stage = 'closed lost';
+            stats[stage] = (stats[stage] || 0) + 1;
+        });
+        
+        // Logical pipeline sequence
+        const order = ['open', 'quote', 'negotiation', 'booked', 'closed won', 'closed lost'];
+        return order.map(s => ({
+            label: s,
+            count: stats[s] || 0,
+            color: STAGE_COLORS[s] || "#64748B"
+        }));
+    }, [deals]);
+
     const fetchDeals = useCallback(async (pageNum = 1, shouldAppend = false) => {
         if (!shouldAppend) setLoading(true);
         const result = await safeApiCall<any>(() => getDeals({ page: String(pageNum), limit: "50" }));
@@ -225,6 +446,10 @@ export default function DealsScreen() {
             setDeals(prev => shouldAppend ? [...prev, ...newDeals] : newDeals);
             setHasMore(newDeals.length === 50);
             setPage(pageNum);
+            // Fetch live deal scores from Stage Engine (fire-and-forget)
+            if (!shouldAppend) {
+                getDealScores().then(scores => setDealScores(scores)).catch(() => { });
+            }
         }
         setLoading(false);
         setRefreshing(false);
@@ -266,9 +491,17 @@ export default function DealsScreen() {
             if (filters.propertyType?.length > 0 && !filters.propertyType.includes(deal.propertyType)) return false;
             if (filters.transactionType?.length > 0 && !filters.transactionType.includes(deal.transactionType)) return false;
 
+            // Pipeline stage filter
+            if (activePipelineStage) {
+                let s = (resolveName(deal.stage) || "open").toLowerCase();
+                if (s === 'closed' || s === 'closed won') s = 'closed won';
+                if (s === 'closed lost') s = 'closed lost';
+                if (s !== activePipelineStage.toLowerCase()) return false;
+            }
+
             return true;
         });
-    }, [deals, search, filters]);
+    }, [deals, search, filters, activePipelineStage]);
 
     const filtersCount = Object.keys(filters).filter(k => filters[k] && (Array.isArray(filters[k]) ? filters[k].length > 0 : true)).length;
 
@@ -279,29 +512,24 @@ export default function DealsScreen() {
     const renderHeader = () => (
         <SafeAreaView style={styles.safeArea}>
             <View style={styles.header}>
-                <View>
+                <TouchableOpacity 
+                    activeOpacity={0.7} 
+                    onPress={() => setActivePipelineStage(null)}
+                >
                     <Text style={styles.headerTitle}>Deals</Text>
                     <Text style={styles.headerSubtitle}>{filteredDeals.length} active opportunities</Text>
-                </View>
+                </TouchableOpacity>
                 <TouchableOpacity style={styles.addBtn} onPress={() => router.push("/add-deal")}>
                     <Ionicons name="add" size={26} color="#fff" />
                 </TouchableOpacity>
             </View>
 
-            {filteredDeals.length > 0 && (
-                <View style={styles.headerCard}>
-                    <View>
-                        <Text style={styles.summaryLabel}>PIPELINE VALUE</Text>
-                        <Text style={styles.summaryValue}>{formatAmount(totalValue)}</Text>
-                    </View>
-                    <View style={styles.summaryDivider} />
-                    <View style={styles.summaryStats}>
-                        <View style={styles.statItem}>
-                            <Text style={styles.statLabel}>AVG</Text>
-                            <Text style={styles.statValue}>{formatAmount(totalValue / filteredDeals.length)}</Text>
-                        </View>
-                    </View>
-                </View>
+            {pipelineStats.length > 0 && (
+                <DealPipelineHorizontal 
+                    stages={pipelineStats} 
+                    activeStage={activePipelineStage} 
+                    onStagePress={setActivePipelineStage} 
+                />
             )}
 
             <View style={styles.commandBar}>
@@ -346,37 +574,94 @@ export default function DealsScreen() {
         });
     };
 
-    // Communication Handlers
-    const handleCall = (deal: Deal) => {
-        const phone = (deal.associatedContact as any)?.phone || (deal.owner as any)?.phone || (deal.contact as any)?.phone;
-        if (!phone) {
-            Alert.alert("Error", "No phone number linked to this deal.");
+    // Communication Logic with Multi-Contact Support for Deals
+    const getContactsForDeal = (deal: Deal) => {
+        const contacts: any[] = [];
+        const seen = new Set();
+
+        const addContact = (name: string, phone: string | undefined, email: string | undefined, type: string) => {
+            const key = `${name}-${phone}-${email}`;
+            if (!seen.has(key) && (phone || email)) {
+                contacts.push({ name, phone, email, type });
+                seen.add(key);
+            }
+        };
+
+        // 1. Associated Contact
+        if (deal.associatedContact && typeof deal.associatedContact === 'object') {
+            const c = deal.associatedContact as any;
+            addContact(resolveName(c) || "Client", c.phone || c.mobile, c.email, 'Client');
+        }
+
+        // 2. Owner stakeholder
+        if (deal.owner && typeof deal.owner === 'object') {
+            const o = deal.owner as any;
+            addContact(resolveName(o) || "Owner", o.phone || o.mobile, o.email, 'Owner');
+        }
+
+        // 3. Party Structure
+        if (deal.partyStructure) {
+            const ps = deal.partyStructure;
+            if (ps.buyer) addContact(resolveName(ps.buyer) || "Buyer", ps.buyer.phone || ps.buyer.mobile, ps.buyer.email, 'Buyer');
+            if (ps.owner) addContact(resolveName(ps.owner) || "Seller", ps.owner.phone || ps.owner.mobile, ps.owner.email, 'Seller');
+            if (ps.channelPartner) addContact(resolveName(ps.channelPartner) || "CP", ps.channelPartner.phone || ps.channelPartner.mobile, ps.channelPartner.email, 'CP');
+            if (ps.internalRM) addContact(resolveName(ps.internalRM) || "RM", ps.internalRM.phone || ps.internalRM.mobile, ps.internalRM.email, 'Internal RM');
+        }
+
+        return contacts;
+    };
+
+    const handleCommunicationAction = (deal: Deal, actionType: string) => {
+        const contacts = getContactsForDeal(deal);
+
+        if (contacts.length === 0) {
+            Alert.alert("No Contact", "No phone number or email linked to this deal.");
             return;
         }
-        trackCall(phone, deal._id, "Deal", getDealTitle(deal));
-    };
 
-    const handleWhatsApp = (deal: Deal) => {
-        const phone = (deal.associatedContact as any)?.phone || (deal.owner as any)?.phone || (deal.contact as any)?.phone;
-        if (!phone) return;
-        const cleanPhone = phone.replace(/[^0-9]/g, "");
-        Linking.openURL(`whatsapp://send?phone=${cleanPhone.length === 10 ? "91" + cleanPhone : cleanPhone}`);
-    };
-
-    const handleSMS = (deal: Deal) => {
-        const phone = (deal.associatedContact as any)?.phone || (deal.owner as any)?.phone || (deal.contact as any)?.phone;
-        if (!phone) return;
-        Linking.openURL(`sms:${phone}`);
-    };
-
-    const handleEmail = (deal: Deal) => {
-        const email = (deal.associatedContact as any)?.email || (deal.owner as any)?.email || (deal.contact as any)?.email;
-        if (!email) {
-            Alert.alert("Error", "No email linked to this deal.");
-            return;
+        if (contacts.length === 1) {
+            executeAction(contacts[0], actionType, deal);
+        } else {
+            setAvailableContacts(contacts);
+            setPendingAction({ type: actionType, deal });
+            setContactPickerVisible(true);
         }
-        Linking.openURL(`mailto:${email}`);
     };
+
+    const executeAction = (contact: any, type: string, deal: Deal) => {
+        const phone = contact.phone?.replace(/[^0-9]/g, "");
+        const email = contact.email;
+
+        switch (type) {
+            case 'CALL':
+                if (!contact.phone) {
+                    Alert.alert("Error", "No phone number for this contact.");
+                    return;
+                }
+                trackCall(contact.phone, deal._id, "Deal", getDealTitle(deal));
+                break;
+            case 'WHATSAPP':
+                if (!phone) return;
+                Linking.openURL(`whatsapp://send?phone=${phone.length === 10 ? "91" + phone : phone}`);
+                break;
+            case 'SMS':
+                if (!contact.phone) return;
+                Linking.openURL(`sms:${contact.phone}`);
+                break;
+            case 'EMAIL':
+                if (!email) {
+                    Alert.alert("No Email", "No email linked to this contact.");
+                    return;
+                }
+                Linking.openURL(`mailto:${email}`);
+                break;
+        }
+    };
+
+    const handleCall = (deal: Deal) => handleCommunicationAction(deal, 'CALL');
+    const handleWhatsApp = (deal: Deal) => handleCommunicationAction(deal, 'WHATSAPP');
+    const handleSMS = (deal: Deal) => handleCommunicationAction(deal, 'SMS');
+    const handleEmail = (deal: Deal) => handleCommunicationAction(deal, 'EMAIL');
 
     // Action Grid Handlers
     const handleReassign = async (userId: string) => {
@@ -454,6 +739,7 @@ export default function DealsScreen() {
                             onEmail={() => handleEmail(item)}
                             onMenuPress={() => openHub(item)}
                             getLookupValue={getLookupValue}
+                            liveScore={dealScores[item._id]}
                         />
                     )}
                     contentContainerStyle={styles.list}
@@ -479,6 +765,45 @@ export default function DealsScreen() {
                     }
                 />
             )}
+
+            {/* Contact Picker Modal */}
+            <Modal transparent visible={contactPickerVisible} animationType="fade" onRequestClose={() => setContactPickerVisible(false)}>
+                <Pressable style={styles.modalOverlay} onPress={() => setContactPickerVisible(false)}>
+                    <View style={styles.contactPickerSheet}>
+                        <View style={styles.sheetHandle} />
+                        <Text style={styles.sheetTitle}>Select Contact</Text>
+                        <Text style={styles.sheetSub}>Choose who to {pendingAction?.type.toLowerCase()}</Text>
+
+                        <View style={{ marginTop: 10 }}>
+                            {availableContacts.map((contact, idx) => (
+                                <TouchableOpacity
+                                    key={idx}
+                                    style={styles.contactItem}
+                                    onPress={() => {
+                                        executeAction(contact, pendingAction!.type, pendingAction!.deal);
+                                        setContactPickerVisible(false);
+                                    }}
+                                >
+                                    <View style={styles.contactInfo}>
+                                        <View style={[styles.contactAvatar, { backgroundColor: '#6366F120' }]}>
+                                            <Ionicons
+                                                name={contact.type === 'Internal RM' ? "business" : "person"}
+                                                size={18}
+                                                color="#6366F1"
+                                            />
+                                        </View>
+                                        <View>
+                                            <Text style={styles.contactName}>{contact.name}</Text>
+                                            <Text style={styles.contactRole}>{contact.type} • {contact.phone || contact.email || "No Details"}</Text>
+                                        </View>
+                                    </View>
+                                    <Ionicons name="chevron-forward" size={18} color="#CBD5E1" />
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+                    </View>
+                </Pressable>
+            </Modal>
 
             {/* Action Hub Modal */}
             <Modal transparent visible={hubVisible} animationType="none" onRequestClose={closeHub}>
@@ -707,10 +1032,83 @@ const styles = StyleSheet.create({
     clientRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1, marginLeft: 12 },
     clientName: { fontSize: 13, color: "#64748B", fontWeight: "700" },
 
-    headerRight: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+    headerRight: { flexDirection: 'row', alignItems: 'center', gap: 16 },
     menuTrigger: { padding: 4, marginRight: -4 },
+    qualityBox: { marginRight: 4 },
     cardQuickActions: { flexDirection: 'row', gap: 8, alignItems: 'center' },
     quickActionBtn: { width: 32, height: 32, borderRadius: 10, backgroundColor: "#F8FAFC", justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: "#F1F5F9" },
+
+    // Pipeline Styles
+    pipelineWrapper: { marginBottom: 12 },
+    pipelineScroll: { paddingHorizontal: 20, gap: 8 },
+    pipelineChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 14, backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0' },
+    pipelineChipActive: { backgroundColor: '#2563EB15', borderColor: '#2563EB' },
+    pipelineChipText: { fontSize: 11, fontWeight: '800', color: '#64748B' },
+    pipelineChipTextActive: { color: '#2563EB' },
+    // Compact Arrow Pipeline Styles
+    horizontalPipelineWrapper: { marginHorizontal: 16, marginBottom: 12 },
+    chevronContainer: { 
+        flexDirection: 'row', 
+        height: 48, 
+        backgroundColor: '#fff',
+        borderRadius: 8,
+        overflow: 'hidden',
+        borderWidth: 1,
+        borderColor: '#F1F5F9'
+    },
+    chevronSegment: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingLeft: 4,
+        position: 'relative',
+        zIndex: 1
+    },
+    chevronContent: {
+        alignItems: 'center',
+        justifyContent: 'center'
+    },
+    chevronLabel: {
+        fontSize: 10,
+        fontWeight: '900',
+        letterSpacing: -0.2
+    },
+    chevronCount: {
+        fontSize: 12,
+        fontWeight: '900',
+    },
+    chevronPercent: {
+        fontSize: 8,
+        fontWeight: '700',
+    },
+    chevronArrow: {
+        position: 'absolute',
+        right: -10,
+        width: 20,
+        height: '100%',
+        backgroundColor: 'transparent',
+        borderLeftWidth: 10,
+        borderTopWidth: 24,
+        borderBottomWidth: 24,
+        borderTopColor: 'transparent',
+        borderBottomColor: 'transparent',
+        zIndex: 2
+    },
+    compactSubRow: {
+        flexDirection: 'row',
+        justifyContent: 'center',
+        gap: 8,
+        marginTop: 8
+    },
+    subStageChip: {
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 12
+    },
+    subStageText: {
+        fontSize: 10,
+        fontWeight: '800'
+    },
 
     cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 12, borderTopWidth: 1, borderTopColor: "#F8FAFC" },
     locationGroup: { flexDirection: 'row', alignItems: 'center', gap: 4, flex: 1 },
@@ -759,4 +1157,12 @@ const styles = StyleSheet.create({
         alignItems: "center", elevation: 4, shadowColor: "#000",
         shadowOpacity: 0.2, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }
     },
+
+    // Contact Picker (Synced with Inventory)
+    contactPickerSheet: { backgroundColor: "#fff", borderTopLeftRadius: 32, borderTopRightRadius: 32, paddingHorizontal: 20, paddingBottom: 60, width: '100%' },
+    contactItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#F8FAFC' },
+    contactInfo: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+    contactAvatar: { width: 40, height: 40, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+    contactName: { fontSize: 15, fontWeight: '800', color: '#0F172A' },
+    contactRole: { fontSize: 11, color: '#64748B', fontWeight: '600', marginTop: 2 },
 });

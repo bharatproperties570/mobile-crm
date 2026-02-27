@@ -38,20 +38,29 @@ function InfoRow({ label, value, accent, icon }: { label: string; value: string;
     );
 }
 
-const STATUS_COLORS: Record<string, string> = {
-    available: "#10B981", sold: "#EF4444", "under offer": "#F59E0B",
-    reserved: "#8B5CF6", blocked: "#F97316", rented: "#3B82F6",
-};
+const ACTIVE_STATUSES = ['Available', 'Interested / Warm', 'Interested / Hot', 'Request Call Back', 'Busy / Driving', 'Market Feedback', 'General Inquiry'];
+const INACTIVE_STATUSES = ['Sold Out', 'Rented Out', 'Not Interested', 'Inactive', 'Wrong Number / Invalid', 'Switch Off / Unreachable'];
 
 export default function InventoryDetailScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
     const router = useRouter();
     const { theme } = useTheme();
-    const { getLookupValue } = useLookup();
+    const { getLookupValue, lookups } = useLookup();
     const [inv, setInv] = useState<any>(null);
     const [activities, setActivities] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState(0);
+
+    const resolveStatus = (val: any): string => {
+        if (!val) return '';
+        if (typeof val === 'object') return val.lookup_value || val.name || '';
+        const byStatus = lookups.find(l => l.lookup_type.toLowerCase() === 'status' && (l._id === val || l.lookup_value === val));
+        if (byStatus) return byStatus.lookup_value;
+        const byInvStatus = lookups.find(l => l.lookup_type.toLowerCase() === 'inventorystatus' && (l._id === val || l.lookup_value === val));
+        if (byInvStatus) return byInvStatus.lookup_value;
+        const isId = /^[a-f0-9]{24}$/i.test(String(val));
+        return isId ? '' : String(val);
+    };
 
     const tabScrollViewRef = useRef<ScrollView>(null);
     const contentScrollViewRef = useRef<ScrollView>(null);
@@ -100,8 +109,9 @@ export default function InventoryDetailScreen() {
     if (loading) return <View style={[styles.center, { backgroundColor: theme.background }]}><ActivityIndicator size="large" color={theme.primary} /></View>;
     if (!inv) return <View style={[styles.center, { backgroundColor: theme.background }]}><Text style={[styles.noData, { color: theme.textLight }]}>Unit not found</Text></View>;
 
-    const statusLabel = lv(inv.status);
-    const statusColor = STATUS_COLORS[statusLabel.toLowerCase()] ?? theme.primary;
+    const resolvedStatus = resolveStatus(inv.status);
+    const stageLabel = INACTIVE_STATUSES.includes(resolvedStatus) ? 'InActive' : 'Active';
+    const stageColor = stageLabel === 'Active' ? '#10B981' : '#F59E0B';
     const unitNo = inv.unitNumber || inv.unitNo || "N/A";
     const unitType = lv(inv.unitType);
     const projectName = inv.projectName || "Unknown Project";
@@ -136,9 +146,16 @@ export default function InventoryDetailScreen() {
                         </View>
                     </View>
                     <View style={styles.statusContainer}>
-                        <View style={[styles.statusRing, { borderColor: statusColor + '40' }]}>
-                            <Ionicons name="home" size={20} color={statusColor} />
-                            <Text style={[styles.statusLabel, { color: theme.textLight }]}>{statusLabel.toUpperCase()}</Text>
+                        <View style={[styles.statusRing, { borderColor: stageColor + '40', flexDirection: 'column', gap: 2 }]}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                                <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: stageColor }} />
+                                <Text style={[styles.statusLabel, { color: stageColor }]}>{stageLabel.toUpperCase()}</Text>
+                            </View>
+                            {resolvedStatus && resolvedStatus !== stageLabel && (
+                                <Text style={{ fontSize: 8, fontWeight: '700', color: stageColor, opacity: 0.8, textAlign: 'center' }}>
+                                    {resolvedStatus.toUpperCase()}
+                                </Text>
+                            )}
                         </View>
                     </View>
                 </View>
@@ -170,10 +187,10 @@ export default function InventoryDetailScreen() {
 
                 {/* Marketing & Acquisition Row */}
                 <View style={styles.marketingRow}>
-                    <View style={[styles.marketingPill, { backgroundColor: statusColor + '10' }]}>
-                        <Ionicons name="stats-chart" size={12} color={statusColor} />
-                        <Text style={[styles.marketingText, { color: statusColor }]}>
-                            {statusLabel.toUpperCase()}
+                    <View style={[styles.marketingPill, { backgroundColor: stageColor + '10' }]}>
+                        <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: stageColor }} />
+                        <Text style={[styles.marketingText, { color: stageColor }]}>
+                            {stageLabel.toUpperCase()}{resolvedStatus && resolvedStatus !== stageLabel ? ` · ${resolvedStatus}` : ''}
                         </Text>
                     </View>
 
@@ -355,21 +372,39 @@ export default function InventoryDetailScreen() {
                                     <Text style={{ fontSize: 12, fontWeight: '800', color: theme.primary }}>+ ADD</Text>
                                 </TouchableOpacity>
                             </View>
-                            {(!inv.owners || inv.owners.length === 0) ? (
-                                <Text style={styles.emptyText}>No owners assigned.</Text>
-                            ) : (
-                                inv.owners.map((owner: any, idx: number) => (
-                                    <TouchableOpacity key={idx} style={[styles.partyCard, { backgroundColor: theme.background }]} onPress={() => owner._id && router.push(`/contact-detail?id=${owner._id}`)}>
+                            {/* Merge: owners[] array + legacy ownerName/ownerPhone flat field */}
+                            {(() => {
+                                const ownersArr = inv.owners && inv.owners.length > 0 ? inv.owners : [];
+                                // Build a combined list: array owners first, then legacy if array is empty
+                                const displayOwners = ownersArr.length > 0 ? ownersArr :
+                                    (inv.ownerName ? [{ name: inv.ownerName, phone: inv.ownerPhone, _legacy: true }] : []);
+
+                                if (displayOwners.length === 0) {
+                                    return <Text style={styles.emptyText}>No owners assigned.</Text>;
+                                }
+                                return displayOwners.map((owner: any, idx: number) => (
+                                    <TouchableOpacity
+                                        key={idx}
+                                        style={[styles.partyCard, { backgroundColor: theme.background }]}
+                                        onPress={() => !owner._legacy && owner._id && router.push(`/contact-detail?id=${owner._id}`)}
+                                    >
                                         <View style={styles.matchLeft}>
-                                            <Text style={[styles.matchUnit, { color: theme.text }]}>{lv(owner)}</Text>
-                                            <Text style={[styles.matchProject, { color: theme.textLight }]}>{owner.phones?.[0]?.number || "No Phone"}</Text>
+                                            <Text style={[styles.matchUnit, { color: theme.text }]}>
+                                                {owner.name || owner.fullName || '—'}
+                                            </Text>
+                                            <Text style={[styles.matchProject, { color: theme.textLight }]}>
+                                                {owner.phones?.[0]?.number || owner.mobile || owner.phone || 'No Phone'}
+                                            </Text>
+                                            {owner._legacy && (
+                                                <Text style={{ fontSize: 9, color: '#94A3B8', fontWeight: '600', marginTop: 2 }}>Legacy record</Text>
+                                            )}
                                         </View>
                                         <View style={[styles.relationBadge, { backgroundColor: '#10B981' + '10' }]}>
                                             <Text style={{ fontSize: 10, color: '#10B981', fontWeight: '700' }}>OWNER</Text>
                                         </View>
                                     </TouchableOpacity>
-                                ))
-                            )}
+                                ));
+                            })()}
                         </View>
 
                         {inv.associates?.length > 0 && (
@@ -386,8 +421,15 @@ export default function InventoryDetailScreen() {
                                 {inv.associates.map((assoc: any, idx: number) => (
                                     <TouchableOpacity key={idx} style={[styles.partyCard, { backgroundColor: theme.background }]} onPress={() => assoc._id && router.push(`/contact-detail?id=${assoc._id}`)}>
                                         <View style={styles.matchLeft}>
-                                            <Text style={[styles.matchUnit, { color: theme.text }]}>{lv(assoc)}</Text>
-                                            <Text style={[styles.matchProject, { color: theme.textLight }]}>{assoc.phones?.[0]?.number || "No Phone"}</Text>
+                                            <Text style={[styles.matchUnit, { color: theme.text }]}>
+                                                {typeof assoc === 'object' ? (assoc.name || assoc.fullName || '—') : lv(assoc)}
+                                            </Text>
+                                            <Text style={[styles.matchProject, { color: theme.textLight }]}>
+                                                {assoc.phones?.[0]?.number || assoc.mobile || assoc.phone || 'No Phone'}
+                                            </Text>
+                                            {assoc.relationship ? (
+                                                <Text style={{ fontSize: 10, color: '#F59E0B', fontWeight: '700', marginTop: 2 }}>{assoc.relationship}</Text>
+                                            ) : null}
                                         </View>
                                         <View style={[styles.relationBadge, { backgroundColor: theme.primary + '10' }]}>
                                             <Text style={{ fontSize: 10, color: theme.primary, fontWeight: '700' }}>ASSOCIATE</Text>

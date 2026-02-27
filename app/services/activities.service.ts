@@ -45,3 +45,45 @@ export const deleteActivity = async (id: string) => {
     const res = await api.delete(`/activities/${id}`);
     return res.data;
 };
+
+export const getOrCreateCallActivity = async (entityId: string, entityType: string, subject: string) => {
+    try {
+        // 1. Search for existing pending call activities
+        const actRes = await getActivities({
+            entityId,
+            entityType,
+            type: "Call",
+            status: "Pending",
+            limit: "1"
+        });
+
+        const activities = actRes?.data ?? actRes;
+        if (Array.isArray(activities) && activities.length > 0) {
+            return activities[0];
+        }
+
+        // 2. If no pending call activity, create one for 'Now'
+        const now = new Date();
+        const newActivity = {
+            type: "Call",
+            subject: `Call: ${subject}`,
+            entityType,
+            entityId,
+            dueDate: now.toISOString().split('T')[0],
+            dueTime: now.toTimeString().slice(0, 5),
+            priority: "Normal",
+            status: "Pending",
+            description: "Automatically created for call outcome tracking."
+        };
+
+        const createRes = await addActivity(newActivity);
+        return createRes?.data ?? createRes;
+    } catch (e) {
+        console.error("Error in getOrCreateCallActivity:", e);
+        throw e;
+    }
+};
+export const getUnifiedTimeline = async (entityType: string, entityId: string) => {
+    const res = await api.get(`/activities/unified/${entityType}/${entityId}`);
+    return res.data;
+};

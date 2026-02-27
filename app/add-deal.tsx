@@ -106,7 +106,7 @@ function SearchableDropdown({
 
 export default function AddDealScreen() {
     const router = useRouter();
-    const { id } = useLocalSearchParams<{ id: string }>();
+    const { id, prefill, location: pfLocation, price: pfPrice, size: pfSize, unitNo: pfUnitNo, mobile: pfMobile, name: pfName, type: pfType } = useLocalSearchParams<any>();
     const [step, setStep] = useState(0);
     const [loading, setLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
@@ -234,8 +234,24 @@ export default function AddDealScreen() {
                 setLoading(false);
             }
         };
-        loadData();
-    }, [id]);
+        if (id) {
+            loadData();
+        } else if (prefill === 'true') {
+            // Handle pre-fill from Intake or other sources
+            setFormData(prev => ({
+                ...prev,
+                location: pfLocation || prev.location,
+                unitNo: pfUnitNo || prev.unitNo,
+                size: pfSize ? parseFloat(pfSize.replace(/[^0-9.]/g, '')) || prev.size : prev.size,
+                price: pfPrice ? parseFloat(pfPrice.replace(/[^0-9.]/g, '')) || prev.price : prev.price,
+                propertyType: pfType || prev.propertyType,
+                remarks: `Intake From: ${pfName || 'Unknown'} (${pfMobile || 'No Mobile'})`
+            }));
+            setLoading(false);
+        } else {
+            loadData();
+        }
+    }, [id, prefill]);
 
     useEffect(() => {
         const fetchUnits = async () => {

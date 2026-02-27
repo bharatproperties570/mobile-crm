@@ -10,6 +10,7 @@ import { getInventory, type Inventory } from "../services/inventory.service";
 import { lookupVal, safeApiCall } from "../services/api.helpers";
 import { useCallTracking } from "../context/CallTrackingContext";
 import { useLookup } from "../context/LookupContext";
+import api from "../services/api";
 import FilterModal, { FilterField } from "../components/FilterModal";
 
 const INVENTORY_FILTER_FIELDS: FilterField[] = [
@@ -18,6 +19,17 @@ const INVENTORY_FILTER_FIELDS: FilterField[] = [
     { key: "subCategory", label: "Sub Category", type: "lookup", lookupType: "SubCategory" },
     { key: "unitType", label: "Unit Type", type: "lookup", lookupType: "UnitType" },
 ];
+
+function lv(field: unknown): string {
+    if (field === null || field === undefined || field === "" || field === "null" || field === "undefined") return "—";
+    if (typeof field === "object" && field !== null) {
+        if ("lookup_value" in field && (field as any).lookup_value) return (field as any).lookup_value;
+        if ("fullName" in field && (field as any).fullName) return (field as any).fullName;
+        if ("name" in field && (field as any).name) return (field as any).name;
+    }
+    const str = String(field).trim();
+    return str || "—";
+}
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const COLUMN_WIDTH = (SCREEN_WIDTH - 48) / 2;
@@ -30,6 +42,9 @@ const STATUS_COLORS: Record<string, string> = {
     'Hold': '#8B5CF6'
 };
 
+const ACTIVE_STATUSES = ['Available', 'Interested / Warm', 'Interested / Hot', 'Request Call Back', 'Busy / Driving', 'Market Feedback', 'General Inquiry'];
+const INACTIVE_STATUSES = ['Sold Out', 'Rented Out', 'Not Interested', 'Inactive', 'Wrong Number / Invalid', 'Switch Off / Unreachable'];
+
 const TYPE_ICONS: Record<string, string> = {
     'Apartment': 'business',
     'Villa': 'home',
@@ -38,7 +53,7 @@ const TYPE_ICONS: Record<string, string> = {
     'Shop': 'cart'
 };
 
-const InventoryCard = memo(({ item, onPress, onCall, onWhatsApp, onSMS, onEmail, onMenuPress, viewMode }: {
+const InventoryCard = memo(({ item, onPress, onCall, onWhatsApp, onSMS, onEmail, onMenuPress, viewMode, users }: {
     item: Inventory;
     onPress: () => void;
     onCall: () => void;
@@ -46,17 +61,48 @@ const InventoryCard = memo(({ item, onPress, onCall, onWhatsApp, onSMS, onEmail,
     onSMS: () => void;
     onEmail: () => void;
     onMenuPress: () => void;
-    viewMode: 'list' | 'grid'
+    viewMode: 'list' | 'grid';
+    users?: any[];
 }) => {
-    const { getLookupValue } = useLookup();
-    const status = getLookupValue('InventoryStatus', item.status);
-    const color = STATUS_COLORS[status] || '#64748B';
-    const type = getLookupValue('Category', item.category);
-    const subCat = getLookupValue('SubCategory', item.subCategory);
-    const unitType = getLookupValue('UnitType', item.unitType);
+    const { getLookupValue, lookups } = useLookup();
+
+    // Try resolving status via multiple lookup types (backend stores under "Status")
+    const resolveStatus = (val: any): string => {
+        if (!val) return '';
+        if (typeof val === 'object') return val.lookup_value || val.name || '';
+        // Try "Status" first, then "InventoryStatus" as fallback
+        const byStatus = lookups.find(l => l.lookup_type.toLowerCase() === 'status' && (l._id === val || l.lookup_value === val));
+        if (byStatus) return byStatus.lookup_value;
+        const byInvStatus = lookups.find(l => l.lookup_type.toLowerCase() === 'inventorystatus' && (l._id === val || l.lookup_value === val));
+        if (byInvStatus) return byInvStatus.lookup_value;
+        // If it looks like an ID (24-char hex) return empty, else return raw string
+        const isId = /^[a-f0-9]{24}$/i.test(String(val));
+        return isId ? '' : String(val);
+    };
+
+    const status = resolveStatus(item.status); // Human-readable specific reason e.g. "Interested / Warm"
+
+    // Categorize into Active/InActive Stage
+    // If status is explicitly in INACTIVE list → InActive. Everything else (including empty) → Active
+    const isActive = !INACTIVE_STATUSES.includes(status);
+    const statusLabel = isActive ? "Active" : "InActive";
+    const statusColor = isActive ? '#10B981' : '#F59E0B'; // Green for Active, Orange for InActive
+    const type = getLookupValue("Category", item.category);
+    const subCat = getLookupValue("SubCategory", item.subCategory);
+    const unitType = getLookupValue("UnitType", item.unitType);
     const iconName = TYPE_ICONS[type] || 'cube';
 
     const displayType = [subCat, unitType].filter(v => v && v !== "—").join(' · ');
+
+    const getAssignedName = () => {
+        if (!item.assignedTo) return "—";
+        if (typeof item.assignedTo === 'object') {
+            return item.assignedTo.fullName || item.assignedTo.name || "—";
+        }
+        // If it's a string ID, look it up in users list
+        const user = users?.find(u => u._id === item.assignedTo || u.id === item.assignedTo);
+        return user ? (user.fullName || user.name) : "—";
+    };
 
     const renderRightActions = () => (
         <View style={styles.rightActions}>
@@ -87,11 +133,11 @@ const InventoryCard = memo(({ item, onPress, onCall, onWhatsApp, onSMS, onEmail,
     if (viewMode === 'grid') {
         return (
             <TouchableOpacity style={styles.gridCard} onPress={onPress} activeOpacity={0.8}>
-                <View style={[styles.gridMediaSlot, { backgroundColor: color + "10" }]}>
-                    <Ionicons name={iconName as any} size={32} color={color} />
-                    <View style={[styles.gridStatusDot, { backgroundColor: color }]} />
+                <View style={[styles.gridMediaSlot, { backgroundColor: statusColor + "10" }]}>
+                    <Ionicons name={iconName as any} size={32} color={statusColor} />
+                    <View style={[styles.gridStatusDot, { backgroundColor: statusColor }]} />
                     <TouchableOpacity style={styles.gridMenuTrigger} onPress={(e) => { e.stopPropagation(); onMenuPress(); }}>
-                        <Ionicons name="ellipsis-horizontal" size={18} color={color} />
+                        <Ionicons name="ellipsis-horizontal" size={18} color={statusColor} />
                     </TouchableOpacity>
                 </View>
                 <View style={styles.gridInfo}>
@@ -105,25 +151,41 @@ const InventoryCard = memo(({ item, onPress, onCall, onWhatsApp, onSMS, onEmail,
     return (
         <Swipeable renderRightActions={renderRightActions} renderLeftActions={renderLeftActions} friction={2}>
             <TouchableOpacity style={styles.listCard} onPress={onPress} activeOpacity={0.8}>
-                <View style={[styles.cardAccent, { backgroundColor: color }]} />
+                <View style={[styles.cardAccent, { backgroundColor: statusColor }]} />
                 <View style={styles.listMain}>
                     <View style={styles.listHeader}>
                         <View style={{ flex: 1 }}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 2 }}>
                                 <Text style={styles.listUnitNumber}>{item.unitNumber || item.unitNo || "N/A"}</Text>
-                                <View style={[styles.typePill, { backgroundColor: color + '10' }]}>
-                                    <Text style={[styles.typePillText, { color: color }]}>{displayType || "Property"}</Text>
-                                </View>
+                                {displayType ? (
+                                    <View style={[styles.typePill, { backgroundColor: statusColor + '10' }]}>
+                                        <Text style={[styles.typePillText, { color: statusColor }]}>{displayType}</Text>
+                                    </View>
+                                ) : null}
                             </View>
                             <Text numberOfLines={1} style={styles.listProjectContainer}>
                                 <Text style={styles.listProjectName}>{item.projectName || "N/A"}</Text>
                                 <Text style={styles.listBlockName}> • {item.block || "No Block"}</Text>
                             </Text>
+                            {/* Size shown below project name */}
+                            {(item.size || item.sizeUnit) ? (
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 }}>
+                                    <Ionicons name="expand-outline" size={11} color="#94A3B8" />
+                                    <Text style={{ fontSize: 11, color: '#94A3B8', fontWeight: '600' }}>
+                                        {[item.size, item.sizeUnit].filter(Boolean).join(' ')}
+                                    </Text>
+                                </View>
+                            ) : null}
                         </View>
                         <View style={{ alignItems: 'flex-end' }}>
-                            <View style={[styles.statusPill, { backgroundColor: color + "10" }]}>
-                                <View style={[styles.statusDot, { backgroundColor: color }]} />
-                                <Text style={[styles.statusPillText, { color: color }]}>{status}</Text>
+                            <View style={[styles.statusPill, { backgroundColor: statusColor + "10", flexDirection: 'column', alignItems: 'flex-end', gap: 2, paddingVertical: 6 }]}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                    <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
+                                    <Text style={[styles.statusPillText, { color: statusColor }]}>{statusLabel}</Text>
+                                </View>
+                                {status && status !== statusLabel && status !== "—" && (
+                                    <Text style={[styles.statusSubText, { color: statusColor }]}>{status}</Text>
+                                )}
                             </View>
                             <TouchableOpacity style={styles.menuTrigger} onPress={onMenuPress}>
                                 <Ionicons name="ellipsis-vertical" size={18} color="#94A3B8" />
@@ -131,17 +193,43 @@ const InventoryCard = memo(({ item, onPress, onCall, onWhatsApp, onSMS, onEmail,
                         </View>
                     </View>
 
-                    <View style={styles.listFooter}>
-                        <View style={styles.listMeta}>
-                            <Ionicons name="expand-outline" size={14} color="#64748B" />
-                            <Text style={styles.listMetaText}>{item.size} {item.sizeUnit}</Text>
-                        </View>
-                        {item.price && (
+                    {/* Footer: Owner + Associate with phone */}
+                    <View style={[styles.listFooter, { flexDirection: 'column', gap: 6 }]}>
+                        {/* Owner */}
+                        {(item.owners?.[0]?.name || item.ownerName) ? (
                             <View style={styles.listMeta}>
-                                <Ionicons name="cash-outline" size={14} color="#64748B" />
-                                <Text style={styles.listMetaText}>₹{item.price.toLocaleString()}</Text>
+                                <Ionicons name="home-outline" size={13} color="#10B981" />
+                                <Text style={[styles.listMetaText, { color: '#0F172A' }]} numberOfLines={1}>
+                                    {item.owners?.[0]?.name || item.ownerName}
+                                </Text>
+                                {(item.owners?.[0]?.phones?.[0]?.number || item.owners?.[0]?.phone || item.ownerPhone) ? (
+                                    <Text style={[styles.listMetaText, { color: '#64748B' }]}>
+                                        • {item.owners?.[0]?.phones?.[0]?.number || item.owners?.[0]?.phone || item.ownerPhone}
+                                    </Text>
+                                ) : null}
                             </View>
-                        )}
+                        ) : null}
+                        {/* Associate */}
+                        {(item.associates?.[0]?.name || item.associatedContact) ? (
+                            <View style={styles.listMeta}>
+                                <Ionicons name="people-outline" size={13} color="#6366F1" />
+                                <Text style={[styles.listMetaText, { color: '#0F172A' }]} numberOfLines={1}>
+                                    {item.associates?.[0]?.name || item.associatedContact}
+                                </Text>
+                                {(item.associates?.[0]?.phones?.[0]?.number || item.associates?.[0]?.phone || item.associatedPhone) ? (
+                                    <Text style={[styles.listMetaText, { color: '#64748B' }]}>
+                                        • {item.associates?.[0]?.phones?.[0]?.number || item.associates?.[0]?.phone || item.associatedPhone}
+                                    </Text>
+                                ) : null}
+                            </View>
+                        ) : null}
+                        {/* If neither owner nor associate, show a subtle placeholder */}
+                        {(!item.owners?.[0]?.name && !item.ownerName && !item.associates?.[0]?.name && !item.associatedContact) ? (
+                            <View style={styles.listMeta}>
+                                <Ionicons name="person-outline" size={13} color="#CBD5E1" />
+                                <Text style={[styles.listMetaText, { color: '#CBD5E1' }]}>No contact info</Text>
+                            </View>
+                        ) : null}
                     </View>
                 </View>
             </TouchableOpacity>
@@ -159,11 +247,29 @@ export default function InventoryScreen() {
     const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
     const [filters, setFilters] = useState<any>({});
     const [showFilterModal, setShowFilterModal] = useState(false);
+    const [activeCount, setActiveCount] = useState(0);
+    const [inactiveCount, setInactiveCount] = useState(0);
+    const [users, setUsers] = useState<any[]>([]);
+
+    const fetchUsers = useCallback(async () => {
+        try {
+            const res = await api.get("/users?limit=1000");
+            const data = res.data?.records || res.data?.data || (Array.isArray(res.data) ? res.data : []);
+            setUsers(data);
+        } catch (e) {
+            console.error("Failed to fetch users:", e);
+        }
+    }, []);
 
     // Action Hub State
     const [selectedInv, setSelectedInv] = useState<Inventory | null>(null);
     const [hubVisible, setHubVisible] = useState(false);
     const slideAnim = useRef(new Animated.Value(350)).current;
+
+    // Contact Picker State
+    const [contactPickerVisible, setContactPickerVisible] = useState(false);
+    const [availableContacts, setAvailableContacts] = useState<any[]>([]);
+    const [pendingAction, setPendingAction] = useState<{ type: string; item: Inventory } | null>(null);
 
     const openHub = (item: Inventory) => {
         setSelectedInv(item);
@@ -188,18 +294,21 @@ export default function InventoryScreen() {
     };
 
     const fetchInventory = useCallback(async () => {
-        const result = await safeApiCall<Inventory>(() => getInventory());
+        const result = await safeApiCall<Inventory>(() => getInventory(filters));
         if (!result.error) {
             setInventory(result.data);
+            setActiveCount(result.activeCount || 0);
+            setInactiveCount(result.inactiveCount || 0);
         }
         setLoading(false);
         setRefreshing(false);
-    }, []);
+    }, [filters]);
 
     useFocusEffect(
         useCallback(() => {
             fetchInventory();
-        }, [fetchInventory])
+            fetchUsers();
+        }, [fetchInventory, fetchUsers])
     );
 
     const filtered = useMemo(() => {
@@ -222,49 +331,118 @@ export default function InventoryScreen() {
         });
     }, [inventory, search, filters]);
 
-    // Communication Handlers - Prioritize Owner for Swipe Actions
-    const handleCall = (item: Inventory) => {
-        const phone = item.owners?.[0]?.phones?.[0]?.phone || item.ownerPhone;
-        if (!phone) {
-            Alert.alert("No Contact", "No owner phone number linked.");
+    // Communication Logic with Multi-Contact Support
+    const getContactsForInventory = (item: Inventory) => {
+        const contacts: any[] = [];
+
+        // Extract from Owners
+        if (item.owners && item.owners.length > 0) {
+            item.owners.forEach(owner => {
+                const name = owner.name || "Owner";
+                if (owner.phones && owner.phones.length > 0) {
+                    owner.phones.forEach((p: any) => {
+                        contacts.push({ name, phone: p.phone, type: 'Owner', email: owner.email });
+                    });
+                } else if (owner.phone) {
+                    contacts.push({ name, phone: owner.phone, type: 'Owner', email: owner.email });
+                }
+            });
+        } else if (item.ownerPhone) {
+            contacts.push({ name: item.ownerName || "Owner", phone: item.ownerPhone, type: 'Owner' });
+        }
+
+        // Extract from Associates
+        if (item.associates && item.associates.length > 0) {
+            item.associates.forEach(assoc => {
+                const name = assoc.name || "Associate";
+                if (assoc.phone) {
+                    contacts.push({ name, phone: assoc.phone, type: 'Associate', email: assoc.email });
+                }
+            });
+        }
+
+        return contacts;
+    };
+
+    const handleCommunicationAction = (item: Inventory, actionType: string) => {
+        const contacts = getContactsForInventory(item);
+
+        if (contacts.length === 0) {
+            Alert.alert("No Contact", "No phone number or email linked to this property.");
             return;
         }
-        trackCall(phone, item._id, "Inventory", `${item.projectName} - ${item.unitNumber || item.unitNo}`);
-    };
 
-    const handleWhatsApp = (item: Inventory) => {
-        const phone = item.owners?.[0]?.phones?.[0]?.phone || item.ownerPhone;
-        if (!phone) return;
-        const cleanPhone = phone.replace(/[^0-9]/g, "");
-        Linking.openURL(`whatsapp://send?phone=${cleanPhone.length === 10 ? "91" + cleanPhone : cleanPhone}`);
-    };
-
-    const handleSMS = (item: Inventory) => {
-        const phone = item.owners?.[0]?.phones?.[0]?.phone || item.ownerPhone;
-        if (!phone) return;
-        Linking.openURL(`sms:${phone}`);
-    };
-
-    const handleEmail = (item: Inventory) => {
-        const email = item.owners?.[0]?.email || (item as any).ownerEmail;
-        if (!email) {
-            Alert.alert("No Email", "No owner email linked.");
-            return;
+        if (contacts.length === 1) {
+            executeAction(contacts[0], actionType, item);
+        } else {
+            setAvailableContacts(contacts);
+            setPendingAction({ type: actionType, item });
+            setContactPickerVisible(true);
         }
-        Linking.openURL(`mailto:${email}`);
     };
+
+    const executeAction = (contact: any, type: string, item: Inventory) => {
+        const phone = contact.phone?.replace(/[^0-9]/g, "");
+        const email = contact.email;
+
+        switch (type) {
+            case 'CALL':
+                if (!contact.phone) {
+                    Alert.alert("Error", "No phone number for this contact.");
+                    return;
+                }
+                trackCall(contact.phone, item._id, "Inventory", `${item.projectName} - ${item.unitNumber || item.unitNo}`);
+                break;
+            case 'WHATSAPP':
+                if (!phone) return;
+                Linking.openURL(`whatsapp://send?phone=${phone.length === 10 ? "91" + phone : phone}`);
+                break;
+            case 'SMS':
+                if (!contact.phone) return;
+                Linking.openURL(`sms:${contact.phone}`);
+                break;
+            case 'EMAIL':
+                if (!email) {
+                    Alert.alert("No Email", "No email linked to this contact.");
+                    return;
+                }
+                Linking.openURL(`mailto:${email}`);
+                break;
+        }
+    };
+
+    const handleCall = (item: Inventory) => handleCommunicationAction(item, 'CALL');
+    const handleWhatsApp = (item: Inventory) => handleCommunicationAction(item, 'WHATSAPP');
+    const handleSMS = (item: Inventory) => handleCommunicationAction(item, 'SMS');
+    const handleEmail = (item: Inventory) => handleCommunicationAction(item, 'EMAIL');
 
     const renderHeader = () => (
         <View style={styles.headerContainer}>
             <View style={styles.header}>
                 <View>
                     <Text style={styles.headerTitle}>Inventory</Text>
-                    <Text style={styles.headerSubtitle}>{filtered.length} total units available</Text>
                 </View>
                 <View style={styles.headerActions}>
                     <TouchableOpacity style={[styles.actionBtn, styles.actionBtnPrimary]} onPress={() => router.push("/add-inventory")}>
                         <Ionicons name="add" size={24} color="#fff" />
                     </TouchableOpacity>
+                </View>
+            </View>
+
+            <View style={styles.metricsRow}>
+                <View style={[styles.metricCard, { borderLeftColor: '#22C55E' }]}>
+                    <View>
+                        <Text style={styles.metricLabel}>ACTIVE</Text>
+                        <Text style={[styles.metricValue, { color: '#16A34A' }]}>{activeCount.toLocaleString()}</Text>
+                    </View>
+                    <Ionicons name="trending-up" size={20} color="#22C55E20" />
+                </View>
+                <View style={[styles.metricCard, { borderLeftColor: '#94A3B8' }]}>
+                    <View>
+                        <Text style={styles.metricLabel}>INACTIVE</Text>
+                        <Text style={[styles.metricValue, { color: '#64748B' }]}>{inactiveCount.toLocaleString()}</Text>
+                    </View>
+                    <Ionicons name="archive-outline" size={20} color="#94A3B820" />
                 </View>
             </View>
 
@@ -311,6 +489,7 @@ export default function InventoryScreen() {
                             onSMS={() => handleSMS(item)}
                             onEmail={() => handleEmail(item)}
                             onMenuPress={() => openHub(item)}
+                            users={users}
                         />
                     )}
                     contentContainerStyle={styles.list}
@@ -328,6 +507,45 @@ export default function InventoryScreen() {
                     }
                 />
             )}
+
+            {/* Contact Picker Modal */}
+            <Modal transparent visible={contactPickerVisible} animationType="fade" onRequestClose={() => setContactPickerVisible(false)}>
+                <Pressable style={styles.modalOverlay} onPress={() => setContactPickerVisible(false)}>
+                    <View style={styles.contactPickerSheet}>
+                        <View style={styles.sheetHandle} />
+                        <Text style={styles.sheetTitle}>Select Contact</Text>
+                        <Text style={styles.sheetSub}>Choose who to {pendingAction?.type.toLowerCase()}</Text>
+
+                        <View style={{ marginTop: 10 }}>
+                            {availableContacts.map((contact, idx) => (
+                                <TouchableOpacity
+                                    key={idx}
+                                    style={styles.contactItem}
+                                    onPress={() => {
+                                        executeAction(contact, pendingAction!.type, pendingAction!.item);
+                                        setContactPickerVisible(false);
+                                    }}
+                                >
+                                    <View style={styles.contactInfo}>
+                                        <View style={[styles.contactAvatar, { backgroundColor: contact.type === 'Owner' ? '#DB277720' : '#3B82F620' }]}>
+                                            <Ionicons
+                                                name={contact.type === 'Owner' ? "person" : "people"}
+                                                size={18}
+                                                color={contact.type === 'Owner' ? "#DB2777" : "#3B82F6"}
+                                            />
+                                        </View>
+                                        <View>
+                                            <Text style={styles.contactName}>{contact.name}</Text>
+                                            <Text style={styles.contactRole}>{contact.type} • {contact.phone || contact.email}</Text>
+                                        </View>
+                                    </View>
+                                    <Ionicons name="chevron-forward" size={18} color="#CBD5E1" />
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+                    </View>
+                </Pressable>
+            </Modal>
 
             {/* Action Hub Modal */}
             <Modal transparent visible={hubVisible} animationType="none" onRequestClose={closeHub}>
@@ -349,63 +567,81 @@ export default function InventoryScreen() {
                                 <Text style={styles.actionLabel}>Edit</Text>
                             </TouchableOpacity >
 
-                            <TouchableOpacity style={styles.actionItem} onPress={() => { router.push(`/inventory-detail?id=${selectedInv?._id}`); closeHub(); }}>
-                                <View style={[styles.actionIcon, { backgroundColor: "#F0F9FF" }]}>
-                                    <Ionicons name="eye" size={24} color="#0EA5E9" />
+                            <TouchableOpacity style={styles.actionItem} onPress={() => {
+                                if (selectedInv) router.push(`/add-activity?id=${selectedInv._id}&type=Inventory`);
+                                closeHub();
+                            }}>
+                                <View style={[styles.actionIcon, { backgroundColor: "#E0F2FE" }]}>
+                                    <Ionicons name="calendar" size={24} color="#0EA5E9" />
                                 </View>
-                                <Text style={styles.actionLabel}>View</Text>
+                                <Text style={styles.actionLabel}>Activities</Text>
                             </TouchableOpacity>
 
-                            <TouchableOpacity style={styles.actionItem} onPress={() => { router.push(`/add-lead?refInvent=${selectedInv?._id}`); closeHub(); }}>
-                                <View style={[styles.actionIcon, { backgroundColor: "#FDF2F8" }]}>
-                                    <Ionicons name="person-add" size={24} color="#DB2777" />
+                            <TouchableOpacity style={styles.actionItem} onPress={() => {
+                                if (selectedInv) router.push(`/add-deal?inventoryId=${selectedInv._id}&prefill=true`);
+                                closeHub();
+                            }}>
+                                <View style={[styles.actionIcon, { backgroundColor: "#DCFCE7" }]}>
+                                    <Ionicons name="briefcase" size={24} color="#22C55E" />
                                 </View>
-                                <Text style={styles.actionLabel}>Add Lead</Text>
+                                <Text style={styles.actionLabel}>Create Deal</Text>
                             </TouchableOpacity>
 
-                            <TouchableOpacity style={styles.actionItem} onPress={() => { Alert.alert("Share", "Sharing unit details..."); closeHub(); }}>
-                                <View style={[styles.actionIcon, { backgroundColor: "#F0FDF4" }]}>
-                                    <Ionicons name="share-social" size={24} color="#16A34A" />
+                            <TouchableOpacity style={styles.actionItem} onPress={() => {
+                                if (selectedInv) router.push(`/manage-owners?id=${selectedInv._id}`);
+                                closeHub();
+                            }}>
+                                <View style={[styles.actionIcon, { backgroundColor: "#FEF9C3" }]}>
+                                    <Ionicons name="person-add" size={24} color="#A16207" />
                                 </View>
-                                <Text style={styles.actionLabel}>Share</Text>
+                                <Text style={styles.actionLabel}>Add Owner</Text>
                             </TouchableOpacity>
 
-                            <TouchableOpacity style={styles.actionItem} onPress={() => { if (selectedInv) handleCall(selectedInv); closeHub(); }}>
-                                <View style={[styles.actionIcon, { backgroundColor: "#EFF6FF" }]}>
-                                    <Ionicons name="call" size={24} color="#3B82F6" />
+                            <TouchableOpacity style={styles.actionItem} onPress={() => {
+                                if (selectedInv) router.push(`/manage-tags?id=${selectedInv._id}`);
+                                closeHub();
+                            }}>
+                                <View style={[styles.actionIcon, { backgroundColor: "#F3E8FF" }]}>
+                                    <Ionicons name="pricetag" size={24} color="#9333EA" />
                                 </View>
-                                <Text style={styles.actionLabel}>Call Owner</Text>
+                                <Text style={styles.actionLabel}>Tag</Text>
                             </TouchableOpacity>
 
-                            <TouchableOpacity style={styles.actionItem} onPress={() => { if (selectedInv) handleWhatsApp(selectedInv); closeHub(); }}>
-                                <View style={[styles.actionIcon, { backgroundColor: "#F0FDF4" }]}>
-                                    <Ionicons name="logo-whatsapp" size={24} color="#10B981" />
+                            <TouchableOpacity style={styles.actionItem} onPress={() => {
+                                if (selectedInv) router.push(`/upload-media?id=${selectedInv._id}`);
+                                closeHub();
+                            }}>
+                                <View style={[styles.actionIcon, { backgroundColor: "#FFEDD5" }]}>
+                                    <Ionicons name="images" size={24} color="#F97316" />
                                 </View>
-                                <Text style={styles.actionLabel}>WhatsApp</Text>
+                                <Text style={styles.actionLabel}>Upload</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity style={styles.actionItem} onPress={() => {
+                                if (selectedInv) router.push(`/add-document?id=${selectedInv._id}&type=Inventory`);
+                                closeHub();
+                            }}>
+                                <View style={[styles.actionIcon, { backgroundColor: "#FFE4E6" }]}>
+                                    <Ionicons name="document-attach" size={24} color="#E11D48" />
+                                </View>
+                                <Text style={styles.actionLabel}>Document</Text>
                             </TouchableOpacity>
 
                             <TouchableOpacity style={styles.actionItem} onPress={() => {
                                 if (selectedInv) router.push(`/inventory-feedback?id=${selectedInv._id}`);
                                 closeHub();
                             }}>
-                                <View style={[styles.actionIcon, { backgroundColor: "#FFF7ED" }]}>
-                                    <Ionicons name="chatbubble-ellipses" size={24} color="#F97316" />
+                                <View style={[styles.actionIcon, { backgroundColor: "#F1F5F9" }]}>
+                                    <Ionicons name="chatbubble-ellipses" size={24} color="#64748B" />
                                 </View>
                                 <Text style={styles.actionLabel}>Feedback</Text>
                             </TouchableOpacity>
 
-                            <TouchableOpacity style={styles.actionItem} onPress={() => { if (selectedInv) handleSMS(selectedInv); closeHub(); }}>
-                                <View style={[styles.actionIcon, { backgroundColor: "#FFF7ED" }]}>
-                                    <Ionicons name="chatbubble" size={24} color="#F97316" />
+                            <TouchableOpacity style={styles.actionItem} onPress={() => { Alert.alert("Share", "Sharing unit details..."); closeHub(); }}>
+                                <View style={[styles.actionIcon, { backgroundColor: "#F1F5F9" }]}>
+                                    <Ionicons name="share-social" size={24} color="#64748B" />
                                 </View>
-                                <Text style={styles.actionLabel}>SMS</Text>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity style={styles.actionItem} onPress={() => { if (selectedInv) handleEmail(selectedInv); closeHub(); }}>
-                                <View style={[styles.actionIcon, { backgroundColor: "#EEF2FF" }]}>
-                                    <Ionicons name="mail" size={24} color="#6366F1" />
-                                </View>
-                                <Text style={styles.actionLabel}>Email</Text>
+                                <Text style={styles.actionLabel}>Share</Text>
                             </TouchableOpacity>
                         </View >
                     </Animated.View >
@@ -434,6 +670,25 @@ const styles = StyleSheet.create({
     },
     headerTitle: { fontSize: 28, fontWeight: "900", color: "#0F172A", letterSpacing: -0.5 },
     headerSubtitle: { fontSize: 13, color: "#64748B", fontWeight: "600", marginTop: 2 },
+    metricsRow: { flexDirection: 'row', gap: 12, marginHorizontal: 20, marginBottom: 16 },
+    metricCard: {
+        flex: 1,
+        backgroundColor: '#fff',
+        paddingHorizontal: 16,
+        paddingVertical: 14,
+        borderRadius: 16,
+        borderLeftWidth: 5,
+        shadowColor: '#000',
+        shadowOpacity: 0.06,
+        shadowRadius: 10,
+        shadowOffset: { width: 0, height: 4 },
+        elevation: 3,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center'
+    },
+    metricLabel: { fontSize: 10, fontWeight: '800', color: '#64748B', marginBottom: 4, letterSpacing: 0.5 },
+    metricValue: { fontSize: 22, fontWeight: '900' },
     headerActions: { flexDirection: 'row', gap: 8 },
     actionBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: "#F1F5F9", justifyContent: 'center', alignItems: 'center' },
     actionBtnPrimary: { backgroundColor: "#2563EB" },
@@ -469,6 +724,7 @@ const styles = StyleSheet.create({
     statusPill: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 20, gap: 6 },
     statusDot: { width: 6, height: 6, borderRadius: 3 },
     statusPillText: { fontSize: 10, fontWeight: "800", textTransform: 'uppercase' },
+    statusSubText: { fontSize: 6, fontWeight: "700", textTransform: 'uppercase', opacity: 0.8 },
     listUnit: { fontSize: 13, color: "#64748B", fontWeight: "600", marginBottom: 8 },
     listFooter: { flexDirection: 'row', gap: 12, marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#F8FAFC' },
     listMeta: { flexDirection: 'row', alignItems: 'center', gap: 6 },
@@ -514,4 +770,12 @@ const styles = StyleSheet.create({
     actionItem: { width: "22%", alignItems: "center", marginBottom: 16 },
     actionIcon: { width: 56, height: 56, borderRadius: 20, justifyContent: "center", alignItems: "center", marginBottom: 8, shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 5, shadowOffset: { width: 0, height: 2 } },
     actionLabel: { fontSize: 10, fontWeight: "800", color: "#475569", textAlign: "center" },
+
+    // Contact Picker
+    contactPickerSheet: { backgroundColor: "#fff", borderTopLeftRadius: 32, borderTopRightRadius: 32, paddingHorizontal: 20, paddingBottom: 60, width: '100%' },
+    contactItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#F8FAFC' },
+    contactInfo: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+    contactAvatar: { width: 40, height: 40, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+    contactName: { fontSize: 15, fontWeight: '800', color: '#0F172A' },
+    contactRole: { fontSize: 11, color: '#64748B', fontWeight: '600', marginTop: 2 },
 });

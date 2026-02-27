@@ -8,6 +8,7 @@ import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { updateActivity, getActivityById } from "./services/activities.service";
 import { safeApiCall, safeApiCallSingle } from "./services/api.helpers";
+import { computeLeadStage, updateLeadStage, syncDealStage } from "./services/stageEngine.service";
 
 const CALL_OUTCOMES = ["Connected", "No Answer", "Busy", "Wrong Number", "Left Voicemail"];
 const MEETING_OUTCOMES = ["Conducted", "Rescheduled", "Cancelled", "No Show"];
@@ -84,6 +85,29 @@ export default function CompleteActivityScreen() {
         setSaving(false);
 
         if (!res.error) {
+            // ── Stage Engine: fire lead stage update ──────────────────────────────
+            const entityId = formData.entityId || formData.relatedTo?.[0]?.id;
+            const entityType = (formData.entityType || formData.relatedTo?.[0]?.entityType || "Lead").toLowerCase();
+            const dealId = formData.dealId || formData.relatedTo?.find((r: any) => r.entityType?.toLowerCase() === "deal")?.id;
+            const outcomeStr = formData.callOutcome || formData.meetingOutcomeStatus || "";
+            const resultStr = formData.completionResult || "";
+
+            if (entityId && entityType === "lead") {
+                const newStage = computeLeadStage(formData.leadStage || "New", outcomeStr, resultStr);
+                updateLeadStage(entityId, newStage, {
+                    activityType: params.actType,
+                    outcome: resultStr || outcomeStr,
+                    activityId: params.id,
+                    reason: `${params.actType} completed: ${outcomeStr}${resultStr ? ` — ${resultStr}` : ""}`,
+                }).then(r => {
+                    if (r?.success) {
+                        console.info(`[StageEngine] Lead ${entityId} → ${newStage}`);
+                        if (dealId) syncDealStage(dealId, [newStage]);
+                    }
+                }).catch(e => console.warn("[StageEngine] stage update error", e));
+            }
+            // ─────────────────────────────────────────────────────────────────
+
             Alert.alert("Success", "Outcome logged successfully", [
                 { text: "OK", onPress: () => router.back() }
             ]);

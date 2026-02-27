@@ -11,7 +11,8 @@ import {
     Platform,
     Modal,
     FlatList,
-    SafeAreaView
+    SafeAreaView,
+    Switch
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -22,6 +23,7 @@ import { getDeals, getDealById } from "./services/deals.service";
 import { getContacts, getContactById, contactFullName } from "./services/contacts.service";
 import { getProjects, type Project } from "./services/projects.service";
 import { getCompanyById } from "./services/companies.service";
+import { getSystemSettingsByKey } from "./services/system-settings.service";
 import { safeApiCall, safeApiCallSingle, extractList } from "./services/api.helpers";
 
 const TYPES = ["Call", "Meeting", "Site Visit", "Task", "Email"];
@@ -30,6 +32,60 @@ const STATUSES = ["Pending", "In Progress", "Completed", "Deferred"];
 const CALL_OUTCOMES = ["Connected", "No Answer", "Busy", "Wrong Number", "Switch Off"];
 const MEETING_TYPES = ["Office", "On-Site", "Virtual", "Developer Office"];
 const VISIT_TYPES = ["Initial Visit", "Second Visit", "Follow-up", "Booking Visit"];
+const CALL_STATUSES = ["Answered / Connected", "No Answer", "Busy", "Wrong Number", "Left Voicemail"];
+
+const DEFAULT_ACTIVITY_MASTER_FIELDS = {
+    activities: [
+        {
+            name: 'Call',
+            purposes: [
+                {
+                    name: 'Introduction / First Contact',
+                    outcomes: [{ label: 'Connected' }, { label: 'Not Reachable' }, { label: 'Wrong Number' }, { label: 'Callback Requested' }, { label: 'Busy' }]
+                },
+                {
+                    name: 'Requirement Gathering',
+                    outcomes: [{ label: 'Requirements Shared' }, { label: 'Partial Info' }, { label: 'Refused to Share' }, { label: 'Rescheduled' }]
+                },
+                {
+                    name: 'Follow-up',
+                    outcomes: [{ label: 'Still Interested' }, { label: 'Ready for Visit' }, { label: 'Negotiation Mode' }, { label: 'Lost Interest' }, { label: 'No Response' }]
+                },
+                {
+                    name: 'Negotiation',
+                    outcomes: [{ label: 'Offer Accepted' }, { label: 'Offer Rejected' }, { label: 'Counter Offer Made' }, { label: 'Decision Pending' }]
+                },
+                {
+                    name: 'Post-Visit Feedback',
+                    outcomes: [{ label: 'Liked Property' }, { label: 'Disliked - Price' }, { label: 'Disliked - Location' }, { label: 'Thinking/Hold' }, { label: 'Booking Request' }]
+                },
+                {
+                    name: 'Payment Reminder',
+                    outcomes: [{ label: 'Payment Promised' }, { label: 'Already Paid' }, { label: 'Dispute' }, { label: 'Extension Requested' }]
+                }
+            ]
+        },
+        {
+            name: 'Meeting',
+            purposes: [
+                { name: 'Initial Consultation', outcomes: [{ label: 'Qualified' }, { label: 'Need More Time' }, { label: 'Not Qualified' }, { label: 'Rescheduled' }] },
+                { name: 'Project Presentation', outcomes: [{ label: 'Impressed' }, { label: 'Neutral' }, { label: 'Skeptical' }, { label: 'Requested Site Visit' }] },
+                { name: 'Price Negotiation', outcomes: [{ label: 'Deal Closed' }, { label: 'Stalemate' }, { label: 'Discount Approved' }, { label: 'Walk-away' }] },
+                { name: 'Document Collection', outcomes: [{ label: 'All Collected' }, { label: 'Partial' }, { label: 'Pending' }, { label: 'Issues Found' }] },
+                { name: 'Final Closing', outcomes: [{ label: 'Signed' }, { label: 'Reviewing Draft' }, { label: 'Postponed' }, { label: 'Cancelled' }] }
+            ]
+        },
+        {
+            name: 'Site Visit',
+            purposes: [
+                { name: 'First Visit (Solo)', outcomes: [{ label: 'Very Interested' }, { label: 'Somewhat Interested' }, { label: 'Not Interested' }, { label: 'Price Issue' }] },
+                { name: 'Re-Visit (With Family)', outcomes: [{ label: 'Shortlisted' }, { label: 'Family Liked' }, { label: 'Family Disliked' }, { label: 'Need Consensus' }] },
+                { name: 'Unit Selection', outcomes: [{ label: 'Unit Blocked' }, { label: 'Unit Not Available' }, { label: 'Changed Preference' }, { label: 'Thinking' }] },
+                { name: 'Competitor Comparison', outcomes: [{ label: 'Favors Us' }, { label: 'Favors Competitor' }, { label: 'Undecided' }] }
+            ]
+        }
+    ]
+};
 
 interface RelatedItem {
     id: string;
@@ -60,20 +116,25 @@ export default function AddActivityScreen() {
         priority: "Normal" as any,
         status: "Pending" as any,
         description: "",
+        clientFeedback: "",
         details: {
             purpose: "",
             duration: "15",
             callOutcome: "",
             meetingType: "Office",
             meetingLocation: "",
-            direction: "Outgoing",
+            direction: "Outgoing Call",
             completionResult: "",
+            meetingOutcomeStatus: "",
+            completionDate: new Date().toISOString().split("T")[0],
+            completionTime: new Date().toTimeString().slice(0, 5),
             visitedProperties: [] as any[],
             tasks: [{ subject: '', reminder: false, reminderTime: '10:00' }] as any[],
         }
     });
 
     const [activeTaskPicker, setActiveTaskPicker] = useState<number | null>(null);
+    const [activePickerField, setActivePickerField] = useState<"due" | "completion" | "task">("due");
 
     // Related Entity State
     const [selectedEntity, setSelectedEntity] = useState<RelatedItem | null>(null);
@@ -95,6 +156,17 @@ export default function AddActivityScreen() {
     const [showTimePicker, setShowTimePicker] = useState(false);
     const [pickerDate, setPickerDate] = useState(new Date());
 
+    const [activityMasterFields, setActivityMasterFields] = useState<any>(DEFAULT_ACTIVITY_MASTER_FIELDS);
+    const [isPurposeModalVisible, setIsPurposeModalVisible] = useState(false);
+
+    // Dynamic Purposes based on Activity Type
+    const currentActivityConfig = activityMasterFields?.activities?.find((a: any) => a.name === formData.type);
+    const dynamicPurposes = currentActivityConfig?.purposes || [];
+    const selectedPurposeObj = dynamicPurposes.find((p: any) => p.name === formData.details.purpose);
+    const dynamicResults = selectedPurposeObj?.outcomes || [];
+
+
+
     useEffect(() => {
         init();
     }, []);
@@ -107,7 +179,8 @@ export default function AddActivityScreen() {
 
         switch (formData.type) {
             case "Call":
-                subject = `Call with ${selectedEntity.name} on ${formattedDate} @ ${formData.dueTime}`;
+                const purp = formData.details.purpose ? `${formData.details.purpose} ` : "";
+                subject = `${purp}Call with ${selectedEntity.name} on ${formattedDate} @ ${formData.dueTime}`;
                 break;
             case "Meeting":
                 subject = `${formData.details.meetingType} Meeting with ${selectedEntity.name} (${formattedDate})`;
@@ -162,6 +235,17 @@ export default function AddActivityScreen() {
                 setFormData(prev => ({ ...prev, subject: `${params.actType || "Follow up"} with ${name}` }));
             }
         }
+
+        // 3. Fetch Activity Master Fields
+        const settingsRes: any = await safeApiCallSingle(() => getSystemSettingsByKey("activity_master_fields"));
+        if (!settingsRes.error && settingsRes.data) {
+            // safeApiCallSingle returns { data: settingRecord, error: null }
+            const settingValue = settingsRes.data.value;
+            if (settingValue) {
+                setActivityMasterFields(settingValue);
+            }
+        }
+
         setLoading(false);
     };
 
@@ -193,13 +277,22 @@ export default function AddActivityScreen() {
         if (!formData.subject) return Alert.alert("Error", "Please enter a subject");
         if (!selectedEntity) return Alert.alert("Error", "Please select a related entity");
 
+        if (formData.type === "Call" && !formData.details.purpose) {
+            return Alert.alert("Required", "Please select a Call Purpose");
+        }
+
         setSaving(true);
         const payload = {
             ...formData,
             entityId: selectedEntity.id,
             entityType: selectedEntity.type,
+            completionResult: formData.details.completionResult, // Legacy top-level mapping
             details: {
                 ...formData.details,
+                clientFeedback: formData.clientFeedback, // Aligned with Web CRM
+                completionDate: formData.details.completionDate,
+                completionTime: formData.details.completionTime,
+                meetingOutcomeStatus: formData.details.meetingOutcomeStatus,
                 visitedProperties: selectedProjects,
                 tasks: formData.type === "Task" ? formData.details.tasks : []
             }
@@ -330,6 +423,7 @@ export default function AddActivityScreen() {
                             <Text style={styles.label}>Due Date</Text>
                             <TouchableOpacity style={styles.input} onPress={() => {
                                 setPickerDate(new Date(formData.dueDate));
+                                setActivePickerField("due");
                                 setShowDatePicker(true);
                             }}>
                                 <Text style={styles.inputText}>{new Date(formData.dueDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</Text>
@@ -343,6 +437,7 @@ export default function AddActivityScreen() {
                                 const d = new Date();
                                 d.setHours(parseInt(hours), parseInt(minutes));
                                 setPickerDate(d);
+                                setActivePickerField("due");
                                 setShowTimePicker(true);
                             }}>
                                 <Text style={styles.inputText}>{formData.dueTime}</Text>
@@ -354,45 +449,148 @@ export default function AddActivityScreen() {
 
                 {/* 3. Dynamic Type-Specific Section */}
                 {formData.type === "Call" && (
-                    <Section title="Call Logistics">
-                        <View style={styles.row}>
-                            <View style={{ flex: 1, marginRight: 8 }}>
-                                <Text style={styles.label}>Direction</Text>
-                                <View style={styles.toggleRow}>
-                                    {["Outgoing", "Incoming"].map(d => (
-                                        <TouchableOpacity
-                                            key={d}
-                                            style={[styles.toggleBtn, formData.details.direction === d && styles.activeToggle]}
-                                            onPress={() => setFormData(p => ({ ...p, details: { ...p.details, direction: d } }))}
-                                        >
-                                            <Text style={[styles.toggleText, formData.details.direction === d && styles.activeToggleText]}>{d}</Text>
-                                        </TouchableOpacity>
-                                    ))}
-                                </View>
-                            </View>
-                            <View style={{ flex: 1, marginLeft: 8 }}>
-                                <Text style={styles.label}>Priority</Text>
-                                <View style={styles.toggleRow}>
-                                    {PRIORITIES.map(pr => (
-                                        <TouchableOpacity
-                                            key={pr}
-                                            style={[styles.toggleBtn, formData.priority === pr && styles.activeToggle]}
-                                            onPress={() => setFormData(p => ({ ...p, priority: pr as any }))}
-                                        >
-                                            <Text style={[styles.toggleText, formData.priority === pr && styles.activeToggleText]}>{pr[0]}</Text>
-                                        </TouchableOpacity>
-                                    ))}
-                                </View>
-                            </View>
+                    <Section title="Call Specifics">
+                        {/* 1. Call Purpose (Dynamic Dropdown from Web Settings) */}
+                        <Text style={styles.label}>Purpose / Agenda</Text>
+                        <TouchableOpacity
+                            style={styles.input}
+                            onPress={() => setIsPurposeModalVisible(true)}
+                        >
+                            <Text style={[styles.inputText, !formData.details.purpose && { color: "#94A3B8" }]}>
+                                {formData.details.purpose || "Select Purpose"}
+                            </Text>
+                            <Ionicons name="chevron-down" size={20} color="#64748B" />
+                        </TouchableOpacity>
+
+                        {/* 2. Priority Selector */}
+                        <Text style={[styles.label, { marginTop: 12 }]}>Priority</Text>
+                        <View style={styles.toggleRow}>
+                            {PRIORITIES.map((pr: string) => (
+                                <TouchableOpacity
+                                    key={pr}
+                                    style={[styles.toggleBtn, formData.priority === pr && styles.activeToggle]}
+                                    onPress={() => setFormData(p => ({ ...p, priority: pr as any }))}
+                                >
+                                    <Text style={[styles.toggleText, formData.priority === pr && styles.activeToggleText]}>{pr}</Text>
+                                </TouchableOpacity>
+                            ))}
                         </View>
+
+                        {/* 3. Duration Selector */}
+                        <Text style={[styles.label, { marginTop: 12 }]}>Duration (Minutes)</Text>
+                        <View style={styles.toggleRow}>
+                            {["15", "30", "45", "60"].map((d: string) => (
+                                <TouchableOpacity
+                                    key={d}
+                                    style={[styles.toggleBtn, formData.details.duration === d && styles.activeToggle]}
+                                    onPress={() => setFormData(p => ({ ...p, details: { ...p.details, duration: d } }))}
+                                >
+                                    <Text style={[styles.toggleText, formData.details.duration === d && styles.activeToggleText]}>{d}</Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+
+                        {/* 3. Complete Call Outcomes Toggle */}
+                        <View style={[styles.row, { marginTop: 24, justifyContent: "space-between", alignItems: "center" }]}>
+                            <View>
+                                <Text style={[styles.label, { marginBottom: 2 }]}>Complete Call Outcomes</Text>
+                                <Text style={{ fontSize: 12, color: "#64748B" }}>Log direction, status and result</Text>
+                            </View>
+                            <Switch
+                                value={formData.status === "Completed"}
+                                onValueChange={(val) => setFormData(p => ({ ...p, status: val ? "Completed" : "Pending" }))}
+                                trackColor={{ false: "#CBD5E1", true: "#93C5FD" }}
+                                thumbColor={formData.status === "Completed" ? "#2563EB" : "#F4F4F5"}
+                            />
+                        </View>
+
+                        {/* 4. Conditional Outcome Fields */}
+                        {formData.status === "Completed" && (
+                            <View style={{ marginTop: 16, backgroundColor: "#F8FAFC", padding: 12, borderRadius: 12, borderWidth: 1, borderColor: "#E2E8F0" }}>
+                                <View style={styles.row}>
+                                    <View style={{ flex: 1, marginRight: 8 }}>
+                                        <Text style={styles.label}>Direction</Text>
+                                        <View style={styles.toggleRow}>
+                                            {["Outgoing Call", "Incoming Call"].map(d => (
+                                                <TouchableOpacity
+                                                    key={d}
+                                                    style={[styles.toggleBtn, formData.details.direction === d && styles.activeToggle]}
+                                                    onPress={() => setFormData(p => ({ ...p, details: { ...p.details, direction: d } }))}
+                                                >
+                                                    <Text style={[styles.toggleText, formData.details.direction === d && styles.activeToggleText]}>{d.split(' ')[0]}</Text>
+                                                </TouchableOpacity>
+                                            ))}
+                                        </View>
+                                    </View>
+                                    <View style={{ flex: 1, marginLeft: 8 }}>
+                                        <Text style={styles.label}>Call Status</Text>
+                                        <View style={styles.chipGrid}>
+                                            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                                                {CALL_STATUSES.map((s: string) => {
+                                                    const val = s.includes("Connected") ? "Connected" : s;
+                                                    return (
+                                                        <TouchableOpacity
+                                                            key={s}
+                                                            style={[styles.chip, formData.details.callOutcome === val && styles.activeChip, { marginRight: 8 }]}
+                                                            onPress={() => setFormData(p => ({ ...p, details: { ...p.details, callOutcome: val } }))}
+                                                        >
+                                                            <Text style={[styles.chipText, formData.details.callOutcome === val && styles.activeChipText]}>{s}</Text>
+                                                        </TouchableOpacity>
+                                                    );
+                                                })}
+                                            </ScrollView>
+                                        </View>
+                                    </View>
+                                </View>
+
+                                {formData.details.purpose ? (
+                                    <>
+                                        <Text style={[styles.label, { marginTop: 12 }]}>Call Result (Based on {formData.details.purpose})</Text>
+                                        <View style={styles.chipGrid}>
+                                            {dynamicResults.map((r: any) => (
+                                                <TouchableOpacity
+                                                    key={r.label}
+                                                    style={[styles.chip, formData.details.completionResult === r.label && styles.activeChip]}
+                                                    onPress={() => setFormData(prev => ({ ...prev, details: { ...prev.details, completionResult: r.label } }))}
+                                                >
+                                                    <Text style={[styles.chipText, formData.details.completionResult === r.label && styles.activeChipText]}>{r.label}</Text>
+                                                </TouchableOpacity>
+                                            ))}
+                                        </View>
+
+                                        <Text style={[styles.label, { marginTop: 12 }]}>Feedback / Notes</Text>
+                                        <TextInput
+                                            style={[styles.input, { height: 80, textAlignVertical: "top" }]}
+                                            multiline
+                                            value={formData.clientFeedback}
+                                            onChangeText={t => setFormData(p => ({ ...p, clientFeedback: t }))}
+                                            placeholder="Write a summary... (e.g. client was interested)"
+                                        />
+                                    </>
+                                ) : (
+                                    <Text style={{ fontSize: 12, color: "#94A3B8", marginTop: 12, fontStyle: "italic" }}>Select a purpose to see available results</Text>
+                                )}
+                            </View>
+                        )}
                     </Section>
                 )}
 
                 {formData.type === "Meeting" && (
                     <Section title="Meeting Workspace">
-                        <Text style={styles.label}>Meeting Type</Text>
+                        <Text style={styles.label}>Purpose / Agenda</Text>
+                        <TouchableOpacity
+                            style={styles.input}
+                            onPress={() => setIsPurposeModalVisible(true)}
+                        >
+                            <Text style={[styles.inputText, !formData.details.purpose && { color: "#94A3B8" }]}>
+                                {formData.details.purpose || "Select Purpose"}
+                            </Text>
+                            <Ionicons name="chevron-down" size={20} color="#64748B" />
+                        </TouchableOpacity>
+
+                        <Text style={[styles.label, { marginTop: 12 }]}>Meeting Type</Text>
                         <View style={styles.chipGrid}>
-                            {MEETING_TYPES.map(mt => (
+                            {MEETING_TYPES.map((mt: string) => (
                                 <TouchableOpacity
                                     key={mt}
                                     style={[styles.chip, formData.details.meetingType === mt && styles.activeChip]}
@@ -411,6 +609,93 @@ export default function AddActivityScreen() {
                             onChangeText={t => setFormData(p => ({ ...p, details: { ...p.details, meetingLocation: t } }))}
                             placeholder={formData.details.meetingType === "Virtual" ? "Zoom/Meet Link" : "Office Address"}
                         />
+
+                        {/* Complete Meeting Toggle */}
+                        <View style={[styles.row, { marginTop: 24, justifyContent: "space-between", alignItems: "center" }]}>
+                            <View>
+                                <Text style={[styles.label, { marginBottom: 2 }]}>Complete Meeting</Text>
+                                <Text style={{ fontSize: 12, color: "#64748B" }}>Log status, result and feedback</Text>
+                            </View>
+                            <Switch
+                                value={formData.status === "Completed"}
+                                onValueChange={(val) => setFormData(p => ({ ...p, status: val ? "Completed" : "Pending" }))}
+                                trackColor={{ false: "#CBD5E1", true: "#F5D0FE" }}
+                                thumbColor={formData.status === "Completed" ? "#C026D3" : "#F4F4F5"}
+                            />
+                        </View>
+
+                        {/* Conditional Meeting Completion Fields */}
+                        {formData.status === "Completed" && (
+                            <View style={{ marginTop: 16, backgroundColor: "#FDF4FF", padding: 12, borderRadius: 12, borderWidth: 1, borderColor: "#F5D0FE" }}>
+                                <View style={styles.row}>
+                                    <View style={{ flex: 1, marginRight: 8 }}>
+                                        <Text style={styles.label}>Status</Text>
+                                        <View style={styles.chipGrid}>
+                                            {["Conducted", "Rescheduled", "Cancelled", "No Show"].map(s => (
+                                                <TouchableOpacity
+                                                    key={s}
+                                                    style={[styles.chip, formData.details.meetingOutcomeStatus === s && styles.activeChip, { borderColor: "#F5D0FE" }]}
+                                                    onPress={() => setFormData(p => ({ ...p, details: { ...p.details, meetingOutcomeStatus: s } }))}
+                                                >
+                                                    <Text style={[styles.chipText, formData.details.meetingOutcomeStatus === s && styles.activeChipText]}>{s}</Text>
+                                                </TouchableOpacity>
+                                            ))}
+                                        </View>
+                                    </View>
+                                </View>
+
+                                {formData.details.meetingOutcomeStatus === "Conducted" && (
+                                    <View style={{ marginTop: 12 }}>
+                                        <Text style={styles.label}>Result / Outcome</Text>
+                                        <View style={styles.chipGrid}>
+                                            {dynamicResults.map((r: any) => (
+                                                <TouchableOpacity
+                                                    key={r.label}
+                                                    style={[styles.chip, formData.details.completionResult === r.label && styles.activeChip]}
+                                                    onPress={() => setFormData(prev => ({ ...prev, details: { ...prev.details, completionResult: r.label } }))}
+                                                >
+                                                    <Text style={[styles.chipText, formData.details.completionResult === r.label && styles.activeChipText]}>{r.label}</Text>
+                                                </TouchableOpacity>
+                                            ))}
+                                        </View>
+                                    </View>
+                                )}
+
+                                <View style={[styles.row, { marginTop: 12 }]}>
+                                    <View style={{ flex: 1, marginRight: 8 }}>
+                                        <Text style={styles.label}>Date</Text>
+                                        <TouchableOpacity style={styles.input} onPress={() => {
+                                            setPickerDate(new Date(formData.details.completionDate));
+                                            setActivePickerField("completion");
+                                            setShowDatePicker(true);
+                                        }}>
+                                            <Text style={styles.inputText}>{new Date(formData.details.completionDate).toLocaleDateString('en-GB')}</Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                    <View style={{ flex: 1, marginLeft: 8 }}>
+                                        <Text style={styles.label}>Time</Text>
+                                        <TouchableOpacity style={styles.input} onPress={() => {
+                                            const [h, m] = formData.details.completionTime.split(':');
+                                            const d = new Date(); d.setHours(parseInt(h), parseInt(m));
+                                            setPickerDate(d);
+                                            setActivePickerField("completion");
+                                            setShowTimePicker(true);
+                                        }}>
+                                            <Text style={styles.inputText}>{formData.details.completionTime}</Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                </View>
+
+                                <Text style={[styles.label, { marginTop: 12 }]}>Feedback / Notes</Text>
+                                <TextInput
+                                    style={[styles.input, { height: 80, textAlignVertical: "top", backgroundColor: "#FFF" }]}
+                                    multiline
+                                    value={formData.clientFeedback}
+                                    onChangeText={t => setFormData(p => ({ ...p, clientFeedback: t }))}
+                                    placeholder="Write a professional summary..."
+                                />
+                            </View>
+                        )}
                     </Section>
                 )}
 
@@ -435,18 +720,103 @@ export default function AddActivityScreen() {
                             </TouchableOpacity>
                         </View>
 
-                        <Text style={[styles.label, { marginTop: 16 }]}>Visit Type</Text>
-                        <View style={styles.chipGrid}>
-                            {VISIT_TYPES.map(vt => (
-                                <TouchableOpacity
-                                    key={vt}
-                                    style={[styles.chip, formData.details.purpose === vt && styles.activeChip]}
-                                    onPress={() => setFormData(prev => ({ ...prev, details: { ...prev.details, purpose: vt } }))}
-                                >
-                                    <Text style={[styles.chipText, formData.details.purpose === vt && styles.activeChipText]}>{vt}</Text>
-                                </TouchableOpacity>
-                            ))}
+                        <Text style={[styles.label, { marginTop: 16 }]}>Purpose / Agenda</Text>
+                        <TouchableOpacity
+                            style={styles.input}
+                            onPress={() => setIsPurposeModalVisible(true)}
+                        >
+                            <Text style={[styles.inputText, !formData.details.purpose && { color: "#94A3B8" }]}>
+                                {formData.details.purpose || "Select Purpose"}
+                            </Text>
+                            <Ionicons name="chevron-down" size={20} color="#64748B" />
+                        </TouchableOpacity>
+
+                        {/* Complete Site Visit Toggle */}
+                        <View style={[styles.row, { marginTop: 24, justifyContent: "space-between", alignItems: "center" }]}>
+                            <View>
+                                <Text style={[styles.label, { marginBottom: 2 }]}>Complete Site Visit</Text>
+                                <Text style={{ fontSize: 12, color: "#64748B" }}>Log status, results and feedback</Text>
+                            </View>
+                            <Switch
+                                value={formData.status === "Completed"}
+                                onValueChange={(val) => setFormData(p => ({ ...p, status: val ? "Completed" : "Pending" }))}
+                                trackColor={{ false: "#CBD5E1", true: "#DCFCE7" }}
+                                thumbColor={formData.status === "Completed" ? "#22C55E" : "#F4F4F5"}
+                            />
                         </View>
+
+                        {/* Conditional Site Visit Completion Fields */}
+                        {formData.status === "Completed" && (
+                            <View style={{ marginTop: 16, backgroundColor: "#F0FDF4", padding: 12, borderRadius: 12, borderWidth: 1, borderColor: "#DCFCE7" }}>
+                                <View style={styles.row}>
+                                    <View style={{ flex: 1, marginRight: 8 }}>
+                                        <Text style={styles.label}>Status</Text>
+                                        <View style={styles.chipGrid}>
+                                            {["Conducted", "Rescheduled", "Cancelled", "Did Not Visit"].map(s => (
+                                                <TouchableOpacity
+                                                    key={s}
+                                                    style={[styles.chip, formData.details.meetingOutcomeStatus === s && styles.activeChip, { borderColor: "#DCFCE7" }]}
+                                                    onPress={() => setFormData(p => ({ ...p, details: { ...p.details, meetingOutcomeStatus: s } }))}
+                                                >
+                                                    <Text style={[styles.chipText, formData.details.meetingOutcomeStatus === s && styles.activeChipText]}>{s}</Text>
+                                                </TouchableOpacity>
+                                            ))}
+                                        </View>
+                                    </View>
+                                </View>
+
+                                {formData.details.meetingOutcomeStatus === "Conducted" && (
+                                    <View style={{ marginTop: 12 }}>
+                                        <Text style={styles.label}>Overall Result</Text>
+                                        <View style={styles.chipGrid}>
+                                            {dynamicResults.map((r: any) => (
+                                                <TouchableOpacity
+                                                    key={r.label}
+                                                    style={[styles.chip, formData.details.completionResult === r.label && styles.activeChip]}
+                                                    onPress={() => setFormData(prev => ({ ...prev, details: { ...prev.details, completionResult: r.label } }))}
+                                                >
+                                                    <Text style={[styles.chipText, formData.details.completionResult === r.label && styles.activeChipText]}>{r.label}</Text>
+                                                </TouchableOpacity>
+                                            ))}
+                                        </View>
+                                    </View>
+                                )}
+
+                                <View style={[styles.row, { marginTop: 12 }]}>
+                                    <View style={{ flex: 1, marginRight: 8 }}>
+                                        <Text style={styles.label}>Date</Text>
+                                        <TouchableOpacity style={styles.input} onPress={() => {
+                                            setPickerDate(new Date(formData.details.completionDate));
+                                            setActivePickerField("completion");
+                                            setShowDatePicker(true);
+                                        }}>
+                                            <Text style={styles.inputText}>{new Date(formData.details.completionDate).toLocaleDateString('en-GB')}</Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                    <View style={{ flex: 1, marginLeft: 8 }}>
+                                        <Text style={styles.label}>Time</Text>
+                                        <TouchableOpacity style={styles.input} onPress={() => {
+                                            const [h, m] = formData.details.completionTime.split(':');
+                                            const d = new Date(); d.setHours(parseInt(h), parseInt(m));
+                                            setPickerDate(d);
+                                            setActivePickerField("completion");
+                                            setShowTimePicker(true);
+                                        }}>
+                                            <Text style={styles.inputText}>{formData.details.completionTime}</Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                </View>
+
+                                <Text style={[styles.label, { marginTop: 12 }]}>General Feedback</Text>
+                                <TextInput
+                                    style={[styles.input, { height: 80, textAlignVertical: "top", backgroundColor: "#FFF" }]}
+                                    multiline
+                                    value={formData.clientFeedback}
+                                    onChangeText={t => setFormData(p => ({ ...p, clientFeedback: t }))}
+                                    placeholder="Summary of the site visit..."
+                                />
+                            </View>
+                        )}
                     </Section>
                 )}
 
@@ -494,6 +864,7 @@ export default function AddActivityScreen() {
                                                 d.setHours(parseInt(h), parseInt(m));
                                                 setPickerDate(d);
                                                 setActiveTaskPicker(index);
+                                                setActivePickerField("task");
                                                 setShowTimePicker(true);
                                             }}
                                         >
@@ -506,51 +877,6 @@ export default function AddActivityScreen() {
                         ))}
                     </Section>
                 )}
-
-                {/* 4. Completion & Execution */}
-                <Section title="Progress Control">
-                    <Text style={styles.label}>Status</Text>
-                    <View style={styles.row}>
-                        {STATUSES.map(s => (
-                            <TouchableOpacity
-                                key={s}
-                                style={[styles.statusBtn, formData.status === s && { backgroundColor: "#2563EB", borderColor: "#2563EB" }]}
-                                onPress={() => setFormData(p => ({ ...p, status: s }))}
-                            >
-                                <Text style={[styles.statusBtnText, formData.status === s && { color: "#fff" }]}>{s}</Text>
-                            </TouchableOpacity>
-                        ))}
-                    </View>
-
-                    {formData.status === "Completed" && (
-                        <View style={{ marginTop: 16 }}>
-                            {formData.type === "Call" && (
-                                <>
-                                    <Text style={styles.label}>Call Outcome</Text>
-                                    <View style={styles.chipGrid}>
-                                        {CALL_OUTCOMES.map(co => (
-                                            <TouchableOpacity
-                                                key={co}
-                                                style={[styles.smallChip, formData.details.callOutcome === co && styles.activeChip]}
-                                                onPress={() => setFormData(p => ({ ...p, details: { ...p.details, callOutcome: co } }))}
-                                            >
-                                                <Text style={[styles.smallChipText, formData.details.callOutcome === co && styles.activeChipText]}>{co}</Text>
-                                            </TouchableOpacity>
-                                        ))}
-                                    </View>
-                                </>
-                            )}
-                            <Text style={[styles.label, { marginTop: 12 }]}>Final Result / Remarks</Text>
-                            <TextInput
-                                style={[styles.input, { height: 80, textAlignVertical: "top" }]}
-                                multiline
-                                value={formData.details.completionResult}
-                                onChangeText={t => setFormData(p => ({ ...p, details: { ...p.details, completionResult: t } }))}
-                                placeholder="What was the result of this mission?"
-                            />
-                        </View>
-                    )}
-                </Section>
 
                 <View style={{ height: 100 }} />
             </ScrollView>
@@ -762,7 +1088,11 @@ export default function AddActivityScreen() {
                         setShowDatePicker(false);
                         if (event.type === 'set' && date) {
                             const localDate = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-                            setFormData(p => ({ ...p, dueDate: localDate }));
+                            if (activePickerField === "completion") {
+                                setFormData(p => ({ ...p, details: { ...p.details, completionDate: localDate } }));
+                            } else {
+                                setFormData(p => ({ ...p, dueDate: localDate }));
+                            }
                         }
                     }}
                 />
@@ -777,9 +1107,11 @@ export default function AddActivityScreen() {
                         setShowTimePicker(false);
                         if (event.type === 'set' && date) {
                             const localTime = date.toTimeString().slice(0, 5);
-                            if (activeTaskPicker !== null) {
+                            if (activePickerField === "task" && activeTaskPicker !== null) {
                                 updateTask(activeTaskPicker, 'reminderTime', localTime);
                                 setActiveTaskPicker(null);
+                            } else if (activePickerField === "completion") {
+                                setFormData(p => ({ ...p, details: { ...p.details, completionTime: localTime } }));
                             } else {
                                 setFormData(p => ({ ...p, dueTime: localTime }));
                             }
@@ -789,6 +1121,52 @@ export default function AddActivityScreen() {
                     }}
                 />
             )}
+
+            {/* Purpose Selection Modal */}
+            <Modal visible={isPurposeModalVisible} animationType="fade" transparent>
+                <View style={styles.centeredModal}>
+                    <View style={styles.pickerCard}>
+                        <View style={styles.pickerHeader}>
+                            <Text style={styles.pickerTitle}>Select {formData.type} Purpose</Text>
+                            <TouchableOpacity onPress={() => setIsPurposeModalVisible(false)}>
+                                <Ionicons name="close" size={24} color="#64748B" />
+                            </TouchableOpacity>
+                        </View>
+                        {dynamicPurposes.length > 0 ? (
+                            <FlatList
+                                data={dynamicPurposes}
+                                keyExtractor={i => i.name}
+                                renderItem={({ item }) => (
+                                    <TouchableOpacity
+                                        style={[styles.pickerRow, formData.details.purpose === item.name && { backgroundColor: "#F0F9FF" }]}
+                                        onPress={() => {
+                                            setFormData(p => ({
+                                                ...p,
+                                                details: { ...p.details, purpose: item.name, completionResult: "" }
+                                            }));
+                                            setIsPurposeModalVisible(false);
+                                        }}
+                                    >
+                                        <Text style={[styles.pickerText, formData.details.purpose === item.name && { color: "#2563EB", fontWeight: "700" }]}>
+                                            {item.name}
+                                        </Text>
+                                        {formData.details.purpose === item.name && (
+                                            <Ionicons name="checkmark-circle" size={18} color="#2563EB" />
+                                        )}
+                                    </TouchableOpacity>
+                                )}
+                            />
+                        ) : (
+                            <View style={{ padding: 30, alignItems: 'center' }}>
+                                <Ionicons name="alert-circle-outline" size={40} color="#CBD5E1" />
+                                <Text style={{ color: '#94A3B8', marginTop: 12, textAlign: 'center' }}>
+                                    No purposes found in settings.
+                                </Text>
+                            </View>
+                        )}
+                    </View>
+                </View>
+            </Modal>
         </SafeAreaView>
     );
 }
@@ -870,6 +1248,8 @@ const styles = StyleSheet.create({
     section: { marginBottom: 20 },
     sectionLabel: { fontSize: 11, fontWeight: "800", color: "#94A3B8", textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 8, paddingLeft: 4 },
     sectionCard: { backgroundColor: "#fff", borderRadius: 24, padding: 20, borderWidth: 1, borderColor: "#F1F5F9" },
+    emptyContainer: { alignItems: 'center', justifyContent: 'center', padding: 20, backgroundColor: '#F8FAFC', borderRadius: 16, borderStyle: 'dashed', borderWidth: 1, borderColor: '#CBD5E1' },
+    emptyText: { fontSize: 13, color: "#94A3B8", fontStyle: "italic", textAlign: "center", marginTop: 8 },
     label: { fontSize: 13, fontWeight: "700", color: "#475569", marginBottom: 8 },
     input: {
         backgroundColor: "#F8FAFC", borderWidth: 1, borderColor: "#E2E8F0",
@@ -941,5 +1321,6 @@ const styles = StyleSheet.create({
     pickerText: { fontSize: 15, fontWeight: "600", color: "#334155" },
     pickerClose: { marginTop: 16, alignItems: "center", padding: 12 },
     pickerCloseText: { color: "#2563EB", fontWeight: "700" },
+    pickerHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
     badgeSubLabel: { fontSize: 10, color: "#EF4444", fontWeight: "600" }
 });
