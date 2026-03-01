@@ -1,15 +1,19 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
     View, Text, StyleSheet, TouchableOpacity, TextInput,
-    ActivityIndicator, Alert, ScrollView, SafeAreaView, Vibration
+    ActivityIndicator, Alert, ScrollView, SafeAreaView, Vibration,
+    Platform
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
+import { Audio } from 'expo-av';
+import api from "./services/api";
 import { getActivityById, updateActivity } from "./services/activities.service";
 import { getSystemSettingsByKey } from "./services/system-settings.service";
 import { safeApiCallSingle } from "./services/api.helpers";
 import { computeLeadStage, updateLeadStage, syncDealStage } from "./services/stageEngine.service";
+import { getAuthorizedFolder, requestFolderPermission, findLatestRecording } from "./services/storage.service";
 
 // Standard Outcome Data (Fallback)
 const DEFAULT_OUTCOMES: any = {
@@ -31,7 +35,7 @@ const DEFAULT_OUTCOMES: any = {
 };
 
 export default function OutcomeScreen() {
-    const { id } = useLocalSearchParams();
+    const { id, entityId: pEntityId, entityType: pEntityType, entityName: pEntityName, actType: pActType, mobile: pMobile } = useLocalSearchParams();
     const router = useRouter();
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -48,6 +52,20 @@ export default function OutcomeScreen() {
     const [showDatePicker, setShowDatePicker] = useState(false);
     const [showTimePicker, setShowTimePicker] = useState(false);
 
+    // Audio Recording State
+    const [recording, setRecording] = useState<Audio.Recording | null>(null);
+    const [recordingUri, setRecordingUri] = useState<string | null>(null);
+    const [isRecording, setIsRecording] = useState(false);
+    const [sound, setSound] = useState<Audio.Sound | null>(null);
+    const [isPlaying, setIsPlaying] = useState(false);
+    const [recordingDuration, setRecordingDuration] = useState(0);
+    const recordingInterval = useRef<any>(null);
+
+    // Auto-Sync State
+    const [folderUri, setFolderUri] = useState<string | null>(null);
+    const [isScanning, setIsScanning] = useState(false);
+    const [autoFetched, setAutoFetched] = useState(false);
+
     useEffect(() => {
         console.log("[OutcomeScreen] Mounted with id:", id);
         if (id) {
@@ -57,17 +75,42 @@ export default function OutcomeScreen() {
 
     const loadInitialData = async () => {
         try {
-            const [actRes, setRes] = await Promise.all([
-                safeApiCallSingle(() => getActivityById(id as string)),
-                safeApiCallSingle(() => getSystemSettingsByKey("activity_master_fields"))
-            ]);
+            setLoading(true);
+            const setRes = await safeApiCallSingle(() => getSystemSettingsByKey("activity_master_fields"));
+            if ((setRes as any)?.data) setMasterSettings((setRes as any).data.value);
 
-            if (actRes?.data) {
-                setActivity(actRes.data);
-                if (actRes.data.type === "Call") setOutcomeStatus("Answered / Connected");
-                else if (["Meeting", "Site Visit"].includes(actRes.data.type)) setOutcomeStatus("Conducted");
+            if (id === 'new') {
+                const now = new Date();
+                const newAct = {
+                    type: pActType || "Call",
+                    subject: `${pActType || "Call"} with ${pEntityName || "Client"}`,
+                    entityId: pEntityId,
+                    entityType: pEntityType || "Lead",
+                    relatedTo: pEntityId ? [{ id: pEntityId, name: pEntityName || "Client", model: pEntityType || "Lead" }] : [],
+                    dueDate: now.toISOString().split('T')[0],
+                    dueTime: now.toTimeString().slice(0, 5),
+                    status: "Pending"
+                };
+                setActivity(newAct);
+                if (newAct.type === "Call") {
+                    setOutcomeStatus("Answered / Connected");
+                    if (Platform.OS === 'android') checkAndScanRecording();
+                } else if (["Meeting", "Site Visit"].includes(newAct.type)) {
+                    setOutcomeStatus("Conducted");
+                }
+            } else {
+                const actRes = await safeApiCallSingle(() => getActivityById(id as any));
+                if ((actRes as any)?.data) {
+                    const act = (actRes as any).data;
+                    setActivity(act);
+                    if (act.type === "Call") {
+                        setOutcomeStatus("Answered / Connected");
+                        if (Platform.OS === 'android') checkAndScanRecording();
+                    } else if (["Meeting", "Site Visit"].includes(act.type)) {
+                        setOutcomeStatus("Conducted");
+                    }
+                }
             }
-            if (setRes?.data) setMasterSettings(setRes.data.value);
         } catch (e) {
             console.error("Load outcome data error:", e);
         } finally {
@@ -77,11 +120,131 @@ export default function OutcomeScreen() {
 
     const getDynamicOutcomes = () => {
         if (!activity) return [];
-        const typeSettings = masterSettings?.activities?.find((a: any) => a.name === activity.type);
-        const purposeName = activity.details?.purpose || activity.subject;
+        const typeSettings = (masterSettings as any)?.activities?.find((a: any) => a.name === (activity as any).type);
+        const purposeName = (activity as any).details?.purpose || (activity as any).subject;
         const purposeObj = typeSettings?.purposes?.find((p: any) => p.name === purposeName);
         if (purposeObj?.outcomes) return purposeObj.outcomes;
-        return DEFAULT_OUTCOMES[activity.type]?.[outcomeStatus] || [];
+        return DEFAULT_OUTCOMES[(activity as any).type]?.[outcomeStatus] || [];
+    };
+
+    const checkAndScanRecording = async () => {
+        const uri = await getAuthorizedFolder();
+        setFolderUri(uri);
+        if (uri) {
+            setIsScanning(true);
+            const searchStr = Array.isArray(pMobile) ? pMobile[0] : pMobile;
+            const latest = await findLatestRecording(15, searchStr); // Look back 15 mins for safety
+            if (latest) {
+                setRecordingUri(latest.uri);
+                setAutoFetched(true);
+                if ((latest as any).exact) {
+                    Vibration.vibrate([0, 100, 50, 100, 50, 100]); // Special vibration for exact match
+                } else {
+                    Vibration.vibrate([0, 100, 50, 100]);
+                }
+            }
+            setIsScanning(false);
+        }
+    };
+
+    const handleEnableAutoSync = async () => {
+        const uri = await requestFolderPermission();
+        if (uri) {
+            setFolderUri(uri);
+            checkAndScanRecording();
+        }
+    };
+
+    // --- Audio Recording Logic ---
+    const startRecording = async () => {
+        try {
+            const permission = await Audio.requestPermissionsAsync();
+            if (permission.status !== 'granted') {
+                return Alert.alert('Permission Required', 'Microphone access is needed for voice memos.');
+            }
+
+            await Audio.setAudioModeAsync({
+                allowsRecordingIOS: true,
+                playsInSilentModeIOS: true,
+            });
+
+            const { recording } = await Audio.Recording.createAsync(
+                Audio.RecordingOptionsPresets.HIGH_QUALITY
+            );
+
+            setRecording(recording);
+            setIsRecording(true);
+            setRecordingDuration(0);
+            recordingInterval.current = setInterval(() => {
+                setRecordingDuration(prev => prev + 1);
+            }, 1000);
+
+            Vibration.vibrate(100);
+        } catch (err) {
+            console.error('Failed to start recording', err);
+            Alert.alert('Error', 'Could not start recording');
+        }
+    };
+
+    const stopRecording = async () => {
+        if (!recording) return;
+        setIsRecording(false);
+        clearInterval(recordingInterval.current);
+        try {
+            await recording.stopAndUnloadAsync();
+            const uri = recording.getURI();
+            setRecordingUri(uri || null);
+            setRecording(null);
+            Vibration.vibrate(50);
+        } catch (err) {
+            console.error('Failed to stop recording', err);
+        }
+    };
+
+    const playRecording = async () => {
+        if (!recordingUri) return;
+        try {
+            if (sound) {
+                await sound.unloadAsync();
+            }
+            const { sound: newSound } = await Audio.Sound.createAsync(
+                { uri: recordingUri },
+                { shouldPlay: true }
+            );
+            setSound(newSound);
+            setIsPlaying(true);
+            newSound.setOnPlaybackStatusUpdate((status: any) => {
+                if (status.didJustFinish) setIsPlaying(false);
+            });
+        } catch (err) {
+            console.error('Failed to play sound', err);
+        }
+    };
+
+    const deleteRecording = () => {
+        setRecordingUri(null);
+        setRecordingDuration(0);
+        if (sound) {
+            sound.unloadAsync();
+            setSound(null);
+        }
+    };
+
+    const uploadAudio = async (uri: string) => {
+        const formData = new FormData() as any;
+        const filename = uri.split('/').pop() || 'voice_memo.m4a';
+
+        formData.append('file', {
+            uri: Platform.OS === 'ios' ? uri.replace('file://', '') : uri,
+            name: filename,
+            type: 'audio/m4a',
+        });
+
+        const response = await api.post('/upload', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+        });
+
+        return response.data?.url;
     };
 
     const handleSave = async () => {
@@ -90,7 +253,19 @@ export default function OutcomeScreen() {
         setSaving(true);
         Vibration.vibrate(50);
         try {
+            let audioUrl = null;
+            if (recordingUri) {
+                try {
+                    audioUrl = await uploadAudio(recordingUri);
+                } catch (err) {
+                    console.error('Audio upload failed:', err);
+                    // Continue without audio if upload fails? Or ask user?
+                    // For now, continue but log error.
+                }
+            }
+
             const payload = {
+                ...activity,
                 status: "Completed",
                 completedAt: new Date(`${completionDate.toISOString().split('T')[0]}T${completionTime.toTimeString().slice(0, 5)}`),
                 details: {
@@ -99,16 +274,25 @@ export default function OutcomeScreen() {
                     completionResult: result,
                     clientFeedback: feedback,
                     completionDate: completionDate.toISOString().split('T')[0],
-                    completionTime: completionTime.toTimeString().slice(0, 5)
+                    completionTime: completionTime.toTimeString().slice(0, 5),
+                    audioUrl: audioUrl
                 }
             };
-            await updateActivity(id as string, payload);
+
+            let savedActivity;
+            if (id === 'new') {
+                const res = await api.post("/activities", payload);
+                savedActivity = res.data?.data || res.data;
+            } else {
+                await updateActivity(id as any, payload);
+                savedActivity = activity;
+            }
 
             // ── Stage Engine: trigger lead stage update ──────────────────────────
             // Resolve the lead/deal linked to this activity
-            const entityId = activity.entityId || activity.relatedTo?.[0]?.id;
-            const entityType = (activity.entityType || activity.relatedTo?.[0]?.entityType || "Lead").toLowerCase();
-            const dealId = activity.dealId || activity.relatedTo?.find((r: any) => r.entityType?.toLowerCase() === "deal")?.id;
+            const entityId = savedActivity.entityId || savedActivity.relatedTo?.[0]?.id;
+            const entityType = (savedActivity.entityType || savedActivity.relatedTo?.[0]?.entityType || "Lead").toLowerCase();
+            const dealId = savedActivity.dealId || savedActivity.relatedTo?.find((r: any) => r.entityType?.toLowerCase() === "deal")?.id;
 
             if (entityId && entityType === "lead") {
                 const currentStage = (activity.leadStage as string) || "New";
@@ -267,6 +451,88 @@ export default function OutcomeScreen() {
                     />
                 </View>
 
+                {/* Voice Memo Section */}
+                {activity.type === "Call" && (
+                    <View style={styles.section}>
+                        <View style={styles.sectionHeaderRow}>
+                            <Text style={styles.label}>Voice Memo / Call Recording</Text>
+                            {Platform.OS === 'android' && (
+                                <View style={styles.autoSyncRow}>
+                                    <TouchableOpacity
+                                        onPress={handleEnableAutoSync}
+                                        style={[styles.autoSyncBadge, folderUri && styles.autoSyncBadgeActive]}
+                                    >
+                                        <Ionicons name={folderUri ? "sync-circle" : "sync-circle-outline"} size={14} color={folderUri ? "#22C55E" : "#64748B"} />
+                                        <Text style={[styles.autoSyncBadgeText, folderUri && { color: "#22C55E" }]}>
+                                            {folderUri ? "AUTO-SYNC ON" : "ENABLE AUTO-SYNC"}
+                                        </Text>
+                                    </TouchableOpacity>
+                                    {folderUri && (
+                                        <TouchableOpacity onPress={checkAndScanRecording} style={styles.rescanBtn}>
+                                            <Ionicons name="refresh" size={12} color="#2563EB" />
+                                            <Text style={styles.rescanText}>RE-SCAN</Text>
+                                        </TouchableOpacity>
+                                    )}
+                                </View>
+                            )}
+                        </View>
+
+                        <View style={styles.audioCard}>
+                            {isScanning ? (
+                                <View style={styles.scanningContainer}>
+                                    <ActivityIndicator size="small" color="#2563EB" />
+                                    <Text style={styles.scanningText}>Scanning for latest call recording...</Text>
+                                </View>
+                            ) : !recordingUri ? (
+                                <View>
+                                    <TouchableOpacity
+                                        style={[styles.recordBtn, isRecording && styles.recordBtnActive]}
+                                        onPress={isRecording ? stopRecording : startRecording}
+                                    >
+                                        <Ionicons name={isRecording ? "stop" : "mic"} size={28} color="#fff" />
+                                        <View style={styles.recordTextContainer}>
+                                            <Text style={styles.recordTitle}>{isRecording ? "Stop Recording" : "Tap to Record Summary"}</Text>
+                                            <Text style={styles.recordTimer}>
+                                                {isRecording ? `${Math.floor(recordingDuration / 60)}:${(recordingDuration % 60).toString().padStart(2, '0')}` : "Maximum 2 minutes recommended"}
+                                            </Text>
+                                        </View>
+                                    </TouchableOpacity>
+                                    {Platform.OS === 'android' && !folderUri && (
+                                        <Text style={styles.hintText}>
+                                            Tip: Enable Auto-Sync to automatically fetch Samsung call recordings.
+                                        </Text>
+                                    )}
+                                </View>
+                            ) : (
+                                <View>
+                                    {autoFetched && (
+                                        <View style={styles.autoFetchedTag}>
+                                            <Ionicons name="sparkles" size={12} color="#7C3AED" />
+                                            <Text style={styles.autoFetchedText}>NATIVE RECORDING DETECTED</Text>
+                                        </View>
+                                    )}
+                                    <View style={styles.playbackContainer}>
+                                        <TouchableOpacity style={styles.playBtn} onPress={playRecording}>
+                                            <Ionicons name={isPlaying ? "pause" : "play"} size={24} color="#2563EB" />
+                                        </TouchableOpacity>
+                                        <View style={styles.waveformPlaceholder}>
+                                            <View style={styles.audioProgressBase}>
+                                                <View style={[styles.audioProgressFill, { width: '100%' }]} />
+                                            </View>
+                                            <Text style={styles.audioDurationText}>
+                                                {autoFetched ? "Attached from Samsung Recordings" : "Recording Saved"}
+                                            </Text>
+                                        </View>
+                                        <TouchableOpacity style={styles.deleteAudioBtn} onPress={() => { deleteRecording(); setAutoFetched(false); }}>
+                                            <Ionicons name="trash-outline" size={20} color="#EF4444" />
+                                        </TouchableOpacity>
+                                    </View>
+                                </View>
+                            )}
+                        </View>
+                    </View>
+                )}
+
                 <View style={styles.infoBanner}>
                     <Ionicons name="information-circle-outline" size={16} color="#64748B" />
                     <Text style={styles.infoText}>Submitting will mark this activity as completed.</Text>
@@ -320,4 +586,33 @@ const styles = StyleSheet.create({
 
     submitBtn: { backgroundColor: '#2563EB', borderRadius: 20, paddingVertical: 20, alignItems: 'center', marginTop: 24, shadowColor: "#2563EB", shadowOpacity: 0.2, shadowRadius: 15, shadowOffset: { width: 0, height: 10 } },
     submitText: { color: '#fff', fontSize: 16, fontWeight: "900" },
+
+    // Audio Styles
+    audioCard: { backgroundColor: '#F8FAFC', borderRadius: 20, padding: 16, borderWidth: 1, borderColor: '#F1F5F9' },
+    recordBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#2563EB', padding: 16, borderRadius: 16, gap: 15 },
+    recordBtnActive: { backgroundColor: '#EF4444' },
+    recordTextContainer: { flex: 1 },
+    recordTitle: { color: '#fff', fontSize: 15, fontWeight: '800' },
+    recordTimer: { color: 'rgba(255,255,255,0.7)', fontSize: 12, fontWeight: '600', marginTop: 2 },
+
+    playbackContainer: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+    playBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#DBEAFE', justifyContent: 'center', alignItems: 'center' },
+    waveformPlaceholder: { flex: 1 },
+    audioProgressBase: { height: 4, backgroundColor: '#E2E8F0', borderRadius: 2, overflow: 'hidden' },
+    audioProgressFill: { height: '100%', backgroundColor: '#2563EB' },
+    audioDurationText: { fontSize: 10, color: '#64748B', fontWeight: '700', marginTop: 4 },
+    deleteAudioBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#FEE2E2', justifyContent: 'center', alignItems: 'center' },
+
+    sectionHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+    autoSyncBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#F1F5F9', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 },
+    autoSyncBadgeActive: { backgroundColor: '#DCFCE7' },
+    autoSyncBadgeText: { fontSize: 9, fontWeight: '900', color: '#64748B' },
+    autoSyncRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    rescanBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4 },
+    rescanText: { fontSize: 9, fontWeight: '900', color: '#2563EB' },
+    scanningContainer: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10 },
+    scanningText: { fontSize: 13, color: '#64748B', fontWeight: '600' },
+    autoFetchedTag: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 10, backgroundColor: '#DCFCE7', alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
+    autoFetchedText: { fontSize: 9, fontWeight: '900', color: '#166534' },
+    hintText: { fontSize: 11, color: '#94A3B8', fontWeight: '600', marginTop: 12, textAlign: 'center' },
 });

@@ -69,6 +69,11 @@ export const getOrCreateCallActivity = async (entityId: string, entityType: stri
             subject: `Call: ${subject}`,
             entityType,
             entityId,
+            relatedTo: [{
+                id: entityId,
+                name: subject,
+                model: entityType
+            }],
             dueDate: now.toISOString().split('T')[0],
             dueTime: now.toTimeString().slice(0, 5),
             priority: "Normal",

@@ -28,25 +28,25 @@ const SHORT_NAMES: Record<string, string> = {
     closed: "Won",
 };
 
-const ChevronSegment = memo(({ 
-    label, 
-    count, 
+const ChevronSegment = memo(({
+    label,
+    count,
     percentage,
-    color, 
+    color,
     isFirst = false,
     isLast = false
-}: { 
-    label: string; 
-    count: number; 
+}: {
+    label: string;
+    count: number;
     percentage: number;
-    color: string; 
+    color: string;
     isFirst?: boolean;
     isLast?: boolean;
 }) => {
     const { theme } = useTheme();
     const shortLabel = SHORT_NAMES[label.toLowerCase()] || label;
     const isDark = theme.background === '#0F172A';
-    
+
     return (
         <View style={[
             styles.dashChevronSegment,
@@ -249,20 +249,25 @@ export default function MissionControlScreen() {
 
     const fetchData = useCallback(async () => {
         try {
-            const [ds, lu, actv] = await Promise.allSettled([
-                getDashboardStats(),
-                api.get("/lookups"),
-                getActivities({ status: 'Pending', limit: 5 })
-            ]);
-
-            if (lu.status === "fulfilled") {
-                setLookups(extractList(lu.value));
+            // 1. Fetch Lookups (sequential to reduce tunnel pressure)
+            const luRes = await api.get("/lookups").catch(() => null);
+            if (luRes?.data) {
+                setLookups(extractList(luRes.data));
             }
 
-            if (ds.status === "fulfilled" && ds.value.data) {
-                const data = ds.value.data;
+            // 2. Fetch Activities
+            const actvRes = await getActivities({ status: 'Pending', limit: 5 }).catch(() => null);
+            if (actvRes) {
+                const actData = actvRes?.data ?? actvRes?.records ?? [];
+                setActivities(Array.isArray(actData) ? actData : []);
+            }
+
+            // 3. Fetch Dashboard Stats (Heaviest call)
+            const dsRes = await getDashboardStats();
+            if (dsRes && dsRes.data) {
+                const data = dsRes.data;
                 setDashboardData(data);
-                
+
                 // Keep sync with general stats for other components
                 setStats({
                     leads: (data.leads || []).reduce((s: number, l: any) => s + l.count, 0),
@@ -274,11 +279,6 @@ export default function MissionControlScreen() {
                 });
             }
 
-            if (actv.status === "fulfilled") {
-                const actData = actv.value?.data ?? actv.value?.records ?? [];
-                setActivities(Array.isArray(actData) ? actData : []);
-            }
-
             Animated.timing(fadeAnim, {
                 toValue: 1,
                 duration: 800,
@@ -286,10 +286,11 @@ export default function MissionControlScreen() {
             }).start();
         } catch (e) {
             console.error("Mission Control fetch error:", e);
+        } finally {
+            setLoading(false);
+            setRefreshing(false);
         }
-        setLoading(false);
-        setRefreshing(false);
-    }, []);
+    }, [fadeAnim]);
 
     useFocusEffect(
         useCallback(() => {
@@ -319,7 +320,7 @@ export default function MissionControlScreen() {
             {dashboardData?.aiAlertHub && (
                 <View style={styles.alertHubContainer}>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12 }}>
-                        {dashboardData.aiAlertHub.followupFailure?.length > 0 && dashboardData.aiAlertHub.followupFailure.map((alert: any) => (
+                        {dashboardData.aiAlertHub?.followupFailure && dashboardData.aiAlertHub.followupFailure.length > 0 && dashboardData.aiAlertHub.followupFailure.map((alert: any) => (
                             <TouchableOpacity key={alert.id} style={[styles.alertCard, { borderColor: '#EF4444' }]}>
                                 <View style={[styles.alertIcon, { backgroundColor: '#FEE2E2' }]}>
                                     <Ionicons name="warning" size={16} color="#EF4444" />
@@ -330,7 +331,7 @@ export default function MissionControlScreen() {
                                 </View>
                             </TouchableOpacity>
                         ))}
-                        {dashboardData.aiAlertHub.hotLeads?.length > 0 && dashboardData.aiAlertHub.hotLeads.map((alert: any) => (
+                        {dashboardData.aiAlertHub?.hotLeads && dashboardData.aiAlertHub.hotLeads.length > 0 && dashboardData.aiAlertHub.hotLeads.map((alert: any) => (
                             <TouchableOpacity key={alert.id} style={[styles.alertCard, { borderColor: '#F59E0B' }]}>
                                 <View style={[styles.alertIcon, { backgroundColor: '#FEF3C7' }]}>
                                     <Ionicons name="flame" size={16} color="#F59E0B" />
@@ -381,13 +382,13 @@ export default function MissionControlScreen() {
                         <Text style={[styles.pipeTotal, { color: '#2563EB', fontWeight: '800' }]}>View All</Text>
                     </TouchableOpacity>
                 </View>
-                
+
                 <View style={styles.dashboardChevronContainer}>
                     {['INCOMING', 'PROSPECT', 'OPPORTUNITY', 'NEGOTIATION', 'CLOSED'].map((cat, idx) => {
                         const item = (dashboardData?.deals || []).find(d => d.stage.toLowerCase() === cat.toLowerCase()) || { count: 0 };
                         const total = dashboardData?.deals?.reduce((acc: number, d: any) => acc + d.count, 0) || 1;
                         return (
-                            <ChevronSegment 
+                            <ChevronSegment
                                 key={idx}
                                 label={cat}
                                 count={item.count}
@@ -402,22 +403,22 @@ export default function MissionControlScreen() {
 
                 <View style={styles.funnelFooterRow}>
                     <View style={styles.funnelStatItem}>
-                         <Text style={[styles.funnelStatVal, { color: theme.text }]}>₹{((dashboardData?.performance?.achieved || 0) / 10000000).toFixed(1)}Cr</Text>
-                         <Text style={styles.funnelStatLab}>Won Value</Text>
+                        <Text style={[styles.funnelStatVal, { color: theme.text }]}>₹{((dashboardData?.performance?.achieved || 0) / 10000000).toFixed(1)}Cr</Text>
+                        <Text style={styles.funnelStatLab}>Won Value</Text>
                     </View>
                     <View style={styles.funnelStatDivider} />
                     <View style={styles.funnelStatItem}>
-                         <Text style={[styles.funnelStatVal, { color: theme.text }]}>{dashboardData?.performance?.conversion || 0}%</Text>
-                         <Text style={styles.funnelStatLab}>Win Rate</Text>
+                        <Text style={[styles.funnelStatVal, { color: theme.text }]}>{dashboardData?.performance?.conversion || 0}%</Text>
+                        <Text style={styles.funnelStatLab}>Win Rate</Text>
                     </View>
                 </View>
             </View>
 
             {/* High-Value Agenda Section */}
-            {(dashboardData?.agenda?.tasks?.length > 0 || dashboardData?.agenda?.siteVisits?.length > 0) && (
+            {dashboardData?.agenda && (dashboardData.agenda.tasks?.length > 0 || dashboardData.agenda.siteVisits?.length > 0) && (
                 <View style={[styles.pipelineContainer, { backgroundColor: theme.card, borderColor: theme.border }]}>
                     <Text style={[styles.sectionHeader, { color: theme.textMuted }]}>High-Value Agenda</Text>
-                    {dashboardData.agenda.siteVisits.map((sv: any) => (
+                    {dashboardData.agenda.siteVisits?.map((sv: any) => (
                         <View key={sv.id} style={styles.agendaItem}>
                             <View style={[styles.agendaIcon, { backgroundColor: '#F0FDF4' }]}>
                                 <Ionicons name="navigate" size={16} color="#10B981" />
@@ -429,7 +430,7 @@ export default function MissionControlScreen() {
                             <View style={styles.activeTag}><Text style={styles.activeTagText}>VISIT</Text></View>
                         </View>
                     ))}
-                    {dashboardData.agenda.tasks.map((t: any) => (
+                    {dashboardData.agenda.tasks?.map((t: any) => (
                         <View key={t.id} style={styles.agendaItem}>
                             <View style={[styles.agendaIcon, { backgroundColor: '#F0F9FF' }]}>
                                 <Ionicons name="call" size={16} color="#3B82F6" />
@@ -596,6 +597,19 @@ export default function MissionControlScreen() {
                                     <Ionicons name="settings-outline" size={22} color={theme.textMuted} />
                                 </Animated.View>
                             </TouchableOpacity>
+                            {/* Simulation Button for Testing */}
+                            <TouchableOpacity
+                                style={[styles.notifBtn, { backgroundColor: theme.primary + '15' }]}
+                                onPress={() => {
+                                    // Using a common mobile number from the CRM or a dummy one
+                                    const { useCallTracking } = require('../context/CallTrackingContext');
+                                    // This is a bit hacky for a component but fine for a simulation button
+                                    const { simulateIncomingCall } = useCallTracking();
+                                    simulateIncomingCall('9876543210');
+                                }}
+                            >
+                                <Ionicons name="flask" size={22} color={theme.primary} />
+                            </TouchableOpacity>
                         </View>
                     </View>
 
@@ -746,7 +760,6 @@ const styles = StyleSheet.create({
     logSubject: { fontSize: 14, fontWeight: "700", color: "#334155" },
     logTime: { fontSize: 11, color: "#94A3B8", fontWeight: "600", marginTop: 2 },
     emptyText: { textAlign: "center", color: "#CBD5E1", fontSize: 13, marginVertical: 20 },
-    systemNoteText: { fontSize: 12, color: "#4F46E5", fontWeight: "600", textAlign: "center", lineHeight: 18 },
 
     // Alert Hub
     alertHubContainer: { marginBottom: 24 },
@@ -887,4 +900,6 @@ const styles = StyleSheet.create({
     funnelStatVal: { fontSize: 16, fontWeight: '800' },
     funnelStatLab: { fontSize: 10, fontWeight: '700', color: '#94A3B8', marginTop: 2 },
     funnelStatDivider: { width: 1, height: 20, backgroundColor: '#F1F5F9' },
+    systemNote: { marginTop: 20, padding: 15, backgroundColor: 'rgba(79, 70, 229, 0.05)', borderRadius: 16, borderWidth: 1, borderColor: 'rgba(79, 70, 229, 0.1)' },
+    systemNoteText: { fontSize: 12, color: "#4F46E5", fontWeight: "600", textAlign: "center", lineHeight: 18 },
 });

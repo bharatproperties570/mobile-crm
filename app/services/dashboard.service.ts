@@ -28,6 +28,14 @@ export interface DashboardStats {
         status: string;
         count: number;
     }[];
+    aiAlertHub?: {
+        followupFailure: any[];
+        hotLeads: any[];
+    };
+    agenda?: {
+        siteVisits: any[];
+        tasks: any[];
+    };
 }
 
 export async function getDashboardStats() {

@@ -231,10 +231,10 @@ export default function LeadDetailScreen() {
                 {/* Professional Action Hub */}
                 <View style={styles.modernActionHub}>
                     {[
-                        { icon: 'call', color: theme.primary, onPress: () => trackCall(lead.mobile, id!, "Lead", name) },
-                        { icon: 'chatbubble-ellipses', color: '#3B82F6', onPress: () => Linking.openURL(`sms:${lead.mobile.replace(/\D/g, "")}`) },
-                        { icon: 'logo-whatsapp', color: '#128C7E', onPress: () => Linking.openURL(`https://wa.me/${lead.mobile.replace(/\D/g, "")}`) },
-                        { icon: 'mail', color: '#EA4335', onPress: () => Linking.openURL(`mailto:${lead.email}`) },
+                        { icon: 'call', color: theme.primary, onPress: () => lead?.mobile && trackCall(lead.mobile, id!, "Lead", name) },
+                        { icon: 'chatbubble-ellipses', color: '#3B82F6', onPress: () => lead?.mobile && Linking.openURL(`sms:${lead.mobile.replace(/\D/g, "")}`) },
+                        { icon: 'logo-whatsapp', color: '#128C7E', onPress: () => lead?.mobile && Linking.openURL(`https://wa.me/${lead.mobile.replace(/\D/g, "")}`) },
+                        { icon: 'mail', color: '#EA4335', onPress: () => lead?.email && Linking.openURL(`mailto:${lead.email}`) },
                         { icon: 'calendar', color: '#6366F1', onPress: () => router.push(`/add-activity?id=${id}&type=Lead`) },
                     ].map((action, i) => (
                         <TouchableOpacity key={i} style={[styles.modernHubBtn, { backgroundColor: action.color }]} onPress={action.onPress}>
@@ -279,8 +279,8 @@ export default function LeadDetailScreen() {
                         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
                             <Text style={[styles.cardTitle, { color: theme.text }]}>Core Requirements</Text>
                             <InfoRow label="Main Need" value={getLookupValue("Requirement", lead.requirement)} icon="cart-outline" accent />
-                            <InfoRow label="Category" value={getLookupValue("Category", lead.propertyType)} icon="grid-outline" />
-                            <InfoRow label="Sub Category" value={getLookupValue("SubCategory", lead.subType)} icon="list-outline" />
+                            <InfoRow label="Category" value={getLookupValue("PropertyType", lead.propertyType)} icon="grid-outline" />
+                            <InfoRow label="Sub Category" value={getLookupValue("SubType", lead.subType)} icon="list-outline" />
                             <InfoRow label="Project" value={lv(lead.project)} icon="business-outline" />
                             <InfoRow label="Budget" value={getLookupValue("Budget", lead.budget)} icon="wallet-outline" accent />
                             <InfoRow label="Min - Max" value={(lead.budgetMin || lead.budgetMax) ? `₹${lead.budgetMin || 0} - ₹${lead.budgetMax || 0}` : ""} icon="cash-outline" />
@@ -289,7 +289,7 @@ export default function LeadDetailScreen() {
 
                         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
                             <Text style={[styles.cardTitle, { color: theme.text }]}>Specifications</Text>
-                            <InfoRow label="Unit Type" value={getLookupValue("PropertyType", lead.unitType)} icon="cube-outline" />
+                            <InfoRow label="Unit Type" value={getLookupValue("UnitType", lead.unitType)} icon="cube-outline" />
                             <InfoRow label="Facing" value={Array.isArray(lead.facing) ? lead.facing.map((t: any) => getLookupValue("Facing", t) !== "—" ? getLookupValue("Facing", t) : lv(t)).join(", ") : getLookupValue("Facing", lead.facing)} icon="compass-outline" />
                             <InfoRow label="Direction" value={Array.isArray(lead.direction) ? lead.direction.map((t: any) => getLookupValue("Direction", t) !== "—" ? getLookupValue("Direction", t) : lv(t)).join(", ") : getLookupValue("Direction", lead.direction)} icon="navigate-outline" />
                             <InfoRow label="Road Width" value={Array.isArray(lead.roadWidth) ? lead.roadWidth.map((t: any) => getLookupValue("RoadWidth", t) !== "—" ? getLookupValue("RoadWidth", t) : lv(t)).join(", ") : getLookupValue("RoadWidth", lead.roadWidth)} icon="swap-horizontal-outline" />
@@ -478,7 +478,8 @@ export default function LeadDetailScreen() {
                                                                 entityId: id,
                                                                 entityType: 'Lead',
                                                                 entityName: name,
-                                                                actType: act.type
+                                                                actType: act.type,
+                                                                mobile: lead.mobile
                                                             }
                                                         })}
                                                         style={{

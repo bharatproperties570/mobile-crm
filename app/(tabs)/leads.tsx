@@ -586,9 +586,16 @@ const LeadCard = memo(({ lead, index, onPress, onMore, isSelected, onLongPress, 
                                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                                         <Text style={[styles.leadName, { color: theme.text }]} numberOfLines={1}>{name}</Text>
                                     </View>
-                                    <View style={styles.mobileRow}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
                                         <Ionicons name="call-outline" size={12} color={theme.textLight} />
-                                        <Text style={[styles.leadMobile, { color: theme.textMuted }]}>{lead.mobile}</Text>
+                                        <Text style={{ fontSize: 12, color: theme.textLight, fontWeight: '600', marginLeft: 4 }}>{lead.mobile}</Text>
+                                        {lead.email && (
+                                            <>
+                                                <Text style={{ fontSize: 12, color: theme.textLight, marginHorizontal: 6 }}>•</Text>
+                                                <Ionicons name="mail-outline" size={12} color={theme.textLight} />
+                                                <Text style={{ fontSize: 12, color: theme.textLight, fontWeight: '600', marginLeft: 4, flex: 1 }} numberOfLines={1}>{lead.email}</Text>
+                                            </>
+                                        )}
                                     </View>
                                 </View>
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
@@ -606,20 +613,20 @@ const LeadCard = memo(({ lead, index, onPress, onMore, isSelected, onLongPress, 
                                     <View style={styles.reqRow}>
                                         <Ionicons name="business-outline" size={12} color={theme.textLight} />
                                         <Text style={[styles.reqText, { color: theme.textMuted }]}>
-                                            {getLookupValue("Category", lead.propertyType)}
-                                            {(lead.subType && lead.subType.length > 0) || lead.subRequirement ? ` • ${getLookupValue("SubCategory", lead.subType || lead.subRequirement)}` : ''}
+                                            {getLookupValue("PropertyType", lead.propertyType)}
+                                            {(lead.subType && lead.subType.length > 0) || lead.subRequirement ? ` • ${getLookupValue("SubType", lead.subType || lead.subRequirement)}` : ''}
                                         </Text>
                                     </View>
                                 )}
                                 <View style={styles.reqRow}>
                                     <Ionicons name="home-outline" size={12} color={theme.textLight} />
-                                    <Text style={[styles.reqText, { color: theme.textMuted }]}>{getLookupValue("PropertyType", lead.unitType)}</Text>
+                                    <Text style={[styles.reqText, { color: theme.textMuted }]}>{getLookupValue("UnitType", lead.unitType)}</Text>
                                 </View>
                                 {(lead.locCity || lead.location || lead.locArea) && (
                                     <View style={styles.locRow}>
                                         <Ionicons name="location-outline" size={12} color={theme.textLight} />
                                         <Text style={[styles.locText, { color: theme.textLight }]} numberOfLines={1}>
-                                            {[getLookupValue("City", lead.locCity), lead.locArea, getLookupValue("ProjectLocation", lead.location)].filter(v => v && v !== "—").join(", ") || "No Location"}
+                                            {[getLookupValue("City", lead.locCity), lead.locArea, getLookupValue("Location", lead.location)].filter(v => v && v !== "—").join(", ") || "No Location"}
                                         </Text>
                                     </View>
                                 )}
@@ -662,7 +669,7 @@ const LeadCard = memo(({ lead, index, onPress, onMore, isSelected, onLongPress, 
 export default function LeadsScreen() {
     const router = useRouter();
     const { theme } = useTheme();
-    const { getLookupValue } = useLookup();
+    const { getLookupValue, refreshLookups } = useLookup();
     const [leads, setLeads] = useState<Lead[]>([]);
     const [search, setSearch] = useState("");
     const [loading, setLoading] = useState(true);
@@ -734,8 +741,9 @@ export default function LeadsScreen() {
 
     const onRefresh = useCallback(() => {
         setRefreshing(true);
+        refreshLookups();
         fetchLeads(1, false);
-    }, [fetchLeads]);
+    }, [fetchLeads, refreshLookups]);
 
     const loadMore = useCallback(() => {
         if (!loading && hasMore) {

@@ -121,11 +121,28 @@ const ContactCard = memo(({ contact, idx, onPress, onMenuPress }: { contact: Con
                             <Text style={styles.cardName} numberOfLines={1}>{name}</Text>
                             <View style={[styles.stageDot, { backgroundColor: stageColor }]} />
                         </View>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
+                            {phone && (
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                    <Ionicons name="call-outline" size={12} color="#94A3B8" />
+                                    <Text style={{ fontSize: 12, color: "#64748B", fontWeight: "600" }}>{phone}</Text>
+                                </View>
+                            )}
+                            {phone && email && (
+                                <Text style={{ fontSize: 12, color: "#E2E8F0", marginHorizontal: 6 }}>•</Text>
+                            )}
+                            {email && (
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flex: 1 }}>
+                                    <Ionicons name="mail-outline" size={12} color="#94A3B8" />
+                                    <Text style={{ fontSize: 12, color: "#64748B", fontWeight: "600" }} numberOfLines={1}>{email}</Text>
+                                </View>
+                            )}
+                        </View>
                         <Text style={styles.cardSubtitle} numberOfLines={1}>
                             {(getLookupValue("ProfessionalDesignation", contact.designation) !== "—" && getLookupValue("ProfessionalDesignation", contact.designation) !== "")
                                 ? `${getLookupValue("ProfessionalDesignation", contact.designation)} • `
                                 : ""}
-                            {contact.company || (phone ? phone : "Individual")}
+                            {contact.company || "Individual"}
                         </Text>
                     </View>
 

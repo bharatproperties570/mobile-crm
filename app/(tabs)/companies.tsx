@@ -89,35 +89,63 @@ const CompanyCard = ({ company, onPress, onMenuPress, idx }: { company: Company,
             <Animated.View style={{ opacity: fadeAnim, transform: [{ scale: scaleValue }, { translateY: fadeAnim.interpolate({ inputRange: [0, 1], outputRange: [20, 0] }) }] }}>
                 <TouchableOpacity activeOpacity={1} onPressIn={onPressIn} onPressOut={onPressOut} onPress={onPress} style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
                     <View style={styles.cardHeader}>
-                        <View style={[styles.typeBadge, { backgroundColor: color + '15' }]}>
-                            <Text style={[styles.typeText, { color }]}>{lookupVal(company.relationshipType)?.toUpperCase()}</Text>
-                        </View>
+                        <Text style={[styles.companyName, { color: theme.text, flex: 1, marginRight: 8 }]} numberOfLines={1}>{company.name}</Text>
                         <TouchableOpacity style={styles.menuTrigger} onPress={(e) => { e.stopPropagation(); onMenuPress(); }}>
                             <Ionicons name="ellipsis-vertical" size={18} color={theme.textLight} />
                         </TouchableOpacity>
                     </View>
 
-                    <Text style={[styles.companyName, { color: theme.text }]} numberOfLines={1}>{company.name}</Text>
-
-                    <View style={styles.statsRow}>
-                        <View style={styles.stat}>
-                            <Ionicons name="people-outline" size={14} color={theme.textLight} />
-                            <Text style={[styles.statText, { color: theme.textLight }]}>{(company as any).employeeCount || 0} Employees</Text>
-                        </View>
-                        <View style={styles.stat}>
-                            <Ionicons name="business-outline" size={14} color={theme.textLight} />
-                            <Text style={[styles.statText, { color: theme.textLight }]}>{lookupVal((company as any).category)}</Text>
-                        </View>
-                    </View>
-
-                    {(company as any).addresses && (company as any).addresses.registeredOffice && (
-                        <View style={styles.locationRow}>
-                            <Ionicons name="location-outline" size={14} color={theme.primary} />
-                            <Text style={[styles.locationText, { color: theme.textLight }]} numberOfLines={1}>
-                                {lookupVal((company as any).addresses.registeredOffice.city)}, {lookupVal((company as any).addresses.registeredOffice.state)}
-                            </Text>
+                    {(phone || email) && (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10, marginTop: -2 }}>
+                            {phone && (
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                    <Ionicons name="call-outline" size={12} color={theme.textLight} />
+                                    <Text style={{ fontSize: 12, color: theme.textLight, fontWeight: '600' }}>{phone}</Text>
+                                </View>
+                            )}
+                            {email && (
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flex: 1 }}>
+                                    <Ionicons name="mail-outline" size={12} color={theme.textLight} />
+                                    <Text style={{ fontSize: 12, color: theme.textLight, fontWeight: '600' }} numberOfLines={1}>{email}</Text>
+                                </View>
+                            )}
                         </View>
                     )}
+
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 4 }}>
+                        <View style={{ flex: 1, paddingRight: 8 }}>
+                            {(company as any).addresses?.registeredOffice && (
+                                <View style={styles.locationRow}>
+                                    <Ionicons name="location-outline" size={14} color={theme.primary} />
+                                    <Text style={[styles.locationText, { color: theme.textLight }]} numberOfLines={1}>
+                                        {lookupVal((company as any).addresses.registeredOffice.city)}, {lookupVal((company as any).addresses.registeredOffice.state)}
+                                    </Text>
+                                </View>
+                            )}
+                        </View>
+                        <View style={{ alignItems: 'flex-end', maxWidth: '55%' }}>
+                            {(() => {
+                                const typeName = lookupVal((company as any).companyType) || lookupVal((company as any).category);
+                                const indName = lookupVal(company.industry);
+                                const isAgent = (typeName?.toLowerCase() === 'real estate agent' || indName?.toLowerCase() === 'real estate agent' || typeName?.toLowerCase() === 'channel partner');
+
+                                const textColor = isAgent ? '#EA580C' : theme.textLight;
+                                const bgColor = isAgent ? '#FFF7ED' : '#F1F5F9';
+
+                                if (typeName || indName) {
+                                    return (
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: bgColor, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, gap: 4 }}>
+                                            <Ionicons name="briefcase" size={10} color={textColor} />
+                                            <Text style={{ fontSize: 10, fontWeight: '800', color: textColor, textTransform: 'uppercase' }} numberOfLines={1} ellipsizeMode="tail">
+                                                {[typeName, indName].filter(Boolean).join(' • ')}
+                                            </Text>
+                                        </View>
+                                    );
+                                }
+                                return null;
+                            })()}
+                        </View>
+                    </View>
                 </TouchableOpacity>
             </Animated.View>
         </Swipeable>
@@ -356,15 +384,15 @@ const styles = StyleSheet.create({
     filterBtn: { padding: 4, marginLeft: 8 },
     list: { paddingBottom: 100 },
     card: {
-        marginHorizontal: 16, marginBottom: 10, padding: 12, borderRadius: 20,
+        marginHorizontal: 16, marginBottom: 8, padding: 10, borderRadius: 16,
         borderWidth: 1
     },
-    cardHeader: { flexDirection: "row", alignItems: "center", marginBottom: 8, justifyContent: 'space-between' },
-    companyName: { fontSize: 16, fontWeight: "800", marginBottom: 6 },
+    cardHeader: { flexDirection: "row", alignItems: "center", marginBottom: 2, justifyContent: 'space-between' },
+    companyName: { fontSize: 15, fontWeight: "800", marginBottom: 4 },
     typeBadge: { paddingHorizontal: 10, paddingVertical: 3, borderRadius: 8 },
     typeText: { fontSize: 10, fontWeight: "900", letterSpacing: 0.5 },
-    statsRow: { flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 10 },
-    stat: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    statsRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 6 },
+    stat: { flexDirection: 'row', alignItems: 'center', gap: 4 },
     statText: { fontSize: 12, fontWeight: '600' },
     locationRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
     locationText: { fontSize: 12, fontWeight: '600', flex: 1 },

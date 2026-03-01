@@ -5,6 +5,7 @@ import {
 } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { Audio } from 'expo-av';
 import { getActivities, Activity, deleteActivity, updateActivity } from "../services/activities.service";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Swipeable from "react-native-gesture-handler/Swipeable";
@@ -40,6 +41,10 @@ export default function ActivitiesScreen() {
     const [search, setSearch] = useState("");
     const [typeFilter, setTypeFilter] = useState("All");
     const [statusFilter, setStatusFilter] = useState("Pending");
+
+    // Audio Playback State
+    const [playingId, setPlayingId] = useState<string | null>(null);
+    const [sound, setSound] = useState<Audio.Sound | null>(null);
 
     const fetchActivities = async (isRefreshing = false) => {
         if (!isRefreshing) setLoading(true);
@@ -115,13 +120,49 @@ export default function ActivitiesScreen() {
         });
     }, [activities, statusFilter]);
 
-    const ActivityCard = memo(({ item, onPress, onDelete, onEdit, onReschedule, onComplete }: {
+    const handlePlayAudio = async (id: string, url: string) => {
+        try {
+            if (playingId === id) {
+                if (sound) {
+                    await sound.stopAsync();
+                    await sound.unloadAsync();
+                }
+                setPlayingId(null);
+                setSound(null);
+                return;
+            }
+
+            if (sound) {
+                await sound.unloadAsync();
+            }
+
+            setPlayingId(id);
+            const { sound: newSound } = await Audio.Sound.createAsync(
+                { uri: url },
+                { shouldPlay: true }
+            );
+            setSound(newSound);
+            newSound.setOnPlaybackStatusUpdate((status: any) => {
+                if (status.didJustFinish) {
+                    setPlayingId(null);
+                }
+            });
+        } catch (e) {
+            console.error("Playback error:", e);
+            Alert.alert("Error", "Could not play audio");
+            setPlayingId(null);
+        }
+    };
+
+    const ActivityCard = memo(({ item, onPress, onDelete, onEdit, onReschedule, onComplete, onPlayAudio, isPlaying }: {
         item: Activity;
         onPress: () => void;
         onDelete: (id: string) => void;
         onEdit: (id: string | undefined) => void;
         onReschedule: (item: Activity) => void;
         onComplete: (item: Activity) => void;
+        onPlayAudio: (id: string, url: string) => void;
+        isPlaying: boolean;
     }) => {
         const meta = TYPE_META[item.type] || { color: "#64748B", icon: "list", emoji: "📌" };
         const statusStyle = STATUS_COLORS[item.status] || { bg: "#F1F5F9", text: "#64748B" };
@@ -179,8 +220,21 @@ export default function ActivitiesScreen() {
 
                         {relatedName ? (
                             <View style={styles.clientRow}>
-                                <Ionicons name="person-circle-outline" size={14} color="#64748B" />
-                                <Text style={styles.clientName}>{relatedName}</Text>
+                                <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                    <Ionicons name="person-circle-outline" size={14} color="#64748B" />
+                                    <Text style={styles.clientName}>{relatedName}</Text>
+                                </View>
+                                {item.details?.audioUrl && (
+                                    <TouchableOpacity
+                                        style={[styles.playBadge, isPlaying && styles.playBadgeActive]}
+                                        onPress={() => onPlayAudio(item._id!, item.details.audioUrl)}
+                                    >
+                                        <Ionicons name={isPlaying ? "pause" : "play"} size={12} color={isPlaying ? "#fff" : "#2563EB"} />
+                                        <Text style={[styles.playBadgeText, isPlaying && { color: "#fff" }]}>
+                                            {isPlaying ? "PLAYING" : "VOICE MEMO"}
+                                        </Text>
+                                    </TouchableOpacity>
+                                )}
                             </View>
                         ) : null}
 
@@ -302,6 +356,8 @@ export default function ActivitiesScreen() {
                                     router.push({ pathname: route, params: { id: item.entityId } });
                                 }
                             }}
+                            onPlayAudio={handlePlayAudio}
+                            isPlaying={playingId === item._id}
                             onDelete={(id) => {
                                 Alert.alert("Delete Activity", "Are you sure? This cannot be undone.", [
                                     { text: "Cancel", style: "cancel" },
@@ -432,4 +488,8 @@ const styles = StyleSheet.create({
     assigneeName: { fontSize: 11, fontWeight: '700', color: '#475569', maxWidth: 80 },
     teamBadge: { backgroundColor: '#EEF2FF', paddingHorizontal: 4, paddingVertical: 2, borderRadius: 4, borderWidth: 1, borderColor: '#E0E7FF' },
     teamBadgeText: { fontSize: 8, fontWeight: '800', color: '#4F46E5' },
+
+    playBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#DBEAFE', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+    playBadgeActive: { backgroundColor: '#2563EB' },
+    playBadgeText: { fontSize: 9, fontWeight: '900', color: '#2563EB' },
 });

@@ -21,15 +21,37 @@ export const LookupProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const [lookups, setLookups] = useState<Lookup[]>([]);
     const [loading, setLoading] = useState(true);
 
-    const refreshLookups = useCallback(async () => {
+    const refreshLookups = useCallback(async (retryCount = 2) => {
         setLoading(true);
         try {
             const res = await api.get('/lookups', { params: { limit: 2000 } });
-            if (res.data?.success || Array.isArray(res.data?.data)) {
-                setLookups(res.data.data || []);
+
+            // Centralized extraction logic (similar to extractList)
+            let data: Lookup[] = [];
+            const responseData = res.data;
+
+            if (Array.isArray(responseData)) {
+                data = responseData;
+            } else if (responseData?.data && Array.isArray(responseData.data)) {
+                data = responseData.data;
+            } else if (responseData?.records && Array.isArray(responseData.records)) {
+                data = responseData.records;
+            } else if (responseData?.success && responseData?.data && Array.isArray(responseData.data)) {
+                data = responseData.data;
+            }
+
+            if (data.length > 0) {
+                setLookups(data);
+            } else if (retryCount > 0) {
+                console.log(`[LookupContext] Empty lookup response, retrying... (${retryCount} left)`);
+                setTimeout(() => refreshLookups(retryCount - 1), 1000);
             }
         } catch (error) {
             console.error('[LookupContext] Failed to fetch lookups:', error);
+            if (retryCount > 0) {
+                console.log(`[LookupContext] Error fetching lookups, retrying... (${retryCount} left)`);
+                setTimeout(() => refreshLookups(retryCount - 1), 2000);
+            }
         } finally {
             setLoading(false);
         }
@@ -67,9 +89,13 @@ export const LookupProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             );
 
             // ─── Robust Fallback ───
-            // If not found by type, search globally by ID (very useful during schema migrations/misalignments)
+            // If not found by type, search globally by ID
             if (!found && typeof val === 'string' && (val.length === 24 || val.startsWith('lk_'))) {
                 found = lookups.find(l => l._id === val);
+            }
+
+            if (!found) {
+                console.log(`[LookupContext] ⚠️ Failed to resolve ${t} with value:`, val, "(Lookups loaded: " + lookups.length + ")");
             }
 
             return found ? found.lookup_value : String(val);

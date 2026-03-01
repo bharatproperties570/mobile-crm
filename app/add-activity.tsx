@@ -258,9 +258,9 @@ export default function AddActivityScreen() {
 
         // Parallel search across entities
         const [l, d, c] = await Promise.all([
-            getLeads({ q: text, limit: "5" }),
-            getDeals({ q: text, limit: "5" }),
-            getContacts({ q: text, limit: "5" })
+            getLeads({ search: text, limit: "5" }),
+            getDeals({ search: text, limit: "5" }),
+            getContacts({ search: text, limit: "5" })
         ]);
 
         const results: RelatedItem[] = [
@@ -286,6 +286,11 @@ export default function AddActivityScreen() {
             ...formData,
             entityId: selectedEntity.id,
             entityType: selectedEntity.type,
+            relatedTo: [{
+                id: selectedEntity.id,
+                name: selectedEntity.name,
+                model: selectedEntity.type
+            }],
             completionResult: formData.details.completionResult, // Legacy top-level mapping
             details: {
                 ...formData.details,

@@ -48,6 +48,26 @@ export function extractTotal(res: any): number {
 }
 
 /**
+ * Simple retry wrapper for async functions.
+ */
+async function withRetry<T>(fn: () => Promise<T>, retries = 2, delay = 1000): Promise<T> {
+    try {
+        return await fn();
+    } catch (err: any) {
+        // Don't retry on certain status codes (401, 403, 404, 400)
+        const status = err?.response?.status;
+        if (status && [400, 401, 403, 404].includes(status)) {
+            throw err;
+        }
+
+        if (retries <= 0) throw err;
+        console.log(`[withRetry] Retrying... (${retries} left)`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        return withRetry(fn, retries - 1, delay * 2);
+    }
+}
+
+/**
  * Safe API call wrapper for list endpoints.
  */
 export async function safeApiCall<T>(fn: () => Promise<any>): Promise<{
@@ -58,7 +78,7 @@ export async function safeApiCall<T>(fn: () => Promise<any>): Promise<{
     error: string | null
 }> {
     try {
-        const res = await fn();
+        const res = await withRetry(fn);
         return {
             data: extractList(res),
             total: extractTotal(res),
@@ -82,7 +102,7 @@ export async function safeApiCall<T>(fn: () => Promise<any>): Promise<{
  */
 export async function safeApiCallSingle<T>(fn: () => Promise<any>): Promise<{ data: T | null; error: string | null }> {
     try {
-        const res = await fn();
+        const res = await withRetry(fn);
         // If it's a wrapper { success, data }
         const data = res.data && !Array.isArray(res.data) ? res.data : res;
         return { data, error: null };
