@@ -36,6 +36,7 @@ export interface DashboardStats {
         siteVisits: any[];
         tasks: any[];
     };
+    projects?: number;
 }
 
 export async function getDashboardStats() {

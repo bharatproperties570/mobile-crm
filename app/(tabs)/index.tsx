@@ -249,21 +249,22 @@ export default function MissionControlScreen() {
 
     const fetchData = useCallback(async () => {
         try {
-            // 1. Fetch Lookups (sequential to reduce tunnel pressure)
-            const luRes = await api.get("/lookups").catch(() => null);
+            // 1. Parallel Fetching for speed
+            const [luRes, actvRes, dsRes] = await Promise.all([
+                api.get("/lookups").catch(() => null),
+                getActivities({ status: 'Pending', limit: 5 }).catch(() => null),
+                getDashboardStats().catch(() => null)
+            ]);
+
             if (luRes?.data) {
                 setLookups(extractList(luRes.data));
             }
 
-            // 2. Fetch Activities
-            const actvRes = await getActivities({ status: 'Pending', limit: 5 }).catch(() => null);
             if (actvRes) {
                 const actData = actvRes?.data ?? actvRes?.records ?? [];
                 setActivities(Array.isArray(actData) ? actData : []);
             }
 
-            // 3. Fetch Dashboard Stats (Heaviest call)
-            const dsRes = await getDashboardStats();
             if (dsRes && dsRes.data) {
                 const data = dsRes.data;
                 setDashboardData(data);
@@ -273,7 +274,7 @@ export default function MissionControlScreen() {
                     leads: (data.leads || []).reduce((s: number, l: any) => s + l.count, 0),
                     deals: (data.deals || []).reduce((s: number, d: any) => s + d.count, 0),
                     inventory: (data.inventoryHealth || []).reduce((s: number, i: any) => s + i.count, 0),
-                    projects: 0,
+                    projects: data.projects || 0,
                     rawProjects: [],
                     rawInventory: []
                 });
@@ -354,7 +355,7 @@ export default function MissionControlScreen() {
                 </View>
                 <View style={styles.segmentedPipeline}>
                     {['INCOMING', 'PROSPECT', 'OPPORTUNITY', 'NEGOTIATION', 'CLOSED'].map((cat, idx) => {
-                        const item = (dashboardData?.leads || []).find(l => l.status === cat) || { count: 0 };
+                        const item = (dashboardData?.leads || []).find(l => l.status.toUpperCase() === cat.toUpperCase()) || { count: 0 };
                         const colors = ["#2563EB", "#3B82F6", "#60A5FA", "#8B5CF6", "#10B981"];
                         return (
                             <View key={idx} style={{ flex: Math.max(item.count, 0.5), minWidth: 20 }}>
@@ -649,11 +650,11 @@ export default function MissionControlScreen() {
                 <View style={styles.kpiContainer}>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.kpiScroll}>
                         <KPIItem label="Total Leads" value={stats.leads || 0} icon="people" color="#3B82F6" delay={0} />
-                        <KPIItem label="Hot Leads" value={dashboardData?.leads?.find(l => l.status.toLowerCase().includes('hot'))?.count || 0} icon="flame" color="#EF4444" delay={100} trend="up" />
+                        <KPIItem label="Hot Leads" value={dashboardData?.leads?.find(l => l.status === 'OPPORTUNITY' || l.status.toLowerCase().includes('hot'))?.count || 0} icon="flame" color="#EF4444" delay={100} trend="up" />
                         <KPIItem label="Active Deals" value={stats.deals || 0} icon="briefcase" color="#F59E0B" delay={200} />
                         <KPIItem label="Revenue" value={Math.round((dashboardData?.performance?.revenue || 0) / 1000)} icon="wallet" color="#10B981" delay={300} trend="up" />
                         <KPIItem label="Inventory" value={stats.inventory || 0} icon="cube" color="#8B5CF6" delay={400} />
-                        <KPIItem label="Projects" value={stats.projects || 0} icon="business" color="#4F46E5" delay={500} />
+                        <KPIItem label="Projects" value={dashboardData?.projects || 0} icon="business" color="#4F46E5" delay={500} />
                     </ScrollView>
                 </View>
 

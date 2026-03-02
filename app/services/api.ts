@@ -14,11 +14,14 @@ const MACHINE_IP = "192.168.1.10";
 const BACKEND_PORT = "4000";
 
 const WEB_URL = `http://localhost:${BACKEND_PORT}/api`;
-const NATIVE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || `https://bharat-crm-stable-api.loca.lt/api`;
+const NATIVE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || `https://mean-times-take.loca.lt/api`;
 
 const BASE_URL = Platform.OS === "web" ? WEB_URL : NATIVE_URL;
 
-console.log(`[API] Platform: ${Platform.OS} | Base URL: ${BASE_URL}`);
+console.log(`[API] Configuration Found:`);
+console.log(`- Platform: ${Platform.OS}`);
+console.log(`- Base URL: ${BASE_URL}`);
+console.log(`- Local IP: http://${MACHINE_IP}:${BACKEND_PORT}/api`);
 
 const api = axios.create({
   baseURL: BASE_URL,
@@ -36,7 +39,7 @@ axiosRetry(api, {
   retryDelay: axiosRetry.exponentialDelay,
   retryCondition: (error) => {
     // Retry on Network Error or 5xx status codes
-    return error.code === 'ECONNABORTED' || (!error.response && error.request) || (error.response?.status >= 500);
+    return error.code === 'ECONNABORTED' || (!error.response && error.request) || (error.response?.status && error.response.status >= 500);
   }
 });
 
