@@ -86,7 +86,12 @@ export default function OutcomeScreen() {
                     subject: `${pActType || "Call"} with ${pEntityName || "Client"}`,
                     entityId: pEntityId,
                     entityType: pEntityType || "Lead",
-                    relatedTo: pEntityId ? [{ id: pEntityId, name: pEntityName || "Client", model: pEntityType || "Lead" }] : [],
+                    relatedTo: pEntityId ? [{
+                        id: pEntityId,
+                        name: pEntityName || "Client",
+                        model: pEntityType || "Lead",
+                        mobile: Array.isArray(pMobile) ? pMobile[0] : pMobile
+                    }] : [],
                     dueDate: now.toISOString().split('T')[0],
                     dueTime: now.toTimeString().slice(0, 5),
                     status: "Pending"
@@ -99,7 +104,7 @@ export default function OutcomeScreen() {
                     setOutcomeStatus("Conducted");
                 }
             } else {
-                const actRes = await safeApiCallSingle(() => getActivityById(id as any));
+                const actRes = await safeApiCallSingle(() => getActivityById(id as string));
                 if ((actRes as any)?.data) {
                     const act = (actRes as any).data;
                     setActivity(act);

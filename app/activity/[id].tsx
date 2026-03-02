@@ -45,6 +45,24 @@ export default function ActivityDetailScreen() {
         fetchActivity();
     }, [id]);
 
+    const handleCall = () => {
+        if (!activity) return;
+        const related = (activity as any).relatedTo?.[0];
+        const mobile = related?.mobile || (activity as any).mobile;
+        if (!mobile) return Alert.alert("Error", "No mobile number available");
+        Linking.openURL(`tel:${mobile}`);
+    };
+
+    const handleWhatsApp = () => {
+        if (!activity) return;
+        const related = (activity as any).relatedTo?.[0];
+        const mobile = related?.mobile || (activity as any).mobile;
+        if (!mobile) return Alert.alert("Error", "No mobile number available");
+        const cleanMobile = mobile.replace(/\D/g, "");
+        const url = `whatsapp://send?phone=${cleanMobile.startsWith("+") ? cleanMobile : "+" + (cleanMobile.length === 10 ? "91" + cleanMobile : cleanMobile)}`;
+        Linking.openURL(url).catch(() => Alert.alert("Error", "WhatsApp is not installed"));
+    };
+
     const handleToggleStatus = async () => {
         if (!activity) return;
         setUpdating(true);
@@ -141,19 +159,43 @@ export default function ActivityDetailScreen() {
 
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Related To</Text>
-                    <TouchableOpacity
-                        style={styles.relateCard}
-                        onPress={() => router.push(`/(tabs)/${activity.entityType.toLowerCase()}s` as any)}
-                    >
+                    <View style={styles.relateCard}>
                         <View style={styles.relateIcon}>
                             <Ionicons name={activity.entityType === "Lead" ? "person-add" : "person"} size={24} color="#1E40AF" />
                         </View>
                         <View style={{ flex: 1 }}>
-                            <Text style={styles.relateName}>{activity.entityType} Details</Text>
-                            <Text style={styles.relateSub}>Tap to view related hub</Text>
+                            <Text style={styles.relateName}>
+                                {(activity as any).relatedTo?.[0]?.name || activity.entityType + " Detail"}
+                            </Text>
+                            {(activity as any).relatedTo?.[0]?.mobile ? (
+                                <Text style={styles.relateSub}>{(activity as any).relatedTo[0].mobile}</Text>
+                            ) : (
+                                <Text style={styles.relateSub}>Tap to view related hub</Text>
+                            )}
                         </View>
-                        <Ionicons name="chevron-forward" size={20} color="#CBD5E1" />
-                    </TouchableOpacity>
+
+                        {(activity as any).relatedTo?.[0]?.mobile && (
+                            <View style={styles.relateActions}>
+                                <TouchableOpacity style={styles.miniActionBtn} onPress={handleCall}>
+                                    <Ionicons name="call" size={18} color="#2563EB" />
+                                </TouchableOpacity>
+                                <TouchableOpacity style={[styles.miniActionBtn, { backgroundColor: '#DCFCE7' }]} onPress={handleWhatsApp}>
+                                    <Ionicons name="logo-whatsapp" size={18} color="#166534" />
+                                </TouchableOpacity>
+                            </View>
+                        )}
+
+                        <TouchableOpacity
+                            onPress={() => {
+                                const type = activity.entityType.toLowerCase();
+                                const route = `/${type}-detail` as any;
+                                router.push({ pathname: route, params: { id: activity.entityId } });
+                            }}
+                            style={{ marginLeft: 10 }}
+                        >
+                            <Ionicons name="chevron-forward" size={20} color="#CBD5E1" />
+                        </TouchableOpacity>
+                    </View>
                 </View>
             </ScrollView>
 
@@ -208,5 +250,7 @@ const styles = StyleSheet.create({
     btnCompleted: { backgroundColor: "#10B981" },
     btnPending: { backgroundColor: "#F59E0B" },
     btnText: { color: "#fff", fontSize: 16, fontWeight: "700" },
+    relateActions: { flexDirection: 'row', gap: 10, alignItems: 'center' },
+    miniActionBtn: { width: 36, height: 36, borderRadius: 10, backgroundColor: "#EEF2FF", justifyContent: "center", alignItems: "center" },
     center: { flex: 1, justifyContent: "center", alignItems: "center" }
 });

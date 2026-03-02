@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, memo, useMemo } from "react";
 import {
     View, Text, StyleSheet, FlatList, TouchableOpacity,
-    ActivityIndicator, RefreshControl, TextInput, Alert, Vibration
+    ActivityIndicator, RefreshControl, TextInput, Alert, Vibration, Linking
 } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -154,7 +154,19 @@ export default function ActivitiesScreen() {
         }
     };
 
-    const ActivityCard = memo(({ item, onPress, onDelete, onEdit, onReschedule, onComplete, onPlayAudio, isPlaying }: {
+    const handleCall = (mobile: string) => {
+        if (!mobile) return Alert.alert("Error", "No mobile number available");
+        Linking.openURL(`tel:${mobile}`);
+    };
+
+    const handleWhatsApp = (mobile: string) => {
+        if (!mobile) return Alert.alert("Error", "No mobile number available");
+        const cleanMobile = mobile.replace(/\D/g, "");
+        const url = `whatsapp://send?phone=${cleanMobile.startsWith("+") ? cleanMobile : "+" + (cleanMobile.length === 10 ? "91" + cleanMobile : cleanMobile)}`;
+        Linking.openURL(url).catch(() => Alert.alert("Error", "WhatsApp is not installed"));
+    };
+
+    const ActivityCard = memo(({ item, onPress, onDelete, onEdit, onReschedule, onComplete, onPlayAudio, isPlaying, onCall, onWhatsApp }: {
         item: Activity;
         onPress: () => void;
         onDelete: (id: string) => void;
@@ -163,13 +175,17 @@ export default function ActivitiesScreen() {
         onComplete: (item: Activity) => void;
         onPlayAudio: (id: string, url: string) => void;
         isPlaying: boolean;
+        onCall: (mobile: string) => void;
+        onWhatsApp: (mobile: string) => void;
     }) => {
         const meta = TYPE_META[item.type] || { color: "#64748B", icon: "list", emoji: "📌" };
         const statusStyle = STATUS_COLORS[item.status] || { bg: "#F1F5F9", text: "#64748B" };
         const dueDate = item.dueDate ? new Date(item.dueDate) : null;
         const isToday = dueDate?.toDateString() === new Date().toDateString();
         const isOverdue = dueDate && dueDate < new Date() && item.status !== "Completed";
-        const relatedName = (item as any).relatedTo?.[0]?.name || (item as any).entityName || "";
+        const related = (item as any).relatedTo?.[0];
+        const relatedName = related?.name || (item as any).entityName || "";
+        const relatedMobile = related?.mobile || "";
 
         const renderLeftActions = () => (
             <View style={styles.leftActions}>
@@ -220,21 +236,40 @@ export default function ActivitiesScreen() {
 
                         {relatedName ? (
                             <View style={styles.clientRow}>
-                                <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                    <Ionicons name="person-circle-outline" size={14} color="#64748B" />
-                                    <Text style={styles.clientName}>{relatedName}</Text>
+                                <View style={{ flex: 1 }}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                                        <Ionicons name="person-circle-outline" size={14} color="#64748B" />
+                                        <Text style={styles.clientName}>{relatedName}</Text>
+                                    </View>
+                                    {relatedMobile ? (
+                                        <Text style={styles.clientMobile}>{relatedMobile}</Text>
+                                    ) : null}
                                 </View>
-                                {item.details?.audioUrl && (
-                                    <TouchableOpacity
-                                        style={[styles.playBadge, isPlaying && styles.playBadgeActive]}
-                                        onPress={() => onPlayAudio(item._id!, item.details.audioUrl)}
-                                    >
-                                        <Ionicons name={isPlaying ? "pause" : "play"} size={12} color={isPlaying ? "#fff" : "#2563EB"} />
-                                        <Text style={[styles.playBadgeText, isPlaying && { color: "#fff" }]}>
-                                            {isPlaying ? "PLAYING" : "VOICE MEMO"}
-                                        </Text>
-                                    </TouchableOpacity>
-                                )}
+
+                                <View style={styles.actionGroup}>
+                                    {relatedMobile ? (
+                                        <>
+                                            <TouchableOpacity style={styles.actionBtn} onPress={() => onCall(relatedMobile)}>
+                                                <Ionicons name="call" size={16} color="#2563EB" />
+                                            </TouchableOpacity>
+                                            <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#DCFCE7' }]} onPress={() => onWhatsApp(relatedMobile)}>
+                                                <Ionicons name="logo-whatsapp" size={16} color="#166534" />
+                                            </TouchableOpacity>
+                                        </>
+                                    ) : null}
+
+                                    {item.details?.audioUrl && (
+                                        <TouchableOpacity
+                                            style={[styles.playBadge, isPlaying && styles.playBadgeActive]}
+                                            onPress={() => onPlayAudio(item._id!, item.details.audioUrl)}
+                                        >
+                                            <Ionicons name={isPlaying ? "pause" : "play"} size={12} color={isPlaying ? "#fff" : "#2563EB"} />
+                                            <Text style={[styles.playBadgeText, isPlaying && { color: "#fff" }]}>
+                                                {isPlaying ? "PLAYING" : "VOICE"}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    )}
+                                </View>
                             </View>
                         ) : null}
 
@@ -358,6 +393,8 @@ export default function ActivitiesScreen() {
                             }}
                             onPlayAudio={handlePlayAudio}
                             isPlaying={playingId === item._id}
+                            onCall={handleCall}
+                            onWhatsApp={handleWhatsApp}
                             onDelete={(id) => {
                                 Alert.alert("Delete Activity", "Are you sure? This cannot be undone.", [
                                     { text: "Cancel", style: "cancel" },
@@ -472,8 +509,9 @@ const styles = StyleSheet.create({
     metaText: { fontSize: 12, color: "#94A3B8", fontWeight: "600" },
     priorityEmoji: { fontSize: 12 },
 
-    actionGroup: { flex: 1, flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center' },
-    iconBtn: { width: 32, height: 32, borderRadius: 10, backgroundColor: "#F8FAFC", justifyContent: 'center', alignItems: 'center' },
+    actionGroup: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    actionBtn: { width: 32, height: 32, borderRadius: 10, backgroundColor: "#EEF2FF", justifyContent: 'center', alignItems: 'center' },
+    clientMobile: { fontSize: 11, color: "#94A3B8", fontWeight: "600", marginLeft: 20 },
 
     empty: { alignItems: "center", marginTop: 80, paddingHorizontal: 40 },
     emptyText: { marginTop: 16, fontSize: 16, color: "#94A3B8", fontWeight: "700", textAlign: 'center' },

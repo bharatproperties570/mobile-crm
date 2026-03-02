@@ -91,6 +91,7 @@ interface RelatedItem {
     id: string;
     name: string;
     type: "Lead" | "Deal" | "Contact" | "Company";
+    mobile?: string;
 }
 
 export default function AddActivityScreen() {
@@ -215,22 +216,38 @@ export default function AddActivityScreen() {
         // 2. Resolve initial entity if passed
         if (params.id && params.type) {
             let name = "Loading...";
+            let mobile = "";
             if (params.type === "Lead") {
                 const leadRes = await safeApiCallSingle<Lead>(() => getLeadById(params.id!));
-                if (!leadRes.error && leadRes.data) name = leadName(leadRes.data);
+                if (!leadRes.error && leadRes.data) {
+                    name = leadName(leadRes.data);
+                    mobile = leadRes.data.mobile || "";
+                }
             } else if (params.type === "Deal") {
                 const dealRes = await getDealById(params.id);
                 const d = dealRes?.data ?? dealRes;
-                if (d) name = d.dealId || [d.projectName, d.unitNo].filter(Boolean).join(" - ") || "Deal";
+                if (d) {
+                    name = d.dealId || [d.projectName, d.unitNo].filter(Boolean).join(" - ") || "Deal";
+                    mobile = d.contactEmail || ""; // Deals don't always have mobile at top level, but let's keep it safe
+                }
             } else if (params.type === "Contact") {
                 const conRes = await getContactById(params.id);
-                if (!conRes.error && conRes.data) name = contactFullName(conRes.data);
+                if (!conRes.error && conRes.data) {
+                    name = contactFullName(conRes.data);
+                    mobile = conRes.data.phones?.[0]?.number || "";
+                }
             } else if (params.type === "Company") {
                 const compRes = await getCompanyById(params.id);
-                if (compRes?.success && compRes.data) name = compRes.data.name;
-                else if (compRes?.name) name = compRes.name;
+                if (compRes?.success && compRes.data) {
+                    name = compRes.data.name;
+                    mobile = compRes.data.phone || "";
+                }
+                else if (compRes?.name) {
+                    name = compRes.name;
+                    mobile = compRes.phone || "";
+                }
             }
-            setSelectedEntity({ id: params.id, type: params.type as any, name });
+            setSelectedEntity({ id: params.id, type: params.type as any, name, mobile });
             if (!params.subject) {
                 setFormData(prev => ({ ...prev, subject: `${params.actType || "Follow up"} with ${name}` }));
             }
@@ -264,9 +281,24 @@ export default function AddActivityScreen() {
         ]);
 
         const results: RelatedItem[] = [
-            ...extractList(l).map((i: any) => ({ id: i._id, name: i.firstName + " " + (i.lastName || ""), type: "Lead" as const })),
-            ...extractList(d).map((i: any) => ({ id: i._id, name: i.title || i.dealId || "Deal", type: "Deal" as const })),
-            ...extractList(c).map((i: any) => ({ id: i._id, name: i.fullName || i.name || "Contact", type: "Contact" as const }))
+            ...extractList(l).map((i: any) => ({
+                id: i._id,
+                name: i.firstName + " " + (i.lastName || ""),
+                type: "Lead" as const,
+                mobile: i.mobile
+            })),
+            ...extractList(d).map((i: any) => ({
+                id: i._id,
+                name: i.title || i.dealId || "Deal",
+                type: "Deal" as const,
+                mobile: i.contactPhone
+            })),
+            ...extractList(c).map((i: any) => ({
+                id: i._id,
+                name: i.fullName || i.name || "Contact",
+                type: "Contact" as const,
+                mobile: i.phones?.[0]?.number
+            }))
         ];
 
         setSearchResults(results);
@@ -289,7 +321,8 @@ export default function AddActivityScreen() {
             relatedTo: [{
                 id: selectedEntity.id,
                 name: selectedEntity.name,
-                model: selectedEntity.type
+                model: selectedEntity.type,
+                mobile: selectedEntity.mobile
             }],
             completionResult: formData.details.completionResult, // Legacy top-level mapping
             details: {

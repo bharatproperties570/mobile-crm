@@ -10,6 +10,7 @@ export interface Activity {
         id: string;
         name: string;
         model: string;
+        mobile?: string;
     }>;
     dueDate: string;
     dueTime?: string;
@@ -46,7 +47,7 @@ export const deleteActivity = async (id: string) => {
     return res.data;
 };
 
-export const getOrCreateCallActivity = async (entityId: string, entityType: string, subject: string) => {
+export const getOrCreateCallActivity = async (entityId: string, entityType: string, subject: string, mobile?: string) => {
     try {
         // 1. Search for existing pending call activities
         const actRes = await getActivities({
@@ -72,7 +73,8 @@ export const getOrCreateCallActivity = async (entityId: string, entityType: stri
             relatedTo: [{
                 id: entityId,
                 name: subject,
-                model: entityType
+                model: entityType,
+                mobile: mobile
             }],
             dueDate: now.toISOString().split('T')[0],
             dueTime: now.toTimeString().slice(0, 5),
