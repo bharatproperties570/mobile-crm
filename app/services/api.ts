@@ -14,7 +14,7 @@ const MACHINE_IP = "192.168.1.10";
 const BACKEND_PORT = "4000";
 
 const WEB_URL = `http://localhost:${BACKEND_PORT}/api`;
-const NATIVE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || `https://mean-times-take.loca.lt/api`;
+const NATIVE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || `https://api.bharatproperties.co/api`;
 
 const BASE_URL = Platform.OS === "web" ? WEB_URL : NATIVE_URL;
 
@@ -27,9 +27,10 @@ const api = axios.create({
   baseURL: BASE_URL,
   timeout: 15000,
   headers: {
-    "Origin": "https://crm.bharatproperties.com",
+    "Origin": "https://crm.bharatproperties.co",
     "Content-Type": "application/json",
     "Accept": "application/json",
+    "Bypass-Tunnel-Reminder": "true",
   },
 });
 

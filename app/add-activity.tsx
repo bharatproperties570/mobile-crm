@@ -11,9 +11,10 @@ import {
     Platform,
     Modal,
     FlatList,
-    SafeAreaView,
-    Switch
+    Switch,
+    StatusBar
 } from "react-native";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
@@ -95,6 +96,7 @@ interface RelatedItem {
 }
 
 export default function AddActivityScreen() {
+    const insets = useSafeAreaInsets();
     const router = useRouter();
     const params = useLocalSearchParams<{
         id?: string;
@@ -207,63 +209,68 @@ export default function AddActivityScreen() {
 
     const init = async () => {
         setLoading(true);
-        // 1. Fetch Projects if Site Visit might be used
-        const projRes = await safeApiCall(() => getProjects());
-        if (!projRes.error) {
-            setProjects(extractList(projRes.data));
-        }
+        try {
+            // 1. Fetch Projects if Site Visit might be used
+            const projRes = await safeApiCall(() => getProjects());
+            if (!projRes.error) {
+                setProjects(extractList(projRes.data));
+            }
 
-        // 2. Resolve initial entity if passed
-        if (params.id && params.type) {
-            let name = "Loading...";
-            let mobile = "";
-            if (params.type === "Lead") {
-                const leadRes = await safeApiCallSingle<Lead>(() => getLeadById(params.id!));
-                if (!leadRes.error && leadRes.data) {
-                    name = leadName(leadRes.data);
-                    mobile = leadRes.data.mobile || "";
+            // 2. Resolve initial entity if passed
+            if (params.id && params.type) {
+                let name = "Loading...";
+                let mobile = "";
+                if (params.type === "Lead") {
+                    const leadRes = await safeApiCallSingle<Lead>(() => getLeadById(params.id!));
+                    if (!leadRes.error && leadRes.data) {
+                        name = leadName(leadRes.data);
+                        mobile = leadRes.data.mobile || "";
+                    }
+                } else if (params.type === "Deal") {
+                    const dealRes = await getDealById(params.id);
+                    const d = dealRes?.data ?? dealRes;
+                    if (d) {
+                        name = d.dealId || [d.projectName, d.unitNo].filter(Boolean).join(" - ") || "Deal";
+                        mobile = d.contactEmail || ""; // Deals don't always have mobile at top level, but let's keep it safe
+                    }
+                } else if (params.type === "Contact") {
+                    const conRes = await getContactById(params.id);
+                    if (!conRes.error && conRes.data) {
+                        name = contactFullName(conRes.data);
+                        mobile = conRes.data.phones?.[0]?.number || "";
+                    }
+                } else if (params.type === "Company") {
+                    const compRes = await getCompanyById(params.id);
+                    if (compRes?.success && compRes.data) {
+                        name = compRes.data.name;
+                        mobile = compRes.data.phone || "";
+                    }
+                    else if (compRes?.name) {
+                        name = compRes.name;
+                        mobile = compRes.phone || "";
+                    }
                 }
-            } else if (params.type === "Deal") {
-                const dealRes = await getDealById(params.id);
-                const d = dealRes?.data ?? dealRes;
-                if (d) {
-                    name = d.dealId || [d.projectName, d.unitNo].filter(Boolean).join(" - ") || "Deal";
-                    mobile = d.contactEmail || ""; // Deals don't always have mobile at top level, but let's keep it safe
-                }
-            } else if (params.type === "Contact") {
-                const conRes = await getContactById(params.id);
-                if (!conRes.error && conRes.data) {
-                    name = contactFullName(conRes.data);
-                    mobile = conRes.data.phones?.[0]?.number || "";
-                }
-            } else if (params.type === "Company") {
-                const compRes = await getCompanyById(params.id);
-                if (compRes?.success && compRes.data) {
-                    name = compRes.data.name;
-                    mobile = compRes.data.phone || "";
-                }
-                else if (compRes?.name) {
-                    name = compRes.name;
-                    mobile = compRes.phone || "";
+                setSelectedEntity({ id: params.id, type: params.type as any, name, mobile });
+                if (!params.subject) {
+                    setFormData(prev => ({ ...prev, subject: `${params.actType || "Follow up"} with ${name}` }));
                 }
             }
-            setSelectedEntity({ id: params.id, type: params.type as any, name, mobile });
-            if (!params.subject) {
-                setFormData(prev => ({ ...prev, subject: `${params.actType || "Follow up"} with ${name}` }));
-            }
-        }
 
-        // 3. Fetch Activity Master Fields
-        const settingsRes: any = await safeApiCallSingle(() => getSystemSettingsByKey("activity_master_fields"));
-        if (!settingsRes.error && settingsRes.data) {
-            // safeApiCallSingle returns { data: settingRecord, error: null }
-            const settingValue = settingsRes.data.value;
-            if (settingValue) {
-                setActivityMasterFields(settingValue);
+            // 3. Fetch Activity Master Fields
+            const settingsRes: any = await safeApiCallSingle(() => getSystemSettingsByKey("activity_master_fields"));
+            if (!settingsRes.error && settingsRes.data) {
+                // safeApiCallSingle returns { data: settingRecord, error: null }
+                const settingValue = settingsRes.data.value;
+                if (settingValue) {
+                    setActivityMasterFields(settingValue);
+                }
             }
+        } catch (error) {
+            console.error("[AddActivity] Init failed:", error);
+            Alert.alert("Initialization Error", "Failed to load some form data. Please try again.");
+        } finally {
+            setLoading(false);
         }
-
-        setLoading(false);
     };
 
     const handleSearch = async (text: string) => {
@@ -390,9 +397,11 @@ export default function AddActivityScreen() {
     }
 
     return (
-        <SafeAreaView style={styles.container}>
+        <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
+            <StatusBar barStyle="dark-content" backgroundColor="#fff" />
+
             {/* Header */}
-            <View style={styles.header}>
+            <View style={[styles.header, { paddingTop: Platform.OS === 'ios' ? 0 : insets.top }]}>
                 <TouchableOpacity
                     onPress={() => {
                         console.log("[AddActivity] Back pressed");
