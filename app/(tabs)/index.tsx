@@ -232,6 +232,105 @@ function KPIItem({ label, value, icon, color, delay = 0, trend }: { label: strin
     );
 }
 
+const ActivityTypeGrid = memo(({ data, theme }: { data: any[]; theme: any }) => {
+    if (!data || data.length === 0) return null;
+    const icons: any = { Call: 'call', WhatsApp: 'logo-whatsapp', Meeting: 'people', Note: 'document-text', Email: 'mail', Task: 'checkbox' };
+    const colors: any = { Call: '#10B981', WhatsApp: '#25D366', Meeting: '#4F46E5', Note: '#F59E0B', Email: '#3B82F6', Task: '#EF4444' };
+
+    return (
+        <View style={styles.activityBreakdownRow}>
+            {data.slice(0, 4).map((item, idx) => (
+                <View key={idx} style={[styles.activityTypeCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                    <View style={[styles.activityTypeIcon, { backgroundColor: (colors[item._id] || '#64748B') + '15' }]}>
+                        <Ionicons name={icons[item._id] || 'apps'} size={14} color={colors[item._id] || '#64748B'} />
+                    </View>
+                    <Text style={[styles.activityTypeCount, { color: theme.text }]}>{item.count}</Text>
+                    <Text style={[styles.activityTypeLabel, { color: theme.textMuted }]}>{item._id}</Text>
+                </View>
+            ))}
+        </View>
+    );
+});
+
+const LeadSourceList = memo(({ data, theme }: { data: any[]; theme: any }) => {
+    if (!data || data.length === 0) return null;
+    return (
+        <View style={styles.sourceList}>
+            {data.slice(0, 3).map((item, idx) => (
+                <View key={idx} style={styles.sourceItem}>
+                    <View style={styles.sourceHeader}>
+                        <Text style={[styles.sourceName, { color: theme.text }]}>{item.source}</Text>
+                        <Text style={[styles.sourceCount, { color: theme.text }]}>{item.count} leads</Text>
+                    </View>
+                    <View style={[styles.sourceBarBase, { backgroundColor: theme.border }]}>
+                        <View style={[styles.sourceBarFill, { width: `${(item.count / (data[0].count || 1)) * 100}%`, backgroundColor: '#4F46E5' }]} />
+                    </View>
+                </View>
+            ))}
+        </View>
+    );
+});
+
+const AIRecommendationsList = memo(({ suggestions, theme }: { suggestions: any; theme: any }) => {
+    const all = [
+        ...(suggestions?.leads || []),
+        ...(suggestions?.performance || []),
+        ...(suggestions?.pipeline || []),
+        ...(suggestions?.strategy || [])
+    ];
+    if (all.length === 0) return (
+        <View style={styles.insightCard}>
+            <View style={styles.insightHeader}>
+                <View style={styles.insightIconCircle}><Ionicons name="bulb" size={16} color="#4F46E5" /></View>
+                <Text style={styles.insightTitle}>Smart Insight</Text>
+            </View>
+            <Text style={styles.insightText}>Consistency is key. Focus on 'Qualified' leads to maintain a healthy deal funnel.</Text>
+        </View>
+    );
+
+    return (
+        <View style={[styles.recommendationsContainer, { backgroundColor: theme.card, borderColor: theme.border }]}>
+            <Text style={[styles.sectionHeader, { color: theme.textMuted }]}>AI Recommendations</Text>
+            {all.slice(0, 3).map((s, i) => {
+                const glyphs: any = { optimization: '⚡', training: '📚', growth: '🚀', strategy: '🎯' };
+                return (
+                    <View key={i} style={[styles.recommendationItem, { backgroundColor: theme.background }]}>
+                        <Text style={styles.recommendationGlyph}>{glyphs[s.type] || '💡'}</Text>
+                        <Text style={[styles.recommendationText, { color: theme.text }]}>{s.text}</Text>
+                    </View>
+                );
+            })}
+        </View>
+    );
+});
+
+
+const ProjectQuickList = memo(({ data, theme, router }: { data: any[]; theme: any; router: any }) => {
+    if (!data || data.length === 0) return null;
+    return (
+        <View style={styles.projectListContainer}>
+            {data.slice(0, 3).map((proj, idx) => (
+                <TouchableOpacity
+                    key={idx}
+                    style={[styles.miniProjCard, { backgroundColor: theme.background, borderColor: theme.border }]}
+                    onPress={() => router.push({ pathname: "/project-detail", params: { id: proj._id } })}
+                >
+                    <View style={styles.miniProjInfo}>
+                        <Text style={[styles.miniProjName, { color: theme.text }]} numberOfLines={1}>{proj.name}</Text>
+                        <Text style={[styles.miniProjLoc, { color: theme.textMuted }]}>{proj.location || 'Primary'}</Text>
+                    </View>
+                    <View style={styles.miniProjStats}>
+                        <View style={styles.miniProjBadge}>
+                            <Text style={styles.miniProjBadgeText}>{proj.units?.available || 0} Avail</Text>
+                        </View>
+                        <Ionicons name="chevron-forward" size={14} color={theme.textLight} />
+                    </View>
+                </TouchableOpacity>
+            ))}
+        </View>
+    );
+});
+
 export default function MissionControlScreen() {
     const { currentDept, config } = useDepartment();
     const router = useRouter();
@@ -344,6 +443,22 @@ export default function MissionControlScreen() {
                             </TouchableOpacity>
                         ))}
                     </ScrollView>
+                </View>
+            )}
+
+            {/* Activity Type Breakdown */}
+            {dashboardData?.activityTypeBreakdown && dashboardData.activityTypeBreakdown.length > 0 && (
+                <View style={styles.sectionContainer}>
+                    <Text style={[styles.sectionHeader, { color: theme.textMuted }]}>Weekly Activity Mix</Text>
+                    <ActivityTypeGrid data={dashboardData.activityTypeBreakdown} theme={theme} />
+                </View>
+            )}
+
+            {/* Lead Source Breakdown */}
+            {dashboardData?.leadSourceStats && dashboardData.leadSourceStats.length > 0 && (
+                <View style={[styles.pipelineContainer, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                    <Text style={[styles.sectionHeader, { color: theme.textMuted }]}>Top Lead Sources</Text>
+                    <LeadSourceList data={dashboardData.leadSourceStats} theme={theme} />
                 </View>
             )}
 
@@ -509,6 +624,19 @@ export default function MissionControlScreen() {
                     </View>
                 </View>
 
+                {/* Project Quick List */}
+                {dashboardData?.projectList && dashboardData.projectList.length > 0 && (
+                    <View style={[styles.pipelineContainer, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                        <View style={styles.pipeHeaderRow}>
+                            <Text style={[styles.sectionHeader, { color: theme.textMuted }]}>Recent Projects</Text>
+                            <TouchableOpacity onPress={() => router.push("/(tabs)/projects")}>
+                                <Text style={[styles.pipeTotal, { color: '#2563EB', fontWeight: '800' }]}>View All</Text>
+                            </TouchableOpacity>
+                        </View>
+                        <ProjectQuickList data={dashboardData.projectList} theme={theme} router={router} />
+                    </View>
+                )}
+
                 <TouchableOpacity style={[styles.actionBtn, { backgroundColor: "#F59E0B" }]} onPress={() => router.push("/add-project")}>
                     <Ionicons name="business" size={24} color="#fff" />
                     <Text style={styles.actionBtnText}>Add New Project</Text>
@@ -670,26 +798,22 @@ export default function MissionControlScreen() {
                     )}
 
                     {/* 8. Smart Insight Card */}
-                    <View style={styles.insightCard}>
-                        <View style={styles.insightHeader}>
-                            <View style={styles.insightIconCircle}>
-                                <Ionicons name="bulb" size={16} color="#4F46E5" />
-                            </View>
-                            <Text style={styles.insightTitle}>Smart Insight</Text>
-                        </View>
-                        <Text style={styles.insightText}>
-                            {dashboardData?.performance?.conversion && dashboardData.performance.conversion > 30
-                                ? "Excellent conversion rate! High probability of reaching monthly target early."
-                                : dashboardData?.activities?.overdue && dashboardData.activities.overdue > 0
-                                    ? `You have ${dashboardData.activities.overdue} overdue tasks. Clearing these could boost won value by ₹5L.`
-                                    : "Consistency is key. Focus on 'Qualified' leads to maintain a healthy deal funnel."}
-                        </Text>
-                    </View>
+                    <AIRecommendationsList suggestions={dashboardData?.autoSuggestions} theme={theme} />
 
                     {/* 9. Command Log (Timeline View) */}
-                    <View style={[styles.activityBox, { paddingBottom: 10 }]}>
+                    <View style={[styles.activityBox, { paddingBottom: 10, marginBottom: 30 }]}>
                         <Text style={styles.sectionTitle}>Command Log (Recent Events)</Text>
-                        {activities.length > 0 ? (
+                        {dashboardData?.recentActivityFeed?.length ? (
+                            <View style={styles.timelineContainer}>
+                                <View style={styles.timelineLine} />
+                                {dashboardData.recentActivityFeed.slice(0, 6).map((act, idx) => {
+                                    const aIcon: any = { Call: 'call', WhatsApp: 'logo-whatsapp', Meeting: 'people', Note: 'document-text', Email: 'mail', Site_Visit: 'pin' };
+                                    const aColor: any = { Call: '#10B981', WhatsApp: '#25D366', Meeting: '#4F46E5', Note: '#F59E0B', Email: '#3B82F6', Site_Visit: '#8B5CF6' };
+                                    const config = { color: aColor[act.type] || theme.primary };
+                                    return <CommandLogItem key={idx} act={act} idx={idx} config={config} router={router} />;
+                                })}
+                            </View>
+                        ) : activities.length > 0 ? (
                             <View style={styles.timelineContainer}>
                                 <View style={styles.timelineLine} />
                                 {activities.map((act, idx) => (
@@ -901,6 +1025,36 @@ const styles = StyleSheet.create({
     funnelStatVal: { fontSize: 16, fontWeight: '800' },
     funnelStatLab: { fontSize: 10, fontWeight: '700', color: '#94A3B8', marginTop: 2 },
     funnelStatDivider: { width: 1, height: 20, backgroundColor: '#F1F5F9' },
-    systemNote: { marginTop: 20, padding: 15, backgroundColor: 'rgba(79, 70, 229, 0.05)', borderRadius: 16, borderWidth: 1, borderColor: 'rgba(79, 70, 229, 0.1)' },
+    systemNote: { marginTop: 20, padding: 15, backgroundColor: 'rgba(79, 70, 229, 0.05)', borderRadius: 16, borderWidth: 1, borderColor: 'rgba(79, 70, 229, 0.1)', marginBottom: 40 },
     systemNoteText: { fontSize: 12, color: "#4F46E5", fontWeight: "600", textAlign: "center", lineHeight: 18 },
+
+    // New Enhancement Styles
+    sectionContainer: { marginBottom: 24 },
+    activityBreakdownRow: { flexDirection: 'row', gap: 10, flexWrap: 'wrap' },
+    activityTypeCard: { flex: 1, minWidth: '45%', padding: 12, borderRadius: 16, borderWidth: 1, alignItems: 'center' },
+    activityTypeIcon: { width: 28, height: 28, borderRadius: 8, justifyContent: 'center', alignItems: 'center', marginBottom: 6 },
+    activityTypeCount: { fontSize: 16, fontWeight: '800' },
+    activityTypeLabel: { fontSize: 10, fontWeight: '700', marginTop: 2 },
+
+    sourceList: { gap: 12 },
+    sourceItem: {},
+    sourceHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
+    sourceName: { fontSize: 12, fontWeight: '700' },
+    sourceCount: { fontSize: 11, fontWeight: '800', opacity: 0.6 },
+    sourceBarBase: { height: 6, borderRadius: 3, overflow: 'hidden' },
+    sourceBarFill: { height: '100%', borderRadius: 3 },
+
+    recommendationsContainer: { marginBottom: 30, backgroundColor: "#fff", padding: 18, borderRadius: 24, borderWidth: 1 },
+    recommendationItem: { flexDirection: 'row', gap: 10, padding: 12, borderRadius: 12, marginBottom: 8, alignItems: 'center' },
+    recommendationGlyph: { fontSize: 16 },
+    recommendationText: { fontSize: 12, fontWeight: '700', flex: 1 },
+
+    projectListContainer: { gap: 10 },
+    miniProjCard: { flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 16, borderLeftWidth: 3, borderLeftColor: '#4F46E5', gap: 12 },
+    miniProjInfo: { flex: 1 },
+    miniProjName: { fontSize: 14, fontWeight: '800' },
+    miniProjLoc: { fontSize: 11, fontWeight: '600', marginTop: 2 },
+    miniProjStats: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    miniProjBadge: { backgroundColor: '#EEF2FF', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+    miniProjBadgeText: { fontSize: 10, fontWeight: '800', color: '#4F46E5' },
 });

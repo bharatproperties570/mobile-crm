@@ -31,12 +31,25 @@ export interface DashboardStats {
     aiAlertHub?: {
         followupFailure: any[];
         hotLeads: any[];
+        stuckDeals: any[];
+        inventory: any[];
     };
     agenda?: {
         siteVisits: any[];
         tasks: any[];
     };
     projects?: number;
+    projectList?: any[];
+    recentActivityFeed?: any[];
+    leadSourceStats?: { source: string; count: number }[];
+    activityTypeBreakdown?: { _id: string; count: number }[];
+    autoSuggestions?: {
+        leads: any[];
+        performance: any[];
+        pipeline: any[];
+        strategy: any[];
+    };
+    recentDeals?: any[];
 }
 
 export async function getDashboardStats() {
