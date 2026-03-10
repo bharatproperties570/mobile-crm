@@ -303,10 +303,54 @@ export default function AddDealScreen() {
             setFormData({
                 ...formData,
                 unitNo,
+                inventoryId: unit._id,
                 propertyType: unit.type || unit.category || formData.propertyType,
-                size: unit.size || formData.size,
-                owner: unit.owners?.[0]?._id || unit.ownerName || "",
-                associatedContact: unit.associates?.[0]?._id || unit.associatedContact || ""
+                category: unit.category || "",
+                subCategory: unit.subCategory || "",
+                size: unit.size ? String(unit.size) : formData.size,
+                sizeUnit: unit.sizeUnit || formData.sizeUnit,
+                location: unit.location || unit.address?.city || formData.location,
+
+                // Detailed Data Inheritance
+                unitSpecification: {
+                    facing: unit.facing,
+                    direction: unit.direction,
+                    orientation: unit.orientation,
+                    roadWidth: unit.roadWidth,
+                    builtupType: unit.builtupType,
+                    ownership: unit.ownership,
+                    length: unit.length,
+                    width: unit.width,
+                    sizeLabel: unit.sizeLabel,
+                    totalSaleableArea: unit.totalSaleableArea,
+                    builtUpArea: unit.builtUpArea,
+                    carpetArea: unit.carpetArea
+                },
+                locationDetails: unit.address || {},
+                builtupDetails: unit.builtupDetails || [],
+                furnishing: {
+                    furnishType: unit.furnishType,
+                    furnishedItems: unit.furnishedItems,
+                    possessionStatus: unit.possessionStatus,
+                    constructionAge: unit.constructionAge || unit.ageOfConstruction
+                },
+                documents: unit.inventoryDocuments || [],
+
+                // Contacts
+                owner: {
+                    _id: unit.owners?.[0]?._id || null,
+                    name: unit.owners?.[0]?.name || unit.ownerName || "",
+                    phone: unit.owners?.[0]?.phone || unit.ownerPhone || "",
+                    email: unit.owners?.[0]?.email || unit.ownerEmail || ""
+                },
+                associatedContact: {
+                    _id: unit.associates?.[0]?._id || null,
+                    name: unit.associates?.[0]?.name || unit.associatedContact || "",
+                    phone: unit.associates?.[0]?.phone || unit.associatedPhone || "",
+                    email: unit.associates?.[0]?.email || unit.associatedEmail || ""
+                },
+                isOwnerSelected: !!(unit.owners?.[0]?._id || unit.ownerName),
+                isAssociateSelected: !!(unit.associates?.[0]?._id || unit.associatedContact)
             });
         } else {
             setFormData({ ...formData, unitNo });
@@ -398,12 +442,12 @@ export default function AddDealScreen() {
             if (formData.isOwnerSelected && formData.owner) {
                 payload.owner = typeof formData.owner === 'object' ? formData.owner._id || formData.owner.id : formData.owner;
             } else {
-                delete payload.owner;
+                payload.owner = null;
             }
             if (formData.isAssociateSelected && formData.associatedContact) {
                 payload.associatedContact = typeof formData.associatedContact === 'object' ? formData.associatedContact._id || formData.associatedContact.id : formData.associatedContact;
             } else {
-                delete payload.associatedContact;
+                payload.associatedContact = null;
             }
 
             // Other populated drop downs
@@ -416,11 +460,8 @@ export default function AddDealScreen() {
                 payload.inventoryId = selectedUnit._id;
             }
 
-            console.log("MOBILE ADD DEAL SUBMITTING PAYLOAD:");
-            console.log(JSON.stringify(payload, null, 2));
-
-            const res = id ? await updateDeal(id, payload) : await addDeal(payload);
-            if (res) {
+            const res = id ? await api.put(`/deals/${id}`, payload) : await api.post('/deals', payload);
+            if (res.data && res.data.success) {
                 router.dismissAll();
                 router.replace("/(tabs)/deals");
             }
@@ -595,7 +636,7 @@ export default function AddDealScreen() {
                         </View>
 
                         {(formData.intent === "Rent" || formData.intent === "Lease") && (
-                            <View style={{ marginTop: 20, padding: 16, backgroundColor: '#f0f9ff', borderRadius: 16, borderSize: 1, borderColor: '#bae6fd' }}>
+                            <View style={{ marginTop: 20, padding: 16, backgroundColor: '#f0f9ff', borderRadius: 16, borderWidth: 1, borderColor: '#bae6fd' }}>
                                 <SectionTitle title={`${formData.intent} Details`} icon="📜" />
 
                                 <FormLabel label={`Expected ${formData.intent}`} />
@@ -875,4 +916,16 @@ const styles = StyleSheet.create({
     modalSearchInput: { backgroundColor: '#F1F5F9', borderRadius: 12, padding: 12, marginBottom: 16, fontSize: 16 },
     modalListItem: { paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
     modalListItemText: { fontSize: 16, color: '#1E293B' },
+    partyBox: { backgroundColor: "#F8FAFC", borderRadius: 12, padding: 16, marginBottom: 20, borderWidth: 1, borderColor: "#E2E8F0" },
+    partyBoxTitle: { fontSize: 14, fontWeight: "700", color: "#1E3A8A", marginBottom: 12 },
+    partyItem: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 8 },
+    partyText: { fontSize: 14, color: "#475569" },
+    wordsText: { fontSize: 12, color: "#6366F1", fontStyle: "italic", marginTop: 4 },
+    sliderBox: { marginVertical: 12 },
+    sliderLabel: { fontSize: 13, fontWeight: "600", color: "#64748B" },
+    sliderValue: { fontSize: 16, fontWeight: "800", color: "#1E3A8A" },
+    sliderHint: { fontSize: 11, color: "#94A3B8", marginTop: 4 },
+    gridContainer: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 },
+    gridBtn: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, backgroundColor: "#F1F5F9", borderWidth: 1, borderColor: "#E2E8F0" },
+    gridBtnText: { fontSize: 12, fontWeight: "600", color: "#64748B" },
 });
