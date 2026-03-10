@@ -359,9 +359,6 @@ const DealCard = memo(({
                             </View>
                             <View style={{ alignItems: 'flex-end', gap: 2 }}>
                                 <Text style={[styles.dealAmount, { color: color, fontSize: 14 }]}>{formatAmount(amount)}</Text>
-                                <TouchableOpacity style={styles.menuTrigger} onPress={onMenuPress}>
-                                    <Ionicons name="ellipsis-vertical" size={18} color="#94A3B8" />
-                                </TouchableOpacity>
                             </View>
                         </View>
                     </View>

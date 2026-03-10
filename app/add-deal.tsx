@@ -177,6 +177,12 @@ export default function AddDealScreen() {
         visibleTo: "Public",
         remarks: "",
         stage: "Open",
+
+        // Rent/Lease specific fields
+        expectedRent: "",
+        securityDeposit: "",
+        leaseTermMonths: "",
+        lockInMonths: "",
     });
 
     const [activeDropdown, setActiveDropdown] = useState<'project' | 'block' | 'unit' | 'status' | 'dealType' | 'transactionType' | 'source' | 'team' | 'agent' | 'visibility' | null>(null);
@@ -344,7 +350,11 @@ export default function AddDealScreen() {
             const payload: any = { ...formData };
 
             // Clean specific numeric fields to avoid MongoDB cast errors from empty strings
-            const numFields = ['price', 'quotePrice', 'ratePrice', 'quoteRatePrice', 'size', 'dealProbability', 'flexiblePercentage'];
+            const numFields = [
+                'price', 'quotePrice', 'ratePrice', 'quoteRatePrice',
+                'size', 'dealProbability', 'flexiblePercentage',
+                'expectedRent', 'securityDeposit', 'leaseTermMonths', 'lockInMonths'
+            ];
             numFields.forEach(f => {
                 if (payload[f] === "" || payload[f] === null) {
                     delete payload[f]; // Better to let backend schema handle defaults than send empty strings
@@ -583,6 +593,53 @@ export default function AddDealScreen() {
                             <Text style={styles.toggleLabel}>Fixed Price</Text>
                             <Switch value={formData.pricingNature.fixed} onValueChange={v => setFormData({ ...formData, pricingNature: { fixed: v, negotiable: !v } })} />
                         </View>
+
+                        {(formData.intent === "Rent" || formData.intent === "Lease") && (
+                            <View style={{ marginTop: 20, padding: 16, backgroundColor: '#f0f9ff', borderRadius: 16, borderSize: 1, borderColor: '#bae6fd' }}>
+                                <SectionTitle title={`${formData.intent} Details`} icon="📜" />
+
+                                <FormLabel label={`Expected ${formData.intent}`} />
+                                <TextInput
+                                    style={styles.input}
+                                    value={formData.expectedRent}
+                                    keyboardType="numeric"
+                                    onChangeText={t => setFormData({ ...formData, expectedRent: t })}
+                                    placeholder={`Enter monthly ${formData.intent.toLowerCase()}`}
+                                />
+
+                                <FormLabel label="Security Deposit" />
+                                <TextInput
+                                    style={styles.input}
+                                    value={formData.securityDeposit}
+                                    keyboardType="numeric"
+                                    onChangeText={t => setFormData({ ...formData, securityDeposit: t })}
+                                    placeholder="Enter deposit amount"
+                                />
+
+                                <View style={styles.row}>
+                                    <View style={{ flex: 1, marginRight: 8 }}>
+                                        <FormLabel label="Term (Months)" />
+                                        <TextInput
+                                            style={styles.input}
+                                            value={formData.leaseTermMonths}
+                                            keyboardType="numeric"
+                                            onChangeText={t => setFormData({ ...formData, leaseTermMonths: t })}
+                                            placeholder="Period"
+                                        />
+                                    </View>
+                                    <View style={{ flex: 1 }}>
+                                        <FormLabel label="Lock-in (Months)" />
+                                        <TextInput
+                                            style={styles.input}
+                                            value={formData.lockInMonths}
+                                            keyboardType="numeric"
+                                            onChangeText={t => setFormData({ ...formData, lockInMonths: t })}
+                                            placeholder="Lock-in"
+                                        />
+                                    </View>
+                                </View>
+                            </View>
+                        )}
 
                         <FormLabel label="Deal Probability (%)" />
                         <TextInput style={styles.input} value={String(formData.dealProbability)} keyboardType="numeric" onChangeText={t => setFormData({ ...formData, dealProbability: t })} />
