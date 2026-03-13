@@ -452,7 +452,7 @@ export default function DealsScreen() {
     }, [deals]);
 
     const fetchDeals = useCallback(async (pageNum = 1, shouldAppend = false) => {
-        if (!shouldAppend) setLoading(true);
+        setLoading(true);
         const result = await safeApiCall<any>(() => getDeals({ page: String(pageNum), limit: "50" }));
 
         if (result.error) {
@@ -460,7 +460,19 @@ export default function DealsScreen() {
         } else if (result.data) {
             const dataObj = result.data as any;
             const newDeals = dataObj.data || dataObj.records || (Array.isArray(dataObj) ? dataObj : []);
-            setDeals(prev => shouldAppend ? [...prev, ...newDeals] : newDeals);
+            
+            setDeals(prev => {
+                const combined = shouldAppend ? [...prev, ...newDeals] : newDeals;
+                // Deduplicate by _id
+                const seen = new Set();
+                return combined.filter((d: any) => {
+                    const id = d?._id || d?.id;
+                    if (!id || seen.has(id)) return false;
+                    seen.add(id);
+                    return true;
+                });
+            });
+            
             setHasMore(newDeals.length === 50);
             setPage(pageNum);
             // Fetch live deal scores from Stage Engine (fire-and-forget)

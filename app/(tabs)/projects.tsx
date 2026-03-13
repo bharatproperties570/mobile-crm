@@ -3,7 +3,7 @@ import {
     View, Text, StyleSheet, SectionList, TouchableOpacity,
     TextInput, RefreshControl, ActivityIndicator, Dimensions, Animated, Modal, Pressable, Alert
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { getProjects, type Project } from "../services/projects.service";
 import { lookupVal } from "../services/api.helpers";
@@ -118,13 +118,24 @@ export default function ProjectsScreen() {
     };
 
     const fetchProjects = useCallback(async (pageNum = 1, shouldAppend = false) => {
-        if (!shouldAppend) setLoading(true);
+        setLoading(true);
         const result = await safeApiCall<any>(() => getProjects({ page: String(pageNum), limit: "50" }));
 
         if (!result.error && result.data) {
             const dataObj = result.data as any;
             const newRecords = dataObj.data || dataObj.records || (Array.isArray(dataObj) ? dataObj : []);
-            setProjects(prev => shouldAppend ? [...prev, ...newRecords] : newRecords);
+            
+            setProjects(prev => {
+                const combined = shouldAppend ? [...prev, ...newRecords] : newRecords;
+                const seen = new Set();
+                return combined.filter((p: any) => {
+                    const id = p?._id || p?.id;
+                    if (!id || seen.has(id)) return false;
+                    seen.add(id);
+                    return true;
+                });
+            });
+            
             setHasMore(newRecords.length === 50);
             setPage(pageNum);
         }
@@ -132,7 +143,11 @@ export default function ProjectsScreen() {
         setRefreshing(false);
     }, []);
 
-    useEffect(() => { fetchProjects(1, false); }, [fetchProjects]);
+    useFocusEffect(
+        useCallback(() => {
+            fetchProjects(1, false);
+        }, [fetchProjects])
+    );
 
     const onRefresh = useCallback(() => {
         setRefreshing(true);

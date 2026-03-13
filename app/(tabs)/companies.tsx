@@ -3,7 +3,7 @@ import {
     View, Text, StyleSheet, FlatList, TouchableOpacity,
     TextInput, RefreshControl, ActivityIndicator, Linking, Animated, Modal, Pressable, Alert
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Swipeable } from "react-native-gesture-handler";
 import { getCompanies, type Company } from "../services/companies.service";
@@ -192,13 +192,24 @@ export default function CompaniesScreen() {
     };
 
     const fetchCompanies = useCallback(async (pageNum = 1, shouldAppend = false) => {
-        if (!shouldAppend) setLoading(true);
+        setLoading(true);
         const result = await safeApiCall<any>(() => getCompanies({ page: String(pageNum), limit: "50" }));
 
         if (!result.error && result.data) {
             const dataObj = result.data as any;
             const newRecords = dataObj.data || dataObj.records || (Array.isArray(dataObj) ? dataObj : []);
-            setCompanies(prev => shouldAppend ? [...prev, ...newRecords] : newRecords);
+            
+            setCompanies(prev => {
+                const combined = shouldAppend ? [...prev, ...newRecords] : newRecords;
+                const seen = new Set();
+                return combined.filter((c: any) => {
+                    const id = c?._id || c?.id;
+                    if (!id || seen.has(id)) return false;
+                    seen.add(id);
+                    return true;
+                });
+            });
+            
             setHasMore(newRecords.length === 50);
             setPage(pageNum);
         }
@@ -206,7 +217,11 @@ export default function CompaniesScreen() {
         setRefreshing(false);
     }, []);
 
-    useEffect(() => { fetchCompanies(1, false); }, [fetchCompanies]);
+    useFocusEffect(
+        useCallback(() => {
+            fetchCompanies(1, false);
+        }, [fetchCompanies])
+    );
 
     const onRefresh = useCallback(() => {
         setRefreshing(true);

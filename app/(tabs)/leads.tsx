@@ -721,13 +721,25 @@ export default function LeadsScreen() {
     }, []);
 
     const fetchLeads = useCallback(async (pageNum = 1, shouldAppend = false) => {
-        if (!shouldAppend) setLoading(true);
+        setLoading(true);
         const result = await safeApiCall<any>(() => getLeads({ page: String(pageNum), limit: "50" }));
 
         if (!result.error && result.data) {
             const dataObj = result.data as any;
             const newLeads = dataObj.data || dataObj.records || (Array.isArray(dataObj) ? dataObj : []);
-            setLeads(prev => shouldAppend ? [...prev, ...newLeads] : newLeads);
+            
+            setLeads(prev => {
+                const combined = shouldAppend ? [...prev, ...newLeads] : newLeads;
+                // Deduplicate by _id
+                const seen = new Set();
+                return combined.filter((l: any) => {
+                    const id = l?._id || l?.id;
+                    if (!id || seen.has(id)) return false;
+                    seen.add(id);
+                    return true;
+                });
+            });
+            
             setHasMore(newLeads.length === 50);
             setPage(pageNum);
             // Fetch live scores from Stage Engine (fire-and-forget)
@@ -921,7 +933,7 @@ export default function LeadsScreen() {
 
     return (
         <View style={styles.container}>
-            {loading ? (
+            {loading && page === 1 ? (
                 <ActivityIndicator color="#2563EB" size="large" style={{ marginTop: 100 }} />
             ) : (
                 <FlatList

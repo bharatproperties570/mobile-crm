@@ -196,13 +196,25 @@ export default function ContactsScreen() {
     };
 
     const fetchContacts = useCallback(async (pageNum = 1, shouldAppend = false) => {
-        if (!shouldAppend) setLoading(true);
+        setLoading(true);
         const result = await safeApiCall<any>(() => getContacts({ page: String(pageNum), limit: "50" }));
 
         if (!result.error && result.data) {
             const dataObj = result.data as any;
             const newContacts = dataObj.data || dataObj.records || (Array.isArray(dataObj) ? dataObj : []);
-            setContacts(prev => shouldAppend ? [...prev, ...newContacts] : newContacts);
+            
+            setContacts(prev => {
+                const combined = shouldAppend ? [...prev, ...newContacts] : newContacts;
+                // Deduplicate by _id
+                const seen = new Set();
+                return combined.filter((c: any) => {
+                    const id = c?._id || c?.id;
+                    if (!id || seen.has(id)) return false;
+                    seen.add(id);
+                    return true;
+                });
+            });
+            
             setHasMore(newContacts.length === 50);
             setPage(pageNum);
         }
@@ -321,7 +333,7 @@ export default function ContactsScreen() {
     return (
         <View style={styles.container}>
             <SafeAreaView style={styles.safeArea}>
-                {loading ? (
+                {loading && page === 1 ? (
                     <ActivityIndicator color="#2563EB" size="large" style={{ marginTop: 100 }} />
                 ) : (
                     <SectionList

@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useMemo, useRef, memo } from "react";
 import {
     View, Text, ScrollView, StyleSheet, TouchableOpacity,
-    RefreshControl, ActivityIndicator, Dimensions, Animated
+    RefreshControl, ActivityIndicator, Dimensions, Animated, Image
 } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -691,9 +691,15 @@ export default function MissionControlScreen() {
                 {/* 1. Header Section – Mission Control */}
                 <View style={[styles.header, { backgroundColor: theme.card }]}>
                     <View style={styles.headerTop}>
-                        <View>
-                            <Text style={[styles.greetText, { color: theme.text }]}>Good Morning, Bharat</Text>
-                            <Text style={[styles.subGreet, { color: theme.textMuted }]}>Sales Command Center</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                            <Image 
+                                source={theme.background === '#0F172A' ? require("../../assets/images/logo_dark.png") : require("../../assets/images/logo.png")} 
+                                style={styles.headerLogo} 
+                            />
+                            <View>
+                                <Text style={[styles.greetText, { color: theme.text }]}>Morning, Bharat</Text>
+                                <Text style={[styles.subGreet, { color: theme.textMuted }]}>Sales Command Center</Text>
+                            </View>
                         </View>
                         <View style={{ flexDirection: 'row', gap: 10 }}>
                             <TouchableOpacity style={[styles.notifBtn, { backgroundColor: theme.background }]} onPress={() => router.push("/search")}>
@@ -843,6 +849,7 @@ const styles = StyleSheet.create({
     headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
     greetText: { fontSize: 22, fontWeight: "800", color: "#1E293B" },
     subGreet: { fontSize: 13, color: "#94A3B8", fontWeight: "600" },
+    headerLogo: { width: 44, height: 44, borderRadius: 10 },
     notifBtn: { width: 44, height: 44, borderRadius: 14, backgroundColor: "#F8FAFC", justifyContent: 'center', alignItems: 'center' },
 
     performanceCard: {
