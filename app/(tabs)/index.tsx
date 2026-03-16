@@ -694,7 +694,13 @@ export default function MissionControlScreen() {
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                             <Image 
                                 source={theme.background === '#0F172A' ? require("../../assets/images/logo_dark.png") : require("../../assets/images/logo.png")} 
-                                style={styles.headerLogo} 
+                                style={[styles.headerLogo, { 
+                                    opacity: 1,
+                                    shadowColor: '#3b82f6',
+                                    shadowOffset: { width: 0, height: 0 },
+                                    shadowOpacity: 0.5,
+                                    shadowRadius: 10
+                                }]} 
                             />
                             <View>
                                 <Text style={[styles.greetText, { color: theme.text }]}>Morning, Bharat</Text>
