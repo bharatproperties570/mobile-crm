@@ -2,7 +2,7 @@
   "expo": {
     "name": "Bharat Properties CRM",
     "slug": "bharat-properties-crm-mobile",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "bharatproperties",
