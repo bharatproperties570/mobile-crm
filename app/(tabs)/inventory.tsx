@@ -84,7 +84,7 @@ const InventoryCard = memo(({ item, onPress, onCall, onWhatsApp, onSMS, onEmail,
 
     // Categorize into Active/InActive Stage
     // If status is explicitly in INACTIVE list → InActive. Everything else (including empty) → Active
-    const isActive = !INACTIVE_STATUSES.includes(status);
+    const isActive = !INACTIVE_STATUSES.some(s => s.toLowerCase() === status.toLowerCase());
     const statusLabel = isActive ? "Active" : "InActive";
     const statusColor = isActive ? '#10B981' : '#F59E0B'; // Green for Active, Orange for InActive
     const type = getLookupValue("Category", item.category);
@@ -183,9 +183,7 @@ const InventoryCard = memo(({ item, onPress, onCall, onWhatsApp, onSMS, onEmail,
                                     <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
                                     <Text style={[styles.statusPillText, { color: statusColor }]}>{statusLabel}</Text>
                                 </View>
-                                {status && status !== statusLabel && status !== "—" && (
-                                    <Text style={[styles.statusSubText, { color: statusColor }]}>{status}</Text>
-                                )}
+                                 {/* Removed redundant subtext to prevent double "Active" display */}
                             </View>
                             <TouchableOpacity style={styles.menuTrigger} onPress={onMenuPress}>
                                 <Ionicons name="ellipsis-vertical" size={18} color="#94A3B8" />

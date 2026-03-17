@@ -45,7 +45,9 @@ export interface Lead {
 }
 
 export function leadName(lead: Lead): string {
-    return [lead.salutation, lead.firstName, lead.lastName].filter(Boolean).join(" ") || "Unknown";
+    const isObjectId = (val: string) => /^[0-9a-fA-F]{24}$/.test(val);
+    const salutation = lead.salutation && !isObjectId(lead.salutation) ? lead.salutation : "";
+    return [salutation, lead.firstName, lead.lastName].filter(Boolean).join(" ") || "Unknown";
 }
 
 

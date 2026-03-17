@@ -8,6 +8,7 @@ import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import GooglePlacesAutocomplete from './components/GooglePlacesAutocompleteFixed';
 import { getTeams, getTeamMembers } from "./services/teams.service";
+import { getContactById } from "./services/contacts.service";
 import { getLeadById, addLead, updateLead, checkDuplicates } from "./services/leads.service";
 import { getLookups } from "./services/lookups.service";
 import { getProjects } from "./services/projects.service";
@@ -15,9 +16,9 @@ import api from "./services/api";
 import { useTheme, SPACING } from "./context/ThemeContext";
 
 const LEAD_LOOKUP_TYPES = [
-    "Requirement", "Category", "SubCategory", "PropertyType",
+    "Requirement", "Category", "SubCategory", "UnitType",
     "Budget", "Facing", "Direction", "Status", "Stage", "Campaign",
-    "Sub Campaign", "Source", "SubSource"
+    "Sub Campaign", "Source", "SubSource", "Title"
 ];
 
 const BUDGET_VALUES = [
@@ -541,7 +542,7 @@ export default function AddLeadScreen() {
                             </Field>
                             <Field label="Category">{renderMultiSelect("Category", "propertyType")}</Field>
                             <Field label="Sub Category">{renderDependentMultiSelect("SubCategory", "subType", formData.propertyType)}</Field>
-                            <Field label="Size Type">{renderDependentMultiSelect("PropertyType", "unitType", formData.subType)}</Field>
+                            <Field label="Size Type">{renderDependentMultiSelect("UnitType", "unitType", formData.subType)}</Field>
                             <Field label="Budget Range (Min - Max)">
                                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.budgetScroll}>
                                     {BUDGET_VALUES.map((opt) => (
@@ -682,9 +683,9 @@ export default function AddLeadScreen() {
                     <FadeInView key="step3">
                         <SectionHeader title="System & Assignment" icon="⚙️" subtitle="Back-office routing and status" />
                         <View style={[styles.card, { backgroundColor: theme.cardBg, borderColor: theme.border }]}>
-                            <Field label="Stage">{renderSingleSelect("Stage", "stage")}</Field>
+
                             <Field label="Campaign">{renderSingleSelect("Campaign", "campaign")}</Field>
-                            {formData.campaign ? <Field label="Sub Campaign">{renderSingleSelect("Sub Campaign", "subCampaign", formData.campaign)}</Field> : null}
+
                             <Field label="Source">{renderSingleSelect("Source", "source", formData.campaign)}</Field>
                             {formData.source ? <Field label="Sub Source">{renderSingleSelect("SubSource", "subSource", formData.source)}</Field> : null}
                             <Field label="Assignment">
@@ -803,4 +804,6 @@ const styles = StyleSheet.create({
     warningBox: { padding: 16, borderRadius: 16, borderLeftWidth: 5, marginBottom: 20 },
     warningTitle: { fontSize: 15, fontWeight: "800", marginBottom: 8 },
     dupItem: { fontSize: 13, marginBottom: 4, fontWeight: '500' },
+    helperText: { fontSize: 11, marginTop: 4, marginLeft: 4 },
+    textMuted: { opacity: 0.6 },
 });

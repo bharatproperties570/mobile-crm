@@ -142,7 +142,7 @@ export default function InventoryFeedbackScreen() {
                 lastContactUser: 'Mobile User',
                 remarks: newRemark,
                 status: newStatus,
-                history: [newInteraction, ...(inventory.history || [])]
+                interactions: [newInteraction]
             };
 
             await updateInventory(id as string, updates);

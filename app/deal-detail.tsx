@@ -439,7 +439,7 @@ export default function DealDetailScreen() {
                                                 <Text style={styles.timelineDate}>{new Date(act.createdAt).toLocaleDateString()}</Text>
                                             </View>
                                             <Text style={[styles.timelineSubject, { color: theme.text }]}>{act.subject}</Text>
-                                            {(act.description || act.details?.note) && <Text style={[styles.timelineNote, { color: theme.textLight }]}>{act.description || act.details.note}</Text>}
+                                            {(act.description || act.details?.note) && <Text style={[styles.timelineNote, { color: theme.textLight }]}>{act.description || act.details?.note}</Text>}
                                         </View>
                                     </View>
                                 ))

@@ -262,7 +262,18 @@ export default function InventoryDetailScreen() {
                     <ScrollView contentContainerStyle={styles.innerScroll}>
                         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
                             <Text style={[styles.cardTitle, { color: theme.text }]}>Pricing & Commercials</Text>
-                            <InfoRow label="Demand" value={inv.price ? `₹${inv.price.toLocaleString("en-IN")}` : "—"} icon="cash-outline" accent />
+                            {(() => {
+                                const priceVal = typeof inv.price === 'object' ? inv.price?.value : inv.price;
+                                const currency = typeof inv.price === 'object' ? inv.price?.currency : 'INR';
+                                return (
+                                    <InfoRow 
+                                        label="Demand" 
+                                        value={priceVal ? `${currency === 'INR' ? '₹' : currency}${Number(priceVal).toLocaleString("en-IN")}` : "—"} 
+                                        icon="cash-outline" 
+                                        accent 
+                                    />
+                                );
+                            })()}
                             <InfoRow label="Maintenance" value={inv.maintenance} icon="construct-outline" />
                             <InfoRow label="Ownership" value={lv(inv.ownership)} icon="document-text-outline" />
                         </View>
@@ -350,7 +361,11 @@ export default function InventoryDetailScreen() {
                                                 <Text style={styles.timelineDate}>{new Date(act.createdAt).toLocaleDateString()}</Text>
                                             </View>
                                             <Text style={[styles.timelineSubject, { color: theme.text }]}>{act.subject}</Text>
-                                            {(act.description || act.details?.note) && <Text style={[styles.timelineNote, { color: theme.textLight }]}>{act.description || act.details.note}</Text>}
+                                            {(act.description || act.details?.note || act.note) && (
+                                                <Text style={[styles.timelineNote, { color: theme.textLight }]}>
+                                                    {act.description || act.details?.note || act.note}
+                                                </Text>
+                                            )}
                                         </View>
                                     </View>
                                 ))

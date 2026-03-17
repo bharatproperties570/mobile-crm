@@ -244,7 +244,7 @@ export default function AddDealScreen() {
             loadData();
         } else if (prefill === 'true') {
             // Handle pre-fill from Intake or other sources
-            setFormData(prev => ({
+            setFormData((prev: any) => ({
                 ...prev,
                 location: pfLocation || prev.location,
                 unitNo: pfUnitNo || prev.unitNo,
@@ -399,11 +399,16 @@ export default function AddDealScreen() {
                 'size', 'dealProbability', 'flexiblePercentage',
                 'expectedRent', 'securityDeposit', 'leaseTermMonths', 'lockInMonths'
             ];
-            numFields.forEach(f => {
-                if (payload[f] === "" || payload[f] === null) {
-                    delete payload[f]; // Better to let backend schema handle defaults than send empty strings
-                } else if (typeof payload[f] === 'string' && !isNaN(Number(payload[f]))) {
-                    payload[f] = Number(payload[f]);
+            numFields.forEach((f: string) => {
+                if (payload[f] === "" || payload[f] === null || payload[f] === undefined) {
+                    delete payload[f]; 
+                } else if (typeof payload[f] === 'string') {
+                    const trimmed = payload[f].trim();
+                    if (trimmed === "") {
+                        delete payload[f];
+                    } else if (!isNaN(Number(trimmed))) {
+                        payload[f] = Number(trimmed);
+                    }
                 }
             });
 
@@ -467,7 +472,8 @@ export default function AddDealScreen() {
             }
         } catch (e: any) {
             console.error("Deal save error:", e?.response?.data || e);
-            Alert.alert("Error", e?.response?.data?.message || "Failed to save deal.");
+            const errMsg = e?.response?.data?.error || e?.response?.data?.message || e.message || "Failed to save deal.";
+            Alert.alert("Error", errMsg);
         } finally {
             setIsSaving(false);
         }

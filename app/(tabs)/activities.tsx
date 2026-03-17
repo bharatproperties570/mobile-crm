@@ -287,7 +287,7 @@ export default function ActivitiesScreen() {
                             </View>
                             <View style={styles.assigneeContainer}>
                                 <View style={styles.assigneeTextContent}>
-                                    <Text style={styles.assigneeName} numberOfLines={1}>{item.assignedTo?.name || "Unassigned"}</Text>
+                                    <Text style={styles.assigneeName} numberOfLines={1}>{item.assignedTo?.fullName || item.assignedTo?.name || "Unassigned"}</Text>
                                     {item.assignedTo?.team && (
                                         <View style={styles.teamBadge}>
                                             <Text style={styles.teamBadgeText}>{item.assignedTo.team.substring(0, 3).toUpperCase()}</Text>

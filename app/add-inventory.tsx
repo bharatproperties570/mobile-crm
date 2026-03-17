@@ -399,6 +399,7 @@ export default function AddInventoryScreen() {
             subCategory: sizeConfig.subCategory || f.subCategory,
             unitConfig: sizeConfig.unitType || sizeConfig.unitConfig || sizeConfig.type || f.unitConfig, // Configuration (e.g. 3 BHK / 10 Marla)
             size: sizeConfig.area || sizeConfig.saleableArea || sizeConfig.totalArea || f.size,
+            sizeLabel: sizeConfig.name || sizeConfig.lookup_value || "",
             builtupType: "" // Reset builtupType to force refresh based on new hierarchy
         }));
     };
@@ -458,7 +459,7 @@ export default function AddInventoryScreen() {
                 load("/teams?limit=100", (data) => setTeams(data.map((t: any) => ({ label: t.name, value: t._id })))),
                 load("/users?limit=1000", (data) => setUsers(data.map((u: any) => ({ label: u.name || u.fullName, value: u._id, team: u.team })))),
                 load("/lookups?limit=2500", setLookups),
-                load("/lookups?lookup_type=size&limit=1000", (data) => {
+                load("/lookups?lookup_type=Size&limit=1000", (data) => {
                     const normalized = data.map((sz: any) => ({
                         id: sz._id,
                         name: sz.lookup_value,
@@ -492,12 +493,23 @@ export default function AddInventoryScreen() {
                 return match ? match._id : value;
             };
             const payload = {
-                ...form, unitNumber: form.unitNo, unitNo: form.unitNo, category: resolveId('Category', form.category), subCategory: resolveId('SubCategory', form.subCategory), status: resolveId('Status', form.status), intent: resolveId('Intent', form.intent), facing: resolveId('Facing', form.facing),
-                projectId: form.projectId, projectName: form.projectName, builtupDetails: form.builtupDetails.map(d => ({ ...d, floor: d.floor, length: Number(d.length) || 0, width: Number(d.width) || 0, totalArea: Number(d.totalArea) || 0 })),
+                ...form, 
+                unitNumber: form.unitNo, 
+                unitNo: form.unitNo, 
+                category: resolveId('Category', form.category), 
+                subCategory: resolveId('SubCategory', form.subCategory), 
+                status: resolveId('Status', form.status), 
+                intent: resolveId('Intent', form.intent), 
+                facing: resolveId('Facing', form.facing),
+                projectId: form.projectId, 
+                projectName: form.projectName, 
+                builtupDetails: form.builtupDetails.map(d => ({ ...d, floor: d.floor, length: Number(d.length) || 0, width: Number(d.width) || 0, totalArea: Number(d.totalArea) || 0 })),
                 address: { ...form.address, city: form.address.city, location: form.address.location, area: form.address.area },
-                owners: form.owners.filter(o => o.role === 'Property Owner').map(o => o.id), associates: form.owners.filter(o => o.role === 'Associate').map(o => ({ contact: o.id, relationship: o.relationship })),
+                owners: form.owners.filter(o => o.role === 'Property Owner').map(o => o.id), 
+                associates: form.owners.filter(o => o.role === 'Associate').map(o => ({ contact: o.id, relationship: o.relationship })),
             };
-            const finalPayload: any = { ...payload }; delete finalPayload.locationSearch;
+            const finalPayload: any = { ...payload }; 
+            delete finalPayload.locationSearch;
             const res = await api.post("/inventory", finalPayload);
             if (res.data?.success || res.status === 201 || res.status === 200) {
                 Alert.alert(
@@ -540,7 +552,11 @@ export default function AddInventoryScreen() {
                             <SelectButton
                                 value={selectedSizeId}
                                 options={propertySizes
-                                    .filter(s => s.project === form.projectName && (!form.block || s.block === form.block))
+                                    .filter(s => {
+                                        const projMatch = s.project?.trim().toLowerCase() === form.projectName?.trim().toLowerCase();
+                                        const blockMatch = !form.block || s.block?.trim().toLowerCase() === form.block?.trim().toLowerCase();
+                                        return projMatch && blockMatch;
+                                    })
                                     .map(s => ({
                                         label: `${s.name} (${s.area || s.saleableArea || s.totalArea} ${s.areaMetrics || 'SqFt'})`,
                                         value: s.id || s._id
