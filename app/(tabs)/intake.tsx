@@ -7,11 +7,11 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
-import { useTheme } from '../context/ThemeContext';
-import { splitIntakeMessage, parseDealContent, ParsedDeal, ParserConfig } from '../../utils/dealParser';
-import { parseWhatsAppZip } from '../../utils/importParsers';
-import { parsingService, ParsingRule } from '../services/parsing.service';
-import IntakeItemCard from '../components/IntakeItemCard';
+import { useTheme } from "@/context/ThemeContext";
+import { splitIntakeMessage, parseDealContent, ParsedDeal, ParserConfig } from "@/utils/dealParser";
+import { parseWhatsAppZip } from "@/utils/importParsers";
+import { parsingService, ParsingRule } from "@/services/parsing.service";
+import IntakeItemCard from "@/components/IntakeItemCard";
 
 export default function IntakeScreen() {
     const router = useRouter();

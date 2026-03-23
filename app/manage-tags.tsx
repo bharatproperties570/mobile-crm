@@ -5,8 +5,8 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useTheme } from './context/ThemeContext';
-import { getInventoryById, updateInventory } from './services/inventory.service';
+import { useTheme } from "@/context/ThemeContext";
+import { getInventoryById, updateInventory } from "@/services/inventory.service";
 
 export default function ManageTagsScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();

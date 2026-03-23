@@ -6,8 +6,8 @@ import {
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import api from "./services/api";
-import { useTheme, SPACING } from "./context/ThemeContext";
+import api from "@/services/api";
+import { useTheme, SPACING } from "@/context/ThemeContext";
 
 // ─── Reusable Components ──────────────────────────────────────────────────────
 
@@ -169,7 +169,7 @@ export default function AddEmployeeScreen() {
             }
 
             Alert.alert("✅ Success", "Employee linked successfully!", [
-                { text: "OK", onPress: () => router.back() }
+                { text: "OK", onPress: () => router.canGoBack() ? router.back() : router.replace("/(tabs)") }
             ]);
         } catch (err: any) {
             Alert.alert("Error", err?.response?.data?.error || "Failed to link employee.");
@@ -182,7 +182,7 @@ export default function AddEmployeeScreen() {
         <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
             <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
                 <View style={styles.header}>
-                    <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+                    <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace("/(tabs)")} style={styles.backBtn}>
                         <Ionicons name="close" size={28} color={theme.textPrimary} />
                     </TouchableOpacity>
                     <View style={styles.headerTitleContainer}>

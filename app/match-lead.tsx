@@ -2,10 +2,10 @@ import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, FlatList, ActivityIndicator, Alert, Linking, Share } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { getLeads, getLeadById, type Lead, updateLead } from "./services/leads.service";
-import { getDeals, type Deal } from "./services/deals.service";
-import { safeApiCall, safeApiCallSingle, lookupVal } from "./services/api.helpers";
-import api from "./services/api";
+import { getLeads, getLeadById, type Lead, updateLead } from "@/services/leads.service";
+import { getDeals, type Deal } from "@/services/deals.service";
+import { safeApiCall, safeApiCallSingle, lookupVal } from "@/services/api.helpers";
+import api from "@/services/api";
 
 export default function MatchScreen() {
     const router = useRouter();

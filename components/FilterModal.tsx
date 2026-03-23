@@ -4,8 +4,8 @@ import {
     ScrollView, TextInput, Pressable, Platform
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useTheme } from '../context/ThemeContext';
-import { useLookup } from '../context/LookupContext';
+import { useTheme } from "@/context/ThemeContext";
+import { useLookup } from "@/context/LookupContext";
 
 export interface FilterField {
     key: string;
@@ -29,7 +29,7 @@ export default function FilterModal({
     visible, onClose, onApply, initialFilters, fields, users = [], teams = []
 }: FilterModalProps) {
     const { theme } = useTheme();
-    const { getLookupValue, lookups } = useLookup();
+    const { getLookupValue, getLookupsByType } = useLookup();
     const [filters, setFilters] = useState<any>(initialFilters || {});
 
     useEffect(() => {
@@ -56,7 +56,7 @@ export default function FilterModal({
     };
 
     const renderLookupField = (field: FilterField) => {
-        const options = lookups.filter(l => l.lookup_type.toLowerCase() === field.lookupType?.toLowerCase());
+        const options = getLookupsByType(field.lookupType || "");
         return (
             <View key={field.key} style={styles.section}>
                 <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>{field.label}</Text>

@@ -6,7 +6,7 @@ import {
 import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Audio } from 'expo-av';
-import { getActivities, Activity, deleteActivity, updateActivity } from "../services/activities.service";
+import { getActivities, Activity, deleteActivity, updateActivity } from "@/services/activities.service";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Swipeable from "react-native-gesture-handler/Swipeable";
 

@@ -5,12 +5,12 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { getLeads } from "./services/leads.service";
-import { getContacts } from "./services/contacts.service";
-import { getDeals } from "./services/deals.service";
-import { getProjects } from "./services/projects.service";
-import { getInventory } from "./services/inventory.service";
-import { extractList } from "./services/api.helpers";
+import { getLeads } from "@/services/leads.service";
+import { getContacts } from "@/services/contacts.service";
+import { getDeals } from "@/services/deals.service";
+import { getProjects } from "@/services/projects.service";
+import { getInventory } from "@/services/inventory.service";
+import { extractList } from "@/services/api.helpers";
 
 type ResultType = 'Lead' | 'Contact' | 'Deal' | 'Project' | 'Inventory' | 'Command';
 
@@ -172,7 +172,7 @@ export default function SearchScreen() {
     return (
         <SafeAreaView style={styles.container}>
             <View style={styles.header}>
-                <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+                <TouchableOpacity style={styles.backBtn} onPress={() => router.canGoBack() ? router.back() : router.replace("/(tabs)")}>
                     <Ionicons name="arrow-back" size={24} color="#0F172A" />
                 </TouchableOpacity>
                 <View style={styles.searchBar}>

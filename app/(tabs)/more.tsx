@@ -4,7 +4,7 @@ import {
     RefreshControl, ActivityIndicator,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { getInventory, type InventoryUnit } from "../services/inventory.service";
+import { getInventory, type InventoryUnit } from "@/services/inventory.service";
 
 const STATUS_COLORS: Record<string, string> = {
     available: "#10B981", sold: "#EF4444", booked: "#F59E0B", "under construction": "#6366F1",

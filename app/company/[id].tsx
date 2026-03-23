@@ -2,9 +2,9 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, SafeAreaView, Platform, Animated, Dimensions, Alert, Linking } from "react-native";
 import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { useTheme } from "../context/ThemeContext";
-import api from "../services/api";
-import { getActivities } from "../services/activities.service";
+import { useTheme } from "@/context/ThemeContext";
+import api from "@/services/api";
+import { getActivities } from "@/services/activities.service";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -148,7 +148,7 @@ export default function CompanyDetailScreen() {
         <View style={[styles.container, { backgroundColor: theme.background }]}>
             <SafeAreaView style={[styles.headerCard, { backgroundColor: theme.card }]}>
                 <View style={styles.headerTop}>
-                    <TouchableOpacity onPress={() => router.back()} style={styles.backBtnCircle}>
+                    <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace("/(tabs)/contacts")} style={styles.backBtnCircle}>
                         <Ionicons name="chevron-back" size={24} color={theme.text} />
                     </TouchableOpacity>
                     <View style={styles.headerTitleContainer}>

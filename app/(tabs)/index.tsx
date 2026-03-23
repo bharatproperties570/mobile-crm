@@ -5,12 +5,17 @@ import {
 } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { useDepartment } from "../context/DepartmentContext";
-import api from "../services/api";
-import { getActivities } from "../services/activities.service";
-import { getDashboardStats, DashboardStats } from "../services/dashboard.service";
-import { extractTotal, lookupVal, extractList } from "../services/api.helpers";
-import { useTheme, Colors } from "../context/ThemeContext";
+import { useDepartment } from "@/context/DepartmentContext";
+import api from "@/services/api";
+import { getActivities } from "@/services/activities.service";
+import { getDashboardStats, DashboardStats } from "@/services/dashboard.service";
+import { extractTotal, lookupVal, extractList } from "@/services/api.helpers";
+import { useTheme, Colors } from "@/context/ThemeContext";
+import { useLookup } from "@/context/LookupContext";
+import { useCallTracking } from "@/context/CallTrackingContext";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
+const CACHE_KEY_DASHBOARD = "@cache_dashboard_stats";
 
 const STAGE_COLORS: Record<string, string> = {
     incoming: "#6366F1",
@@ -335,12 +340,14 @@ export default function MissionControlScreen() {
     const { currentDept, config } = useDepartment();
     const router = useRouter();
     const { theme } = useTheme();
+    const { getLookupValue } = useLookup();
+    const { simulateIncomingCall } = useCallTracking();
     const [dashboardData, setDashboardData] = useState<DashboardStats | null>(null);
     const [stats, setStats] = useState<any>({});
     const [activities, setActivities] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
-    const [lookups, setLookups] = useState<any[]>([]);
+    // const [lookups, setLookups] = useState<any[]>([]);
 
     const fadeAnim = useRef(new Animated.Value(0)).current;
 
@@ -348,16 +355,28 @@ export default function MissionControlScreen() {
 
     const fetchData = useCallback(async () => {
         try {
-            // 1. Parallel Fetching for speed
-            const [luRes, actvRes, dsRes] = await Promise.all([
-                api.get("/lookups").catch(() => null),
+            // 1. Try Cache First for Instant Load
+            const cached = await AsyncStorage.getItem(CACHE_KEY_DASHBOARD);
+            if (cached) {
+                const parsed = JSON.parse(cached);
+                setDashboardData(parsed);
+                setStats({
+                    leads: (parsed.leads || []).reduce((s: number, l: any) => s + l.count, 0),
+                    deals: (parsed.deals || []).reduce((s: number, d: any) => s + d.count, 0),
+                    inventory: (parsed.inventoryHealth || []).reduce((s: number, i: any) => s + i.count, 0),
+                    projects: parsed.projects || 0,
+                    rawProjects: [],
+                    rawInventory: []
+                });
+                setLoading(false);
+                Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }).start();
+            }
+
+            // 2. Parallel Fetching for Fresh Data
+            const [actvRes, dsRes] = await Promise.all([
                 getActivities({ status: 'Pending', limit: 5 }).catch(() => null),
                 getDashboardStats().catch(() => null)
             ]);
-
-            if (luRes?.data) {
-                setLookups(extractList(luRes.data));
-            }
 
             if (actvRes) {
                 const actData = actvRes?.data ?? actvRes?.records ?? [];
@@ -368,7 +387,9 @@ export default function MissionControlScreen() {
                 const data = dsRes.data;
                 setDashboardData(data);
 
-                // Keep sync with general stats for other components
+                // Update Cache
+                AsyncStorage.setItem(CACHE_KEY_DASHBOARD, JSON.stringify(data)).catch(() => {});
+
                 setStats({
                     leads: (data.leads || []).reduce((s: number, l: any) => s + l.count, 0),
                     deals: (data.deals || []).reduce((s: number, d: any) => s + d.count, 0),
@@ -385,7 +406,7 @@ export default function MissionControlScreen() {
                 useNativeDriver: true
             }).start();
         } catch (e) {
-            console.error("Mission Control fetch error:", e);
+            console.warn("Mission Control fetch error:", e);
         } finally {
             setLoading(false);
             setRefreshing(false);
@@ -572,10 +593,8 @@ export default function MissionControlScreen() {
         const blocked = dashboardData?.inventoryHealth?.find(i => i.status === 'Blocked')?.count || 0;
         const sold = dashboardData?.inventoryHealth?.find(i => i.status === 'Sold')?.count || 0;
 
-        const lookupMap = lookups.reduce((acc, curr) => ({ ...acc, [curr._id]: curr.lookup_value }), {} as any);
-
         const projectTotal = stats.projects || 0;
-        const activeProjects = stats.rawProjects?.filter((p: any) => p.status === 'Active' || (lookupMap && lookupMap[p.status] === 'Active')).length || projectTotal;
+        const activeProjects = stats.rawProjects?.filter((p: any) => p.status === 'Active' || (getLookupValue("Status", p.status) === 'Active')).length || projectTotal;
 
         return (
             <View>
@@ -741,13 +760,7 @@ export default function MissionControlScreen() {
                             {/* Simulation Button for Testing */}
                             <TouchableOpacity
                                 style={[styles.notifBtn, { backgroundColor: theme.primary + '15' }]}
-                                onPress={() => {
-                                    // Using a common mobile number from the CRM or a dummy one
-                                    const { useCallTracking } = require('../context/CallTrackingContext');
-                                    // This is a bit hacky for a component but fine for a simulation button
-                                    const { simulateIncomingCall } = useCallTracking();
-                                    simulateIncomingCall('9876543210');
-                                }}
+                                onPress={() => simulateIncomingCall('9876543210')}
                             >
                                 <Ionicons name="flask" size={22} color={theme.primary} />
                             </TouchableOpacity>

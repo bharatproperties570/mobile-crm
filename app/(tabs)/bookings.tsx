@@ -5,9 +5,9 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { useTheme } from "../context/ThemeContext";
-import api from "../services/api";
-import { safeApiCall } from "../services/api.helpers";
+import { useTheme } from "@/context/ThemeContext";
+import api from "@/services/api";
+import { safeApiCall } from "@/services/api.helpers";
 
 const STATUS_COLORS: Record<string, string> = {
     'Booked': '#10B981',

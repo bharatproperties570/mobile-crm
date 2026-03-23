@@ -81,6 +81,7 @@ export interface CallerInfo {
     unitNumber?: string;
     activity?: string;
     entityId: string;
+    mobile?: string;
 }
 
 export const lookupCallerInfo = async (phoneNumber: string): Promise<CallerInfo | null> => {
@@ -94,7 +95,8 @@ export const lookupCallerInfo = async (phoneNumber: string): Promise<CallerInfo 
                 name: [lead.firstName, lead.lastName].filter(Boolean).join(" ") || "Lead",
                 type: 'Lead',
                 projectName: lead.projectName?.[0],
-                entityId: lead._id
+                entityId: lead._id,
+                mobile: phoneNumber
             };
         }
 
@@ -108,7 +110,8 @@ export const lookupCallerInfo = async (phoneNumber: string): Promise<CallerInfo 
                 type: 'Deal',
                 projectName: deal.projectName,
                 unitNumber: deal.unitNumber || deal.unitNo,
-                entityId: deal._id
+                entityId: deal._id,
+                mobile: phoneNumber
             };
         }
 
@@ -122,7 +125,8 @@ export const lookupCallerInfo = async (phoneNumber: string): Promise<CallerInfo 
                 type: 'Inventory',
                 projectName: inv.projectName,
                 unitNumber: inv.unitNumber || inv.unitNo,
-                entityId: inv._id
+                entityId: inv._id,
+                mobile: phoneNumber
             };
         }
 
@@ -134,7 +138,8 @@ export const lookupCallerInfo = async (phoneNumber: string): Promise<CallerInfo 
             return {
                 name: [contact.name, contact.surname].filter(Boolean).join(" ") || "Contact",
                 type: 'Contact',
-                entityId: contact._id
+                entityId: contact._id,
+                mobile: phoneNumber
             };
         }
 

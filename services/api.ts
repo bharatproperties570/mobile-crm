@@ -10,7 +10,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 // On Native (Expo Go on phone): use the Mac's LAN IP
 // The env var EXPO_PUBLIC_API_BASE_URL can override this.
 // ============================================================
-const MACHINE_IP = "192.168.1.6";
+const MACHINE_IP = "192.168.29.78";
 const BACKEND_PORT = "4000";
 
 const WEB_URL = `http://localhost:${BACKEND_PORT}/api`;
@@ -30,7 +30,7 @@ console.log(`- Tunnel URL: ${TUNNEL_URL}`);
 
 const api = axios.create({
   baseURL: BASE_URL,
-  timeout: 15000,
+  timeout: 60000,
   headers: {
     "Origin": "https://crm.bharatproperties.co",
     "Content-Type": "application/json",
@@ -63,6 +63,12 @@ api.interceptors.request.use(
   },
   (error) => Promise.reject(error)
 );
+
+let on401Callback: (() => void) | null = null;
+
+export const set401Callback = (callback: () => void) => {
+  on401Callback = callback;
+};
 
 // --- Response Interceptor: Offline Caching & Handle 401 ---
 api.interceptors.response.use(
@@ -110,10 +116,11 @@ api.interceptors.response.use(
     const status = error?.response?.status;
     const url = error?.config?.url || "";
     const msg = error?.response?.data?.message || error?.message || "Unknown error";
-    console.error(`[API] ❌ ${status || "NO_RESPONSE"} ${url} — ${msg}`);
+    console.warn(`[API] ❌ ${status || "NO_RESPONSE"} ${url} — ${msg}`);
 
     if (status === 401) {
       await storage.deleteItem("authToken").catch(() => { });
+      if (on401Callback) on401Callback();
     }
     return Promise.reject(error);
   }

@@ -6,8 +6,8 @@ import {
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import api from "./services/api";
-import { useTheme, SPACING } from "./context/ThemeContext";
+import api from "@/services/api";
+import { useTheme, SPACING } from "@/context/ThemeContext";
 
 // ─── Reusable Components ──────────────────────────────────────────────────────
 
@@ -168,6 +168,8 @@ function SelectButton({
     );
 }
 
+import { useLookup } from "@/context/LookupContext";
+
 // ─── Main Form ────────────────────────────────────────────────────────────────
 
 interface ContactForm {
@@ -192,34 +194,47 @@ export default function AddContactScreen() {
     const { id, companyId } = useLocalSearchParams<{ id?: string, companyId?: string }>();
     const router = useRouter();
     const { theme } = useTheme();
+    const { getLookupsByType, loading: loadingLookups } = useLookup();
+    
     const [saving, setSaving] = useState(false);
+    const [loadingContact, setLoadingContact] = useState(false);
     const [form, setForm] = useState<ContactForm>(INITIAL);
 
-    // Lookups
-    const [titles, setTitles] = useState<any[]>([]);
-    const [sources, setSources] = useState<any[]>([]);
-    const [lookups, setLookups] = useState<any[]>([]);
-
     useEffect(() => {
-        const loadInitial = async () => {
-            try {
-                const res = await api.get("/lookups", { params: { limit: 2000 } });
-                const allLookups = res.data?.data || [];
-                setLookups(allLookups);
-
-                setTitles(allLookups.filter((l: any) => l.lookup_type === 'Title').map((l: any) => ({ label: l.lookup_value, value: l.lookup_value })));
-                setSources(allLookups.filter((l: any) => l.lookup_type === 'Source').map((l: any) => ({ label: l.lookup_value, value: l.lookup_value })));
-            } catch (e) {
-                console.error("[ContactUI] Initial load failed", e);
-            }
-        };
-        loadInitial();
-    }, []);
+        if (id) {
+            const fetchContact = async () => {
+                setLoadingContact(true);
+                try {
+                    const res = await api.get(`/contacts/${id}`);
+                    const c = res.data?.data || res.data;
+                    if (c) {
+                        setForm({
+                            title: typeof c.title === 'object' ? c.title?.lookup_value : c.title || "",
+                            name: c.name || "",
+                            phone1: c.phones?.[0]?.number || "",
+                            phone2: c.phones?.[1]?.number || "",
+                            email1: c.emails?.[0]?.address || "",
+                            email2: c.emails?.[1]?.address || "",
+                            description: c.description || "",
+                            source: typeof c.source === 'object' ? c.source?.lookup_value : c.source || "",
+                            tags: Array.isArray(c.tags) ? c.tags[0] : (c.tags || ""),
+                        });
+                    }
+                } catch (e) {
+                    console.error("[ContactUI] Fetch contact failed", e);
+                    Alert.alert("Error", "Failed to load contact details");
+                } finally {
+                    setLoadingContact(false);
+                }
+            };
+            fetchContact();
+        }
+    }, [id]);
 
     const resolveId = (type: string, value: string) => {
         if (!value) return null;
-        const match = lookups.find(l =>
-            l.lookup_type?.toLowerCase() === type.toLowerCase() &&
+        const list = getLookupsByType(type);
+        const match = list.find(l =>
             l.lookup_value?.toLowerCase() === value.toLowerCase()
         );
         return match ? match._id : value;
@@ -253,11 +268,11 @@ export default function AddContactScreen() {
                 company: companyId || undefined,
             };
 
-            const res = await api.post("/contacts", payload);
+            const res = id ? await api.put(`/contacts/${id}`, payload) : await api.post("/contacts", payload);
 
             if (res.data?.success || res.status === 201 || res.status === 200) {
                 Alert.alert("✅ Success", "Contact saved successfully!", [
-                    { text: "OK", onPress: () => router.back() },
+                    { text: "OK", onPress: () => router.canGoBack() ? router.back() : router.replace("/(tabs)/contacts") },
                 ]);
             } else {
                 throw new Error("Failed to save contact.");
@@ -280,10 +295,14 @@ export default function AddContactScreen() {
                             if (isDirty) {
                                 Alert.alert("Discard Changes?", "You have unsaved changes. Are you sure you want to go back?", [
                                     { text: "Keep Editing", style: "cancel" },
-                                    { text: "Discard", style: "destructive", onPress: () => router.back() }
+                                    { text: "Discard", style: "destructive", onPress: () => router.canGoBack() ? router.back() : router.replace("/(tabs)/contacts") }
                                 ]);
                             } else {
-                                router.back();
+                                if (router.canGoBack()) {
+                                    router.back();
+                                } else {
+                                    router.replace("/(tabs)/contacts");
+                                }
                             }
                         }}
                         style={styles.backBtn}
@@ -292,7 +311,7 @@ export default function AddContactScreen() {
                         <Ionicons name="close" size={28} color={theme.textPrimary} />
                     </TouchableOpacity>
                     <View style={styles.headerTitleContainer}>
-                        <Text style={[styles.headerTitle, { color: theme.textPrimary }]}>Create Contact</Text>
+                        <Text style={[styles.headerTitle, { color: theme.textPrimary }]}>{id ? "Edit Contact" : "Create Contact"}</Text>
                         <Text style={[styles.headerSubtitle, { color: theme.textSecondary }]}>Individual Person</Text>
                     </View>
                     <View style={{ width: 28 }} />
@@ -302,7 +321,11 @@ export default function AddContactScreen() {
                     <SectionHeader title="Basic Details" icon="👤" subtitle="Primary identity information" />
                     <View style={[styles.card, { backgroundColor: theme.cardBg, borderColor: theme.border }]}>
                         <Field label="Title" required>
-                            <SelectButton value={form.title} options={titles} onSelect={set("title")} />
+                            <SelectButton 
+                                value={form.title} 
+                                options={getLookupsByType('Title').map(l => ({ label: l.lookup_value, value: l.lookup_value }))} 
+                                onSelect={set("title")} 
+                            />
                         </Field>
                         <Field required>
                             <Input label="Full Name" value={form.name} onChangeText={set("name")} placeholder="John Doe" />
@@ -327,7 +350,11 @@ export default function AddContactScreen() {
                     <SectionHeader title="Source Details" icon="📣" subtitle="Lead acquisition tracking" />
                     <View style={[styles.card, { backgroundColor: theme.cardBg, borderColor: theme.border }]}>
                         <Field label="Contact Source">
-                            <SelectButton value={form.source} options={sources} onSelect={set("source")} />
+                            <SelectButton 
+                                value={form.source} 
+                                options={getLookupsByType('Source').map(l => ({ label: l.lookup_value, value: l.lookup_value }))} 
+                                onSelect={set("source")} 
+                            />
                         </Field>
                         <Field label="Contact Tags">
                             <SelectButton value={form.tags} options={[{ label: "Hot", value: "Hot" }, { label: "Warm", value: "Warm" }, { label: "Cold", value: "Cold" }]} onSelect={set("tags")} />
@@ -343,8 +370,8 @@ export default function AddContactScreen() {
                             <ActivityIndicator color="#fff" />
                         ) : (
                             <>
-                                <Ionicons name="person-add-outline" size={20} color="#fff" style={{ marginRight: 8 }} />
-                                <Text style={styles.bottomSaveBtnText}>Create Contact Profile</Text>
+                                <Ionicons name={id ? "save-outline" : "person-add-outline"} size={20} color="#fff" style={{ marginRight: 8 }} />
+                                <Text style={styles.bottomSaveBtnText}>{id ? "Update Contact Profile" : "Create Contact Profile"}</Text>
                             </>
                         )}
                     </TouchableOpacity>

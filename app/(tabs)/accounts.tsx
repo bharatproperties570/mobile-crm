@@ -4,9 +4,9 @@ import {
     RefreshControl, ActivityIndicator, Animated, Modal, Pressable, Alert
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useTheme } from "../context/ThemeContext";
-import api from "../services/api";
-import { safeApiCall } from "../services/api.helpers";
+import { useTheme } from "@/context/ThemeContext";
+import api from "@/services/api";
+import { safeApiCall } from "@/services/api.helpers";
 
 function LedgerCard({ item, onMenuPress }: { item: any; onMenuPress: () => void }) {
     const { theme } = useTheme();

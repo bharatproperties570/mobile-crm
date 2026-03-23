@@ -1,14 +1,17 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
     View, Text, TextInput, TouchableOpacity, StyleSheet,
     ScrollView, ActivityIndicator, Alert, KeyboardAvoidingView, Platform, SafeAreaView,
     Modal, FlatList, Animated, Pressable, Switch
 } from "react-native";
-import { useRouter } from "expo-router";
-import api from "./services/api";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import api from "@/services/api";
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { useTheme, SPACING } from "./context/ThemeContext";
+import { useTheme, SPACING } from "@/context/ThemeContext";
+import { useLookup } from "@/context/LookupContext";
+import { useUsers } from "@/context/UserContext";
+import { useProjects } from "@/context/ProjectContext";
 
 const FORM_STEPS = ["Basic Info", "Builtup & Furnishing", "Location", "Owner & Assignment"];
 
@@ -347,10 +350,16 @@ const INITIAL: InventoryForm = {
 };
 
 export default function AddInventoryScreen() {
+    const { id } = useLocalSearchParams<{ id?: string }>();
     const router = useRouter();
     const { theme } = useTheme();
+    const { getLookupValue, getLookupsByType, propertyConfig } = useLookup();
+    const { users, loading: loadingUsers, findUser, findTeam } = useUsers();
+    const { projects, loading: loadingProjects } = useProjects();
+    
     const [form, setForm] = useState<InventoryForm>(INITIAL);
     const [saving, setSaving] = useState(false);
+    const [loadingInventory, setLoadingInventory] = useState(false);
     const [projectModalVisible, setProjectModalVisible] = useState(false);
     const [selectedSizeId, setSelectedSizeId] = useState("");
     const [showDatePicker, setShowDatePicker] = useState(false);
@@ -366,23 +375,13 @@ export default function AddInventoryScreen() {
         ]).start();
     };
 
-    const [propertyConfig, setPropertyConfig] = useState<any>({});
     const [masterFields, setMasterFields] = useState<any>({});
-    const [lookups, setLookups] = useState<any[]>([]);
-    const [projects, setProjects] = useState<any[]>([]);
     const [teams, setTeams] = useState<any[]>([]);
-    const [users, setUsers] = useState<any[]>([]);
     const [propertySizes, setPropertySizes] = useState<any[]>([]);
     const [isContactModalOpen, setIsContactModalOpen] = useState(false);
     const [selectedOwner, setSelectedOwner] = useState<any>(null);
     const [linkData, setLinkData] = useState({ role: "Property Owner", relationship: "" });
-    const [countries, setCountries] = useState<any[]>([]);
-    const [states, setStates] = useState<any[]>([]);
-    const [cities, setCities] = useState<any[]>([]);
-    const [locations, setLocations] = useState<any[]>([]);
-    const [tehsils, setTehsils] = useState<any[]>([]);
-    const [postOffices, setPostOffices] = useState<any[]>([]);
-    const [activeLocDropdown, setActiveLocDropdown] = useState<'country' | 'state' | 'city' | 'location' | 'team' | 'assignedTo' | null>(null);
+    const [activeLocDropdown, setActiveLocDropdown] = useState<'country' | 'state' | 'city' | 'location' | 'team' | 'assignedTo' | 'listingAgent' | 'status' | null>(null);
 
     const set = (key: keyof InventoryForm) => (val: any) => setForm((f) => ({ ...f, [key]: val }));
     const handleSizeChange = (sizeId: string) => {
@@ -414,21 +413,12 @@ export default function AddInventoryScreen() {
         });
     };
 
-    const fetchLocLookup = async (lookup_type: string, parent_id: string | null = null) => {
-        try {
-            const params: any = { lookup_type, limit: 1000 };
-            if (parent_id) params.parent_lookup_id = parent_id;
-            const res = await api.get("/lookups", { params });
-            return res.data?.data || [];
-        } catch (error) { return []; }
-    };
-
-    useEffect(() => { fetchLocLookup("Country").then(setCountries); }, []);
-    useEffect(() => { if (!form.address.country) { setStates([]); return; } fetchLocLookup("State", form.address.country).then(setStates); }, [form.address.country]);
-    useEffect(() => { if (!form.address.state) { setCities([]); return; } fetchLocLookup("City", form.address.state).then(setCities); }, [form.address.state]);
-    useEffect(() => { if (!form.address.city) { setLocations([]); setTehsils([]); return; } fetchLocLookup("Location", form.address.city).then(setLocations); fetchLocLookup("Tehsil", form.address.city).then(setTehsils); }, [form.address.city]);
-    useEffect(() => { if (!form.address.location) { setPostOffices([]); return; } fetchLocLookup("PostOffice", form.address.location).then(setPostOffices); }, [form.address.location]);
-    useEffect(() => { if (!form.address.postOffice) return; fetchLocLookup("Pincode", form.address.postOffice).then(data => { if (data.length === 1) setAddress('pinCode')(data[0].lookup_value); }); }, [form.address.postOffice]);
+    const countries = useMemo(() => getLookupsByType("Country"), [getLookupsByType]);
+    const states = useMemo(() => getLookupsByType("State").filter(l => !form.address.country || l.parent_id === form.address.country || (l as any).parent_lookup_id === form.address.country), [getLookupsByType, form.address.country]);
+    const cities = useMemo(() => getLookupsByType("City").filter(l => !form.address.state || l.parent_id === form.address.state || (l as any).parent_lookup_id === form.address.state), [getLookupsByType, form.address.state]);
+    const locations = useMemo(() => getLookupsByType("Location").filter(l => !form.address.city || l.parent_id === form.address.city || (l as any).parent_lookup_id === form.address.city), [getLookupsByType, form.address.city]);
+    const tehsils = useMemo(() => getLookupsByType("Tehsil").filter(l => !form.address.city || l.parent_id === form.address.city || (l as any).parent_lookup_id === form.address.city), [getLookupsByType, form.address.city]);
+    const postOffices = useMemo(() => getLookupsByType("PostOffice").filter(l => !form.address.location || l.parent_id === form.address.location || (l as any).parent_lookup_id === form.address.location), [getLookupsByType, form.address.location]);
 
     useEffect(() => {
         // Form field reset logic on category / subCategory changes
@@ -446,31 +436,86 @@ export default function AddInventoryScreen() {
     useEffect(() => {
         const fetchSystemData = async () => {
             const load = async (url: string, setter: (d: any) => void, transform?: (d: any) => any) => {
-                try {
-                    const res = await api.get(url);
-                    const data = res.data?.data || res.data?.records || res.data || [];
-                    setter(transform ? transform(data) : data);
-                } catch (e) { }
+                try { const res = await api.get(url); let data = res.data?.data || res.data?.records || res.data || []; if (transform) data = transform(data); setter(data); }
+                catch (e) { console.error(`Failed to load ${url}`, e); }
             };
+
             await Promise.all([
-                load("/system-settings/property_config", (data) => setPropertyConfig(data.value || data)),
-                load("/system-settings/master_fields", (data) => setMasterFields(data.value || data)),
-                load("/projects?limit=100", setProjects),
-                load("/teams?limit=100", (data) => setTeams(data.map((t: any) => ({ label: t.name, value: t._id })))),
-                load("/users?limit=1000", (data) => setUsers(data.map((u: any) => ({ label: u.name || u.fullName, value: u._id, team: u.team })))),
-                load("/lookups?limit=2500", setLookups),
-                load("/lookups?lookup_type=Size&limit=1000", (data) => {
-                    const normalized = data.map((sz: any) => ({
-                        id: sz._id,
-                        name: sz.lookup_value,
-                        ...(sz.metadata || {})
-                    }));
-                    setPropertySizes(normalized);
+                load("/system-settings/masterFields", (data) => {
+                    if (data?.value) {
+                        setMasterFields(data.value);
+                    }
                 }),
+                load("/teams", (data) => setTeams(data.map((t: any) => ({ label: t.name, value: t._id })))),
             ]);
         };
         fetchSystemData();
     }, []);
+
+    useEffect(() => {
+        if (id) {
+            const fetchInventory = async () => {
+                setLoadingInventory(true);
+                try {
+                    const res = await api.get(`/inventory/${id}`);
+                    const inv = res.data?.data || res.data;
+                    if (inv) {
+                        setForm({
+                            ...INITIAL,
+                            category: inv.category?.lookup_value || inv.category || "Residential",
+                            subCategory: inv.subCategory?.lookup_value || inv.subCategory || "",
+                            unitNo: inv.unitNo || inv.unitNumber || "",
+                            unitType: inv.unitType?.lookup_value || inv.unitType || "",
+                            unitConfig: inv.unitConfig || "",
+                            projectName: inv.projectName || "",
+                            projectId: inv.projectId || "",
+                            block: inv.block || "",
+                            size: inv.size || "",
+                            direction: inv.direction?.lookup_value || inv.direction || "",
+                            facing: inv.facing?.lookup_value || inv.facing || "",
+                            roadWidth: inv.roadWidth || "",
+                            ownership: inv.ownership || "",
+                            builtupDetail: inv.builtupDetail || "",
+                            builtupType: inv.builtupType || "",
+                            builtupDetails: inv.builtupDetails || [{ floor: "Ground Floor", cluster: "", length: "", width: "", totalArea: "" }],
+                            possessionStatus: inv.possessionStatus || "",
+                            furnishType: inv.furnishType || "",
+                            address: {
+                                country: inv.address?.country || "",
+                                state: inv.address?.state || "",
+                                city: inv.address?.city || "",
+                                location: inv.address?.location || "",
+                                tehsil: inv.address?.tehsil || "",
+                                postOffice: inv.address?.postOffice || "",
+                                pinCode: inv.address?.pinCode || "",
+                                hNo: inv.address?.hNo || "",
+                                street: inv.address?.street || "",
+                                area: inv.address?.area || "",
+                            },
+                            owners: (inv.owners || []).map((o: any) => ({
+                                id: o._id || o.id,
+                                name: o.name || o.fullName,
+                                mobile: o.mobile || o.phone || "",
+                                role: "Property Owner"
+                            })),
+                            assignedTo: inv.assignedTo?._id || inv.assignedTo || "",
+                            team: inv.team?._id || inv.team || "",
+                            status: inv.status?.lookup_value || inv.status || "Available",
+                            intent: inv.intent?.lookup_value || inv.intent || "Sell",
+                            visibleTo: inv.visibleTo || "Everyone",
+                        });
+                        if (inv.sizeId) setSelectedSizeId(inv.sizeId);
+                    }
+                } catch (e) {
+                    console.error("[InventoryUI] Fetch inventory failed", e);
+                    Alert.alert("Error", "Failed to load inventory details");
+                } finally {
+                    setLoadingInventory(false);
+                }
+            };
+            fetchInventory();
+        }
+    }, [id]);
 
     const handleNext = () => {
         if (step === 0 && (!form.projectName || !form.unitNo || !form.subCategory || !form.size)) {
@@ -489,7 +534,9 @@ export default function AddInventoryScreen() {
         try {
             const resolveId = (type: string, value: string) => {
                 if (!value) return null;
-                const match = lookups.find(l => l.lookup_type?.toLowerCase() === type.toLowerCase() && l.lookup_value?.toLowerCase() === value.toLowerCase());
+                // Direct lookup via context (O(1) in new LookupContext)
+                const lookupsForType = getLookupsByType(type);
+                const match = lookupsForType.find(l => l.lookup_value?.toLowerCase() === value.toLowerCase() || l._id === value);
                 return match ? match._id : value;
             };
             const payload = {
@@ -510,7 +557,7 @@ export default function AddInventoryScreen() {
             };
             const finalPayload: any = { ...payload }; 
             delete finalPayload.locationSearch;
-            const res = await api.post("/inventory", finalPayload);
+            const res = id ? await api.put(`/inventory/${id}`, finalPayload) : await api.post("/inventory", finalPayload);
             if (res.data?.success || res.status === 201 || res.status === 200) {
                 Alert.alert(
                     "Success 🎉",
@@ -568,9 +615,17 @@ export default function AddInventoryScreen() {
                         <Field label="Unit Type (Orientation)" required>
                             <SelectButton
                                 value={form.unitType}
-                                options={lookups
-                                    .filter(l => l.lookup_type === 'UnitType')
-                                    .map(l => ({ label: l.lookup_value, value: l.lookup_value }))}
+                                options={(() => {
+                                    if (!propertyConfig || !form.category || !form.subCategory) return [];
+                                    const subCat = (propertyConfig[form.category]?.subCategories || [])
+                                        .find((sc: any) => sc.name === form.subCategory);
+                                    if (!subCat || !subCat.types) return [];
+                                    
+                                    const allowedNames = subCat.types.map((t: any) => t.name);
+                                    return getLookupsByType('UnitType')
+                                        .filter(l => allowedNames.includes(l.lookup_value))
+                                        .map(l => ({ label: l.lookup_value, value: l.lookup_value }));
+                                })()}
                                 onSelect={(val) => setForm(f => ({ ...f, unitType: val }))}
                             />
                         </Field>
@@ -580,8 +635,7 @@ export default function AddInventoryScreen() {
                         <Field label="Direction">
                             <SelectButton
                                 value={form.direction}
-                                options={lookups
-                                    .filter(l => l.lookup_type === 'Direction')
+                                options={getLookupsByType('Direction')
                                     .map(l => ({ label: l.lookup_value, value: l.lookup_value }))}
                                 onSelect={set("direction")}
                             />
@@ -589,8 +643,7 @@ export default function AddInventoryScreen() {
                         <Field label="Facing">
                             <SelectButton
                                 value={form.facing}
-                                options={lookups
-                                    .filter(l => l.lookup_type === 'Facing')
+                                options={getLookupsByType('Facing')
                                     .map(l => ({ label: l.lookup_value, value: l.lookup_value }))}
                                 onSelect={set("facing")}
                             />
@@ -598,8 +651,7 @@ export default function AddInventoryScreen() {
                         <Field label="Road Width">
                             <SelectButton
                                 value={form.roadWidth}
-                                options={lookups
-                                    .filter(l => l.lookup_type === 'RoadWidth')
+                                options={getLookupsByType('RoadWidth')
                                     .map(l => ({ label: l.lookup_value, value: l.lookup_value }))}
                                 onSelect={set("roadWidth")}
                             />
@@ -731,8 +783,8 @@ export default function AddInventoryScreen() {
 
                     <SectionHeader title="System & Assignment" icon="⚙️" subtitle="Lead routing and visibility" />
                     <View style={[styles.card, { backgroundColor: theme.cardBg, borderColor: theme.border }]}>
-                        <Field label="Team"><TouchableOpacity activeOpacity={0.7} style={[styles.selector, { backgroundColor: theme.inputBg, borderColor: theme.border }]} onPress={() => setActiveLocDropdown('team')}><Text style={[styles.selectorText, { color: theme.textPrimary }, !form.team && { color: theme.textMuted }]}>{teams.find(t => t.value === form.team)?.label || "Select Team"}</Text><Ionicons name="chevron-down" size={18} color={theme.textSecondary} /></TouchableOpacity></Field>
-                        <Field label="Assigned To"><TouchableOpacity activeOpacity={0.7} style={[styles.selector, { backgroundColor: theme.inputBg, borderColor: theme.border }]} onPress={() => setActiveLocDropdown('assignedTo')}><Text style={[styles.selectorText, { color: theme.textPrimary }, !form.assignedTo && { color: theme.textMuted }]}>{users.find(u => u.value === form.assignedTo)?.label || "Select User"}</Text><Ionicons name="chevron-down" size={18} color={theme.textSecondary} /></TouchableOpacity></Field>
+                        <Field label="Team"><TouchableOpacity activeOpacity={0.7} style={[styles.selector, { backgroundColor: theme.inputBg, borderColor: theme.border }]} onPress={() => setActiveLocDropdown('team')}><Text style={[styles.selectorText, { color: theme.textPrimary }, !form.team && { color: theme.textMuted }]}>{findTeam(form.team)?.name || "Select Team"}</Text><Ionicons name="chevron-down" size={18} color={theme.textSecondary} /></TouchableOpacity></Field>
+                        <Field label="Assigned To"><TouchableOpacity activeOpacity={0.7} style={[styles.selector, { backgroundColor: theme.inputBg, borderColor: theme.border }]} onPress={() => setActiveLocDropdown('assignedTo')}><Text style={[styles.selectorText, { color: theme.textPrimary }, !form.assignedTo && { color: theme.textMuted }]}>{(findUser(form.assignedTo)?.fullName || findUser(form.assignedTo)?.name) || "Select User"}</Text><Ionicons name="chevron-down" size={18} color={theme.textSecondary} /></TouchableOpacity></Field>
                         <Field label="Visible To"><SelectButton value={form.visibleTo} options={[{ label: 'Everyone', value: 'Everyone' }, { label: 'Team Only', value: 'Team Only' }, { label: 'Me Only', value: 'Me Only' }]} onSelect={set("visibleTo")} /></Field>
                     </View>
                 </FadeInView>
@@ -750,10 +802,9 @@ export default function AddInventoryScreen() {
                             if (step > 0) {
                                 setStep(step - 1);
                             } else {
-                                // Try to go back, with a fallback to the inventory list
-                                try {
+                                if (router.canGoBack()) {
                                     router.back();
-                                } catch (e) {
+                                } else {
                                     router.replace("/(tabs)/inventory");
                                 }
                             }
@@ -763,7 +814,7 @@ export default function AddInventoryScreen() {
                         <Ionicons name={step > 0 ? "arrow-back" : "close"} size={26} color={theme.textPrimary} />
                     </TouchableOpacity>
                     <View style={styles.headerTitleContainer}>
-                        <Text style={[styles.headerTitle, { color: theme.textPrimary }]}>{FORM_STEPS[step]}</Text>
+                        <Text style={[styles.headerTitle, { color: theme.textPrimary }]}>{id ? `Edit ${FORM_STEPS[step]}` : FORM_STEPS[step]}</Text>
                         <Text style={[styles.headerSubtitle, { color: theme.textSecondary }]}>Step {step + 1} of {FORM_STEPS.length}</Text>
                     </View>
                     <TouchableOpacity
@@ -794,7 +845,7 @@ export default function AddInventoryScreen() {
                             </Pressable>
                         ) : (
                             <Pressable onPress={handleSave} disabled={saving} style={[styles.saveBtn, { backgroundColor: theme.success }, saving && { opacity: 0.6 }]}>
-                                {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>Save Inventory</Text>}
+                                {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>{id ? "Update Inventory" : "Save Inventory"}</Text>}
                             </Pressable>
                         )}
                     </Animated.View>
@@ -806,8 +857,10 @@ export default function AddInventoryScreen() {
                 <SearchableDropdown visible={activeLocDropdown === 'state'} onClose={() => setActiveLocDropdown(null)} options={states.map(s => ({ label: s.lookup_value, value: s._id }))} placeholder="Search State" onSelect={setAddress('state')} />
                 <SearchableDropdown visible={activeLocDropdown === 'city'} onClose={() => setActiveLocDropdown(null)} options={cities.map(c => ({ label: c.lookup_value, value: c._id }))} placeholder="Search City" onSelect={setAddress('city')} />
                 <SearchableDropdown visible={activeLocDropdown === 'location'} onClose={() => setActiveLocDropdown(null)} options={locations.map(l => ({ label: l.lookup_value, value: l._id }))} placeholder="Search Location" onSelect={setAddress('location')} />
-                <SearchableDropdown visible={activeLocDropdown === 'team'} onClose={() => setActiveLocDropdown(null)} options={teams} placeholder="Search Team" onSelect={(val) => setForm(f => ({ ...f, team: val, assignedTo: "" }))} />
-                <SearchableDropdown visible={activeLocDropdown === 'assignedTo'} onClose={() => setActiveLocDropdown(null)} options={users.filter(u => !form.team || u.team === form.team)} placeholder="Search User" onSelect={(val) => setForm(f => ({ ...f, assignedTo: val }))} />
+                <SearchableDropdown visible={activeLocDropdown === 'team'} onClose={() => setActiveLocDropdown(null)} options={getLookupsByType("Team").map(l => ({ label: l.lookup_value, value: l._id }))} placeholder="Search Team" onSelect={(val) => setForm(f => ({ ...f, team: val, assignedTo: "" }))} />
+                <SearchableDropdown visible={activeLocDropdown === 'assignedTo'} onClose={() => setActiveLocDropdown(null)} options={users.filter(u => !form.team || u.team === form.team).map(u => ({ label: u.fullName || u.name, value: u._id || u.id }))} placeholder="Search User" onSelect={(val) => setForm(f => ({ ...f, assignedTo: val }))} />
+                <SearchableDropdown visible={activeLocDropdown === 'listingAgent'} onClose={() => setActiveLocDropdown(null)} options={users.map(u => ({ label: u.fullName || u.name, value: u._id || u.id }))} placeholder="Search Listing Agent" onSelect={(val) => setForm(f => ({ ...f, listingAgent: val }))} />
+                <SearchableDropdown visible={activeLocDropdown === 'status'} onClose={() => setActiveLocDropdown(null)} options={getLookupsByType("Status").map(l => ({ label: l.lookup_value, value: l._id }))} placeholder="Search Status" onSelect={(val) => setForm(f => ({ ...f, status: val }))} />
                 <ContactSearchModal visible={isContactModalOpen} onClose={() => setIsContactModalOpen(false)} onSelect={(c) => setSelectedOwner(c)} />
             </KeyboardAvoidingView>
         </SafeAreaView>

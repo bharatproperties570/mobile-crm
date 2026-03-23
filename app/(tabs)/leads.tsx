@@ -7,16 +7,18 @@ import {
 import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import Swipeable from "react-native-gesture-handler/Swipeable";
-import { getLeads, leadName, updateLead, deleteLead, type Lead } from "../services/leads.service";
-import { getLookups, type Lookup } from "../services/lookups.service";
-import { safeApiCall, lookupVal } from "../services/api.helpers";
-import { getLeadScores } from "../services/stageEngine.service";
-import api from "../services/api";
-import { useCallTracking } from "../context/CallTrackingContext";
-import { getOrCreateCallActivity } from "../services/activities.service";
-import { useTheme } from "../context/ThemeContext";
-import { Colors } from "../context/ThemeContext";
-import { useLookup } from "../context/LookupContext";
+import { getLeads, leadName, updateLead, deleteLead, type Lead } from "@/services/leads.service";
+import { getLookups, type Lookup } from "@/services/lookups.service";
+import { safeApiCall, lookupVal } from "@/services/api.helpers";
+import { getLeadScores } from "@/services/stageEngine.service";
+import api from "@/services/api";
+import { useCallTracking } from "@/context/CallTrackingContext";
+import { getOrCreateCallActivity } from "@/services/activities.service";
+import { useTheme } from "@/context/ThemeContext";
+import { Colors } from "@/context/ThemeContext";
+import { useLookup } from "@/context/LookupContext";
+import { useUsers } from "@/context/UserContext";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -206,138 +208,142 @@ function ActionSheet({ visible, onClose, lead, onUpdate, statuses, users }: {
                     ]}
                 >
                     <View style={styles.sheetHandle} />
+                    <ScrollView 
+                        showsVerticalScrollIndicator={false}
+                        contentContainerStyle={{ paddingBottom: 60 }}
+                    >
+                        <View style={styles.sheetHeader}>
+                            <Text style={styles.sheetTitle}>{leadName(lead)}</Text>
+                            <Text style={styles.sheetSub}>{lead.mobile}</Text>
+                        </View>
 
-                    <View style={styles.sheetHeader}>
-                        <Text style={styles.sheetTitle}>{leadName(lead)}</Text>
-                        <Text style={styles.sheetSub}>{lead.mobile}</Text>
-                    </View>
+                        <View style={styles.actionGrid}>
+                            <TouchableOpacity style={styles.actionItem} onPress={() => { router.push(`/add-lead?id=${lead._id}`); onClose(); }}>
+                                <View style={[styles.actionIcon, { backgroundColor: "#F1F5F9" }]}>
+                                    <Ionicons name="create" size={24} color="#64748B" />
+                                </View>
+                                <Text style={styles.actionLabel}>Edit</Text>
+                            </TouchableOpacity>
 
-                    <View style={styles.actionGrid}>
-                        <TouchableOpacity style={styles.actionItem} onPress={() => { router.push(`/add-lead?id=${lead._id}`); onClose(); }}>
-                            <View style={[styles.actionIcon, { backgroundColor: "#F1F5F9" }]}>
-                                <Ionicons name="create" size={24} color="#64748B" />
-                            </View>
-                            <Text style={styles.actionLabel}>Edit</Text>
-                        </TouchableOpacity>
+                            <TouchableOpacity style={styles.actionItem} onPress={() => { router.push(`/match-lead?id=${lead._id}`); onClose(); }}>
+                                <View style={[styles.actionIcon, { backgroundColor: "#FDF2F8" }]}>
+                                    <Ionicons name="git-compare" size={24} color="#DB2777" />
+                                </View>
+                                <Text style={styles.actionLabel}>Match</Text>
+                            </TouchableOpacity>
 
-                        <TouchableOpacity style={styles.actionItem} onPress={() => { router.push(`/match-lead?id=${lead._id}`); onClose(); }}>
-                            <View style={[styles.actionIcon, { backgroundColor: "#FDF2F8" }]}>
-                                <Ionicons name="git-compare" size={24} color="#DB2777" />
-                            </View>
-                            <Text style={styles.actionLabel}>Match</Text>
-                        </TouchableOpacity>
+                            <TouchableOpacity style={styles.actionItem} onPress={() => { router.push(`/add-document?id=${lead._id}&type=Lead`); onClose(); }}>
+                                <View style={[styles.actionIcon, { backgroundColor: "#F0F9FF" }]}>
+                                    <Ionicons name="document-attach" size={24} color="#0EA5E9" />
+                                </View>
+                                <Text style={styles.actionLabel}>Doc</Text>
+                            </TouchableOpacity>
 
-                        <TouchableOpacity style={styles.actionItem} onPress={() => { router.push(`/add-document?id=${lead._id}&type=Lead`); onClose(); }}>
-                            <View style={[styles.actionIcon, { backgroundColor: "#F0F9FF" }]}>
-                                <Ionicons name="document-attach" size={24} color="#0EA5E9" />
-                            </View>
-                            <Text style={styles.actionLabel}>Doc</Text>
-                        </TouchableOpacity>
+                            <TouchableOpacity style={styles.actionItem} onPress={() => { router.push(`/sequences?id=${lead._id}`); onClose(); }}>
+                                <View style={[styles.actionIcon, { backgroundColor: "#F5F3FF" }]}>
+                                    <Ionicons name="repeat" size={24} color="#8B5CF6" />
+                                </View>
+                                <Text style={styles.actionLabel}>Seq</Text>
+                            </TouchableOpacity>
 
-                        <TouchableOpacity style={styles.actionItem} onPress={() => { router.push(`/sequences?id=${lead._id}`); onClose(); }}>
-                            <View style={[styles.actionIcon, { backgroundColor: "#F5F3FF" }]}>
-                                <Ionicons name="repeat" size={24} color="#8B5CF6" />
-                            </View>
-                            <Text style={styles.actionLabel}>Seq</Text>
-                        </TouchableOpacity>
+                            <TouchableOpacity style={styles.actionItem} onPress={() => { router.push(`/add-activity?id=${lead._id}`); onClose(); }}>
+                                <View style={[styles.actionIcon, { backgroundColor: "#FFF7ED" }]}>
+                                    <Ionicons name="add-circle" size={24} color="#EA580C" />
+                                </View>
+                                <Text style={styles.actionLabel}>Activity</Text>
+                            </TouchableOpacity>
 
-                        <TouchableOpacity style={styles.actionItem} onPress={() => { router.push(`/add-activity?id=${lead._id}`); onClose(); }}>
-                            <View style={[styles.actionIcon, { backgroundColor: "#FFF7ED" }]}>
-                                <Ionicons name="add-circle" size={24} color="#EA580C" />
-                            </View>
-                            <Text style={styles.actionLabel}>Activity</Text>
-                        </TouchableOpacity>
+                            <TouchableOpacity style={styles.actionItem} onPress={() => { setShowReassign(!showReassign); setShowStatusPicker(false); setShowTagEditor(false); }}>
+                                <View style={[styles.actionIcon, { backgroundColor: "#F5F3FF" }]}>
+                                    <Ionicons name="person-add" size={24} color="#7C3AED" />
+                                </View>
+                                <Text style={styles.actionLabel}>Assign</Text>
+                            </TouchableOpacity>
 
-                        <TouchableOpacity style={styles.actionItem} onPress={() => { setShowReassign(!showReassign); setShowStatusPicker(false); setShowTagEditor(false); }}>
-                            <View style={[styles.actionIcon, { backgroundColor: "#F5F3FF" }]}>
-                                <Ionicons name="person-add" size={24} color="#7C3AED" />
-                            </View>
-                            <Text style={styles.actionLabel}>Assign</Text>
-                        </TouchableOpacity>
+                            <TouchableOpacity style={styles.actionItem} onPress={() => { setShowTagEditor(!showTagEditor); setShowStatusPicker(false); setShowReassign(false); }}>
+                                <View style={[styles.actionIcon, { backgroundColor: "#EEF2FF" }]}>
+                                    <Ionicons name="pricetags" size={24} color="#4F46E5" />
+                                </View>
+                                <Text style={styles.actionLabel}>Tag</Text>
+                            </TouchableOpacity>
 
-                        <TouchableOpacity style={styles.actionItem} onPress={() => { setShowTagEditor(!showTagEditor); setShowStatusPicker(false); setShowReassign(false); }}>
-                            <View style={[styles.actionIcon, { backgroundColor: "#EEF2FF" }]}>
-                                <Ionicons name="pricetags" size={24} color="#4F46E5" />
-                            </View>
-                            <Text style={styles.actionLabel}>Tag</Text>
-                        </TouchableOpacity>
+                            <TouchableOpacity style={styles.actionItem} onPress={handleQuickDormant}>
+                                <View style={[styles.actionIcon, { backgroundColor: "#F1F5F9" }]}>
+                                    <Ionicons name="moon" size={24} color="#94A3B8" />
+                                </View>
+                                <Text style={styles.actionLabel}>Dormant</Text>
+                            </TouchableOpacity>
 
-                        <TouchableOpacity style={styles.actionItem} onPress={handleQuickDormant}>
-                            <View style={[styles.actionIcon, { backgroundColor: "#F1F5F9" }]}>
-                                <Ionicons name="moon" size={24} color="#94A3B8" />
-                            </View>
-                            <Text style={styles.actionLabel}>Dormant</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity style={styles.actionItem} onPress={async () => {
-                            try {
-                                const act = await getOrCreateCallActivity(lead._id, "Lead", leadName(lead));
-                                if (act?._id) {
-                                    router.push(`/outcome?id=${act._id}`);
-                                    onClose();
+                            <TouchableOpacity style={styles.actionItem} onPress={async () => {
+                                try {
+                                    const act = await getOrCreateCallActivity(lead._id, "Lead", leadName(lead));
+                                    if (act?._id) {
+                                        router.push(`/outcome?id=${act._id}`);
+                                        onClose();
+                                    }
+                                } catch (e) {
+                                    Alert.alert("Error", "Failed to prepare call outcome");
                                 }
-                            } catch (e) {
-                                Alert.alert("Error", "Failed to prepare call outcome");
-                            }
-                        }}>
-                            <View style={[styles.actionIcon, { backgroundColor: "#ECFDF5" }]}>
-                                <Ionicons name="checkmark-done-circle" size={24} color="#10B981" />
-                            </View>
-                            <Text style={styles.actionLabel}>Outcome</Text>
-                        </TouchableOpacity>
-                    </View>
-
-                    {showReassign && (
-                        <View style={styles.pickerView}>
-                            <Text style={styles.sectionTitle}>Reassign To</Text>
-                            <View style={styles.chipList}>
-                                {users.map((u) => (
-                                    <TouchableOpacity
-                                        key={u._id}
-                                        style={styles.actionChip}
-                                        onPress={() => handleReassign(u._id)}
-                                    >
-                                        <Text style={styles.actionChipText}>{u.fullName || u.name}</Text>
-                                    </TouchableOpacity>
-                                ))}
-                            </View>
+                            }}>
+                                <View style={[styles.actionIcon, { backgroundColor: "#ECFDF5" }]}>
+                                    <Ionicons name="checkmark-done-circle" size={24} color="#10B981" />
+                                </View>
+                                <Text style={styles.actionLabel}>Outcome</Text>
+                            </TouchableOpacity>
                         </View>
-                    )}
 
-                    {showTagEditor && (
-                        <View style={styles.pickerView}>
-                            <Text style={styles.sectionTitle}>Manage Tags</Text>
-                            <View style={styles.tagInputRow}>
-                                <TextInput
-                                    style={styles.tagInput}
-                                    placeholder="Add new tag..."
-                                    value={newTag}
-                                    onChangeText={setNewTag}
-                                    onSubmitEditing={handleAddTag}
-                                />
-                                <TouchableOpacity style={styles.addTagBtn} onPress={handleAddTag}>
-                                    <Ionicons name="add" size={20} color="#fff" />
-                                </TouchableOpacity>
-                            </View>
-                            <View style={styles.chipList}>
-                                {(lead.tags || []).map((t: string, idx: number) => (
-                                    <View key={idx} style={styles.tagChip}>
-                                        <Text style={styles.tagChipText}>{t}</Text>
-                                        <TouchableOpacity onPress={() => handleRemoveTag(t)}>
-                                            <Ionicons name="close-circle" size={14} color="#94A3B8" />
+                        {showReassign && (
+                            <View style={styles.pickerView}>
+                                <Text style={styles.sectionTitle}>Reassign To</Text>
+                                <View style={styles.chipList}>
+                                    {users.map((u) => (
+                                        <TouchableOpacity
+                                            key={u._id}
+                                            style={styles.actionChip}
+                                            onPress={() => handleReassign(u._id)}
+                                        >
+                                            <Text style={styles.actionChipText}>{u.fullName || u.name}</Text>
                                         </TouchableOpacity>
-                                    </View>
-                                ))}
+                                    ))}
+                                </View>
                             </View>
-                        </View>
-                    )}
+                        )}
 
-                    <View style={styles.dangerZone}>
-                        <TouchableOpacity style={styles.dangerBtn} onPress={handleDelete}>
-                            <Ionicons name="trash-outline" size={20} color="#EF4444" />
-                            <Text style={styles.dangerBtnText}>Delete Lead</Text>
-                        </TouchableOpacity>
-                    </View>
+                        {showTagEditor && (
+                            <View style={styles.pickerView}>
+                                <Text style={styles.sectionTitle}>Manage Tags</Text>
+                                <View style={styles.tagInputRow}>
+                                    <TextInput
+                                        style={styles.tagInput}
+                                        placeholder="Add new tag..."
+                                        value={newTag}
+                                        onChangeText={setNewTag}
+                                        onSubmitEditing={handleAddTag}
+                                    />
+                                    <TouchableOpacity style={styles.addTagBtn} onPress={handleAddTag}>
+                                        <Ionicons name="add" size={20} color="#fff" />
+                                    </TouchableOpacity>
+                                </View>
+                                <View style={styles.chipList}>
+                                    {(lead.tags || []).map((t: string, idx: number) => (
+                                        <View key={idx} style={styles.tagChip}>
+                                            <Text style={styles.tagChipText}>{t}</Text>
+                                            <TouchableOpacity onPress={() => handleRemoveTag(t)}>
+                                                <Ionicons name="close-circle" size={14} color="#94A3B8" />
+                                            </TouchableOpacity>
+                                        </View>
+                                    ))}
+                                </View>
+                            </View>
+                        )}
+
+                        <View style={styles.dangerZone}>
+                            <TouchableOpacity style={styles.dangerBtn} onPress={handleDelete}>
+                                <Ionicons name="trash-outline" size={20} color="#EF4444" />
+                                <Text style={styles.dangerBtnText}>Delete Lead</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </ScrollView>
                 </Animated.View>
             </Pressable>
         </Modal>
@@ -613,8 +619,11 @@ const LeadCard = memo(({ lead, index, onPress, onMore, isSelected, onLongPress, 
                                     <View style={styles.reqRow}>
                                         <Ionicons name="business-outline" size={12} color={theme.textLight} />
                                         <Text style={[styles.reqText, { color: theme.textMuted }]}>
-                                            {getLookupValue("PropertyType", lead.propertyType)}
-                                            {(lead.subType && lead.subType.length > 0) || lead.subRequirement ? ` • ${getLookupValue("SubType", lead.subType || lead.subRequirement)}` : ''}
+                                            {(lead.propertyType && lead.propertyType.length > 0) ? getLookupValue("Category", lead.propertyType) : getLookupValue("Requirement", lead.requirement)}
+                                            {(lead.subType && lead.subType.length > 0) 
+                                                ? ` • ${getLookupValue("SubCategory", lead.subType)}` 
+                                                : (lead.subRequirement ? ` • ${getLookupValue("SubRequirement", lead.subRequirement)}` : '')
+                                            }
                                         </Text>
                                     </View>
                                 )}
@@ -669,7 +678,8 @@ const LeadCard = memo(({ lead, index, onPress, onMore, isSelected, onLongPress, 
 export default function LeadsScreen() {
     const router = useRouter();
     const { theme } = useTheme();
-    const { getLookupValue, refreshLookups } = useLookup();
+    const { getLookupValue, getLookupsByType, refreshLookups } = useLookup();
+    const { users, loading: loadingUsers, findUser } = useUsers();
     const [leads, setLeads] = useState<Lead[]>([]);
     const [search, setSearch] = useState("");
     const [loading, setLoading] = useState(true);
@@ -682,9 +692,9 @@ export default function LeadsScreen() {
     const [activeFilter, setActiveFilter] = useState<string>("all");
     const [showFilterModal, setShowFilterModal] = useState(false);
     const [filters, setFilters] = useState<{ stages: string[], sources: string[], owners: string[] }>({ stages: [], sources: [], owners: [] });
-    const [statuses, setStatuses] = useState<Lookup[]>([]);
-    const [sources, setSources] = useState<Lookup[]>([]);
-    const [users, setUsers] = useState<any[]>([]);
+    // const [statuses, setStatuses] = useState<Lookup[]>([]);
+    // const [sources, setSources] = useState<Lookup[]>([]);
+    // const [users, setUsers] = useState<any[]>([]);
 
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
     const [bulkAssignVisible, setBulkAssignVisible] = useState(false);
@@ -705,23 +715,26 @@ export default function LeadsScreen() {
         }).start();
     };
 
-    const fetchLookups = useCallback(async () => {
-        const [st, src] = await Promise.all([
-            safeApiCall<Lookup>(() => getLookups("Status")),
-            safeApiCall<Lookup>(() => getLookups("Source"))
-        ]);
-        if (!st.error) setStatuses(st.data);
-        if (!src.error) setSources(src.data);
-
-        try {
-            const res = await api.get("/users");
-            const userList = res.data?.records ?? res.data?.data ?? (Array.isArray(res.data) ? res.data : []);
-            setUsers(Array.isArray(userList) ? userList : []);
-        } catch (e) { console.error("Failed to load users", e); }
-    }, []);
+    const lastFetchTime = useRef<number>(0);
 
     const fetchLeads = useCallback(async (pageNum = 1, shouldAppend = false) => {
-        setLoading(true);
+        // 1. Instant Cache Load (only on first page, non-append load)
+        if (pageNum === 1 && !shouldAppend && leads.length === 0) {
+            try {
+                const cached = await AsyncStorage.getItem("@cache_leads_list");
+                if (cached) {
+                    const parsed = JSON.parse(cached);
+                    if (Array.isArray(parsed) && parsed.length > 0) {
+                        setLeads(parsed);
+                        setLoading(false); // Stop block loading spinner early!
+                    }
+                }
+            } catch (e) { console.warn("[Leads] Cache read failed", e); }
+        }
+
+        // 2. Only show main spinner if we have NO leads at all
+        if (leads.length === 0) setLoading(true);
+        
         const result = await safeApiCall<any>(() => getLeads({ page: String(pageNum), limit: "50" }));
 
         if (!result.error && result.data) {
@@ -732,12 +745,20 @@ export default function LeadsScreen() {
                 const combined = shouldAppend ? [...prev, ...newLeads] : newLeads;
                 // Deduplicate by _id
                 const seen = new Set();
-                return combined.filter((l: any) => {
+                const filtered = combined.filter((l: any) => {
                     const id = l?._id || l?.id;
                     if (!id || seen.has(id)) return false;
                     seen.add(id);
                     return true;
                 });
+
+                // 3. Update Cache (only for first page)
+                if (pageNum === 1 && !shouldAppend) {
+                    AsyncStorage.setItem("@cache_leads_list", JSON.stringify(filtered.slice(0, 50))).catch(() => {});
+                    lastFetchTime.current = Date.now();
+                }
+                
+                return filtered;
             });
             
             setHasMore(newLeads.length === 50);
@@ -749,7 +770,7 @@ export default function LeadsScreen() {
         }
         setLoading(false);
         setRefreshing(false);
-    }, []);
+    }, [leads.length]);
 
     const onRefresh = useCallback(() => {
         setRefreshing(true);
@@ -804,9 +825,12 @@ export default function LeadsScreen() {
 
     useFocusEffect(
         useCallback(() => {
-            fetchLookups();
-            fetchLeads(1, false);
-        }, [fetchLookups, fetchLeads])
+            const now = Date.now();
+            // Only re-fetch if cache is stale (> 2 mins) or empty
+            if (leads.length === 0 || (now - lastFetchTime.current > 120000)) {
+                fetchLeads(1, false);
+            }
+        }, [fetchLeads, leads.length])
     );
 
     const filtered = useMemo(() => {
@@ -1009,7 +1033,7 @@ export default function LeadsScreen() {
                 onClose={() => setSheetVisible(false)}
                 lead={selectedLead}
                 onUpdate={fetchLeads}
-                statuses={statuses}
+                statuses={getLookupsByType("Status")}
                 users={users}
             />
 
@@ -1018,9 +1042,9 @@ export default function LeadsScreen() {
                 onClose={() => setShowFilterModal(false)}
                 filters={filters}
                 setFilters={setFilters}
-                statuses={statuses}
+                statuses={getLookupsByType("Status")}
                 users={users}
-                sources={sources}
+                sources={getLookupsByType("Source")}
             />
 
             <Modal visible={bulkAssignVisible} transparent animationType="fade">
@@ -1135,7 +1159,13 @@ const styles = StyleSheet.create({
     applyBtn: { flex: 2, height: 48, borderRadius: 12, justifyContent: 'center', alignItems: 'center', backgroundColor: "#2563EB" },
     applyBtnText: { fontSize: 14, fontWeight: "700", color: "#fff" },
 
-    sheetContainer: { backgroundColor: "#fff", borderTopLeftRadius: 32, borderTopRightRadius: 32, paddingHorizontal: 24, paddingBottom: 40 },
+    sheetContainer: { 
+        backgroundColor: "#fff", 
+        borderTopLeftRadius: 32, 
+        borderTopRightRadius: 32, 
+        paddingHorizontal: 24, 
+        maxHeight: '85%' 
+    },
     sheetHandle: { width: 40, height: 4, backgroundColor: "#E2E8F0", borderRadius: 2, alignSelf: 'center', marginTop: 12, marginBottom: 24 },
     sheetHeader: { marginBottom: 28 },
     sheetTitle: { fontSize: 20, fontWeight: "800", color: "#0F172A" },

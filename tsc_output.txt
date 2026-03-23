@@ -1,0 +1,28 @@
+app/(tabs)/deals.tsx(877,58): error TS2339: Property 'phone' does not exist on type 'Deal'.
+app/(tabs)/deals.tsx(1015,149): error TS2552: Cannot find name 'loadUsers'. Did you mean 'loadingUsers'?
+app/(tabs)/deals.tsx(1278,5): error TS1117: An object literal cannot have multiple properties with the same name.
+app/(tabs)/deals.tsx(1279,5): error TS1117: An object literal cannot have multiple properties with the same name.
+app/(tabs)/deals.tsx(1280,5): error TS1117: An object literal cannot have multiple properties with the same name.
+app/(tabs)/more.tsx(7,29): error TS2724: '"../services/inventory.service"' has no exported member named 'InventoryUnit'. Did you mean 'Inventory'?
+app/add-inventory.tsx(855,46): error TS2367: This comparison appears to be unintentional because the types '"location" | "assignedTo" | "team" | "city" | "state" | "country" | null' and '"listingAgent"' have no overlap.
+app/add-inventory.tsx(856,46): error TS2367: This comparison appears to be unintentional because the types '"location" | "assignedTo" | "team" | "city" | "state" | "country" | null' and '"status"' have no overlap.
+app/add-lead.tsx(764,31): error TS2304: Cannot find name 'SPACING'.
+app/add-lead.tsx(765,40): error TS2304: Cannot find name 'SPACING'.
+app/add-lead.tsx(773,28): error TS2304: Cannot find name 'SPACING'.
+app/add-lead.tsx(775,51): error TS2304: Cannot find name 'SPACING'.
+app/add-project.tsx(51,49): error TS2339: Property 'helperText' does not exist on type '{ container: { flex: number; }; header: { flexDirection: "row"; alignItems: "center"; justifyContent: "space-between"; paddingHorizontal: number; paddingBottom: number; paddingTop: number; }; ... 51 more ...; blockActionBtn: { ...; }; }'.
+app/add-project.tsx(328,49): error TS2339: Property 'data' does not exist on type 'any[]'.
+app/add-project.tsx(737,72): error TS2741: Property 'onChangeText' is missing in type '{ value: any; editable: false; }' but required in type '{ value: string; onChangeText: (t: string) => void; placeholder?: string | undefined; keyboardType?: any; multiline?: boolean | undefined; numberOfLines?: number | undefined; editable?: boolean | undefined; label?: string | undefined; icon?: string | undefined; }'.
+app/add-project.tsx(738,73): error TS2741: Property 'onChangeText' is missing in type '{ value: any; editable: false; }' but required in type '{ value: string; onChangeText: (t: string) => void; placeholder?: string | undefined; keyboardType?: any; multiline?: boolean | undefined; numberOfLines?: number | undefined; editable?: boolean | undefined; label?: string | undefined; icon?: string | undefined; }'.
+app/add-project.tsx(810,38): error TS2339: Property 'cardTitle' does not exist on type '{ container: { flex: number; }; header: { flexDirection: "row"; alignItems: "center"; justifyContent: "space-between"; paddingHorizontal: number; paddingBottom: number; paddingTop: number; }; ... 51 more ...; blockActionBtn: { ...; }; }'.
+app/complete-activity.tsx(203,60): error TS7006: Parameter 'p' implicitly has an 'any' type.
+app/complete-activity.tsx(247,60): error TS7006: Parameter 'p' implicitly has an 'any' type.
+app/complete-activity.tsx(302,60): error TS7006: Parameter 'p' implicitly has an 'any' type.
+app/components/CallBanner.tsx(51,21): error TS2345: Argument of type '`/${string}/${string}`' is not assignable to parameter of type '"/activities" | "/bookings" | "/companies" | "/contacts" | "/leads" | "/deals" | "/inventory" | "/" | "/intake" | "/projects" | "/(tabs)" | "/(tabs)/leads" | "/(tabs)/deals" | ... 337 more ... | { ...; }'.
+app/outcome.tsx(103,63): error TS2345: Argument of type 'string | string[]' is not assignable to parameter of type 'string'.
+  Type 'string[]' is not assignable to type 'string'.
+app/services/notifications.service.ts(9,41): error TS2322: Type 'Promise<{ shouldShowAlert: true; shouldPlaySound: true; shouldSetBadge: true; }>' is not assignable to type 'Promise<NotificationBehavior>'.
+  Type '{ shouldShowAlert: true; shouldPlaySound: true; shouldSetBadge: true; }' is missing the following properties from type 'NotificationBehavior': shouldShowBanner, shouldShowList
+app/services/notifications.service.ts(45,13): error TS2322: Type 'Date' is not assignable to type 'NotificationTriggerInput'.
+utils/importParsers.ts(22,34): error TS2339: Property 'EncodingType' does not exist on type 'typeof import("/Users/bharatproperties/.gemini/antigravity/scratch/mobile-crm-expo/node_modules/expo-file-system/build/index")'.
+utils/importParsers.ts(33,14): error TS2532: Object is possibly 'undefined'.

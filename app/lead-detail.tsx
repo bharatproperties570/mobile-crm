@@ -1,22 +1,24 @@
 import { useCallback, useEffect, useState, useRef } from "react";
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
-    ActivityIndicator, Linking, Alert, SafeAreaView, Dimensions,
+    ActivityIndicator, Linking, Alert, Dimensions,
     Animated, FlatList
 } from "react-native";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { getLeadById, leadName, getMatchingInventory, type Lead } from "./services/leads.service";
-import { getActivities, getOrCreateCallActivity, getUnifiedTimeline } from "./services/activities.service";
-import { getInventoryByContact } from "./services/inventory.service";
-import { getMatchingDeals } from "./services/deals.service";
-import { useCallTracking } from "./context/CallTrackingContext";
-import { useTheme } from "./context/ThemeContext";
-import { useLookup } from "./context/LookupContext";
-import { STAGE_COLORS } from "./services/stageEngine.service";
-
+import { getLeadById, leadName, getMatchingInventory, type Lead } from "@/services/leads.service";
+import { getActivities, getOrCreateCallActivity, getUnifiedTimeline } from "@/services/activities.service";
+import { getInventoryByContact } from "@/services/inventory.service";
+import { getMatchingDeals } from "@/services/deals.service";
+import { useCallTracking } from "@/context/CallTrackingContext";
+import { useTheme } from "@/context/ThemeContext";
+import { useLookup } from "@/context/LookupContext";
+import { STAGE_COLORS } from "@/services/stageEngine.service";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
+const CACHE_KEY_PREFIX = "@cache_lead_detail_";
 
 const TABS = ["Requirement", "Details", "Activities", "Match", "Inventory"];
 
@@ -62,6 +64,7 @@ function InfoRow({ label, value, accent, icon }: { label: string; value: string;
 }
 
 export default function LeadDetailScreen() {
+    const insets = useSafeAreaInsets();
     const { trackCall } = useCallTracking();
     const { id } = useLocalSearchParams<{ id: string }>();
     const router = useRouter();
@@ -75,36 +78,72 @@ export default function LeadDetailScreen() {
     const [ownedInventory, setOwnedInventory] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState(0);
+    const lastFetchRef = useRef<number>(0);
 
     const scrollX = useRef(new Animated.Value(0)).current;
     const tabScrollViewRef = useRef<ScrollView>(null);
     const contentScrollViewRef = useRef<ScrollView>(null);
+    const fadeAnim = useRef(new Animated.Value(0)).current;
 
-    const fetchData = useCallback(async () => {
+    const fetchData = useCallback(async (isRefresh = false) => {
         if (!id) return;
-        try {
-            const leadRes = await getLeadById(id as string);
-            const currentLead = leadRes?.data ?? leadRes;
-            setLead(currentLead);
+        const cacheKey = `${CACHE_KEY_PREFIX}${id}`;
+        const now = Date.now();
+        if (!isRefresh && lastFetchRef.current && (now - lastFetchRef.current < 120000)) return;
 
-            const [timelineRes, matchRes] = await Promise.all([
+        try {
+            if (loading) {
+                const cachedData = await AsyncStorage.getItem(cacheKey);
+                if (cachedData) {
+                    const parsed = JSON.parse(cachedData);
+                    setLead(parsed.lead);
+                    setActivities(parsed.activities);
+                    setMatchingDeals(parsed.matchingDeals);
+                    setOwnedInventory(parsed.ownedInventory);
+                    setLoading(false);
+                    Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }).start();
+                }
+            }
+
+            const [leadRes, timelineRes, matchRes] = await Promise.all([
+                getLeadById(id as string),
                 getUnifiedTimeline("lead", id as string),
                 getMatchingDeals(id as string)
             ]);
 
-            setActivities(Array.isArray(timelineRes?.data) ? timelineRes.data : (Array.isArray(timelineRes) ? timelineRes : []));
-            setMatchingDeals(Array.isArray(matchRes?.data) ? matchRes.data : (Array.isArray(matchRes) ? matchRes : []));
-
+            const currentLead = leadRes?.data ?? leadRes;
+            const currentActivities = Array.isArray(timelineRes?.data) ? timelineRes.data : (Array.isArray(timelineRes) ? timelineRes : []);
+            const currentMatchingDeals = Array.isArray(matchRes?.data) ? matchRes.data : (Array.isArray(matchRes) ? matchRes : []);
+            
+            let currentOwnedInventory: any[] = [];
             if (currentLead.contactDetails?._id) {
                 const ownedRes = await getInventoryByContact(currentLead.contactDetails._id);
-                setOwnedInventory(Array.isArray(ownedRes?.data) ? ownedRes.data : (Array.isArray(ownedRes) ? ownedRes : []));
+                currentOwnedInventory = Array.isArray(ownedRes?.data) ? ownedRes.data : (Array.isArray(ownedRes) ? ownedRes : []);
+            }
+
+            setLead(currentLead);
+            setActivities(currentActivities);
+            setMatchingDeals(currentMatchingDeals);
+            setOwnedInventory(currentOwnedInventory);
+            lastFetchRef.current = Date.now();
+
+            AsyncStorage.setItem(cacheKey, JSON.stringify({
+                lead: currentLead,
+                activities: currentActivities,
+                matchingDeals: currentMatchingDeals,
+                ownedInventory: currentOwnedInventory,
+                timestamp: Date.now()
+            })).catch(e => console.warn("Cache save error:", e));
+
+            if (loading) {
+                Animated.timing(fadeAnim, { toValue: 1, duration: 600, useNativeDriver: true }).start();
             }
         } catch (error) {
-            console.error("Fetch Error:", error);
+            console.warn("Lead Detail Fetch Error:", error);
         } finally {
             setLoading(false);
         }
-    }, [id]);
+    }, [id, loading, fadeAnim]);
 
     useFocusEffect(useCallback(() => { fetchData(); }, [fetchData]));
 
@@ -130,9 +169,9 @@ export default function LeadDetailScreen() {
     return (
         <View style={[styles.container, { backgroundColor: theme.background }]}>
             {/* Premium SaaS Header */}
-            <SafeAreaView style={[styles.headerCard, { backgroundColor: theme.card }]}>
+            <SafeAreaView style={[styles.headerCard, { backgroundColor: theme.card }]} edges={['top', 'left', 'right']}>
                 <View style={styles.headerTop}>
-                    <TouchableOpacity onPress={() => router.back()} style={styles.backBtnCircle}>
+                    <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace("/(tabs)/leads")} style={styles.backBtnCircle}>
                         <Ionicons name="chevron-back" size={22} color={theme.text} />
                     </TouchableOpacity>
                     <View style={styles.headerTitleContainer}>

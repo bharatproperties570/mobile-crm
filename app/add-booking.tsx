@@ -5,11 +5,11 @@ import {
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { getBookingById, addBooking, updateBooking, type Booking } from "./services/bookings.service";
-import { getLeads, leadName } from "./services/leads.service";
-import { getDeals } from "./services/deals.service";
-import { getProjects } from "./services/projects.service";
-import api from "./services/api";
+import { getBookingById, addBooking, updateBooking, type Booking } from "@/services/bookings.service";
+import { getLeads, leadName } from "@/services/leads.service";
+import { getDeals } from "@/services/deals.service";
+import { getProjects } from "@/services/projects.service";
+import api from "@/services/api";
 
 const FORM_STEPS = ["Client", "Property", "Financials", "Submit"];
 
@@ -101,7 +101,11 @@ export default function AddBookingScreen() {
             const res = id ? await updateBooking(id, payload) : await addBooking(payload);
             if (res) {
                 Alert.alert("Success", `Booking ${id ? "updated" : "created"} successfully!`);
-                router.back();
+                if (router.canGoBack()) {
+                    router.back();
+                } else {
+                    router.replace("/(tabs)/deals");
+                }
             }
         } catch (e) {
             Alert.alert("Error", "Failed to save booking.");
@@ -116,7 +120,7 @@ export default function AddBookingScreen() {
         <View style={styles.container}>
             {/* Header */}
             <View style={styles.header}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+                <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace("/(tabs)/deals")} style={styles.backBtn}>
                     <Ionicons name="arrow-back" size={24} color="#1E293B" />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>{id ? "Edit Booking" : "New Booking"}</Text>

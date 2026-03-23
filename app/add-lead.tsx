@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import {
     View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity,
     ActivityIndicator, Alert, Switch, Modal, FlatList, SafeAreaView, Platform,
@@ -6,14 +6,14 @@ import {
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import GooglePlacesAutocomplete from './components/GooglePlacesAutocompleteFixed';
-import { getTeams, getTeamMembers } from "./services/teams.service";
-import { getContactById } from "./services/contacts.service";
-import { getLeadById, addLead, updateLead, checkDuplicates } from "./services/leads.service";
-import { getLookups } from "./services/lookups.service";
-import { getProjects } from "./services/projects.service";
-import api from "./services/api";
-import { useTheme, SPACING } from "./context/ThemeContext";
+import GooglePlacesAutocomplete from "@/components/GooglePlacesAutocompleteFixed";
+import { getTeams, getTeamMembers } from "@/services/teams.service";
+import { getContactById } from "@/services/contacts.service";
+import { getLeadById, addLead, updateLead, checkDuplicates } from "@/services/leads.service";
+import { useLookup } from "@/context/LookupContext";
+import { useUsers } from "@/context/UserContext";
+import { useProjects } from "@/context/ProjectContext";
+import { useTheme, SPACING } from "@/context/ThemeContext";
 
 const LEAD_LOOKUP_TYPES = [
     "Requirement", "Category", "SubCategory", "UnitType",
@@ -255,10 +255,20 @@ function MultiSelectButton({
     );
 }
 
-export default function AddLeadScreen() {
-    const router = useRouter();
+export default function AddLead() {
     const { theme } = useTheme();
-    const { id, refContact, prefill, location: pfLocation, price: pfPrice, size: pfSize, unitNo: pfUnitNo, mobile: pfMobile, name: pfName, type: pfType } = useLocalSearchParams<any>();
+    const router = useRouter();
+    const params = useLocalSearchParams();
+    const { getLookupValue, getLookupsByType, propertyConfig, leadMasterFields, refreshLookups, loading: loadingLookups } = useLookup();
+    const { users, teams, loading: loadingUsers, findUser } = useUsers();
+    const { projects, loading: loadingProjects } = useProjects();
+
+    const { 
+        id, refContact, prefill, 
+        location: pfLocation, price: pfPrice, size: pfSize, 
+        unitNo: pfUnitNo, mobile: pfMobile, name: pfName, type: pfType 
+    } = params as any; // Cast params to any to match previous usage
+
     const [step, setStep] = useState(0);
     const [loading, setLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
@@ -279,10 +289,47 @@ export default function AddLeadScreen() {
         owner: "", team: "", visibleTo: "Everyone", stage: "", description: "", tags: [],
     });
 
-    const [lookups, setLookups] = useState<Record<string, any[]>>({});
-    const [projects, setProjects] = useState<any[]>([]);
-    const [teams, setTeams] = useState<any[]>([]);
-    const [users, setUsers] = useState<any[]>([]);
+    const allowedSubCategoryNames = useMemo(() => {
+        if (!propertyConfig || formData.propertyType.length === 0) return [];
+        const selectedCategoryNames = formData.propertyType.map((id: string) => getLookupValue("Category", id));
+        let names: string[] = [];
+        selectedCategoryNames.forEach((catName: string) => {
+            const catKey = Object.keys(propertyConfig).find(k => k === catName || catName.includes(k) || k.includes(catName));
+            const catConfig = propertyConfig[catKey || catName];
+            if (catConfig?.subCategories) {
+                catConfig.subCategories.forEach((sc: any) => names.push(sc.name));
+            }
+        });
+        return [...new Set(names)];
+    }, [propertyConfig, formData.propertyType, getLookupValue]);
+
+    const allowedUnitTypeNames = useMemo(() => {
+        if (!propertyConfig || formData.subType.length === 0) return [];
+        const selectedSubCategoryNames = formData.subType.map((id: string) => getLookupValue("SubCategory", id));
+        let names: string[] = [];
+        Object.values(propertyConfig).forEach((catConfig: any) => {
+            if (catConfig?.subCategories) {
+                catConfig.subCategories.forEach((sc: any) => {
+                    const isMatch = selectedSubCategoryNames.some((sn: string) => 
+                        sn === sc.name || 
+                        sn.startsWith(sc.name + " ") || 
+                        sn.includes(sc.name) // fallback for messy data
+                    );
+                    if (isMatch && sc.types) {
+                        sc.types.forEach((t: any) => names.push(t.name));
+                    }
+                });
+            }
+        });
+        return [...new Set(names)];
+    }, [propertyConfig, formData.subType, getLookupValue]);
+
+    // Helper to resolve any value (ID or Name) to a name for UI consistency
+    const resolveToName = useCallback((type: string, val: any) => {
+        if (!val) return "";
+        return getLookupValue(type, val);
+    }, [getLookupValue]);
+
     const [duplicates, setDuplicates] = useState<any[]>([]);
     const [isBlocked, setIsBlocked] = useState(false);
 
@@ -290,34 +337,15 @@ export default function AddLeadScreen() {
         const loadInitialData = async () => {
             try {
                 const results = await Promise.all([
-                    ...LEAD_LOOKUP_TYPES.map(type => getLookups(type)),
-                    getProjects(),
-                    getTeams(),
-                    api.get("/users"),
                     id ? getLeadById(id) : Promise.resolve(null),
                     refContact ? getContactById(refContact) : Promise.resolve(null),
                 ]);
 
-                const lookupMap: Record<string, any[]> = {};
-                LEAD_LOOKUP_TYPES.forEach((type, i) => {
-                    const res = results[i];
-                    lookupMap[type] = res?.data || (Array.isArray(res) ? res : []);
-                });
-                setLookups(lookupMap);
+                const existingLead = results[0]?.data || results[0];
+                const existingContact = results[1]?.data || results[1];
 
-                const projectsRes = results[LEAD_LOOKUP_TYPES.length];
-                setProjects(projectsRes?.data || (Array.isArray(projectsRes) ? projectsRes : []));
-
-                const teamsRes = results[LEAD_LOOKUP_TYPES.length + 1];
-                setTeams(teamsRes?.data || (Array.isArray(teamsRes) ? teamsRes : []));
-
-                const usersRes = results[LEAD_LOOKUP_TYPES.length + 2]?.data;
-                const userList = usersRes?.records ?? usersRes?.data ?? (Array.isArray(usersRes) ? usersRes : []);
-                setUsers(Array.isArray(userList) ? userList : []);
-
-                const existingLead = results[LEAD_LOOKUP_TYPES.length + 3];
                 if (existingLead) {
-                    const l = existingLead.data || existingLead;
+                    const l = existingLead;
                     setFormData({
                         salutation: l.salutation || "Mr.",
                         firstName: l.firstName || "",
@@ -347,59 +375,59 @@ export default function AddLeadScreen() {
                         locCity: l.locCity || "",
                         locArea: l.locArea || "",
                         locPinCode: l.locPinCode || "",
-                        projectName: Array.isArray(l.projectName) ? l.projectName : [],
-                        status: l.status?._id || l.status || "",
-                        stage: l.stage?._id || l.stage || "",
-                        source: l.source?._id || l.source || "",
-                        subSource: l.subSource?._id || l.subSource || "",
-                        campaign: l.campaign?._id || l.campaign || "",
-                        subCampaign: l.subCampaign?._id || l.subCampaign || "",
-                        owner: l.owner?._id || l.owner || l.assignment?.assignedTo?._id || "",
-                        team: l.assignment?.team?.[0] || l.team?._id || l.team || "",
+                        locRange: l.locRange || 5,
+                        projectName: Array.isArray(l.projectName) ? l.projectName.map((v: any) => v._id || v) : (l.projectName ? [l.projectName._id || l.projectName] : []),
+                        projectTowers: l.locBlock || [],
+                        propertyNo: l.propertyNo || "",
+                        propertyNoEnd: l.propertyNoEnd || "",
+                        unitSelectionMode: l.unitSelectionMode || "Single",
+                        status: l.status?.lookup_value || l.status || "",
+                        source: l.source?.lookup_value || l.source || "",
+                        subSource: l.subSource?.lookup_value || l.subSource || "",
+                        campaign: l.campaign?.lookup_value || l.campaign || "",
+                        subCampaign: l.subCampaign?.lookup_value || l.subCampaign || "",
+                        owner: l.assignment?.assignedTo?._id || l.assignment?.assignedTo || "",
+                        team: l.assignment?.team?.[0] || "",
                         visibleTo: l.assignment?.visibleTo || "Everyone",
+                        stage: l.stage?.lookup_value || l.stage || "",
                         description: l.description || "",
-                        tags: Array.isArray(l.tags) ? l.tags : [],
+                        tags: l.tags || [],
                     });
+                } else if (existingContact) {
+                    const c = existingContact;
+                    setFormData((prev: any) => ({
+                        ...prev,
+                        firstName: c.firstName || "",
+                        lastName: c.lastName || "",
+                        mobile: (c.phones && c.phones[0]?.number) || c.mobile || "",
+                        email: (c.emails && c.emails[0]?.address) || c.email || "",
+                    }));
                 }
 
-                const contactRes = results[LEAD_LOOKUP_TYPES.length + 4];
-                if (contactRes) {
-                    const c = contactRes.data || contactRes;
-                    setFormData(prev => ({
+                if (!id && prefill === 'true') {
+                    setFormData((prev: any) => ({
                         ...prev,
-                        firstName: c.name || "",
-                        lastName: c.surname || "",
-                        mobile: c.phones?.[0]?.number || "",
-                        email: c.emails?.[0]?.address || "",
-                        owner: c.owner?._id || c.owner || prev.owner,
-                        source: c.source?._id || c.source || prev.source,
+                        firstName: pfName ? pfName.split(' ')[0] : prev.firstName,
+                        lastName: pfName ? pfName.split(' ').slice(1).join(' ') : prev.lastName,
+                        mobile: pfMobile || prev.mobile,
+                        searchLocation: pfLocation || prev.searchLocation,
+                        propertyNo: pfUnitNo || prev.propertyNo,
+                        areaMin: pfSize || prev.areaMin,
+                        budgetMin: pfPrice || prev.budgetMin,
+                        requirement: pfType === 'Rent' ? 'Rent' : (pfType === 'Lease' ? 'Lease' : 'Buy'),
+                        description: `Intake From Web: ${pfName || 'Unknown'} - ${pfMobile || ''}`
                     }));
                 }
             } catch (error) {
-                console.error("Failed to load form data", error);
+                console.error("Failed to load initial data:", error);
+                Alert.alert("Error", "Failed to load some form data. Please try again.");
             } finally {
                 setLoading(false);
             }
         };
-        if (id) {
-            loadInitialData();
-        } else if (prefill === 'true') {
-            // Handle pre-fill from Intake or other sources
-            setFormData(prev => ({
-                ...prev,
-                firstName: pfName || prev.firstName,
-                mobile: pfMobile || prev.mobile,
-                location: pfLocation || prev.location,
-                unitNo: pfUnitNo || prev.unitNo,
-                areaMin: pfSize ? parseFloat(pfSize.replace(/[^0-9.]/g, '')) || prev.areaMin : prev.areaMin,
-                budgetMax: pfPrice ? parseFloat(pfPrice.replace(/[^0-9.]/g, '')) || prev.budgetMax : prev.budgetMax,
-                propertyType: pfType || prev.propertyType,
-            }));
-            setLoading(false);
-        } else {
-            loadInitialData();
-        }
-    }, [id, prefill]);
+
+        loadInitialData();
+    }, [id, refContact, prefill]);
 
     useEffect(() => {
         const delayDebounce = setTimeout(async () => {
@@ -450,14 +478,20 @@ export default function AddLeadScreen() {
         setIsSaving(true);
         try {
             const getLookupId = (type: string, val: string) => {
-                const list = lookups[type];
-                if (!Array.isArray(list)) return null;
+                const list = getLookupsByType(type);
+                if (!Array.isArray(list)) return val;
                 return list.find((l: any) => l.lookup_value === val)?._id || val;
             };
 
             const payload = {
                 ...formData,
                 requirement: getLookupId("Requirement", formData.requirement),
+                status: getLookupId("LeadStatus", formData.status),
+                stage: getLookupId("LeadStage", formData.stage),
+                source: getLookupId("Source", formData.source),
+                subSource: getLookupId("SubSource", formData.subSource),
+                campaign: getLookupId("Campaign", formData.campaign),
+                subCampaign: getLookupId("SubCampaign", formData.subCampaign),
                 locBlock: formData.projectTowers,
                 budgetMin: formData.budgetMin ? Number(formData.budgetMin) : undefined,
                 budgetMax: formData.budgetMax ? Number(formData.budgetMax) : undefined,
@@ -484,37 +518,124 @@ export default function AddLeadScreen() {
         }
     };
 
-    const renderMultiSelect = (type: string, field: string) => {
-        const list = lookups[type];
-        const options = (list || []).map(l => ({ label: l.lookup_value, value: l._id }));
+    const renderMultiSelect = (type: string, field: string, allowedNames?: string[]) => {
+        let options: { label: string, value: string }[] = [];
+        if (type === "UnitType" && allowedNames && allowedNames.length > 0) {
+            // Special handling for UnitType to match what's in Settings > Configuration exactly
+            options = allowedNames.map(name => ({ label: name, value: name }));
+        } else {
+            const list = getLookupsByType(type);
+            options = (list || []).map(l => ({ label: l.lookup_value, value: l._id }));
+            
+            if (allowedNames && allowedNames.length > 0) {
+                options = options.filter(opt => 
+                    allowedNames.some(name => 
+                        opt.label === name || 
+                        opt.label.startsWith(name + " ") || 
+                        opt.label.startsWith(name + "(")
+                    )
+                );
+            }
+        }
+
+        // For UnitType, we need to ensure values in formData (which might be IDs) 
+        // match the labels in options (which are clean names from config)
+        const currentValues = (formData[field] || []).map((val: any) => 
+            type === "UnitType" ? resolveToName(type, val) : val
+        );
+
         return (
             <MultiSelectButton
-                values={formData[field]}
+                values={currentValues}
                 options={options}
                 onToggle={(val) => {
-                    const current = formData[field] || [];
+                    const current = currentValues;
                     const newList = current.includes(val) ? current.filter((i: string) => i !== val) : [...current, val];
-                    setFormData({ ...formData, [field]: newList });
+                    
+                    // Note: Since we are using names as values for UnitType, the newList array 
+                    // will contain strings like ["1 Kanal"]. The backend resolveLeadLookup handles these.
+                    
+                    let nextFormData = { ...formData, [field]: newList };
+                    
+                    if (field === 'propertyType') {
+                        const nextAllowedSub: string[] = newList.length === 0 ? [] : newList.flatMap((id: string) => {
+                            const catName = getLookupValue("Category", id);
+                            const catKey = Object.keys(propertyConfig || {}).find(k => k === catName || catName.includes(k) || k.includes(catName));
+                            return (propertyConfig?.[catKey || catName]?.subCategories || []).map((sc: any) => sc.name);
+                        });
+                        nextFormData.subType = nextFormData.subType.filter((id: string) => 
+                            nextAllowedSub.some(asn => {
+                                const val = getLookupValue("SubCategory", id);
+                                return val === asn || val.startsWith(asn + " ") || val.includes(asn);
+                            })
+                        );
+                        
+                        // Also trigger unitType reset based on the new subType
+                        const nextAllowedUnit: string[] = nextFormData.subType.length === 0 ? [] : nextFormData.subType.flatMap((id: string) => {
+                            const subName = getLookupValue("SubCategory", id);
+                            let names: string[] = [];
+                            Object.values(propertyConfig || {}).forEach((catConfig: any) => {
+                                (catConfig?.subCategories || []).forEach((sc: any) => {
+                                    if (sc.name === subName || subName.startsWith(sc.name + " ") || subName.includes(sc.name)) {
+                                        (sc.types || []).forEach((t: any) => names.push(t.name));
+                                    }
+                                });
+                            });
+                            return names;
+                        });
+                        nextFormData.unitType = nextFormData.unitType.filter((id: string) => 
+                            nextAllowedUnit.some(aun => {
+                                const val = getLookupValue("UnitType", id);
+                                return val === aun || val.startsWith(aun + " ") || val.includes(aun);
+                            })
+                        );
+                    } else if (field === 'subType') {
+                        const nextAllowedUnit: string[] = newList.length === 0 ? [] : newList.flatMap((id: string) => {
+                            const subName = getLookupValue("SubCategory", id);
+                            let names: string[] = [];
+                            Object.values(propertyConfig || {}).forEach((catConfig: any) => {
+                                (catConfig?.subCategories || []).forEach((sc: any) => {
+                                    if (sc.name === subName || subName.startsWith(sc.name + " ") || subName.includes(sc.name)) {
+                                        (sc.types || []).forEach((t: any) => names.push(t.name));
+                                    }
+                                });
+                            });
+                            return names;
+                        });
+                        nextFormData.unitType = nextFormData.unitType.filter((id: string) => 
+                            nextAllowedUnit.some(aun => {
+                                const val = getLookupValue("UnitType", id);
+                                return val === aun || val.startsWith(aun + " ") || val.includes(aun);
+                            })
+                        );
+                    }
+
+                    setFormData(nextFormData);
                 }}
             />
         );
     };
 
-    const renderSingleSelect = (type: string, field: string, parentId?: string) => {
-        let list = lookups[type];
-        if (!Array.isArray(list)) return null;
-        if (parentId) list = list.filter(item => item.parent_lookup_id === parentId || item.parent_lookup_value === parentId);
-        const options = list.map(l => ({ label: l.lookup_value, value: l._id }));
+    const renderSingleSelect = (lookupType: string, field: keyof typeof formData, parentId?: string) => {
+        const options = getLookupsByType(lookupType)
+            .filter(l => !parentId || l.parent_id === parentId || (l as any).parent_lookup_id === parentId)
+            .map(l => ({ label: l.lookup_value, value: l._id }));
+        return <SelectButton value={formData[field]} options={options} onSelect={(val) => setFormData({ ...formData, [field]: val })} />;
+    };
+
+    const renderLeadMasterSelect = (masterKey: string, field: keyof typeof formData) => {
+        if (!leadMasterFields || !leadMasterFields[masterKey]) return renderSingleSelect(masterKey.slice(0, -1), field);
+        const options = leadMasterFields[masterKey].map((val: string) => ({ label: val, value: val }));
         return <SelectButton value={formData[field]} options={options} onSelect={(val) => setFormData({ ...formData, [field]: val })} />;
     };
 
     const renderDependentMultiSelect = (type: string, field: string, parentIds: string[]) => {
-        let list = lookups[type];
+        let list = getLookupsByType(type);
         if (!Array.isArray(list) || !parentIds || parentIds.length === 0) return <Text style={{ color: theme.textMuted, fontSize: 13, fontStyle: 'italic', padding: 8 }}>Select parent field first</Text>;
+        
         const pIds = parentIds.map(id => String(id));
-        const parentValues: string[] = [];
-        Object.values(lookups).flat().forEach((l: any) => { if (pIds.includes(String(l._id))) parentValues.push(l.lookup_value); });
-        const filtered = list.filter(item => pIds.includes(String(item.parent_lookup_id)) || pIds.includes(String(item.parent_lookup_value)) || parentValues.includes(item.parent_lookup_value));
+        const filtered = list.filter(item => pIds.includes(String(item.parent_id)));
+        
         if (filtered.length === 0) return <Text style={{ color: theme.textMuted, fontSize: 13, fontStyle: 'italic', padding: 8 }}>No options available</Text>;
         const options = filtered.map(l => ({ label: l.lookup_value, value: l._id }));
         return (
@@ -541,8 +662,18 @@ export default function AddLeadScreen() {
                                 <SelectButton value={formData.requirement} options={["Buy", "Rent", "Lease"].map(r => ({ label: r, value: r }))} onSelect={(v) => setFormData({ ...formData, requirement: v })} />
                             </Field>
                             <Field label="Category">{renderMultiSelect("Category", "propertyType")}</Field>
-                            <Field label="Sub Category">{renderDependentMultiSelect("SubCategory", "subType", formData.propertyType)}</Field>
-                            <Field label="Size Type">{renderDependentMultiSelect("UnitType", "unitType", formData.subType)}</Field>
+                            <Field label="Sub Category">
+                                {formData.propertyType.length > 0 
+                                    ? renderMultiSelect("SubCategory", "subType", allowedSubCategoryNames)
+                                    : <Text style={{ color: theme.textMuted, fontSize: 13, fontStyle: 'italic', padding: 8 }}>Select Category first</Text>
+                                }
+                            </Field>
+                            <Field label="Size Type">
+                                {formData.subType.length > 0
+                                    ? renderMultiSelect("UnitType", "unitType", allowedUnitTypeNames)
+                                    : <Text style={{ color: theme.textMuted, fontSize: 13, fontStyle: 'italic', padding: 8 }}>Select Sub Category first</Text>
+                                }
+                            </Field>
                             <Field label="Budget Range (Min - Max)">
                                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.budgetScroll}>
                                     {BUDGET_VALUES.map((opt) => (
@@ -561,6 +692,18 @@ export default function AddLeadScreen() {
                                 <View style={{ flex: 1 }}><Field label="Min Area"><Input value={formData.areaMin} onChangeText={v => setFormData({ ...formData, areaMin: v })} placeholder="Min" keyboardType="numeric" /></Field></View>
                                 <View style={{ flex: 1 }}><Field label="Max Area"><Input value={formData.areaMax} onChangeText={v => setFormData({ ...formData, areaMax: v })} placeholder="Max" keyboardType="numeric" /></Field></View>
                             </View>
+                            <Field label="Funding">
+                                <SelectButton value={formData.funding} options={(leadMasterFields?.fundingTypes || ["Home Loan", "Self Funding"]).map((v: string) => ({ label: v, value: v }))} onSelect={(v) => setFormData({ ...formData, funding: v })} />
+                            </Field>
+                            <Field label="Timeline">
+                                <SelectButton value={formData.timeline} options={(leadMasterFields?.timelines || ["Immediate", "3 Months"]).map((v: string) => ({ label: v, value: v }))} onSelect={(v) => setFormData({ ...formData, timeline: v })} />
+                            </Field>
+                            <Field label="Furnishing">
+                                <SelectButton value={formData.furnishing} options={(leadMasterFields?.furnishingStatuses || ["Unfurnished", "Semi-Furnished"]).map((v: string) => ({ label: v, value: v }))} onSelect={(v) => setFormData({ ...formData, furnishing: v })} />
+                            </Field>
+                            <Field label="Transaction Type">
+                                <SelectButton value={formData.transactionType} options={(leadMasterFields?.transactionTypes || ["Collector Rate", "Full White"]).map((v: string) => ({ label: v, value: v }))} onSelect={(v) => setFormData({ ...formData, transactionType: v })} />
+                            </Field>
                             <Field label="Facing">{renderMultiSelect("Facing", "facing")}</Field>
                             <Field label="Direction">{renderMultiSelect("Direction", "direction")}</Field>
                             <Field label="Purpose"><SelectButton value={formData.purpose} options={["End Use", "Investment"].map(v => ({ label: v, value: v }))} onSelect={(v) => setFormData({ ...formData, purpose: v })} /></Field>
@@ -581,6 +724,9 @@ export default function AddLeadScreen() {
                                     <GooglePlacesAutocomplete
                                         ref={googlePlacesRef}
                                         placeholder="Area, sector or city..."
+                                        minLength={2}
+                                        debounce={400}
+                                        disableScroll={true}
                                         onPress={(data: any, details: any = null) => {
                                             if (details) {
                                                 const locObj = {
@@ -591,11 +737,29 @@ export default function AddLeadScreen() {
                                                 setFormData((prev: any) => ({ ...prev, ...locObj }));
                                             }
                                         }}
-                                        query={{ key: GOOGLE_API_KEY, language: "en", components: "country:in" }}
+                                        onFail={(error: any) => console.error("GooglePlaces Error:", error)}
+                                        query={{ 
+                                            key: GOOGLE_API_KEY, 
+                                            language: "en", 
+                                            components: "country:in",
+                                            types: "geocode" 
+                                        }}
                                         styles={{
                                             textInput: [styles.input, { color: theme.textPrimary, backgroundColor: theme.inputBg, borderRadius: 12, borderWidth: 1, borderColor: theme.border }],
                                             container: { flex: 0 },
-                                            listView: { backgroundColor: theme.cardBg, borderRadius: 12, marginTop: 5, elevation: 5, zIndex: 1000, borderWidth: 1, borderColor: theme.border }
+                                            listView: { 
+                                                position: 'absolute', 
+                                                top: 50, 
+                                                left: 0, 
+                                                right: 0, 
+                                                backgroundColor: theme.cardBg, 
+                                                borderRadius: 12, 
+                                                marginTop: 5, 
+                                                elevation: 5, 
+                                                zIndex: 1000, 
+                                                borderWidth: 1, 
+                                                borderColor: theme.border 
+                                            }
                                         }}
                                         fetchDetails={true}
                                         enablePoweredByContainer={false}
@@ -684,10 +848,35 @@ export default function AddLeadScreen() {
                         <SectionHeader title="System & Assignment" icon="⚙️" subtitle="Back-office routing and status" />
                         <View style={[styles.card, { backgroundColor: theme.cardBg, borderColor: theme.border }]}>
 
-                            <Field label="Campaign">{renderSingleSelect("Campaign", "campaign")}</Field>
+                            <Field label="Campaign">
+                                {leadMasterFields?.campaigns ? (
+                                    <SelectButton
+                                        value={formData.campaign}
+                                        options={leadMasterFields.campaigns.map((c: any) => ({ label: c.name, value: c.name }))}
+                                        onSelect={(val) => setFormData({ ...formData, campaign: val, source: "", subSource: "" })}
+                                    />
+                                ) : renderSingleSelect("Campaign", "campaign")}
+                            </Field>
 
-                            <Field label="Source">{renderSingleSelect("Source", "source", formData.campaign)}</Field>
-                            {formData.source ? <Field label="Sub Source">{renderSingleSelect("SubSource", "subSource", formData.source)}</Field> : null}
+                            <Field label="Source">
+                                {leadMasterFields?.campaigns && formData.campaign ? (
+                                    <SelectButton
+                                        value={formData.source}
+                                        options={(leadMasterFields.campaigns.find((c: any) => c.name === formData.campaign)?.sources || []).map((s: any) => ({ label: s.name, value: s.name }))}
+                                        onSelect={(val) => setFormData({ ...formData, source: val, subSource: "" })}
+                                    />
+                                ) : renderSingleSelect("Source", "source", formData.campaign)}
+                            </Field>
+
+                            <Field label="Sub Source">
+                                {leadMasterFields?.campaigns && formData.campaign && formData.source ? (
+                                    <SelectButton
+                                        value={formData.subSource}
+                                        options={(leadMasterFields.campaigns.find((c: any) => c.name === formData.campaign)?.sources.find((s: any) => s.name === formData.source)?.mediums || []).map((m: any) => ({ label: m, value: m }))}
+                                        onSelect={(val) => setFormData({ ...formData, subSource: val })}
+                                    />
+                                ) : (formData.source ? renderSingleSelect("SubSource", "subSource", formData.source) : null)}
+                            </Field>
                             <Field label="Assignment">
                                 <Text style={[styles.subLabel, { color: theme.textSecondary }]}>Team</Text>
                                 <SelectButton value={formData.team} options={teams.map(t => ({ label: t.name, value: t._id }))} onSelect={(v) => setFormData({ ...formData, team: v, owner: "" })} />
@@ -704,12 +893,12 @@ export default function AddLeadScreen() {
         }
     };
 
-    if (loading) return <View style={styles.center}><ActivityIndicator size="large" color={theme.primary} /></View>;
+    // Remove blocking spinner for "Instant Open" experience
 
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
             <View style={[styles.header, { backgroundColor: theme.background, borderBottomColor: theme.border }]}>
-                <TouchableOpacity onPress={() => router.back()} style={[styles.closeBtn, { backgroundColor: theme.inputBg }]} hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}>
+                <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace("/(tabs)/leads")} style={[styles.closeBtn, { backgroundColor: theme.inputBg }]} hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}>
                     <Ionicons name="close" size={24} color={theme.textPrimary} />
                 </TouchableOpacity>
                 <View style={styles.headerTitleContainer}>

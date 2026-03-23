@@ -62,6 +62,12 @@ export interface Project {
     amenities?: Record<string, boolean>;
     blocks?: ProjectBlock[];
     pricing?: any;
+    isPublished?: boolean;
+    publishedAt?: string;
+    websiteMetadata?: {
+        shareLocation?: boolean;
+        shareBlockDetails?: boolean;
+    };
     createdAt?: string;
     updatedAt?: string;
 }

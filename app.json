@@ -7,7 +7,6 @@
     "icon": "./assets/images/icon.png",
     "scheme": "bharatproperties",
     "userInterfaceStyle": "light",
-    "newArchEnabled": false,
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.bharatproperties.crm",

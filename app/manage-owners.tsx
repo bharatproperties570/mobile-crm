@@ -13,9 +13,9 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useTheme } from './context/ThemeContext';
-import { getInventoryById, updateInventory, Inventory } from './services/inventory.service';
-import { getContacts, Contact, contactFullName, contactPhone } from './services/contacts.service';
+import { useTheme } from "@/context/ThemeContext";
+import { getInventoryById, updateInventory, Inventory } from "@/services/inventory.service";
+import { getContacts, Contact, contactFullName, contactPhone } from "@/services/contacts.service";
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 

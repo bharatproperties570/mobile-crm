@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
-import { storage } from "../services/storage";
+import { storage } from "@/services/storage";
 
 export type Department = 'Sales' | 'Inventory' | 'Post-Sales';
 

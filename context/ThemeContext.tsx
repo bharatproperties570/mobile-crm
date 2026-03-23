@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useColorScheme } from 'react-native';
-import { storage } from '../services/storage';
+import { storage } from "@/services/storage";
 
 interface ThemeContextType {
     isDarkMode: boolean;

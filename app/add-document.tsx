@@ -6,12 +6,12 @@ import {
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as DocumentPicker from "expo-document-picker";
-import { useTheme } from "./context/ThemeContext";
-import { getContactById, updateContact } from "./services/contacts.service";
-import { getInventory, getInventoryById, updateInventory } from "./services/inventory.service";
-import { getLookups } from "./services/lookups.service";
-import { getProjects } from "./services/projects.service";
-import api from "./services/api";
+import { useTheme } from "@/context/ThemeContext";
+import { getContactById, updateContact } from "@/services/contacts.service";
+import { getInventory, getInventoryById, updateInventory } from "@/services/inventory.service";
+import { getHierarchicalDocs } from "@/services/lookups.service";
+import { getProjects } from "@/services/projects.service";
+import api from "@/services/api";
 
 export default function AddDocumentScreen() {
     const router = useRouter();
@@ -63,12 +63,12 @@ export default function AddDocumentScreen() {
         setLoading(true);
         try {
             const [catRes, projRes, entityRes] = await Promise.all([
-                getLookups("DocumentCategory"),
+                getHierarchicalDocs(),
                 getProjects(),
                 type === "Contact" ? getContactById(id!) : getInventoryById(id!)
             ]);
 
-            setCategories(catRes?.data || (Array.isArray(catRes) ? catRes : []));
+            setCategories(catRes?.data || []);
             setProjects(projRes?.data || (Array.isArray(projRes) ? projRes : []));
 
             const data = entityRes?.data ?? entityRes;
@@ -81,10 +81,20 @@ export default function AddDocumentScreen() {
                 setExistingDocs(data.inventoryDocuments || []);
 
                 // Collect owners and associates for linking
-                const contacts = [
-                    ...(data.owners || []).map((o: any) => ({ ...o, role: 'Owner' })),
-                    ...(data.associates || []).map((a: any) => ({ ...a, role: 'Associate' }))
+                let contacts = [
+                    ...(data.owners || []).map((o: any) => ({ ...o, role: 'Owner', id: o._id })),
+                    ...(data.associates || []).map((a: any) => ({ ...a, role: (a.relationship || 'Associate'), id: (a.contact?._id || a.contact) }))
                 ];
+
+                // Web CRM Fallback (Professionally synchronized)
+                if (contacts.length === 0) {
+                    if (data.ownerName) {
+                        contacts.push({ name: data.ownerName, mobile: data.ownerPhone, role: 'Property Owner', id: null });
+                    }
+                    if (data.associatedContact) {
+                        contacts.push({ name: data.associatedContact, mobile: data.associatedPhone, role: 'Associate', id: null });
+                    }
+                }
                 setPotentialContacts(contacts);
             }
         } catch (error) {
@@ -95,24 +105,16 @@ export default function AddDocumentScreen() {
         }
     };
 
-    // Cascading Lookups: Types depend on Category
+    // Types depend on Category (already pre-fetched in the hierarchy)
     useEffect(() => {
         if (selectedCategory) {
-            fetchTypes(selectedCategory._id);
+            setTypes(selectedCategory.subCategories || []);
         } else {
             setTypes([]);
             setSelectedType(null);
         }
     }, [selectedCategory]);
 
-    const fetchTypes = async (categoryId: string) => {
-        try {
-            const res = await api.get("/lookups", { params: { lookup_type: "DocumentType", parent_lookup_id: categoryId } });
-            setTypes(res.data?.data || (Array.isArray(res.data) ? res.data : []));
-        } catch (error) {
-            console.error("Fetch types error:", error);
-        }
-    };
 
     // Cascading Inventory: Blocks depend on Project, Units depend on Block
     useEffect(() => {
@@ -186,16 +188,19 @@ export default function AddDocumentScreen() {
 
             const newDoc = {
                 documentCategory: selectedCategory._id,
+                documentName: selectedCategory._id, // Web CRM maps 'Category' to documentName
                 documentType: selectedType._id,
-                documentName: selectedType._id, // Map to Type ID as per Web CRM logic
                 documentNo: docNumber,
+                documentNumber: docNumber,
                 documentPicture: fileUrl,
+                url: fileUrl,
                 file: fileUrl,
                 // Metadata for cross-linking
                 projectName: type === "Contact" ? (linkToInventory ? (selectedProject?.name || "") : "") : (entityData?.projectName || ""),
                 block: type === "Contact" ? (linkToInventory ? (selectedBlock?.name || selectedBlock || "") : "") : (entityData?.block || ""),
                 unitNumber: type === "Contact" ? (linkToInventory ? (selectedUnit?.unitNumber || "") : "") : (entityData?.unitNumber || entityData?.unitNo || ""),
-                linkedContactId: type === "Inventory" && linkToOwner ? selectedContact?._id : (type === "Contact" ? id : null)
+                linkedContactId: type === "Inventory" ? selectedContact?.id || selectedContact?._id : (type === "Contact" ? id : null),
+                linkedContactMobile: selectedContact?.mobile || ""
             };
 
             const updatedDocs = [...existingDocs, newDoc];
@@ -206,21 +211,20 @@ export default function AddDocumentScreen() {
                 await updateInventory(id!, { inventoryDocuments: updatedDocs });
 
                 // DUAL SAVE: If linked to an owner/associate, push to their documents as well
-                if (linkToOwner && selectedContact?._id) {
+                if (type === "Inventory" && selectedContact?.id) {
                     try {
-                        const contactRes = await getContactById(selectedContact._id);
+                        const contactRes = await getContactById(selectedContact.id);
                         const contactData = contactRes?.data ?? contactRes;
                         const contactDocs = [...(contactData.documents || []), newDoc];
-                        await updateContact(selectedContact._id, { documents: contactDocs });
+                        await updateContact(selectedContact.id, { documents: contactDocs });
                     } catch (err) {
                         console.error("Failed to dual-save document to contact:", err);
-                        // We don't block the main save if this fails, but maybe alert?
                     }
                 }
             }
 
             Alert.alert("Success", "Document added and uploaded successfully", [
-                { text: "OK", onPress: () => router.back() }
+                { text: "OK", onPress: () => router.canGoBack() ? router.back() : router.replace("/(tabs)") }
             ]);
         } catch (error: any) {
             console.error("Save error:", error);
@@ -260,7 +264,7 @@ export default function AddDocumentScreen() {
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
             <View style={[styles.header, { borderBottomColor: theme.border }]}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+                <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace("/(tabs)")} style={styles.backBtn}>
                     <Ionicons name="close" size={24} color={theme.text} />
                 </TouchableOpacity>
                 <Text style={[styles.headerTitle, { color: theme.text }]}>Add Document</Text>
@@ -288,7 +292,7 @@ export default function AddDocumentScreen() {
 
                 {/* 2. Type */}
                 <View style={styles.section}>
-                    <Text style={[styles.label, { color: theme.textLight }]}>DOCUMENT TYPE *</Text>
+                    <Text style={[styles.label, { color: theme.textLight }]}>SPECIFIC TYPE *</Text>
                     <TouchableOpacity
                         style={[styles.input, { borderColor: theme.border, opacity: selectedCategory ? 1 : 0.5 }]}
                         onPress={() => selectedCategory && openModal('type')}
@@ -301,7 +305,7 @@ export default function AddDocumentScreen() {
 
                 {/* 3. Number */}
                 <View style={styles.section}>
-                    <Text style={[styles.label, { color: theme.textLight }]}>DOCUMENT NUMBER *</Text>
+                    <Text style={[styles.label, { color: theme.textLight }]}>DOCUMENT / REF NUMBER *</Text>
                     <TextInput
                         style={[styles.input, { borderColor: theme.border, color: theme.text }]}
                         value={docNumber}
@@ -312,21 +316,12 @@ export default function AddDocumentScreen() {
                 </View>
 
                 {/* 4. Link Toggles */}
-                {type === "Contact" ? (
+                {type === "Contact" && (
                     <View style={[styles.toggleRow, { borderColor: theme.border }]}>
                         <Text style={[styles.toggleLabel, { color: theme.text }]}>Link to Inventory?</Text>
                         <Switch
                             value={linkToInventory}
                             onValueChange={setLinkToInventory}
-                            trackColor={{ false: "#CBD5E1", true: theme.primary }}
-                        />
-                    </View>
-                ) : (
-                    <View style={[styles.toggleRow, { borderColor: theme.border }]}>
-                        <Text style={[styles.toggleLabel, { color: theme.text }]}>Link to Owner?</Text>
-                        <Switch
-                            value={linkToOwner}
-                            onValueChange={setLinkToOwner}
                             trackColor={{ false: "#CBD5E1", true: theme.primary }}
                         />
                     </View>
@@ -367,13 +362,13 @@ export default function AddDocumentScreen() {
                     </View>
                 )}
 
-                {type === "Inventory" && linkToOwner && (
+                {type === "Inventory" && (
                     <View style={[styles.inventoryBox, { backgroundColor: theme.primary + '08', borderColor: theme.primary + '30' }]}>
                         <View style={styles.section}>
-                            <Text style={[styles.label, { color: theme.primary }]}>SELECT OWNER / ASSOCIATE</Text>
+                            <Text style={[styles.label, { color: theme.primary }]}>LINKED TO CONTACT (OPTIONAL)</Text>
                             <TouchableOpacity style={[styles.input, { backgroundColor: '#fff', borderColor: theme.border }]} onPress={() => openModal('contact')}>
                                 <Text style={{ color: selectedContact ? theme.text : theme.textLight }}>
-                                    {selectedContact ? `${selectedContact.name} (${selectedContact.role})` : "Select Contact"}
+                                    {selectedContact ? `${selectedContact.name} (${selectedContact.role})` : "Select Related Contact"}
                                 </Text>
                                 <Ionicons name="chevron-down" size={18} color={theme.primary} />
                             </TouchableOpacity>
@@ -383,7 +378,7 @@ export default function AddDocumentScreen() {
 
                 {/* 6. File Upload */}
                 <View style={styles.section}>
-                    <Text style={[styles.label, { color: theme.textLight }]}>UPLOAD FILE (PDF/IMAGE)</Text>
+                    <Text style={[styles.label, { color: theme.textLight }]}>DOCUMENT FILE *</Text>
                     <TouchableOpacity style={[styles.uploadBtn, { borderColor: theme.primary, borderStyle: 'dashed' }]} onPress={pickDocument}>
                         <Ionicons name="cloud-upload-outline" size={24} color={theme.primary} />
                         <Text style={[styles.uploadText, { color: theme.primary }]}>

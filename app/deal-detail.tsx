@@ -1,20 +1,25 @@
 import { useCallback, useEffect, useState, useRef } from "react";
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
-    ActivityIndicator, Alert, SafeAreaView, Animated, Linking, Dimensions
+    ActivityIndicator, Alert, Animated, Linking, Dimensions
 } from "react-native";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { useTheme } from "./context/ThemeContext";
-import { useCallTracking } from "./context/CallTrackingContext";
-import api from "./services/api";
-import { getActivities } from "./services/activities.service";
-import { getMatchingLeads } from "./services/leads.service";
-import { getDealById, type Deal } from "./services/deals.service";
-import { useLookup } from "./context/LookupContext";
-import { getDealHealth } from "./services/stageEngine.service";
+import { useTheme } from "@/context/ThemeContext";
+import { useCallTracking } from "@/context/CallTrackingContext";
+import api from "@/services/api";
+import { getActivities } from "@/services/activities.service";
+import { getMatchingLeads } from "@/services/leads.service";
+import { getDealById, type Deal } from "@/services/deals.service";
+import { useLookup } from "@/context/LookupContext";
+import { useUsers } from "@/context/UserContext";
+import { getDealHealth } from "@/services/stageEngine.service";
+import { formatSize, getSizeLabel } from "@/utils/format.utils";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
+const CACHE_KEY_PREFIX = "@cache_deal_detail_";
 
 const TABS = ["Financial", "Details", "Location", "Activities", "Match", "Owner"];
 
@@ -25,14 +30,41 @@ function fmt(amount?: number): string {
     return `₹${amount.toLocaleString("en-IN")}`;
 }
 
-function lv(field: unknown): string {
+function lv(field: unknown, getLookupValue?: (type: string, val: any) => string, users?: any[]): string {
     if (field === null || field === undefined || field === "" || field === "null" || field === "undefined") return "—";
+
+    // Handle Array
+    if (Array.isArray(field)) {
+        return field.map(f => lv(f, getLookupValue, users)).filter(v => v && v !== "—").join(", ") || "—";
+    }
+
     if (typeof field === "object" && field !== null) {
         if ("lookup_value" in field && field.lookup_value) return (field as any).lookup_value;
         if ("fullName" in field && field.fullName) return (field as any).fullName;
         if ("name" in field && field.name) return (field as any).name;
+        if ((field as any)._id && getLookupValue) {
+            const resolved = getLookupValue("Any", (field as any)._id);
+            if (resolved && resolved !== (field as any)._id) return resolved;
+        }
     }
+
+    // Handle ID string
     const str = String(field).trim();
+    if (/^[a-f0-9]{24}$/i.test(str)) {
+        // 1. Try Lookups
+        if (getLookupValue) {
+            const resolved = getLookupValue("Any", str);
+            if (resolved && resolved !== str && resolved !== "—") return resolved;
+        }
+        // 2. Try Users
+        if (users) {
+            const user = users.find(u => u._id === str || u.id === str);
+            if (user) return user.fullName || user.name || str;
+        }
+        // If still a hex ID and not resolved, return placeholder for professional look
+        return "—";
+    }
+
     return str || "—";
 }
 
@@ -86,48 +118,81 @@ const STAGE_COLORS: Record<string, string> = {
 };
 
 export default function DealDetailScreen() {
+    const insets = useSafeAreaInsets();
     const { id } = useLocalSearchParams<{ id: string }>();
     const router = useRouter();
     const { theme } = useTheme();
     const { trackCall } = useCallTracking();
     const { getLookupValue } = useLookup();
+    const { users } = useUsers();
     const [deal, setDeal] = useState<any>(null);
     const [activities, setActivities] = useState<any[]>([]);
     const [matchingLeads, setMatchingLeads] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState(0);
     const [dealHealth, setDealHealth] = useState<{ score: number; label: string; color: string } | null>(null);
+    const lastFetchRef = useRef<number>(0);
 
     const scrollX = useRef(new Animated.Value(0)).current;
     const tabScrollViewRef = useRef<ScrollView>(null);
     const contentScrollViewRef = useRef<ScrollView>(null);
     const fadeAnim = useRef(new Animated.Value(0)).current;
 
-    const fetchData = useCallback(async () => {
+    const fetchData = useCallback(async (isRefresh = false) => {
         if (!id) return;
+        const cacheKey = `${CACHE_KEY_PREFIX}${id}`;
+        const now = Date.now();
+        if (!isRefresh && lastFetchRef.current && (now - lastFetchRef.current < 120000)) return;
+
         try {
-            const dealRes = await getDealById(id as string).catch(e => { console.error("Deal fetch error:", e); return null; });
+            if (loading) {
+                const cachedData = await AsyncStorage.getItem(cacheKey);
+                if (cachedData) {
+                    const parsed = JSON.parse(cachedData);
+                    setDeal(parsed.deal);
+                    setActivities(parsed.activities);
+                    setMatchingLeads(parsed.matchingLeads);
+                    setDealHealth(parsed.dealHealth);
+                    setLoading(false);
+                    Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }).start();
+                }
+            }
+
+            const [dealRes, actRes, matchRes, healthRes] = await Promise.all([
+                getDealById(id as string).catch(e => { console.warn("Deal Fetch Error:", e); return null; }),
+                getActivities({ entityId: id, limit: 20 }).catch(e => { console.warn("Activities Fetch Error:", e); return null; }),
+                getMatchingLeads(id as string).catch(e => { console.warn("Match Fetch Error:", e); return null; }),
+                getDealHealth(id as string).catch(e => { console.warn("Health Fetch Error:", e); return null; })
+            ]);
+
             const currentDeal = dealRes?.data ?? dealRes?.deal ?? dealRes;
+            const currentActivities = Array.isArray(actRes?.data) ? actRes.data : (Array.isArray(actRes) ? actRes : []);
+            const currentMatchingLeads = Array.isArray(matchRes?.data) ? matchRes.data : (Array.isArray(matchRes) ? matchRes : []);
+            const currentHealth = healthRes?.score !== undefined ? healthRes : null;
+
             setDeal(currentDeal);
+            setActivities(currentActivities);
+            setMatchingLeads(currentMatchingLeads);
+            setDealHealth(currentHealth);
+            lastFetchRef.current = Date.now();
 
-            // Fetch other data in parallel (including deal health from stage engine)
-            Promise.all([
-                getActivities({ entityId: id, limit: 20 }),
-                getMatchingLeads(id as string),
-                getDealHealth(id as string)
-            ]).then(([actRes, matchRes, healthRes]) => {
-                setActivities(Array.isArray(actRes?.data) ? actRes.data : (Array.isArray(actRes) ? actRes : []));
-                setMatchingLeads(Array.isArray(matchRes?.data) ? matchRes.data : (Array.isArray(matchRes) ? matchRes : []));
-                if (healthRes?.score !== undefined) setDealHealth(healthRes);
-            }).catch(e => console.error("Supplementary fetch error:", e));
+            AsyncStorage.setItem(cacheKey, JSON.stringify({
+                deal: currentDeal,
+                activities: currentActivities,
+                matchingLeads: currentMatchingLeads,
+                dealHealth: currentHealth,
+                timestamp: Date.now()
+            })).catch(e => console.warn("Cache save error:", e));
 
-            Animated.timing(fadeAnim, { toValue: 1, duration: 600, useNativeDriver: true }).start();
+            if (loading) {
+                Animated.timing(fadeAnim, { toValue: 1, duration: 600, useNativeDriver: true }).start();
+            }
         } catch (error) {
-            console.error("Fetch error:", error);
+            console.error("Deal Detail Fetch error:", error);
         } finally {
             setLoading(false);
         }
-    }, [id]);
+    }, [id, loading, fadeAnim]);
 
     const onTabPress = (index: number) => {
         setActiveTab(index);
@@ -153,24 +218,24 @@ export default function DealDetailScreen() {
 
     const stageLabel = deal.stage ?? "Open";
     const stageColor = STAGE_COLORS[stageLabel.toLowerCase()] ?? theme.primary;
-    const score = getDealScore(deal);
+    const score = getDealScore(deal); // Still uses local lv but it's fine for simple stage check
 
     // Header Data
-    const projectName = lv(deal.projectName) !== "—" ? lv(deal.projectName) : lv(deal.projectId);
-    const unitNo = lv(deal.unitNo || deal.unitNumber) !== "—" ? lv(deal.unitNo || deal.unitNumber) : lv(deal.inventoryId?.unitNumber || deal.inventoryId?.unitNo);
-    const unitType = lv(deal.unitType) !== "—" ? lv(deal.unitType) : lv(deal.inventoryId?.unitType);
-    const block = lv(deal.block) !== "—" ? lv(deal.block) : lv(deal.inventoryId?.block);
-    const assignedTo = lv(deal.assignedTo);
-    const intent = lv(deal.intent);
+    const projectName = lv(deal.projectName, getLookupValue, users) !== "—" ? lv(deal.projectName, getLookupValue, users) : lv(deal.projectId, getLookupValue, users);
+    const unitNo = lv(deal.unitNo || deal.unitNumber, getLookupValue, users) !== "—" ? lv(deal.unitNo || deal.unitNumber, getLookupValue, users) : lv(deal.inventoryId?.unitNumber || deal.inventoryId?.unitNo, getLookupValue, users);
+    const unitType = lv(deal.unitType, getLookupValue, users) !== "—" ? lv(deal.unitType, getLookupValue, users) : lv(deal.inventoryId?.unitType, getLookupValue, users);
+    const block = lv(deal.block, getLookupValue, users) !== "—" ? lv(deal.block, getLookupValue, users) : lv(deal.inventoryId?.block, getLookupValue, users);
+    const assignedTo = lv(deal.assignedTo, getLookupValue, users);
+    const intent = lv(deal.intent, getLookupValue, users);
 
-    const buyer = lv(deal.partyStructure?.buyer) !== "—" ? lv(deal.partyStructure?.buyer) : lv(deal.owner);
+    const buyer = resolveNameFromObject(deal.partyStructure?.buyer, deal.owner, getLookupValue, users);
     const buyerPhone = deal.partyStructure?.buyer?.mobile || deal.owner?.mobile || "";
     const buyerEmail = deal.partyStructure?.buyer?.email || deal.owner?.email || "";
 
     return (
         <View style={[styles.container, { backgroundColor: theme.background }]}>
             {/* Premium SaaS Header */}
-            <SafeAreaView style={[styles.headerCard, { backgroundColor: theme.card }]}>
+            <SafeAreaView style={[styles.headerCard, { backgroundColor: theme.card }]} edges={['top', 'left', 'right']}>
                 <View style={styles.headerTop}>
                     <TouchableOpacity
                         onPress={() => router.canGoBack() ? router.back() : router.push("/(tabs)/deals")}
@@ -235,7 +300,7 @@ export default function DealDetailScreen() {
                         <View style={styles.strategyValueRow}>
                             <Ionicons name="people-outline" size={14} color="#6366F1" />
                             <Text style={[styles.strategyValue, { color: theme.text }]} numberOfLines={1}>
-                                {lv(deal.team)}
+                                {lv(deal.team, getLookupValue, users)}
                             </Text>
                         </View>
                     </View>
@@ -263,10 +328,10 @@ export default function DealDetailScreen() {
                 {/* Professional Action Hub */}
                 <View style={styles.modernActionHub}>
                     {[
-                        { icon: 'call', color: theme.primary, onPress: () => trackCall(buyerPhone, id!, "Deal", buyer) },
-                        { icon: 'chatbubble-ellipses', color: '#3B82F6', onPress: () => Linking.openURL(`sms:${buyerPhone.replace(/\D/g, "")}`) },
-                        { icon: 'logo-whatsapp', color: '#128C7E', onPress: () => Linking.openURL(`https://wa.me/${buyerPhone.replace(/\D/g, "")}`) },
-                        { icon: 'mail', color: '#EA4335', onPress: () => Linking.openURL(`mailto:${buyerEmail}`) },
+                        { icon: 'call', color: theme.primary, onPress: () => buyerPhone ? trackCall(buyerPhone, id!, "Deal", buyer) : Alert.alert("No Phone", "Contact number not available") },
+                        { icon: 'chatbubble-ellipses', color: '#3B82F6', onPress: () => buyerPhone ? Linking.openURL(`sms:${buyerPhone.replace(/\D/g, "")}`) : Alert.alert("No Phone", "Contact number not available") },
+                        { icon: 'logo-whatsapp', color: '#128C7E', onPress: () => buyerPhone ? Linking.openURL(`https://wa.me/${buyerPhone.replace(/\D/g, "")}`) : Alert.alert("No Phone", "Contact number not available") },
+                        { icon: 'mail', color: '#EA4335', onPress: () => buyerEmail ? Linking.openURL(`mailto:${buyerEmail}`) : Alert.alert("No Email", "Email address not available") },
                         { icon: 'share-social', color: '#6366F1', onPress: () => Alert.alert("Share Wall", `Sharing details for Deal ${unitNo} at ${projectName}`) },
                     ].map((action, i) => (
                         <TouchableOpacity key={i} style={[styles.modernHubBtn, { backgroundColor: action.color }]} onPress={action.onPress}>
@@ -313,7 +378,7 @@ export default function DealDetailScreen() {
                             <InfoRow label="Expected Price" value={fmt(deal.price)} icon="cash-outline" accent />
                             <InfoRow label="Quote Price" value={fmt(deal.quotePrice)} icon="pricetag-outline" />
                             <InfoRow
-                                label={`Price per ${lv(deal.sizeUnit || deal.inventoryId?.sizeUnit) || "Unit"}`}
+                                label={`Price per ${lv(deal.sizeUnit || deal.inventoryId?.sizeUnit, getLookupValue, users) || "Unit"}`}
                                 value={deal.ratePrice ? `${fmt(deal.ratePrice)}` : "—"}
                                 icon="calculator-outline"
                             />
@@ -322,9 +387,9 @@ export default function DealDetailScreen() {
 
                         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
                             <Text style={[styles.cardTitle, { color: theme.text }]}>Deal Summary</Text>
-                            <InfoRow label="Transaction Type" value={lv(deal.transactionType)} icon="repeat-outline" />
-                            <InfoRow label="Deal Type" value={lv(deal.dealType)} icon="briefcase-outline" />
-                            <InfoRow label="Deal Source" value={lv(deal.source)} icon="compass-outline" />
+                            <InfoRow label="Transaction Type" value={lv(deal.transactionType, getLookupValue, users)} icon="repeat-outline" />
+                            <InfoRow label="Deal Type" value={lv(deal.dealType, getLookupValue, users)} icon="briefcase-outline" />
+                            <InfoRow label="Deal Source" value={lv(deal.source, getLookupValue, users)} icon="compass-outline" />
                             {deal.commission && (
                                 <InfoRow label="Expected Commission" value={fmt(deal.commission.expectedAmount)} icon="wallet-outline" accent />
                             )}
@@ -342,22 +407,21 @@ export default function DealDetailScreen() {
                             </View>
                             <Text style={[styles.insightText, { color: theme.text }]}>{getDealInsight(deal, activities)}</Text>
                         </View>
-
                         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
                             <Text style={[styles.cardTitle, { color: theme.text }]}>Property Configuration</Text>
-                            <InfoRow label="Category" value={lv(deal.category || deal.inventoryId?.category)} icon="list-outline" />
-                            <InfoRow label="Sub-Category" value={lv(deal.subCategory || deal.inventoryId?.subCategory)} icon="layers-outline" />
-                            <InfoRow label="Direction" value={lv(deal.direction || deal.inventoryId?.direction)} icon="compass-outline" />
-                            <InfoRow label="Facing" value={lv(deal.facing || deal.inventoryId?.facing)} icon="navigate-outline" />
-                            <InfoRow label="Road" value={lv(deal.roadWidth || deal.inventoryId?.roadWidth)} icon="trail-sign-outline" />
-                            <InfoRow label="Ownership" value={lv(deal.ownership || deal.inventoryId?.ownership)} icon="document-text-outline" />
+                            <InfoRow label="Category" value={lv(deal.category || deal.inventoryId?.category, getLookupValue, users)} icon="list-outline" />
+                            <InfoRow label="Sub-Category" value={lv(deal.subCategory || deal.inventoryId?.subCategory, getLookupValue, users)} icon="layers-outline" />
+                            <InfoRow label="Direction" value={lv(deal.direction || deal.inventoryId?.direction, getLookupValue, users)} icon="compass-outline" />
+                            <InfoRow label="Facing" value={lv(deal.facing || deal.inventoryId?.facing, getLookupValue, users)} icon="navigate-outline" />
+                            <InfoRow label="Road" value={lv(deal.roadWidth || deal.inventoryId?.roadWidth, getLookupValue, users)} icon="trail-sign-outline" />
+                            <InfoRow label="Ownership" value={lv(deal.ownership || deal.inventoryId?.ownership, getLookupValue, users)} icon="document-text-outline" />
                         </View>
 
                         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
                             <Text style={[styles.cardTitle, { color: theme.text }]}>Size & Dimensions</Text>
-                            <InfoRow label="Size Label" value={deal.size || deal.inventoryId?.size ? `${deal.size || deal.inventoryId?.size} ${deal.sizeUnit || deal.inventoryId?.sizeUnit || ""}` : "—"} icon="cube-outline" accent />
-                            <InfoRow label="Width" value={lv(deal.width || deal.inventoryId?.width || deal.inventoryId?.dimensions?.split('x')?.[0]?.trim())} icon="resize-outline" />
-                            <InfoRow label="Length" value={lv(deal.length || deal.inventoryId?.length || deal.inventoryId?.dimensions?.split('x')?.[1]?.trim())} icon="resize-outline" />
+                            <InfoRow label="Size Label" value={getSizeLabel(deal, getLookupValue) || "—"} icon="cube-outline" accent />
+                            <InfoRow label="Width" value={lv(deal.width || deal.inventoryId?.width || deal.inventoryId?.dimensions?.split('x')?.[0]?.trim(), getLookupValue, users)} icon="resize-outline" />
+                            <InfoRow label="Length" value={lv(deal.length || deal.inventoryId?.length || deal.inventoryId?.dimensions?.split('x')?.[1]?.trim(), getLookupValue, users)} icon="resize-outline" />
                         </View>
 
                         {deal.inventoryId?.builtupDetails?.length > 0 && (
@@ -374,9 +438,9 @@ export default function DealDetailScreen() {
 
                         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
                             <Text style={[styles.cardTitle, { color: theme.text }]}>Furnishing & Status</Text>
-                            <InfoRow label="Furnish Type" value={lv(deal.furnishType || deal.inventoryId?.furnishType)} icon="bed-outline" />
-                            <InfoRow label="Furnished Items" value={lv(deal.furnishedItems || deal.inventoryId?.furnishedItems)} icon="apps-outline" />
-                            <InfoRow label="Possession" value={lv(deal.possessionStatus || deal.inventoryId?.possessionStatus)} icon="key-outline" />
+                            <InfoRow label="Furnish Type" value={lv(deal.furnishType || deal.inventoryId?.furnishType, getLookupValue, users)} icon="bed-outline" />
+                            <InfoRow label="Furnished Items" value={lv(deal.furnishedItems || deal.inventoryId?.furnishedItems, getLookupValue, users)} icon="apps-outline" />
+                            <InfoRow label="Possession" value={lv(deal.possessionStatus || deal.inventoryId?.possessionStatus, getLookupValue, users)} icon="key-outline" />
                         </View>
                     </ScrollView>
                 </View>
@@ -386,18 +450,18 @@ export default function DealDetailScreen() {
                     <ScrollView contentContainerStyle={styles.innerScroll}>
                         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
                             <Text style={[styles.cardTitle, { color: theme.text }]}>Property Location</Text>
-                            <InfoRow label="City" value={lv(deal.city || deal.inventoryId?.city || deal.inventoryId?.address?.city)} icon="business-outline" />
-                            <InfoRow label="Sector/Locality" value={lv(deal.sector || deal.inventoryId?.sector || deal.inventoryId?.address?.locality)} icon="map-outline" />
-                            <InfoRow label="Address" value={lv(deal.address || deal.inventoryId?.address?.street || deal.inventoryId?.address?.hNo)} icon="location-outline" />
-                            <InfoRow label="Tehsil" value={lv(deal.inventoryId?.address?.tehsil)} icon="trail-sign-outline" />
-                            <InfoRow label="ZIP Code" value={lv(deal.inventoryId?.address?.pinCode || deal.inventoryId?.address?.zip)} icon="mail-unread-outline" />
+                            <InfoRow label="City" value={lv(deal.city || deal.inventoryId?.city || deal.inventoryId?.address?.city, getLookupValue, users)} icon="business-outline" />
+                            <InfoRow label="Sector/Locality" value={lv(deal.sector || deal.inventoryId?.sector || deal.inventoryId?.address?.locality, getLookupValue, users)} icon="map-outline" />
+                            <InfoRow label="Address" value={lv(deal.address || deal.inventoryId?.address?.street || deal.inventoryId?.address?.hNo, getLookupValue, users)} icon="location-outline" />
+                            <InfoRow label="Tehsil" value={lv(deal.inventoryId?.address?.tehsil, getLookupValue, users)} icon="trail-sign-outline" />
+                            <InfoRow label="ZIP Code" value={lv(deal.inventoryId?.address?.pinCode || deal.inventoryId?.address?.zip, getLookupValue, users)} icon="mail-unread-outline" />
                         </View>
 
                         {(deal.inventoryId?.address?.lat || deal.inventoryId?.latitude) && (
                             <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
                                 <Text style={[styles.cardTitle, { color: theme.text }]}>Coordinates</Text>
-                                <InfoRow label="Latitude" value={lv(deal.inventoryId?.address?.lat || deal.inventoryId?.latitude)} icon="navigate-outline" />
-                                <InfoRow label="Longitude" value={lv(deal.inventoryId?.address?.lng || deal.inventoryId?.longitude)} icon="navigate-circle-outline" />
+                                <InfoRow label="Latitude" value={lv(deal.inventoryId?.address?.lat || deal.inventoryId?.latitude, getLookupValue, users)} icon="navigate-outline" />
+                                <InfoRow label="Longitude" value={lv(deal.inventoryId?.address?.lng || deal.inventoryId?.longitude, getLookupValue, users)} icon="navigate-circle-outline" />
 
                                 <TouchableOpacity
                                     style={[styles.googleMapsBtn, { backgroundColor: theme.primary }]}
@@ -460,7 +524,7 @@ export default function DealDetailScreen() {
                                     <TouchableOpacity key={i} style={[styles.matchItem, { borderBottomColor: theme.border }]} onPress={() => router.push(`/lead-detail?id=${lead._._id || lead._id}`)}>
                                         <View style={styles.matchLeft}>
                                             <Text style={[styles.matchUnit, { color: theme.text }]}>{lead.firstName} {lead.lastName}</Text>
-                                            <Text style={[styles.matchProject, { color: theme.textLight }]}>{lv(lead.requirement)} • Budget: {lv(lead.budget)}</Text>
+                                            <Text style={[styles.matchProject, { color: theme.textLight }]}>{lv(lead.requirement, getLookupValue, users)} • Budget: {lv(lead.budget, getLookupValue, users)}</Text>
                                         </View>
                                         <View style={styles.matchRight}>
                                             <View style={[styles.relationBadge, { backgroundColor: theme.primary + '10' }]}>
@@ -490,7 +554,7 @@ export default function DealDetailScreen() {
                                             onPress={() => owner._id && router.push(`/contact-detail?id=${owner._id}`)}
                                         >
                                             <View style={styles.matchLeft}>
-                                                <Text style={[styles.matchUnit, { color: theme.text }]}>{lv(owner)}</Text>
+                                                <Text style={[styles.matchUnit, { color: theme.text }]}>{lv(owner, getLookupValue, users)}</Text>
                                                 <Text style={[styles.matchProject, { color: theme.textLight }]}>{owner.phones?.[0]?.number || owner.mobile || "N/A"}</Text>
                                             </View>
                                             <View style={[styles.relationBadge, { backgroundColor: '#10B981' + '10' }]}>
@@ -513,7 +577,7 @@ export default function DealDetailScreen() {
                                             onPress={() => assoc._id && router.push(`/contact-detail?id=${assoc._id}`)}
                                         >
                                             <View style={styles.matchLeft}>
-                                                <Text style={[styles.matchUnit, { color: theme.text }]}>{lv(assoc)}</Text>
+                                                <Text style={[styles.matchUnit, { color: theme.text }]}>{lv(assoc, getLookupValue, users)}</Text>
                                                 <Text style={[styles.matchProject, { color: theme.textLight }]}>{assoc.phones?.[0]?.number || assoc.mobile || "N/A"}</Text>
                                             </View>
                                             <View style={[styles.relationBadge, { backgroundColor: theme.primary + '10' }]}>
@@ -576,8 +640,8 @@ const styles = StyleSheet.create({
     marketingText: { fontSize: 11, fontWeight: '800' },
 
     // Modern Action Hub
-    modernActionHub: { flexDirection: 'row', justifyContent: 'center', gap: 20, paddingVertical: 15 },
-    modernHubBtn: { width: 50, height: 50, borderRadius: 25, justifyContent: 'center', alignItems: 'center', elevation: 8, shadowOpacity: 0.3, shadowRadius: 10 },
+    modernActionHub: { flexDirection: 'row', justifyContent: 'center', gap: 12, paddingVertical: 15 },
+    modernHubBtn: { width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center', elevation: 4, shadowOpacity: 0.2, shadowRadius: 5 },
 
     // Tabs
     tabsScroll: { paddingHorizontal: 20, gap: 25 },
@@ -635,3 +699,12 @@ const styles = StyleSheet.create({
         shadowOffset: { width: 0, height: 6 },
     },
 });
+
+function resolveNameFromObject(obj: any, fallback?: any, getLookupValue?: (type: string, val: any) => string, users?: any[]): string {
+    if (obj) {
+        if (obj.fullName) return obj.fullName;
+        if (obj.name) return obj.name;
+        if (obj.firstName) return [obj.firstName, obj.lastName].filter(Boolean).join(" ");
+    }
+    return lv(fallback, getLookupValue, users);
+}

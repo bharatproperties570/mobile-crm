@@ -4,15 +4,15 @@ import {
     TextInput, Alert, Switch, ActivityIndicator, KeyboardAvoidingView,
     Platform, SafeAreaView, Animated, Pressable, Modal, FlatList
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { createProject, type Project, type ProjectBlock } from "./services/projects.service";
-import { getLookups, type Lookup } from "./services/lookups.service";
-import { getTeams } from "./services/teams.service";
-import { getCompanies } from "./services/companies.service";
-import api from "./services/api";
-import { safeApiCall, lookupVal, safeApiCallSingle } from "./services/api.helpers";
-import { useTheme, SPACING } from "./context/ThemeContext";
+import { createProject, type Project, type ProjectBlock } from "@/services/projects.service";
+import { getLookups, type Lookup } from "@/services/lookups.service";
+import { getTeams } from "@/services/teams.service";
+import { getCompanies } from "@/services/companies.service";
+import api from "@/services/api";
+import { safeApiCall, lookupVal, safeApiCallSingle } from "@/services/api.helpers";
+import { useTheme, SPACING } from "@/context/ThemeContext";
 import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
 
 const GOOGLE_MAPS_API_KEY = "AIzaSyBd2gdMJVt5C_tgYqWoRbBiatzmevYdB9U";
@@ -242,10 +242,12 @@ function ModernPicker({
 const STEPS = ["Basic", "Location", "Block", "Amenities", "Assignment"];
 
 export default function AddProjectScreen() {
+    const { id } = useLocalSearchParams<{ id?: string }>();
     const router = useRouter();
     const { theme } = useTheme();
     const [step, setStep] = useState(0);
     const [loading, setLoading] = useState(false);
+    const [loadingProject, setLoadingProject] = useState(false);
 
     // Form State
     const [formData, setFormData] = useState<Partial<Project>>({
@@ -330,6 +332,38 @@ export default function AddProjectScreen() {
         loadData();
     }, []);
 
+    useEffect(() => {
+        if (id) {
+            const fetchProject = async () => {
+                setLoadingProject(true);
+                try {
+                    const res = await safeApiCallSingle<Project>(() => api.get(`/projects/${id}`));
+                    if (res.data) {
+                        const p = res.data;
+                        setFormData({
+                            ...p,
+                            category: (p.category as any[])?.map(c => c.lookup_value || c) || [],
+                            subCategory: (p.subCategory as any[])?.map(s => s.lookup_value || s) || [],
+                            status: (p.status as any)?.lookup_value || p.status || "",
+                            parkingType: (p.parkingType as any)?.lookup_value || p.parkingType || "",
+                            developerName: (p.developerName as any)?.name || p.developerName || "",
+                            blocks: (p.blocks || []).map(b => ({
+                                ...b,
+                                status: (b.status as any)?.lookup_value || b.status || "",
+                                parkingType: (b.parkingType as any)?.lookup_value || b.parkingType || "",
+                            }))
+                        });
+                    }
+                } catch (e) {
+                    console.error("[ProjectUI] Fetch project failed", e);
+                } finally {
+                    setLoadingProject(false);
+                }
+            };
+            fetchProject();
+        }
+    }, [id]);
+
     const filteredUsersByTeam = useMemo(() => {
         if (!formData.team || formData.team.length === 0) return users;
         return users.filter(u => formData.team?.includes(u.team));
@@ -363,11 +397,15 @@ export default function AddProjectScreen() {
             }))
         };
 
-        const res = await safeApiCall(() => createProject(payload));
+        const res = id ? await safeApiCall(() => api.put(`/projects/${id}`, payload)) : await safeApiCall(() => createProject(payload));
         setLoading(false);
         if (!res.error) {
-            Alert.alert("Success", "Project created successfully!");
-            router.back();
+            Alert.alert("Success", id ? "Project updated successfully!" : "Project created successfully!");
+            if (router.canGoBack()) {
+                router.back();
+            } else {
+                router.replace("/(tabs)/projects");
+            }
         } else {
             Alert.alert("Error", res.error);
         }
@@ -381,7 +419,13 @@ export default function AddProjectScreen() {
 
     const prevStep = () => {
         if (step > 0) setStep(step - 1);
-        else router.back();
+        else {
+            if (router.canGoBack()) {
+                router.back();
+            } else {
+                router.replace("/(tabs)/projects");
+            }
+        }
     };
 
     const renderStepContent = () => {
@@ -403,7 +447,7 @@ export default function AddProjectScreen() {
                         <Ionicons name={step === 0 ? "close" : "arrow-back"} size={26} color={theme.textPrimary} />
                     </TouchableOpacity>
                     <View style={styles.headerTitleContainer}>
-                        <Text style={[styles.headerTitle, { color: theme.textPrimary }]}>Add Project</Text>
+                        <Text style={[styles.headerTitle, { color: theme.textPrimary }]}>{id ? "Edit Project" : "Add Project"}</Text>
                         <Text style={[styles.headerSubtitle, { color: theme.textSecondary }]}>Step {step + 1} of {STEPS.length}: {STEPS[step]}</Text>
                     </View>
                     <View style={{ width: 28 }} />
@@ -424,7 +468,7 @@ export default function AddProjectScreen() {
                         <Text style={[styles.footerBtnTextSecondary, { color: theme.textSecondary }]}>{step === 0 ? "Cancel" : "Previous"}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={[styles.footerBtnPrimary, { backgroundColor: theme.primary, shadowColor: theme.primary }, loading && { opacity: 0.7 }]} onPress={nextStep} disabled={loading}>
-                        {loading ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.footerBtnTextPrimary}>{step === STEPS.length - 1 ? "Complete Setup" : "Continue"}</Text>}
+                        {loading ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.footerBtnTextPrimary}>{step === STEPS.length - 1 ? (id ? "Update Project" : "Complete Setup") : "Continue"}</Text>}
                     </TouchableOpacity>
                 </View>
             </KeyboardAvoidingView>

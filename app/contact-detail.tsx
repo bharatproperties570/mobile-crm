@@ -5,26 +5,29 @@ import {
 } from "react-native";
 import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { useTheme } from "./context/ThemeContext";
-import { useCallTracking } from "./context/CallTrackingContext";
-import { getContactById } from "./services/contacts.service";
-import { getActivities, getOrCreateCallActivity, getUnifiedTimeline } from "./services/activities.service";
-import { getInventoryByContact } from "./services/inventory.service";
-import { useLookup } from "./context/LookupContext";
-
+import { useTheme } from "@/context/ThemeContext";
+import { useCallTracking } from "@/context/CallTrackingContext";
+import { getContactById } from "@/services/contacts.service";
+import { getActivities, getOrCreateCallActivity, getUnifiedTimeline } from "@/services/activities.service";
+import { getInventoryByContact } from "@/services/inventory.service";
+import { useLookup } from "@/context/LookupContext";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { formatSize, getSizeLabel } from "@/utils/format.utils";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
+const CACHE_KEY_PREFIX = "@cache_contact_detail_";
 
 const TABS = ["Details", "Activities", "Inventory", "Documents"];
 
 function lv(field: unknown): string {
-    if (!field) return "—";
+    if (field === null || field === undefined || field === "" || field === "null" || field === "undefined") return "—";
     if (typeof field === "object" && field !== null) {
-        if ("lookup_value" in field) return (field as any).lookup_value ?? "—";
-        if ("fullName" in field) return (field as any).fullName ?? "—";
-        if ("name" in field) return (field as any).name ?? "—";
+        if ("lookup_value" in field && (field as any).lookup_value) return (field as any).lookup_value;
+        if ("fullName" in field && (field as any).fullName) return (field as any).fullName;
+        if ("name" in field && (field as any).name) return (field as any).name;
     }
-    return String(field) || "—";
+    const str = String(field).trim();
+    return str || "—";
 }
 
 function formatTimeAgo(dateString?: string) {
@@ -79,39 +82,67 @@ export default function ContactDetailScreen() {
     const { trackCall } = useCallTracking();
     const { getLookupValue } = useLookup();
     const [contact, setContact] = useState<any>(null);
-
     const [activities, setActivities] = useState<any[]>([]);
     const [ownedInventory, setOwnedInventory] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState(0);
+    const lastFetchRef = useRef<number>(0);
 
     const scrollX = useRef(new Animated.Value(0)).current;
     const tabScrollViewRef = useRef<ScrollView>(null);
     const contentScrollViewRef = useRef<ScrollView>(null);
     const fadeAnim = useRef(new Animated.Value(0)).current;
 
-    const fetchData = useCallback(async () => {
+    const fetchData = useCallback(async (isRefresh = false) => {
         if (!id) return;
+        const cacheKey = `${CACHE_KEY_PREFIX}${id}`;
+        const now = Date.now();
+        if (!isRefresh && lastFetchRef.current && (now - lastFetchRef.current < 120000)) return;
+
         try {
-            const [contactRes, timelineRes] = await Promise.all([
+            if (loading) {
+                const cachedData = await AsyncStorage.getItem(cacheKey);
+                if (cachedData) {
+                    const parsed = JSON.parse(cachedData);
+                    setContact(parsed.contact);
+                    setActivities(parsed.activities);
+                    setOwnedInventory(parsed.ownedInventory);
+                    setLoading(false);
+                    Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }).start();
+                }
+            }
+
+            const [contactRes, timelineRes, ownedRes] = await Promise.all([
                 getContactById(id as string),
-                getUnifiedTimeline("contact", id as string)
+                getUnifiedTimeline("contact", id as string),
+                getInventoryByContact(id as string)
             ]);
 
             const currentContact = contactRes?.data ?? contactRes;
+            const currentActivities = Array.isArray(timelineRes?.data) ? timelineRes.data : (Array.isArray(timelineRes) ? timelineRes : []);
+            const currentInventory = Array.isArray(ownedRes?.data) ? ownedRes.data : (Array.isArray(ownedRes) ? ownedRes : []);
+
             setContact(currentContact);
-            setActivities(Array.isArray(timelineRes?.data) ? timelineRes.data : (Array.isArray(timelineRes) ? timelineRes : []));
+            setActivities(currentActivities);
+            setOwnedInventory(currentInventory);
+            lastFetchRef.current = Date.now();
 
-            const ownedRes = await getInventoryByContact(id);
-            setOwnedInventory(Array.isArray(ownedRes?.data) ? ownedRes.data : (Array.isArray(ownedRes) ? ownedRes : []));
+            AsyncStorage.setItem(cacheKey, JSON.stringify({
+                contact: currentContact,
+                activities: currentActivities,
+                ownedInventory: currentInventory,
+                timestamp: Date.now()
+            })).catch(e => console.warn("Cache save error:", e));
 
-            Animated.timing(fadeAnim, { toValue: 1, duration: 600, useNativeDriver: true }).start();
+            if (loading) {
+                Animated.timing(fadeAnim, { toValue: 1, duration: 600, useNativeDriver: true }).start();
+            }
         } catch (error) {
-            console.error(error);
+            console.error("Contact Detail Fetch error:", error);
         } finally {
             setLoading(false);
         }
-    }, [id]);
+    }, [id, loading, fadeAnim]);
 
     const onTabPress = (index: number) => {
         setActiveTab(index);
@@ -148,7 +179,7 @@ export default function ContactDetailScreen() {
             {/* Premium SaaS Header */}
             <SafeAreaView style={[styles.headerCard, { backgroundColor: theme.card }]}>
                 <View style={styles.headerTop}>
-                    <TouchableOpacity onPress={() => router.back()} style={styles.backBtnCircle}>
+                    <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace("/(tabs)/contacts")} style={styles.backBtnCircle}>
                         <Ionicons name="chevron-back" size={22} color={theme.text} />
                     </TouchableOpacity>
                     <View style={styles.headerTitleContainer}>

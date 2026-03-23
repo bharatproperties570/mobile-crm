@@ -6,8 +6,8 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import api from "./services/api";
-import { useTheme, SPACING } from "./context/ThemeContext";
+import api from "@/services/api";
+import { useTheme, SPACING } from "@/context/ThemeContext";
 
 // ─── Reusable Components ──────────────────────────────────────────────────────
 
@@ -362,7 +362,7 @@ export default function AddCompanyScreen() {
             };
             await api.post("/companies", payload);
             Alert.alert("✅ Success", "Company created successfully!", [
-                { text: "OK", onPress: () => router.back() },
+                { text: "OK", onPress: () => router.canGoBack() ? router.back() : router.replace("/(tabs)/contacts") },
             ]);
         } catch (err: any) {
             const msg = err?.response?.data?.error || err?.response?.data?.message || "Failed to save company.";
@@ -376,7 +376,7 @@ export default function AddCompanyScreen() {
         <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
             <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
                 <View style={[styles.header, { backgroundColor: theme.background }]}>
-                    <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}>
+                    <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace("/(tabs)/contacts")} style={styles.backBtn} hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}>
                         <Ionicons name="close" size={28} color={theme.textPrimary} />
                     </TouchableOpacity>
                     <View style={styles.headerTitleContainer}>

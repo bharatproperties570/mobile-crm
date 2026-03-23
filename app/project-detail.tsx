@@ -5,10 +5,10 @@ import {
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { useTheme } from "./context/ThemeContext";
-import { getProjectById, deleteProject, type Project } from "./services/projects.service";
-import { lookupVal, safeApiCall } from "./services/api.helpers";
-import { getActivities } from "./services/activities.service";
+import { useTheme } from "@/context/ThemeContext";
+import { getProjectById, deleteProject, type Project } from "@/services/projects.service";
+import { lookupVal, safeApiCall } from "@/services/api.helpers";
+import { getActivities } from "@/services/activities.service";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const TABS = ["Overview", "Activities"];
@@ -98,7 +98,13 @@ export default function ProjectDetailScreen() {
                 style: "destructive",
                 onPress: async () => {
                     const res = await safeApiCall(() => deleteProject(id as string));
-                    if (!res.error) router.back();
+                    if (!res.error) {
+                        if (router.canGoBack()) {
+                            router.back();
+                        } else {
+                            router.replace("/(tabs)/projects");
+                        }
+                    }
                 }
             }
         ]);
@@ -114,7 +120,7 @@ export default function ProjectDetailScreen() {
         <View style={[styles.container, { backgroundColor: theme.background }]}>
             <SafeAreaView style={[styles.headerCard, { backgroundColor: theme.card }]}>
                 <View style={styles.navBar}>
-                    <TouchableOpacity onPress={() => router.back()} style={[styles.navBtn, { backgroundColor: theme.background }]}>
+                    <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace("/(tabs)/projects")} style={[styles.navBtn, { backgroundColor: theme.background }]}>
                         <Ionicons name="chevron-back" size={24} color={theme.text} />
                     </TouchableOpacity>
                     <Text style={[styles.navTitle, { color: theme.text }]}>Project Command</Text>

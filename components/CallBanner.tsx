@@ -1,8 +1,8 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated, TouchableOpacity, Dimensions, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useTheme } from '../context/ThemeContext';
-import { CallerInfo } from '../services/contacts.service';
+import { useTheme } from "@/context/ThemeContext";
+import { CallerInfo } from "@/services/contacts.service";
 import { useRouter } from 'expo-router';
 
 const { width } = Dimensions.get('window');
@@ -48,7 +48,7 @@ export default function CallBanner({ info, onClose }: Props) {
     const handlePress = () => {
         onClose();
         const route = info.type.toLowerCase();
-        router.push(`/${route}/${info.entityId}`);
+        router.push(`/${route}-detail?id=${info.entityId}` as any);
     };
 
     return (
@@ -102,13 +102,36 @@ export default function CallBanner({ info, onClose }: Props) {
                     )}
                 </View>
 
-                <TouchableOpacity
-                    style={[styles.actionBtn, { backgroundColor: theme.primary }]}
-                    onPress={handlePress}
-                >
-                    <Text style={styles.actionBtnText}>View Customer Profile</Text>
-                    <Ionicons name="arrow-forward" size={16} color="#fff" />
-                </TouchableOpacity>
+                <View style={styles.actionRow}>
+                    <TouchableOpacity
+                        style={[styles.actionBtn, { backgroundColor: theme.primary + '15', flex: 1 }]}
+                        onPress={handlePress}
+                    >
+                        <Text style={[styles.actionBtnText, { color: theme.primary }]}>Profile</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={[styles.actionBtn, { backgroundColor: theme.primary, flex: 2 }]}
+                        onPress={() => {
+                            onClose();
+                            router.push({
+                                pathname: "/outcome",
+                                params: {
+                                    id: 'new',
+                                    entityId: info.entityId,
+                                    entityType: info.type,
+                                    entityName: info.name,
+                                    actType: 'Call',
+                                    status: 'Completed',
+                                    mobile: info.mobile || ''
+                                }
+                            });
+                        }}
+                    >
+                        <Text style={styles.actionBtnText}>Log Outcome</Text>
+                        <Ionicons name="checkmark-circle" size={16} color="#fff" />
+                    </TouchableOpacity>
+                </View>
             </View>
         </Animated.View>
     );
@@ -195,12 +218,16 @@ const styles = StyleSheet.create({
         fontSize: 13,
         fontWeight: '700',
     },
+    actionRow: {
+        flexDirection: 'row',
+        gap: 10,
+    },
     actionBtn: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        paddingVertical: 14,
-        borderRadius: 16,
+        paddingVertical: 12,
+        borderRadius: 14,
         gap: 8,
     },
     actionBtnText: {

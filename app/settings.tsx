@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, Swi
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { memo, useState } from 'react';
-import { useTheme } from './context/ThemeContext';
+import { useTheme } from "@/context/ThemeContext";
 
 const SettingsItem = memo(({ icon, label, sublabel, onPress, rightElement, color = "#64748B" }: any) => {
     const { theme } = useTheme();

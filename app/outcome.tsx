@@ -1,19 +1,20 @@
 import React, { useState, useEffect, useRef } from "react";
 import {
     View, Text, StyleSheet, TouchableOpacity, TextInput,
-    ActivityIndicator, Alert, ScrollView, SafeAreaView, Vibration,
+    ActivityIndicator, Alert, ScrollView, Vibration,
     Platform
 } from "react-native";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { Audio } from 'expo-av';
-import api from "./services/api";
-import { getActivityById, updateActivity } from "./services/activities.service";
-import { getSystemSettingsByKey } from "./services/system-settings.service";
-import { safeApiCallSingle } from "./services/api.helpers";
-import { computeLeadStage, updateLeadStage, syncDealStage } from "./services/stageEngine.service";
-import { getAuthorizedFolder, requestFolderPermission, findLatestRecording } from "./services/storage.service";
+import api from "@/services/api";
+import { getActivityById, updateActivity } from "@/services/activities.service";
+import { getSystemSettingsByKey } from "@/services/system-settings.service";
+import { safeApiCallSingle } from "@/services/api.helpers";
+import { computeLeadStage, updateLeadStage, syncDealStage } from "@/services/stageEngine.service";
+import { getAuthorizedFolder, requestFolderPermission, findLatestRecording } from "@/services/storage.service";
 
 // Standard Outcome Data (Fallback)
 const DEFAULT_OUTCOMES: any = {
@@ -35,7 +36,14 @@ const DEFAULT_OUTCOMES: any = {
 };
 
 export default function OutcomeScreen() {
-    const { id, entityId: pEntityId, entityType: pEntityType, entityName: pEntityName, actType: pActType, mobile: pMobile } = useLocalSearchParams();
+    const insets = useSafeAreaInsets();
+    const params = useLocalSearchParams();
+    const id = params.id as string;
+    const pEntityId = params.entityId as string;
+    const pEntityType = params.entityType as string;
+    const pEntityName = params.entityName as string;
+    const pActType = params.actType as string;
+    const pMobile = params.mobile as string;
     const router = useRouter();
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -346,7 +354,7 @@ export default function OutcomeScreen() {
                 : ["Completed", "Cancelled"];
 
     return (
-        <SafeAreaView style={styles.container}>
+        <SafeAreaView style={styles.container} edges={['top', 'left', 'right', 'bottom']}>
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
                     <Ionicons name="close" size={24} color="#0F172A" />

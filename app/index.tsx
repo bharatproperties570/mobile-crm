@@ -1,45 +1,28 @@
-import { useEffect, useState } from "react";
-import { Redirect } from "expo-router";
+import React, { useEffect } from "react";
 import { View, ActivityIndicator } from "react-native";
-import { storage } from "./services/storage";
-import api from "./services/api";
+import { useRouter } from "expo-router";
+import { useAuth } from "@/context/AuthContext";
 
 export default function Index() {
-    const [checking, setChecking] = useState(true);
+    const { loading, isAuthenticated } = useAuth();
+    const router = useRouter();
 
     useEffect(() => {
-        const autoLogin = async () => {
-            try {
-                console.log("Attempting background auto-login...");
-                const response = await api.post("/auth/login", { email: "test@bharatproperties.com", password: "Test@123" });
-                const token = response.data?.token || response.data?.accessToken;
-                if (token) {
-                    console.log("Auto-login successful, saving token.");
-                    await storage.setItem("authToken", token);
-                }
-            } catch (error: any) {
-                console.warn("Auto-login failed:", error?.response?.data || error.message);
-            } finally {
-                setChecking(false);
-            }
-        };
-
-        storage.getItem("authToken").then(token => {
-            if (!token) {
-                autoLogin();
+        console.log(`[IndexPage] AuthState: loading=${loading}, isAuthenticated=${isAuthenticated}`);
+        if (!loading) {
+            if (isAuthenticated) {
+                console.log("[IndexPage] Redirecting to (tabs)");
+                router.replace("/(tabs)");
             } else {
-                setChecking(false);
+                console.log("[IndexPage] Redirecting to (auth)/login");
+                router.replace("/(auth)/login");
             }
-        });
-    }, []);
+        }
+    }, [loading, isAuthenticated]);
 
-    if (checking) {
-        return (
-            <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#EEF2FF" }}>
-                <ActivityIndicator size="large" color="#1E40AF" />
-            </View>
-        );
-    }
-
-    return <Redirect href="/(tabs)" />;
+    return (
+        <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#EEF2FF" }}>
+            <ActivityIndicator size="large" color="#1E40AF" />
+        </View>
+    );
 }

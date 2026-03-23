@@ -5,10 +5,13 @@ import {
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useTheme } from './context/ThemeContext';
-import { getInventoryById, updateInventory } from './services/inventory.service';
-import { getSystemSettingsByKey } from './services/system-settings.service';
-import { lookupVal } from './services/api.helpers';
+import { useTheme } from "@/context/ThemeContext";
+import { getInventoryById, updateInventory } from "@/services/inventory.service";
+import { getSystemSettingsByKey } from "@/services/system-settings.service";
+import { lookupVal } from "@/services/api.helpers";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
+const CACHE_KEY_PREFIX = "@cache_inv_feedback_";
 
 export default function InventoryFeedbackScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
@@ -36,19 +39,38 @@ export default function InventoryFeedbackScreen() {
 
     useEffect(() => {
         const loadData = async () => {
+            if (!id) return;
+            const cacheKey = `${CACHE_KEY_PREFIX}${id}`;
+            const settingsCacheKey = `@cache_master_fields`;
+
             try {
+                // Try load from cache first
+                const [cachedInv, cachedSettings] = await Promise.all([
+                    AsyncStorage.getItem(cacheKey),
+                    AsyncStorage.getItem(settingsCacheKey)
+                ]);
+
+                if (cachedInv) setInventory(JSON.parse(cachedInv));
+                if (cachedSettings) setMasterFields(JSON.parse(cachedSettings));
+                if (cachedInv && cachedSettings) setLoading(false);
+
+                // Fetch fresh data
                 const [invRes, settingsRes] = await Promise.all([
                     getInventoryById(id as string),
                     getSystemSettingsByKey('master_fields')
                 ]);
 
                 const invData = invRes.records?.[0] || invRes.data || invRes;
-                setInventory(invData);
-
                 const fields = settingsRes.value || settingsRes.data?.value || settingsRes;
+
+                setInventory(invData);
                 setMasterFields(fields);
 
-                // Default Owner Logic
+                // Background cache update
+                AsyncStorage.setItem(cacheKey, JSON.stringify(invData)).catch(() => {});
+                AsyncStorage.setItem(settingsCacheKey, JSON.stringify(fields)).catch(() => {});
+
+                // Default Owner Logic (only if not already set or refreshing)
                 let initialOwner = '', initialRole = '';
                 if (invData.owners?.length > 0) {
                     initialOwner = invData.owners[0].name || invData.ownerName;
@@ -64,20 +86,23 @@ export default function InventoryFeedbackScreen() {
 
                 setFormData(prev => ({
                     ...prev,
-                    selectedOwner: initialOwner,
-                    selectedOwnerRole: initialRole,
-                    nextActionDate: dateStr
+                    selectedOwner: prev.selectedOwner || initialOwner,
+                    selectedOwnerRole: prev.selectedOwnerRole || initialRole,
+                    nextActionDate: prev.nextActionDate || dateStr
                 }));
 
             } catch (error) {
-                console.error("Error loading feedback data:", error);
-                Alert.alert("Error", "Failed to load required data.");
+                console.warn("Error loading feedback data:", error);
+                // If we have no cache and fetch failed, show alert
+                if (!inventory) {
+                    Alert.alert("Network Error", "Could not load required data. Please check your connection.");
+                }
             } finally {
                 setLoading(false);
             }
         };
 
-        if (id) loadData();
+        loadData();
     }, [id]);
 
     const ownersList = [];
@@ -107,8 +132,19 @@ export default function InventoryFeedbackScreen() {
         setSaving(true);
         try {
             const now = new Date();
-            const dateStr = now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-            const timeStr = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+            // Robust Date/Time formatting for both Web/Native
+            const day = String(now.getDate()).padStart(2, '0');
+            const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+            const month = monthNames[now.getMonth()];
+            const year = now.getFullYear();
+            const dateStr = now.toISOString(); // For backend history
+
+            let hours = now.getHours();
+            const ampm = hours >= 12 ? 'PM' : 'AM';
+            hours = hours % 12;
+            hours = hours ? hours : 12; // the hour '0' should be '12'
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            const timeStr = `${hours}:${minutes} ${ampm}`;
 
             let newRemark = `${formData.result}`;
             if (formData.reason) newRemark += ` (${formData.reason})`;
@@ -125,33 +161,63 @@ export default function InventoryFeedbackScreen() {
                 else newStatus = 'Inactive';
             }
 
+            const displayDate = `${day} ${month} ${year}`;
+            const isoDate = now.toISOString();
+
+            const interactionActor = formData.selectedOwner ? `${formData.selectedOwner} (${formData.selectedOwnerRole})` : 'Mobile User';
+            
             const newInteraction = {
                 id: Date.now(),
-                date: dateStr,
+                date: isoDate,
                 time: timeStr,
-                user: 'Mobile User',
-                action: scheduleFollowUp ? formData.nextActionType : 'Call',
+                actor: interactionActor,
+                action: scheduleFollowUp ? formData.nextActionType : 'Interaction',
                 result: formData.result,
                 reason: formData.reason,
                 note: newRemark
             };
 
-            const updates = {
-                lastContactDate: dateStr,
-                lastContactTime: timeStr,
-                lastContactUser: 'Mobile User',
+            // Ensure status is just an ID string
+            const statusId = (typeof newStatus === 'object' && newStatus !== null) ? (newStatus._id || newStatus.id) : newStatus;
+
+            const updates: any = {
                 remarks: newRemark,
-                status: newStatus,
+                status: statusId,
                 interactions: [newInteraction]
             };
 
-            await updateInventory(id as string, updates);
-            Alert.alert("Success", "Feedback recorded successfully", [
-                { text: "OK", onPress: () => router.back() }
-            ]);
-        } catch (error) {
-            console.error("Error saving feedback:", error);
-            Alert.alert("Error", "Failed to save feedback.");
+            // Add last contact info if schema has these
+            updates.lastContactDate = displayDate;
+            updates.lastContactTime = timeStr;
+            updates.lastContactUser = interactionActor;
+
+            console.log(`[DEBUG] Attempting updateInventory for ID: ${id}`);
+            const response = await updateInventory(id as string, updates);
+            console.log(`[DEBUG] updateInventory Response:`, response);
+            
+            // Backend might return { success: true, data: {...} } or just the document
+            const isSuccess = response?.success === true || response?._id || response?.id;
+
+            if (isSuccess) {
+                Alert.alert("Success", "Feedback recorded successfully", [
+                    { text: "OK", onPress: () => router.canGoBack() ? router.back() : router.replace("/(tabs)/inventory") }
+                ]);
+                
+                // Immediate fallback for Web/Hanging alerts
+                setTimeout(() => {
+                    if (router.canGoBack()) {
+                        router.back();
+                    } else {
+                        router.replace("/(tabs)/inventory");
+                    }
+                }, 1000);
+            } else {
+                throw new Error("Backend failed to confirm save.");
+            }
+        } catch (error: any) {
+            console.error("[DEBUG] Error saving feedback:", error);
+            const errorMsg = error.response?.data?.error || error.message || "Failed to save feedback.";
+            Alert.alert("Save Error", errorMsg);
         } finally {
             setSaving(false);
         }
@@ -171,7 +237,7 @@ export default function InventoryFeedbackScreen() {
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
             <View style={styles.header}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+                <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace("/(tabs)/inventory")} style={styles.backBtn}>
                     <Ionicons name="chevron-back" size={24} color={theme.text} />
                 </TouchableOpacity>
                 <Text style={[styles.headerTitle, { color: theme.text }]}>Log Interaction</Text>

@@ -5,12 +5,12 @@ import {
 } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { getProjects, type Project } from "../services/projects.service";
-import { lookupVal } from "../services/api.helpers";
-import { safeApiCall } from "../services/api.helpers";
-import { useTheme } from "../context/ThemeContext";
-import { useLookup } from "../context/LookupContext";
-import FilterModal, { FilterField } from "../components/FilterModal";
+import { getProjects, updateProject, type Project } from "@/services/projects.service";
+import { lookupVal } from "@/services/api.helpers";
+import { safeApiCall } from "@/services/api.helpers";
+import { useTheme } from "@/context/ThemeContext";
+import { useLookup } from "@/context/LookupContext";
+import FilterModal, { FilterField } from "@/components/FilterModal";
 
 const PROJECT_FILTER_FIELDS: FilterField[] = [
     { key: "status", label: "Status", type: "lookup", lookupType: "ProjectStatus" },
@@ -48,7 +48,13 @@ const ProjectCard = memo(({ project, onPress, onMenuPress }: { project: Project;
                         <Text style={styles.projectId}>PRJ-{project._id.substring(0, 6).toUpperCase()}</Text>
                         <Text style={[styles.projectName, { color: theme.text }]} numberOfLines={1}>{project.name}</Text>
                     </View>
-                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        {project.isPublished && (
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: '#10B98115', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                                <Ionicons name="globe" size={12} color="#10B981" />
+                                <Text style={{ fontSize: 10, color: '#10B981', fontWeight: '800' }}>LIVE</Text>
+                            </View>
+                        )}
                         <View style={[styles.statusPill, { backgroundColor: progress.color + "15" }]}>
                             <View style={[styles.statusDot, { backgroundColor: progress.color }]} />
                             <Text style={[styles.statusText, { color: progress.color }]}>{statusLabel}</Text>
@@ -89,6 +95,7 @@ export default function ProjectsScreen() {
     const [hasMore, setHasMore] = useState(true);
     const [filters, setFilters] = useState<any>({});
     const [showFilterModal, setShowFilterModal] = useState(false);
+    const [isPublishing, setIsPublishing] = useState(false);
 
     // Action Hub State
     const [selectedProject, setSelectedProject] = useState<Project | null>(null);
@@ -116,6 +123,75 @@ export default function ProjectsScreen() {
             setSelectedProject(null);
         });
     };
+
+    const submitPublishData = async (project: Project, metadata: any) => {
+        setIsPublishing(true);
+        const result = await safeApiCall(() => updateProject(project._id, {
+            isPublished: !project.isPublished,
+            websiteMetadata: metadata
+        }));
+
+        if (!result.error) {
+            Alert.alert("Success", `Project ${project.isPublished ? 'Unpublished' : 'Published'} successfully!`);
+            // Update local state directly to skip a full refetch
+            setProjects(prev => prev.map(p => {
+                if (p._id === project._id) {
+                    return { ...p, isPublished: !project.isPublished, websiteMetadata: metadata };
+                }
+                return p;
+            }));
+            if (hubVisible) {
+                closeHub(); 
+            }
+        }
+        setIsPublishing(false);
+    };
+
+    const handleTogglePublish = useCallback((project: Project | null) => {
+        if (!project) return;
+        closeHub();
+
+        setTimeout(() => {
+            if (project.isPublished) {
+                Alert.alert(
+                    "Unpublish Project?",
+                    "This will remove the project from the public website.",
+                    [
+                        { text: "Cancel", style: "cancel" },
+                        { 
+                            text: "Unpublish", 
+                            style: "destructive", 
+                            onPress: () => submitPublishData(project, { ...project.websiteMetadata }) 
+                        }
+                    ]
+                );
+            } else {
+                const metadata = { ...(project.websiteMetadata || {}) };
+                Alert.alert(
+                    "Share Exact Location?",
+                    "Do you want to share the exact location of this project on the public website?",
+                    [
+                        {
+                            text: "No",
+                            onPress: () => {
+                                metadata.shareLocation = false;
+                                submitPublishData(project, metadata);
+                            },
+                        },
+                        {
+                            text: "Yes",
+                            style: "default",
+                            onPress: () => {
+                                metadata.shareLocation = true;
+                                submitPublishData(project, metadata);
+                            },
+                        },
+                    ],
+                    { cancelable: true }
+                );
+            }
+        }, 300); // Wait for modal to slide down
+    }, []);
 
     const fetchProjects = useCallback(async (pageNum = 1, shouldAppend = false) => {
         setLoading(true);
@@ -322,6 +398,21 @@ export default function ProjectsScreen() {
                                     <Ionicons name="share-social" size={24} color="#3B82F6" />
                                 </View>
                                 <Text style={actionHubStyles.actionLabel}>Share</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity 
+                                style={actionHubStyles.actionItem} 
+                                onPress={() => handleTogglePublish(selectedProject)}
+                                disabled={isPublishing}
+                            >
+                                <View style={[actionHubStyles.actionIcon, { backgroundColor: selectedProject?.isPublished ? "#FEF2F2" : "#ECFDF5" }]}>
+                                    {isPublishing ? (
+                                        <ActivityIndicator size="small" color={selectedProject?.isPublished ? "#EF4444" : "#10B981"} />
+                                    ) : (
+                                        <Ionicons name={selectedProject?.isPublished ? "globe" : "globe-outline"} size={24} color={selectedProject?.isPublished ? "#EF4444" : "#10B981"} />
+                                    )}
+                                </View>
+                                <Text style={actionHubStyles.actionLabel}>{selectedProject?.isPublished ? "Unpublish" : "Publish"}</Text>
                             </TouchableOpacity>
                         </View >
                     </Animated.View >

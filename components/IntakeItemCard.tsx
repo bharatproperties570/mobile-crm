@@ -1,8 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useTheme } from '../context/ThemeContext';
-import { ParsedDeal } from '../../utils/dealParser';
+import { useTheme } from "@/context/ThemeContext";
+import { ParsedDeal } from "@/utils/dealParser";
 
 interface Props {
     item: ParsedDeal;

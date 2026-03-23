@@ -2,8 +2,8 @@ import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, FlatList, Alert, ActivityIndicator } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { getLeadById, type Lead } from "./services/leads.service";
-import { safeApiCallSingle } from "./services/api.helpers";
+import { getLeadById, type Lead } from "@/services/leads.service";
+import { safeApiCallSingle } from "@/services/api.helpers";
 
 export default function DocumentsScreen() {
     const router = useRouter();

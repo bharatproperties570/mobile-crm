@@ -42,6 +42,12 @@ export interface Deal {
     tags?: string[];
     remarks?: string;
     block?: string;
+    isPublished?: boolean;
+    publishedAt?: string | null;
+    websiteMetadata?: {
+        shareUnitNumber?: boolean;
+        shareLocation?: boolean;
+    };
     unitType?: string;
     size?: string;
     sizeUnit?: string;

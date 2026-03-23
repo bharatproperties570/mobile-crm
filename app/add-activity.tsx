@@ -18,14 +18,14 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { addActivity } from "./services/activities.service";
-import { getLeadById, leadName, getLeads, type Lead } from "./services/leads.service";
-import { getDeals, getDealById } from "./services/deals.service";
-import { getContacts, getContactById, contactFullName } from "./services/contacts.service";
-import { getProjects, type Project } from "./services/projects.service";
-import { getCompanyById } from "./services/companies.service";
-import { getSystemSettingsByKey } from "./services/system-settings.service";
-import { safeApiCall, safeApiCallSingle, extractList } from "./services/api.helpers";
+import { addActivity } from "@/services/activities.service";
+import { getLeadById, leadName, getLeads, type Lead } from "@/services/leads.service";
+import { getDeals, getDealById } from "@/services/deals.service";
+import { getContacts, getContactById, contactFullName } from "@/services/contacts.service";
+import { getProjects, type Project } from "@/services/projects.service";
+import { getCompanyById } from "@/services/companies.service";
+import { getSystemSettingsByKey } from "@/services/system-settings.service";
+import { safeApiCall, safeApiCallSingle, extractList } from "@/services/api.helpers";
 
 const TYPES = ["Call", "Meeting", "Site Visit", "Task", "Email"];
 const PRIORITIES = ["Low", "Normal", "High"];
@@ -348,7 +348,7 @@ export default function AddActivityScreen() {
 
         if (!res.error) {
             Alert.alert("Success", "Activity logged successfully", [
-                { text: "OK", onPress: () => router.back() }
+                { text: "OK", onPress: () => router.canGoBack() ? router.back() : router.replace("/(tabs)/activities") }
             ]);
         } else {
             Alert.alert("Error", res.error || "Failed to save activity");
@@ -397,15 +397,19 @@ export default function AddActivityScreen() {
     }
 
     return (
-        <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
+        <SafeAreaView style={styles.container} edges={['top', 'left', 'right', 'bottom']}>
             <StatusBar barStyle="dark-content" backgroundColor="#fff" />
 
             {/* Header */}
-            <View style={[styles.header, { paddingTop: Platform.OS === 'ios' ? 0 : insets.top }]}>
+            <View style={styles.header}>
                 <TouchableOpacity
                     onPress={() => {
                         console.log("[AddActivity] Back pressed");
-                        router.back();
+                        if (router.canGoBack()) {
+                            router.back();
+                        } else {
+                            router.replace("/(tabs)/activities");
+                        }
                     }}
                     style={styles.iconBtn}
                     hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}

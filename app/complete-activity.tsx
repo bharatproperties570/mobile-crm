@@ -6,9 +6,9 @@ import {
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { updateActivity, getActivityById } from "./services/activities.service";
-import { safeApiCall, safeApiCallSingle } from "./services/api.helpers";
-import { computeLeadStage, updateLeadStage, syncDealStage } from "./services/stageEngine.service";
+import { updateActivity, getActivityById } from "@/services/activities.service";
+import { safeApiCall, safeApiCallSingle } from "@/services/api.helpers";
+import { computeLeadStage, updateLeadStage, syncDealStage } from "@/services/stageEngine.service";
 
 const CALL_OUTCOMES = ["Connected", "No Answer", "Busy", "Wrong Number", "Left Voicemail"];
 const MEETING_OUTCOMES = ["Conducted", "Rescheduled", "Cancelled", "No Show"];
@@ -50,14 +50,14 @@ export default function CompleteActivityScreen() {
         setLoading(true);
         const res = await safeApiCallSingle<any>(() => getActivityById(params.id));
         if (!res.error && res.data) {
-            setFormData(prev => ({
+            setFormData((prev: any) => ({
                 ...prev,
                 ...res.data,
                 status: "Completed", // Force status to completed for this screen
                 details: res.data.details || {}
             }));
             if (res.data.details?.visitedProperties) {
-                setFormData(prev => ({
+                setFormData((prev: any) => ({
                     ...prev,
                     visitedProperties: res.data.details.visitedProperties.map((p: any) => ({ ...p, result: p.result || "", feedback: p.feedback || "" }))
                 }));
@@ -109,7 +109,7 @@ export default function CompleteActivityScreen() {
             // ─────────────────────────────────────────────────────────────────
 
             Alert.alert("Success", "Outcome logged successfully", [
-                { text: "OK", onPress: () => router.back() }
+                { text: "OK", onPress: () => router.canGoBack() ? router.back() : router.replace("/(tabs)/activities") }
             ]);
         } else {
             Alert.alert("Error", res.error || "Failed to log outcome");
@@ -142,7 +142,11 @@ export default function CompleteActivityScreen() {
                 <TouchableOpacity
                     onPress={() => {
                         console.log("[CompleteActivity] Close pressed");
-                        router.back();
+                        if (router.canGoBack()) {
+                            router.back();
+                        } else {
+                            router.replace("/(tabs)/activities");
+                        }
                     }}
                     style={styles.iconBtn}
                     hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
@@ -171,7 +175,7 @@ export default function CompleteActivityScreen() {
                                 <TouchableOpacity
                                     key={d}
                                     style={[styles.toggleBtn, formData.direction === d && styles.activeToggle]}
-                                    onPress={() => setFormData(p => ({ ...p, direction: d }))}
+                                    onPress={() => setFormData((p: any) => ({ ...p, direction: d }))}
                                 >
                                     <Text style={[styles.toggleText, formData.direction === d && styles.activeToggleText]}>{d}</Text>
                                 </TouchableOpacity>
@@ -184,7 +188,7 @@ export default function CompleteActivityScreen() {
                                 <TouchableOpacity
                                     key={co}
                                     style={[styles.chip, formData.callOutcome === co && styles.activeChip]}
-                                    onPress={() => setFormData(p => ({ ...p, callOutcome: co }))}
+                                    onPress={() => setFormData((p: any) => ({ ...p, callOutcome: co }))}
                                 >
                                     <Text style={[styles.chipText, formData.callOutcome === co && styles.activeChipText]}>{co}</Text>
                                 </TouchableOpacity>
@@ -211,7 +215,7 @@ export default function CompleteActivityScreen() {
                                 <TouchableOpacity
                                     key={mo}
                                     style={[styles.chip, formData.meetingOutcomeStatus === mo && styles.activeChip]}
-                                    onPress={() => setFormData(p => ({ ...p, meetingOutcomeStatus: mo }))}
+                                    onPress={() => setFormData((p: any) => ({ ...p, meetingOutcomeStatus: mo }))}
                                 >
                                     <Text style={[styles.chipText, formData.meetingOutcomeStatus === mo && styles.activeChipText]}>{mo}</Text>
                                 </TouchableOpacity>
@@ -255,7 +259,7 @@ export default function CompleteActivityScreen() {
                                 <TouchableOpacity
                                     key={so}
                                     style={[styles.chip, formData.meetingOutcomeStatus === so && styles.activeChip]}
-                                    onPress={() => setFormData(p => ({ ...p, meetingOutcomeStatus: so }))}
+                                    onPress={() => setFormData((p: any) => ({ ...p, meetingOutcomeStatus: so }))}
                                 >
                                     <Text style={[styles.chipText, formData.meetingOutcomeStatus === so && styles.activeChipText]}>{so}</Text>
                                 </TouchableOpacity>
@@ -272,7 +276,7 @@ export default function CompleteActivityScreen() {
                                     onChangeText={t => {
                                         const n = [...formData.visitedProperties];
                                         n[idx].feedback = t;
-                                        setFormData(p => ({ ...p, visitedProperties: n }));
+                                        setFormData((p: any) => ({ ...p, visitedProperties: n }));
                                     }}
                                     placeholder="Property specific feedback..."
                                 />
@@ -311,7 +315,7 @@ export default function CompleteActivityScreen() {
                     display="default"
                     onChange={(e, d) => {
                         setShowDatePicker(false);
-                        if (d) setFormData(p => ({ ...p, completionDate: d.toISOString().split("T")[0] }));
+                        if (d) setFormData((p: any) => ({ ...p, completionDate: d.toISOString().split("T")[0] }));
                     }}
                 />
             )}
@@ -323,7 +327,7 @@ export default function CompleteActivityScreen() {
                     display="default"
                     onChange={(e, d) => {
                         setShowTimePicker(false);
-                        if (d) setFormData(p => ({ ...p, completionTime: d.toTimeString().slice(0, 5) }));
+                        if (d) setFormData((p: any) => ({ ...p, completionTime: d.toTimeString().slice(0, 5) }));
                     }}
                 />
             )}

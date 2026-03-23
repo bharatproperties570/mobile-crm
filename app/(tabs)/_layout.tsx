@@ -2,8 +2,8 @@ import { Tabs } from "expo-router";
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, Animated } from "react-native";
 import { useEffect, useRef } from "react";
 import { Ionicons } from "@expo/vector-icons";
-import { useDepartment } from "../context/DepartmentContext";
-import { useTheme } from "../context/ThemeContext";
+import { useDepartment } from "@/context/DepartmentContext";
+import { useTheme } from "@/context/ThemeContext";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 

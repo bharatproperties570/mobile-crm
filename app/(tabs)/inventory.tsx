@@ -1,17 +1,20 @@
 import { useEffect, useState, useCallback, useMemo, memo, useRef } from "react";
 import {
-    View, Text, StyleSheet, FlatList, TouchableOpacity,
+    View, Text, StyleSheet, FlatList, TouchableOpacity, ScrollView,
     TextInput, RefreshControl, ActivityIndicator, Dimensions, SafeAreaView, Alert, Linking, Animated, Modal, Pressable
 } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Swipeable } from 'react-native-gesture-handler';
-import { getInventory, type Inventory } from "../services/inventory.service";
-import { lookupVal, safeApiCall } from "../services/api.helpers";
-import { useCallTracking } from "../context/CallTrackingContext";
-import { useLookup } from "../context/LookupContext";
-import api from "../services/api";
-import FilterModal, { FilterField } from "../components/FilterModal";
+import { getInventory, type Inventory } from "@/services/inventory.service";
+import { lookupVal, safeApiCall } from "@/services/api.helpers";
+import { useCallTracking } from "@/context/CallTrackingContext";
+import { useLookup } from "@/context/LookupContext";
+import { useUsers } from "@/context/UserContext";
+import api from "@/services/api";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import FilterModal, { FilterField } from "@/components/FilterModal";
+import { formatSize, getSizeLabel } from "@/utils/format.utils";
 
 const INVENTORY_FILTER_FIELDS: FilterField[] = [
     { key: "status", label: "Status", type: "lookup", lookupType: "InventoryStatus" },
@@ -20,15 +23,46 @@ const INVENTORY_FILTER_FIELDS: FilterField[] = [
     { key: "unitType", label: "Unit Type", type: "lookup", lookupType: "UnitType" },
 ];
 
-function lv(field: unknown): string {
+function lv(field: unknown, getLookupValue?: (type: string, val: any) => string, findUser?: (id: string) => any): string {
     if (field === null || field === undefined || field === "" || field === "null" || field === "undefined") return "—";
+
+    // Handle Array
+    if (Array.isArray(field)) {
+        return field.map(f => lv(f, getLookupValue, findUser)).filter(v => v && v !== "—").join(", ") || "—";
+    }
+
     if (typeof field === "object" && field !== null) {
         if ("lookup_value" in field && (field as any).lookup_value) return (field as any).lookup_value;
         if ("fullName" in field && (field as any).fullName) return (field as any).fullName;
         if ("name" in field && (field as any).name) return (field as any).name;
     }
+
+    // Handle ID string
     const str = String(field).trim();
+    if (/^[a-f0-9]{24}$/i.test(str)) {
+        // 1. Try Lookups (O(1) in new LookupContext)
+        if (getLookupValue) {
+            const resolved = getLookupValue("Any", str);
+            if (resolved && resolved !== str && resolved !== "—") return resolved;
+        }
+        // 2. Try Users (O(1) in new UserContext)
+        if (findUser) {
+            const user = findUser(str);
+            if (user) return user.fullName || user.name || str;
+        }
+        return "—";
+    }
+
     return str || "—";
+}
+
+function resolveNameFromObject(obj: any, fallback?: any, getLookupValue?: (type: string, val: any) => string, findUser?: (id: string) => any): string {
+    if (obj) {
+        if (obj.fullName) return obj.fullName;
+        if (obj.name) return obj.name;
+        if (obj.firstName) return [obj.firstName, obj.lastName].filter(Boolean).join(" ");
+    }
+    return lv(fallback, getLookupValue, findUser);
 }
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -53,7 +87,7 @@ const TYPE_ICONS: Record<string, string> = {
     'Shop': 'cart'
 };
 
-const InventoryCard = memo(({ item, onPress, onCall, onWhatsApp, onSMS, onEmail, onMenuPress, viewMode, users }: {
+const InventoryCard = memo(({ item, onPress, onCall, onWhatsApp, onSMS, onEmail, onMenuPress, viewMode }: {
     item: Inventory;
     onPress: () => void;
     onCall: () => void;
@@ -62,47 +96,42 @@ const InventoryCard = memo(({ item, onPress, onCall, onWhatsApp, onSMS, onEmail,
     onEmail: () => void;
     onMenuPress: () => void;
     viewMode: 'list' | 'grid';
-    users?: any[];
 }) => {
-    const { getLookupValue, lookups } = useLookup();
+    const { getLookupValue } = useLookup();
+    const { findUser } = useUsers();
 
-    // Try resolving status via multiple lookup types (backend stores under "Status")
-    const resolveStatus = (val: any): string => {
-        if (!val) return '';
-        if (typeof val === 'object') return val.lookup_value || val.name || '';
-        // Try "Status" first, then "InventoryStatus" as fallback
-        const byStatus = lookups.find(l => l.lookup_type.toLowerCase() === 'status' && (l._id === val || l.lookup_value === val));
-        if (byStatus) return byStatus.lookup_value;
-        const byInvStatus = lookups.find(l => l.lookup_type.toLowerCase() === 'inventorystatus' && (l._id === val || l.lookup_value === val));
-        if (byInvStatus) return byInvStatus.lookup_value;
-        // If it looks like an ID (24-char hex) return empty, else return raw string
-        const isId = /^[a-f0-9]{24}$/i.test(String(val));
-        return isId ? '' : String(val);
-    };
+    const statusInfo = useMemo(() => {
+        const status = getLookupValue("Status", item.status);
+        const isActive = !INACTIVE_STATUSES.some(s => s.toLowerCase() === status.toLowerCase());
+        return {
+            status,
+            label: isActive ? "Active" : "InActive",
+            color: isActive ? '#10B981' : '#F59E0B'
+        };
+    }, [item.status, getLookupValue]);
 
-    const status = resolveStatus(item.status); // Human-readable specific reason e.g. "Interested / Warm"
+    const displayInfo = useMemo(() => {
+        const type = getLookupValue("Category", item.category);
+        const subCat = getLookupValue("SubCategory", item.subCategory);
+        const unitType = getLookupValue("UnitType", item.unitType);
+        return {
+            type,
+            icon: TYPE_ICONS[type] || 'cube',
+            typeLabel: [subCat, unitType].filter(v => v && v !== "—").join(' · '),
+            sizeLabel: getSizeLabel(item, getLookupValue)
+        };
+    }, [item.category, item.subCategory, item.unitType, item.size, item.sizeUnit, getLookupValue]);
 
-    // Categorize into Active/InActive Stage
-    // If status is explicitly in INACTIVE list → InActive. Everything else (including empty) → Active
-    const isActive = !INACTIVE_STATUSES.some(s => s.toLowerCase() === status.toLowerCase());
-    const statusLabel = isActive ? "Active" : "InActive";
-    const statusColor = isActive ? '#10B981' : '#F59E0B'; // Green for Active, Orange for InActive
-    const type = getLookupValue("Category", item.category);
-    const subCat = getLookupValue("SubCategory", item.subCategory);
-    const unitType = getLookupValue("UnitType", item.unitType);
-    const iconName = TYPE_ICONS[type] || 'cube';
-
-    const displayType = [subCat, unitType].filter(v => v && v !== "—").join(' · ');
-
-    const getAssignedName = () => {
+    const assignedName = useMemo(() => {
         if (!item.assignedTo) return "—";
-        if (typeof item.assignedTo === 'object') {
-            return item.assignedTo.fullName || item.assignedTo.name || "—";
-        }
-        // If it's a string ID, look it up in users list
-        const user = users?.find(u => u._id === item.assignedTo || u.id === item.assignedTo);
-        return user ? (user.fullName || user.name) : "—";
-    };
+        if (typeof item.assignedTo === 'object') return item.assignedTo.fullName || item.assignedTo.name || "—";
+        return findUser(item.assignedTo)?.fullName || "—";
+    }, [item.assignedTo, findUser]);
+
+    const statusColor = statusInfo.color;
+    const statusLabel = statusInfo.label;
+    const iconName = displayInfo.icon;
+    const displayType = displayInfo.typeLabel;
 
     const renderRightActions = () => (
         <View style={styles.rightActions}>
@@ -172,7 +201,7 @@ const InventoryCard = memo(({ item, onPress, onCall, onWhatsApp, onSMS, onEmail,
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 }}>
                                     <Ionicons name="expand-outline" size={11} color="#94A3B8" />
                                     <Text style={{ fontSize: 11, color: '#94A3B8', fontWeight: '600' }}>
-                                        {[item.size, item.sizeUnit].filter(Boolean).join(' ')}
+                                        {displayInfo.sizeLabel}
                                     </Text>
                                 </View>
                             ) : null}
@@ -198,7 +227,7 @@ const InventoryCard = memo(({ item, onPress, onCall, onWhatsApp, onSMS, onEmail,
                             <View style={styles.listMeta}>
                                 <Ionicons name="home-outline" size={13} color="#10B981" />
                                 <Text style={[styles.listMetaText, { color: '#0F172A' }]} numberOfLines={1}>
-                                    {item.owners?.[0]?.name || item.ownerName}
+                                    {resolveNameFromObject(item.owners?.[0], item.ownerName, getLookupValue, findUser)}
                                 </Text>
                                 {(item.owners?.[0]?.phones?.[0]?.number || item.owners?.[0]?.phone || item.ownerPhone) ? (
                                     <Text style={[styles.listMetaText, { color: '#64748B' }]}>
@@ -212,7 +241,7 @@ const InventoryCard = memo(({ item, onPress, onCall, onWhatsApp, onSMS, onEmail,
                             <View style={styles.listMeta}>
                                 <Ionicons name="people-outline" size={13} color="#6366F1" />
                                 <Text style={[styles.listMetaText, { color: '#0F172A' }]} numberOfLines={1}>
-                                    {item.associates?.[0]?.name || item.associatedContact}
+                                    {resolveNameFromObject(item.associates?.[0], item.associatedContact, getLookupValue, findUser)}
                                 </Text>
                                 {(item.associates?.[0]?.phones?.[0]?.number || item.associates?.[0]?.phone || item.associatedPhone) ? (
                                     <Text style={[styles.listMetaText, { color: '#64748B' }]}>
@@ -247,22 +276,15 @@ export default function InventoryScreen() {
     const [showFilterModal, setShowFilterModal] = useState(false);
     const [activeCount, setActiveCount] = useState(0);
     const [inactiveCount, setInactiveCount] = useState(0);
-    const [users, setUsers] = useState<any[]>([]);
-
-    const fetchUsers = useCallback(async () => {
-        try {
-            const res = await api.get("/users?limit=1000");
-            const data = res.data?.records || res.data?.data || (Array.isArray(res.data) ? res.data : []);
-            setUsers(data);
-        } catch (e) {
-            console.error("Failed to fetch users:", e);
-        }
-    }, []);
+    const [page, setPage] = useState(1);
+    const [hasMore, setHasMore] = useState(true);
+    const [loadingMore, setLoadingMore] = useState(false);
+    const lastFetchTime = useRef<number>(0);
 
     // Action Hub State
     const [selectedInv, setSelectedInv] = useState<Inventory | null>(null);
     const [hubVisible, setHubVisible] = useState(false);
-    const slideAnim = useRef(new Animated.Value(350)).current;
+    const slideAnim = useRef(new Animated.Value(Dimensions.get('window').height)).current;
 
     // Contact Picker State
     const [contactPickerVisible, setContactPickerVisible] = useState(false);
@@ -282,7 +304,7 @@ export default function InventoryScreen() {
 
     const closeHub = () => {
         Animated.timing(slideAnim, {
-            toValue: 350,
+            toValue: Dimensions.get('window').height,
             duration: 200,
             useNativeDriver: true
         }).start(() => {
@@ -291,22 +313,83 @@ export default function InventoryScreen() {
         });
     };
 
-    const fetchInventory = useCallback(async () => {
-        const result = await safeApiCall<Inventory>(() => getInventory(filters));
-        if (!result.error) {
-            setInventory(result.data);
-            setActiveCount(result.activeCount || 0);
-            setInactiveCount(result.inactiveCount || 0);
+    const fetchInventory = useCallback(async (pageNum = 1, shouldAppend = false) => {
+        // 1. Instant Cache Load (only on first page, non-append load)
+        if (pageNum === 1 && !shouldAppend && inventory.length === 0) {
+            try {
+                const cached = await AsyncStorage.getItem("@cache_inventory_list");
+                if (cached) {
+                    const parsed = JSON.parse(cached);
+                    if (Array.isArray(parsed) && parsed.length > 0) {
+                        setInventory(parsed);
+                        setLoading(false); // Stop block loading spinner early!
+                    }
+                }
+            } catch (e) { console.warn("[Inventory] Cache read failed", e); }
+        }
+
+        if (pageNum > 1) setLoadingMore(true);
+        else if (inventory.length === 0) setLoading(true);
+
+        const result = await safeApiCall<any>(() => getInventory({ 
+            ...filters, 
+            page: String(pageNum), 
+            limit: "50" 
+        }));
+
+        if (!result.error && result.data) {
+            const dataObj = result.data as any;
+            const newItems = dataObj.data || dataObj.records || (Array.isArray(dataObj) ? dataObj : []);
+            
+            setInventory(prev => {
+                const combined = shouldAppend ? [...prev, ...newItems] : newItems;
+                // Deduplicate
+                const seen = new Set();
+                const filtered = combined.filter((i: any) => {
+                    const id = i?._id || i?.id;
+                    if (!id || seen.has(id)) return false;
+                    seen.add(id);
+                    return true;
+                });
+
+                // 2. Update Cache (only for first page)
+                if (pageNum === 1 && !shouldAppend) {
+                    AsyncStorage.setItem("@cache_inventory_list", JSON.stringify(filtered.slice(0, 50))).catch(() => {});
+                    lastFetchTime.current = Date.now();
+                }
+                
+                return filtered;
+            });
+            
+            setActiveCount(dataObj.activeCount || 0);
+            setInactiveCount(dataObj.inactiveCount || 0);
+            setHasMore(newItems.length === 50);
+            setPage(pageNum);
         }
         setLoading(false);
+        setLoadingMore(false);
         setRefreshing(false);
-    }, [filters]);
+    }, [filters, inventory.length]);
+
+    const onRefresh = useCallback(() => {
+        setRefreshing(true);
+        fetchInventory(1, false);
+    }, [fetchInventory]);
+
+    const loadMore = useCallback(() => {
+        if (!loading && !loadingMore && hasMore) {
+            fetchInventory(page + 1, true);
+        }
+    }, [loading, loadingMore, hasMore, page, fetchInventory]);
 
     useFocusEffect(
         useCallback(() => {
-            fetchInventory();
-            fetchUsers();
-        }, [fetchInventory, fetchUsers])
+            const now = Date.now();
+            // Only re-fetch if cache is stale (> 2 mins) or empty
+            if (inventory.length === 0 || (now - lastFetchTime.current > 120000)) {
+                fetchInventory(1, false);
+            }
+        }, [fetchInventory, inventory.length])
     );
 
     const filtered = useMemo(() => {
@@ -487,7 +570,6 @@ export default function InventoryScreen() {
                             onSMS={() => handleSMS(item)}
                             onEmail={() => handleEmail(item)}
                             onMenuPress={() => openHub(item)}
-                            users={users}
                         />
                     )}
                     contentContainerStyle={styles.list}
@@ -495,8 +577,11 @@ export default function InventoryScreen() {
                     initialNumToRender={10}
                     maxToRenderPerBatch={10}
                     windowSize={5}
+                    onEndReached={loadMore}
+                    onEndReachedThreshold={0.5}
                     removeClippedSubviews={true}
-                    refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchInventory(); }} tintColor="#2563EB" />}
+                    refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#2563EB" />}
+                    ListFooterComponent={loadingMore ? <ActivityIndicator size="small" color="#2563EB" style={{ marginVertical: 10 }} /> : null}
                     ListEmptyComponent={
                         <View style={styles.empty}>
                             <Ionicons name="cube-outline" size={60} color="#E2E8F0" />
@@ -550,98 +635,103 @@ export default function InventoryScreen() {
                 <Pressable style={styles.modalOverlay} onPress={closeHub}>
                     <Animated.View style={[styles.sheetContainer, { transform: [{ translateY: slideAnim }] }]}>
                         <View style={styles.sheetHandle} />
-                        <View style={styles.sheetHeader}>
-                            <Text style={styles.sheetTitle}>{selectedInv ? `Unit ${selectedInv.unitNumber || selectedInv.unitNo}` : "Unit Actions"}</Text>
-                            <Text style={styles.sheetSub}>{selectedInv?.projectName || "Quick Actions"}</Text>
-                        </View>
+                        <ScrollView 
+                            showsVerticalScrollIndicator={false}
+                            contentContainerStyle={{ paddingBottom: 60 }}
+                        >
+                            <View style={styles.sheetHeader}>
+                                <Text style={styles.sheetTitle}>{selectedInv ? `Unit ${selectedInv.unitNumber || selectedInv.unitNo}` : "Unit Actions"}</Text>
+                                <Text style={styles.sheetSub}>{selectedInv?.projectName || "Quick Actions"}</Text>
+                            </View>
 
-                        <View style={styles.actionGrid}>
-                            <TouchableOpacity style={styles.actionItem} onPress={() => {
-                                router.push(`/add-inventory?id=${selectedInv?._id}`); closeHub();
-                            }}>
-                                <View style={[styles.actionIcon, { backgroundColor: "#F1F5F9" }]}>
-                                    <Ionicons name="create" size={24} color="#64748B" />
-                                </View>
-                                <Text style={styles.actionLabel}>Edit</Text>
-                            </TouchableOpacity >
+                            <View style={styles.actionGrid}>
+                                <TouchableOpacity style={styles.actionItem} onPress={() => {
+                                    router.push(`/add-inventory?id=${selectedInv?._id}`); closeHub();
+                                }}>
+                                    <View style={[styles.actionIcon, { backgroundColor: "#F1F5F9" }]}>
+                                        <Ionicons name="create" size={24} color="#64748B" />
+                                    </View>
+                                    <Text style={styles.actionLabel}>Edit</Text>
+                                </TouchableOpacity >
 
-                            <TouchableOpacity style={styles.actionItem} onPress={() => {
-                                if (selectedInv) router.push(`/add-activity?id=${selectedInv._id}&type=Inventory`);
-                                closeHub();
-                            }}>
-                                <View style={[styles.actionIcon, { backgroundColor: "#E0F2FE" }]}>
-                                    <Ionicons name="calendar" size={24} color="#0EA5E9" />
-                                </View>
-                                <Text style={styles.actionLabel}>Activities</Text>
-                            </TouchableOpacity>
+                                <TouchableOpacity style={styles.actionItem} onPress={() => {
+                                    if (selectedInv) router.push(`/add-activity?id=${selectedInv._id}&type=Inventory`);
+                                    closeHub();
+                                }}>
+                                    <View style={[styles.actionIcon, { backgroundColor: "#E0F2FE" }]}>
+                                        <Ionicons name="calendar" size={24} color="#0EA5E9" />
+                                    </View>
+                                    <Text style={styles.actionLabel}>Activities</Text>
+                                </TouchableOpacity>
 
-                            <TouchableOpacity style={styles.actionItem} onPress={() => {
-                                if (selectedInv) router.push(`/add-deal?inventoryId=${selectedInv._id}&prefill=true`);
-                                closeHub();
-                            }}>
-                                <View style={[styles.actionIcon, { backgroundColor: "#DCFCE7" }]}>
-                                    <Ionicons name="briefcase" size={24} color="#22C55E" />
-                                </View>
-                                <Text style={styles.actionLabel}>Create Deal</Text>
-                            </TouchableOpacity>
+                                <TouchableOpacity style={styles.actionItem} onPress={() => {
+                                    if (selectedInv) router.push(`/add-deal?inventoryId=${selectedInv._id}&prefill=true`);
+                                    closeHub();
+                                }}>
+                                    <View style={[styles.actionIcon, { backgroundColor: "#DCFCE7" }]}>
+                                        <Ionicons name="briefcase" size={24} color="#22C55E" />
+                                    </View>
+                                    <Text style={styles.actionLabel}>Create Deal</Text>
+                                </TouchableOpacity>
 
-                            <TouchableOpacity style={styles.actionItem} onPress={() => {
-                                if (selectedInv) router.push(`/manage-owners?id=${selectedInv._id}`);
-                                closeHub();
-                            }}>
-                                <View style={[styles.actionIcon, { backgroundColor: "#FEF9C3" }]}>
-                                    <Ionicons name="person-add" size={24} color="#A16207" />
-                                </View>
-                                <Text style={styles.actionLabel}>Add Owner</Text>
-                            </TouchableOpacity>
+                                <TouchableOpacity style={styles.actionItem} onPress={() => {
+                                    if (selectedInv) router.push(`/manage-owners?id=${selectedInv._id}`);
+                                    closeHub();
+                                }}>
+                                    <View style={[styles.actionIcon, { backgroundColor: "#FEF9C3" }]}>
+                                        <Ionicons name="person-add" size={24} color="#A16207" />
+                                    </View>
+                                    <Text style={styles.actionLabel}>Add Owner</Text>
+                                </TouchableOpacity>
 
-                            <TouchableOpacity style={styles.actionItem} onPress={() => {
-                                if (selectedInv) router.push(`/manage-tags?id=${selectedInv._id}`);
-                                closeHub();
-                            }}>
-                                <View style={[styles.actionIcon, { backgroundColor: "#F3E8FF" }]}>
-                                    <Ionicons name="pricetag" size={24} color="#9333EA" />
-                                </View>
-                                <Text style={styles.actionLabel}>Tag</Text>
-                            </TouchableOpacity>
+                                <TouchableOpacity style={styles.actionItem} onPress={() => {
+                                    if (selectedInv) router.push(`/manage-tags?id=${selectedInv._id}`);
+                                    closeHub();
+                                }}>
+                                    <View style={[styles.actionIcon, { backgroundColor: "#F3E8FF" }]}>
+                                        <Ionicons name="pricetag" size={24} color="#9333EA" />
+                                    </View>
+                                    <Text style={styles.actionLabel}>Tag</Text>
+                                </TouchableOpacity>
 
-                            <TouchableOpacity style={styles.actionItem} onPress={() => {
-                                if (selectedInv) router.push(`/upload-media?id=${selectedInv._id}`);
-                                closeHub();
-                            }}>
-                                <View style={[styles.actionIcon, { backgroundColor: "#FFEDD5" }]}>
-                                    <Ionicons name="images" size={24} color="#F97316" />
-                                </View>
-                                <Text style={styles.actionLabel}>Upload</Text>
-                            </TouchableOpacity>
+                                <TouchableOpacity style={styles.actionItem} onPress={() => {
+                                    if (selectedInv) router.push(`/upload-media?id=${selectedInv._id}`);
+                                    closeHub();
+                                }}>
+                                    <View style={[styles.actionIcon, { backgroundColor: "#FFEDD5" }]}>
+                                        <Ionicons name="images" size={24} color="#F97316" />
+                                    </View>
+                                    <Text style={styles.actionLabel}>Upload</Text>
+                                </TouchableOpacity>
 
-                            <TouchableOpacity style={styles.actionItem} onPress={() => {
-                                if (selectedInv) router.push(`/add-document?id=${selectedInv._id}&type=Inventory`);
-                                closeHub();
-                            }}>
-                                <View style={[styles.actionIcon, { backgroundColor: "#FFE4E6" }]}>
-                                    <Ionicons name="document-attach" size={24} color="#E11D48" />
-                                </View>
-                                <Text style={styles.actionLabel}>Document</Text>
-                            </TouchableOpacity>
+                                <TouchableOpacity style={styles.actionItem} onPress={() => {
+                                    if (selectedInv) router.push(`/add-document?id=${selectedInv._id}&type=Inventory`);
+                                    closeHub();
+                                }}>
+                                    <View style={[styles.actionIcon, { backgroundColor: "#FFE4E6" }]}>
+                                        <Ionicons name="document-attach" size={24} color="#E11D48" />
+                                    </View>
+                                    <Text style={styles.actionLabel}>Document</Text>
+                                </TouchableOpacity>
 
-                            <TouchableOpacity style={styles.actionItem} onPress={() => {
-                                if (selectedInv) router.push(`/inventory-feedback?id=${selectedInv._id}`);
-                                closeHub();
-                            }}>
-                                <View style={[styles.actionIcon, { backgroundColor: "#F1F5F9" }]}>
-                                    <Ionicons name="chatbubble-ellipses" size={24} color="#64748B" />
-                                </View>
-                                <Text style={styles.actionLabel}>Feedback</Text>
-                            </TouchableOpacity>
+                                <TouchableOpacity style={styles.actionItem} onPress={() => {
+                                    if (selectedInv) router.push(`/inventory-feedback?id=${selectedInv._id}`);
+                                    closeHub();
+                                }}>
+                                    <View style={[styles.actionIcon, { backgroundColor: "#F1F5F9" }]}>
+                                        <Ionicons name="chatbubble-ellipses" size={24} color="#64748B" />
+                                    </View>
+                                    <Text style={styles.actionLabel}>Feedback</Text>
+                                </TouchableOpacity>
 
-                            <TouchableOpacity style={styles.actionItem} onPress={() => { Alert.alert("Share", "Sharing unit details..."); closeHub(); }}>
-                                <View style={[styles.actionIcon, { backgroundColor: "#F1F5F9" }]}>
-                                    <Ionicons name="share-social" size={24} color="#64748B" />
-                                </View>
-                                <Text style={styles.actionLabel}>Share</Text>
-                            </TouchableOpacity>
-                        </View >
+                                <TouchableOpacity style={styles.actionItem} onPress={() => { Alert.alert("Share", "Sharing unit details..."); closeHub(); }}>
+                                    <View style={[styles.actionIcon, { backgroundColor: "#F1F5F9" }]}>
+                                        <Ionicons name="share-social" size={24} color="#64748B" />
+                                    </View>
+                                    <Text style={styles.actionLabel}>Share</Text>
+                                </TouchableOpacity>
+                            </View >
+                        </ScrollView>
                     </Animated.View >
                 </Pressable >
             </Modal >
@@ -759,7 +849,14 @@ const styles = StyleSheet.create({
     listMetaContainer: { flex: 1 },
 
     modalOverlay: { flex: 1, backgroundColor: "rgba(15, 23, 42, 0.4)", justifyContent: "flex-end" },
-    sheetContainer: { backgroundColor: "#fff", borderTopLeftRadius: 32, borderTopRightRadius: 32, paddingHorizontal: 20, paddingBottom: 40, minHeight: 350 },
+    sheetContainer: { 
+        backgroundColor: "#fff", 
+        borderTopLeftRadius: 32, 
+        borderTopRightRadius: 32, 
+        paddingHorizontal: 20, 
+        maxHeight: '85%',
+        minHeight: 350 
+    },
     sheetHandle: { width: 40, height: 4, backgroundColor: "#E2E8F0", borderRadius: 2, alignSelf: "center", marginTop: 12, marginBottom: 20 },
     sheetHeader: { marginBottom: 24, alignItems: 'center' },
     sheetTitle: { fontSize: 20, fontWeight: "900", color: "#0F172A" },

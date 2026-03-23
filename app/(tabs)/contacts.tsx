@@ -10,12 +10,12 @@ import Swipeable from "react-native-gesture-handler/Swipeable";
 import {
     getContacts, contactFullName, contactPhone, contactEmail,
     lookupVal, type Contact,
-} from "../services/contacts.service";
-import { safeApiCall } from "../services/api.helpers";
-import { useCallTracking } from "../context/CallTrackingContext";
-import { getOrCreateCallActivity } from "../services/activities.service";
-import { useLookup } from "../context/LookupContext";
-import FilterModal, { FilterField } from "../components/FilterModal";
+} from "@/services/contacts.service";
+import { safeApiCall } from "@/services/api.helpers";
+import { useCallTracking } from "@/context/CallTrackingContext";
+import { getOrCreateCallActivity } from "@/services/activities.service";
+import { useLookup } from "@/context/LookupContext";
+import FilterModal, { FilterField } from "@/components/FilterModal";
 
 const CONTACT_FILTER_FIELDS: FilterField[] = [
     { key: "stage", label: "Stage", type: "lookup", lookupType: "Stage" },

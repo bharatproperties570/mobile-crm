@@ -6,12 +6,12 @@ import {
 import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Swipeable } from "react-native-gesture-handler";
-import { getCompanies, type Company } from "../services/companies.service";
-import { lookupVal, safeApiCall } from "../services/api.helpers";
-import { useTheme } from "../context/ThemeContext";
-import { useLookup } from "../context/LookupContext";
-import { useCallTracking } from "../context/CallTrackingContext";
-import FilterModal, { FilterField } from "../components/FilterModal";
+import { getCompanies, type Company } from "@/services/companies.service";
+import { lookupVal, safeApiCall } from "@/services/api.helpers";
+import { useTheme } from "@/context/ThemeContext";
+import { useLookup } from "@/context/LookupContext";
+import { useCallTracking } from "@/context/CallTrackingContext";
+import FilterModal, { FilterField } from "@/components/FilterModal";
 
 const COMPANY_FILTER_FIELDS: FilterField[] = [
     { key: "relationshipType", label: "Relationship Type", type: "lookup", lookupType: "RelationshipType" },

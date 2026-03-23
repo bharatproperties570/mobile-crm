@@ -6,9 +6,9 @@ import {
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as DocumentPicker from "expo-document-picker";
-import { useTheme } from "./context/ThemeContext";
-import { getInventoryById, updateInventory } from "./services/inventory.service";
-import api from "./services/api";
+import { useTheme } from "@/context/ThemeContext";
+import { getInventoryById, updateInventory } from "@/services/inventory.service";
+import api from "@/services/api";
 
 const { width } = Dimensions.get("window");
 const GRID_SIZE = (width - 60) / 3;

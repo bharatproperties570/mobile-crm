@@ -92,7 +92,7 @@ export async function safeApiCall<T>(fn: () => Promise<any>): Promise<{
             err?.response?.data?.error ||
             err?.message ||
             "Network error — check your connection";
-        console.error("[safeApiCall] Error:", msg, err?.response?.status);
+        console.log("[safeApiCall] Network Alert:", msg, err?.response?.status);
         return { data: [], total: 0, error: msg };
     }
 }
@@ -103,7 +103,16 @@ export async function safeApiCall<T>(fn: () => Promise<any>): Promise<{
 export async function safeApiCallSingle<T>(fn: () => Promise<any>): Promise<{ data: T | null; error: string | null }> {
     try {
         const res = await withRetry(fn);
-        // If it's a wrapper { success, data }
+        
+        // Axios response body
+        const body = res.data || res;
+
+        // If backend returns { success: true, data: { ... } }
+        if (body && body.success === true && body.data && typeof body.data === 'object' && !Array.isArray(body.data)) {
+            return { data: body.data, error: null };
+        }
+
+        // Standard fallback (for [ ] or { ... } directly)
         const data = res.data && !Array.isArray(res.data) ? res.data : res;
         return { data, error: null };
     } catch (err: any) {

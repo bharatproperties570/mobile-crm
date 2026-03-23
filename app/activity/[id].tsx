@@ -5,7 +5,7 @@ import {
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { getActivityById, updateActivity, deleteActivity, Activity } from "../services/activities.service";
+import { getActivityById, updateActivity, deleteActivity, Activity } from "@/services/activities.service";
 
 const TYPE_COLORS: Record<string, string> = {
     "Call": "#3B82F6",
@@ -35,7 +35,11 @@ export default function ActivityDetailScreen() {
         } catch (e) {
             console.error(e);
             Alert.alert("Error", "Failed to fetch activity");
-            router.back();
+            if (router.canGoBack()) {
+                router.back();
+            } else {
+                router.replace("/(tabs)/activities");
+            }
         } finally {
             setLoading(false);
         }
@@ -107,7 +111,7 @@ export default function ActivityDetailScreen() {
         <View style={styles.container}>
             <View style={[styles.header, { backgroundColor: color }]}>
                 <View style={styles.headerTop}>
-                    <TouchableOpacity onPress={() => router.back()}>
+                    <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace("/(tabs)/activities")}>
                         <Ionicons name="arrow-back" size={28} color="#fff" />
                     </TouchableOpacity>
                     <View style={styles.headerActions}>

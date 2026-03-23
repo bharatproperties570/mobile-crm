@@ -1,7 +1,7 @@
 import React from "react";
 import { View, Text, StyleSheet, TouchableOpacity, Animated } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useDepartment, Department } from "../context/DepartmentContext";
+import { useDepartment, Department } from "@/context/DepartmentContext";
 
 export default function DepartmentSwitcher() {
     const { currentDept, setDepartment, config } = useDepartment();

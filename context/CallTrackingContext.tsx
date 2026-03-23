@@ -1,10 +1,10 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { AppState, AppStateStatus, Linking, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
-import { getActivities } from '../services/activities.service';
-import { safeApiCall, extractList } from '../services/api.helpers';
-import { lookupCallerInfo, CallerInfo } from '../services/contacts.service';
-import CallBanner from '../components/CallBanner';
+import { getActivities } from "@/services/activities.service";
+import { safeApiCall, extractList } from "@/services/api.helpers";
+import { lookupCallerInfo, CallerInfo } from "@/services/contacts.service";
+import CallBanner from "@/components/CallBanner";
 
 interface CallTrackingContextType {
     trackCall: (mobile: string, entityId: string, entityType: string, entityName: string) => void;
@@ -57,6 +57,15 @@ export function CallTrackingProvider({ children }: { children: React.ReactNode }
                 info.activity = `Next: ${pending[0].title || pending[0].type}`;
             }
             setActiveBanner(info);
+
+            // AUTO-LOG: Set lastCall so prompt appears on app return
+            setLastCall({
+                mobile,
+                entityId: info.entityId,
+                entityType: info.type,
+                entityName: info.name,
+                startTime: Date.now()
+            });
         }
     };
 
@@ -136,6 +145,7 @@ export function CallTrackingProvider({ children }: { children: React.ReactNode }
     };
 
     const trackCall = (mobile: string, entityId: string, entityType: string, entityName: string) => {
+        // Prepare for outcome prompt
         setLastCall({
             mobile,
             entityId,
@@ -143,6 +153,8 @@ export function CallTrackingProvider({ children }: { children: React.ReactNode }
             entityName,
             startTime: Date.now()
         });
+        
+        // Open Dialer
         Linking.openURL(`tel:${mobile}`);
     };
 

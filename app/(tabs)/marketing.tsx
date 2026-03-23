@@ -1,7 +1,7 @@
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Animated, Modal, Pressable, Alert } from "react-native";
 import { useEffect, useRef, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
-import { useTheme } from "../context/ThemeContext";
+import { useTheme } from "@/context/ThemeContext";
 
 export default function MarketingScreen() {
     const { theme } = useTheme();

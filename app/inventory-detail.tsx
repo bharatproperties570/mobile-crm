@@ -4,12 +4,15 @@ import {
 } from "react-native";
 import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { useTheme } from "./context/ThemeContext";
-import api from "./services/api";
-import { getActivities } from "./services/activities.service";
-import { useLookup } from "./context/LookupContext";
+import { useTheme } from "@/context/ThemeContext";
+import api from "@/services/api";
+import { getActivities } from "@/services/activities.service";
+import { useLookup } from "@/context/LookupContext";
+import { getSizeLabel } from "@/utils/format.utils";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
+const CACHE_KEY_PREFIX = "@cache_inventory_detail_";
 
 const TABS = ["Details", "Location", "Activities", "Owner", "Document", "History"];
 
@@ -50,6 +53,7 @@ export default function InventoryDetailScreen() {
     const [activities, setActivities] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState(0);
+    const lastFetchRef = useRef<number>(0);
 
     const resolveStatus = (val: any): string => {
         if (!val) return '';
@@ -66,26 +70,51 @@ export default function InventoryDetailScreen() {
     const contentScrollViewRef = useRef<ScrollView>(null);
     const fadeAnim = useRef(new Animated.Value(0)).current;
 
-    const fetchData = useCallback(async () => {
+    const fetchData = useCallback(async (isRefresh = false) => {
         if (!id) return;
+        const cacheKey = `${CACHE_KEY_PREFIX}${id}`;
+        const now = Date.now();
+        if (!isRefresh && lastFetchRef.current && (now - lastFetchRef.current < 120000)) return;
+
         try {
+            if (loading) {
+                const cachedData = await AsyncStorage.getItem(cacheKey);
+                if (cachedData) {
+                    const parsed = JSON.parse(cachedData);
+                    setInv(parsed.inv);
+                    setActivities(parsed.activities);
+                    setLoading(false);
+                    Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }).start();
+                }
+            }
+
             const [invRes, actRes] = await Promise.all([
                 api.get(`/inventory/${id}`),
                 getActivities({ entityId: id, limit: 20 })
             ]);
 
             const currentInv = invRes.data?.data ?? invRes.data;
+            const currentActivities = Array.isArray(actRes?.data) ? actRes.data : (Array.isArray(actRes) ? actRes : []);
+            
             setInv(currentInv);
-            setActivities(Array.isArray(actRes?.data) ? actRes.data : (Array.isArray(actRes) ? actRes : []));
+            setActivities(currentActivities);
+            lastFetchRef.current = Date.now();
 
-            Animated.timing(fadeAnim, { toValue: 1, duration: 600, useNativeDriver: true }).start();
+            AsyncStorage.setItem(cacheKey, JSON.stringify({
+                inv: currentInv,
+                activities: currentActivities,
+                timestamp: Date.now()
+            })).catch(e => console.warn("Cache save error:", e));
+
+            if (loading) {
+                Animated.timing(fadeAnim, { toValue: 1, duration: 600, useNativeDriver: true }).start();
+            }
         } catch (error) {
-            console.error("Fetch error:", error);
-            Alert.alert("Error", "Could not load inventory details");
+            console.error("Inventory Detail Fetch error:", error);
         } finally {
             setLoading(false);
         }
-    }, [id]);
+    }, [id, loading, fadeAnim]);
 
     const onTabPress = (index: number) => {
         setActiveTab(index);
@@ -122,7 +151,7 @@ export default function InventoryDetailScreen() {
             {/* Premium SaaS Header */}
             <SafeAreaView style={[styles.headerCard, { backgroundColor: theme.card }]}>
                 <View style={styles.headerTop}>
-                    <TouchableOpacity onPress={() => router.back()} style={styles.backBtnCircle}>
+                    <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace("/(tabs)/inventory")} style={styles.backBtnCircle}>
                         <Ionicons name="chevron-back" size={22} color={theme.text} />
                     </TouchableOpacity>
                     <View style={styles.headerTitleContainer}>
@@ -282,7 +311,7 @@ export default function InventoryDetailScreen() {
                             <Text style={[styles.cardTitle, { color: theme.text }]}>Unit Configuration</Text>
                             <InfoRow label="Category" value={lv(inv.category)} icon="list-outline" />
                             <InfoRow label="Sub-Category" value={lv(inv.subCategory)} icon="layers-outline" />
-                            <InfoRow label="Size" value={inv.size ? `${inv.size} ${inv.sizeUnit || ""}` : "—"} icon="cube-outline" accent />
+                            <InfoRow label="Size Label" value={getSizeLabel(inv, getLookupValue) || "—"} icon="cube-outline" accent />
                             <InfoRow label="Facing" value={lv(inv.facing)} icon="compass-outline" />
                             <InfoRow label="Floor" value={inv.floor} icon="layers-outline" />
                             <InfoRow label="Road Width" value={inv.roadWidth} icon="trail-sign-outline" />
@@ -555,8 +584,8 @@ const styles = StyleSheet.create({
     marketingPill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
     marketingText: { fontSize: 11, fontWeight: '800' },
 
-    modernActionHub: { flexDirection: 'row', justifyContent: 'center', gap: 20, paddingVertical: 15 },
-    modernHubBtn: { width: 50, height: 50, borderRadius: 25, justifyContent: 'center', alignItems: 'center', elevation: 8, shadowOpacity: 0.3, shadowRadius: 10 },
+    modernActionHub: { flexDirection: 'row', justifyContent: 'center', gap: 12, paddingVertical: 15 },
+    modernHubBtn: { width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center', elevation: 4, shadowOpacity: 0.2, shadowRadius: 5 },
 
     tabsScroll: { paddingHorizontal: 20, gap: 25 },
     tabItem: { paddingVertical: 12, borderBottomWidth: 3, borderBottomColor: 'transparent' },
