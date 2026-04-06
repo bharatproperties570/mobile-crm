@@ -157,7 +157,7 @@ export default function AddDocumentScreen() {
         }
     };
 
-    const uploadFile = async (fileResult: any) => {
+    const uploadFile = async (fileResult: any, options: any = {}) => {
         const formData = new FormData();
         const file = fileResult.assets[0];
 
@@ -166,6 +166,12 @@ export default function AddDocumentScreen() {
             name: file.name,
             type: file.mimeType || "application/octet-stream"
         } as any);
+
+        // Add metadata for GDrive structuring
+        if (options.entityType) formData.append("entityType", options.entityType);
+        if (options.entityName) formData.append("entityName", options.entityName);
+        if (options.docCategory) formData.append("docCategory", options.docCategory);
+        if (options.docType) formData.append("docType", options.docType);
 
         const res = await api.post("/upload", formData, {
             headers: { "Content-Type": "multipart/form-data" }
@@ -182,7 +188,12 @@ export default function AddDocumentScreen() {
         try {
             let fileUrl = "";
             if (selectedFile && !selectedFile.canceled) {
-                const uploadRes = await uploadFile(selectedFile);
+                const uploadRes = await uploadFile(selectedFile, {
+                    entityType: type,
+                    entityName: entityName,
+                    docCategory: selectedCategory.lookup_value,
+                    docType: selectedType.lookup_value
+                });
                 if (uploadRes.success) fileUrl = uploadRes.url;
             }
 

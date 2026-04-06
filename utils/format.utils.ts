@@ -76,21 +76,23 @@ export function getSizeLabel(item: any, getLookupValue?: (type: string, val: any
     
     const inv = item.inventoryId && typeof item.inventoryId === 'object' ? item.inventoryId : null;
     
-    // 1. Check Config (on inv then item)
-    const sizeConfig = inv?.sizeConfig || item.sizeConfig;
+    // 1. Check direct sizeLabel (On item or inv)
+    const sizeLabel = item.sizeLabel || inv?.sizeLabel;
+    if (sizeLabel && typeof sizeLabel === 'string' && sizeLabel !== "—") return sizeLabel;
+
+    // 2. Check sizeConfig lookup (On item or inv)
+    const sizeConfig = item.sizeConfig || inv?.sizeConfig;
     if (sizeConfig && getLookupValue) {
         const resolved = getLookupValue("Size", sizeConfig);
         if (resolved && resolved !== sizeConfig && resolved !== "—") return resolved;
     }
 
-    // 2. Check Label (on inv then item)
-    const sizeLabel = inv?.sizeLabel || item.sizeLabel;
-    if (sizeLabel) return sizeLabel;
-
-    // 3. Check Raw Size (on inv then item)
-    const size = inv?.size || item.size;
-    const sizeUnit = inv?.sizeUnit || item.sizeUnit;
-    if (size || size === 0) return formatSize(size, sizeUnit || 'Sq.Ft.', getLookupValue);
+    // 3. Fallback to raw size with unit
+    const size = item.size ?? inv?.size;
+    if (size !== undefined && size !== null) {
+        const unit = item.sizeUnit || inv?.sizeUnit || 'Sq.Ft.';
+        return formatSize({ value: size, unit }, 'Sq.Ft.', getLookupValue);
+    }
     
     return null;
 }

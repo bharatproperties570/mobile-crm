@@ -277,7 +277,7 @@ export default function AddProjectScreen() {
         blocks: [],
         team: [],
         assign: [],
-        owner: ""
+        visibility: "Public"
     });
 
     // Lookup Data
@@ -376,8 +376,8 @@ export default function AddProjectScreen() {
     };
 
     const handleSave = async () => {
-        if (!formData.team?.length || !formData.assign?.length || !formData.owner) {
-            Alert.alert("Required", "Please complete all Assignment fields (Team, Assign, and Owner).");
+        if (!formData.team?.length || !formData.assign?.length) {
+            Alert.alert("Required", "Please complete all Assignment fields (Team and Assign).");
             return;
         }
 
@@ -885,8 +885,8 @@ function AssignmentStep({ data, update, teams, users }: any) {
                 <Field required label="Assign Users">
                     <SelectButton multiple value={data.assign} options={users} onSelect={v => update({ ...data, assign: v })} />
                 </Field>
-                <Field required label="Project Owner">
-                    <ModernPicker label="Select Owner" value={data.owner} options={users} onSelect={v => update({ ...data, owner: v })} />
+                <Field required label="Visibility">
+                    <SelectButton value={data.visibility} options={[{ label: "Public", value: "Public" }, { label: "Team", value: "Team" }, { label: "Private", value: "Private" }]} onSelect={v => update({ ...data, visibility: v })} />
                 </Field>
             </View>
             <View style={[styles.hintBox, { backgroundColor: theme.primary + '10' }]}>

@@ -26,6 +26,7 @@ import { getProjects, type Project } from "@/services/projects.service";
 import { getCompanyById } from "@/services/companies.service";
 import { getSystemSettingsByKey } from "@/services/system-settings.service";
 import { safeApiCall, safeApiCallSingle, extractList } from "@/services/api.helpers";
+import api from "@/services/api";
 
 const TYPES = ["Call", "Meeting", "Site Visit", "Task", "Email"];
 const PRIORITIES = ["Low", "Normal", "High"];
@@ -91,7 +92,7 @@ const DEFAULT_ACTIVITY_MASTER_FIELDS = {
 interface RelatedItem {
     id: string;
     name: string;
-    type: "Lead" | "Deal" | "Contact" | "Company";
+    type: "Lead" | "Deal" | "Contact" | "Company" | "Inventory";
     mobile?: string;
 }
 
@@ -244,10 +245,16 @@ export default function AddActivityScreen() {
                     if (compRes?.success && compRes.data) {
                         name = compRes.data.name;
                         mobile = compRes.data.phone || "";
-                    }
-                    else if (compRes?.name) {
+                    } else if (compRes?.name) {
                         name = compRes.name;
                         mobile = compRes.phone || "";
+                    }
+                } else if (params.type === "Inventory") {
+                    const invRes = await api.get(`/inventory/${params.id}`);
+                    if (invRes.data?.success && invRes.data.data) {
+                        const inv = invRes.data.data;
+                        name = `Unit ${inv.unitNumber || inv.unitNo} - ${inv.projectName || "Property"}`;
+                        mobile = inv.ownerPhone || "";
                     }
                 }
                 setSelectedEntity({ id: params.id, type: params.type as any, name, mobile });

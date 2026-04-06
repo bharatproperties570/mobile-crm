@@ -198,24 +198,47 @@ export default function AddDealScreen() {
     useEffect(() => {
         const loadData = async () => {
             try {
-                // Fetch only deal data (projects come from context)
-                const results = await Promise.all([
-                    id ? getDealById(id) : Promise.resolve(null)
-                ]);
+                // 1. Load existing deal if ID is present
+                if (id) {
+                    const existing = await getDealById(id);
+                    if (existing) {
+                        const d = existing.data || existing;
+                        setFormData(prev => ({
+                            ...prev,
+                            ...d,
+                            price: String(d.price || ""),
+                            quotePrice: String(d.quotePrice || ""),
+                            ratePrice: String(d.ratePrice || ""),
+                            dealProbability: String(d.dealProbability || "50"),
+                            projectName: d.projectName || "",
+                            stage: d.stage || "Open"
+                        }));
+                    }
+                } 
+                // 2. Handle Prefill from Inventory/URL
+                else if (prefill === "true") {
+                    const updates: any = {};
+                    if (pfName) updates.projectName = pfName;
+                    if (pfUnitNo) updates.unitNo = pfUnitNo;
+                    if (pfLocation) updates.block = pfLocation; // Using location param for block
+                    
+                    // If we have an inventoryId, we should try to fetch the precise unit
+                    // so that handleUnitChange can populate ALL details (size, owners, etc.)
+                    if (useLocalSearchParams<{ inventoryId: string }>().inventoryId) {
+                        const invId = useLocalSearchParams<{ inventoryId: string }>().inventoryId;
+                        try {
+                            const res = await api.get(`/inventory/${invId}`);
+                            if (res.data?.success && res.data.data) {
+                                const inv = res.data.data;
+                                updates.projectName = inv.projectName || pfName;
+                                updates.block = inv.block || pfLocation;
+                                updates.unitNo = inv.unitNumber || inv.unitNo || pfUnitNo;
+                                updates.inventoryId = invId;
+                            }
+                        } catch (e) { console.warn("Prefill fetch failed", e); }
+                    }
 
-                const existing = results[0];
-                if (existing) {
-                    const d = existing.data || existing;
-                    setFormData({
-                        ...formData,
-                        ...d,
-                        price: String(d.price || ""),
-                        quotePrice: String(d.quotePrice || ""),
-                        ratePrice: String(d.ratePrice || ""),
-                        dealProbability: String(d.dealProbability || "50"),
-                        projectName: d.projectName || "",
-                        stage: d.stage || "Open",
-                    });
+                    setFormData(prev => ({ ...prev, ...updates }));
                 }
             } catch (e) {
                 console.error(e);
@@ -224,8 +247,7 @@ export default function AddDealScreen() {
             }
         };
         loadData();
-        // ... (prefill logic same)
-    }, [id]);
+    }, [id, prefill]);
 
     useEffect(() => {
         const fetchUnits = async () => {

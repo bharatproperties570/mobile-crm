@@ -893,8 +893,8 @@ export default function LeadsScreen() {
         <View style={styles.header}>
             <View style={styles.headerTop}>
                 <View>
-                    <Text style={styles.headerTitle}>{selectedIds.length > 0 ? `${selectedIds.length} Selected` : "Leads"}</Text>
-                    <Text style={styles.headerCount}>{filtered.length} Active Records</Text>
+                    <Text style={styles.screenTitle}>{selectedIds.length > 0 ? `${selectedIds.length} Selected` : "Leads Hub"}</Text>
+                    <Text style={styles.screenSub}>{filtered.length} Active Records</Text>
                 </View>
                 <View style={{ flexDirection: 'row', gap: 10 }}>
                     {selectedIds.length > 0 && (
@@ -1073,9 +1073,14 @@ export default function LeadsScreen() {
 
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: "#F8FAFC" },
-    header: { paddingHorizontal: 20, paddingTop: 60, paddingBottom: 20, backgroundColor: "#fff" },
-    headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-    headerTitle: { fontSize: 24, fontWeight: "800", color: "#0F172A", letterSpacing: -0.5 },
+    header: { paddingHorizontal: 20, paddingTop: 60, paddingBottom: 15, borderBottomWidth: 1 },
+    headerTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
+    screenTitle: { fontSize: 24, fontWeight: "900", letterSpacing: -0.5 },
+    screenSub: { fontSize: 10, fontWeight: "800", marginTop: 2, letterSpacing: 0.5 },
+    versionBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
+    versionText: { fontSize: 9, fontWeight: '800' },
+    autoPilotBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
+    autoPilotText: { fontSize: 9, fontWeight: '900' },
     headerCount: { fontSize: 13, color: "#94A3B8", fontWeight: "600", marginTop: 2 },
     headerActionBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center', borderRadius: 12, backgroundColor: "#F1F5F9" },
     commandBar: { flexDirection: 'row', gap: 12, marginBottom: 16 },

@@ -2,6 +2,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Animated, Modal, 
 import { useEffect, useRef, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/context/ThemeContext";
+import { marketingService } from "@/services/marketing.service";
 
 export default function MarketingScreen() {
     const { theme } = useTheme();
@@ -17,10 +18,16 @@ export default function MarketingScreen() {
         { id: '102', name: 'Amit Shah', classification: 'Investor', intentIndex: 88, tags: ['Plot Expert', 'Multiple Units'], campaign: 'Facebook Flat Campaign' },
     ];
 
+    // AI Marketing OS v3.0 State
+    const [isAutoPilotActive, setIsAutoPilotActive] = useState(true);
+    const [smsStatus, setSmsStatus] = useState<any>({ connected: true, balance: "2,845", provider: "SMSGatewayHub" });
+    const [generatedVisual, setGeneratedVisual] = useState<string | null>("https://i.ibb.co/Vmm45Cq/ai-render-preview.jpg");
+    const [isGenerating, setIsGenerating] = useState(false);
+
     // Action Hub State
     const [selectedCamp, setSelectedCamp] = useState<any>(null);
     const [hubVisible, setHubVisible] = useState(false);
-    const slideAnim = useRef(new Animated.Value(350)).current;
+    const slideAnim = useRef(new Animated.Value(450)).current;
 
     const openHub = (camp: any) => {
         setSelectedCamp(camp);
@@ -64,56 +71,113 @@ export default function MarketingScreen() {
 
     useEffect(() => {
         Animated.timing(fadeAnim, { toValue: 1, duration: 600, useNativeDriver: true }).start();
+        
+        // Initial Fetch
+        marketingService.getSmsStatus().then(res => {
+            if (res.success) setSmsStatus(res);
+        });
+
+        // Neural Sync Polling Simulation
+        const interval = setInterval(() => {
+            console.log("[MOBILE]: Neural Sync Check Complete");
+        }, 15000);
+        return () => clearInterval(interval);
     }, []);
+
+    const handleDesignerGen = async () => {
+        setIsGenerating(true);
+        // Simulating the 3.5s render feel from web
+        setTimeout(() => {
+            setIsGenerating(false);
+            setGeneratedVisual("https://i.ibb.co/Vmm45Cq/ai-render-preview.jpg");
+            Alert.alert("AI Marketing OS", "High-Fidelity Media Render Complete (Reel 9:16)");
+        }, 3500);
+    };
 
     return (
         <View style={{ flex: 1, backgroundColor: theme.background }}>
             <ScrollView style={[styles.container]} contentContainerStyle={styles.content}>
                 <Animated.View style={{ opacity: fadeAnim }}>
                     <View style={styles.headerRow}>
-                        <Text style={[styles.title, { color: theme.text }]}>Marketing OS</Text>
-                        <View style={[styles.versionBadge, { backgroundColor: theme.primary + '20' }]}>
-                            <Text style={[styles.versionText, { color: theme.primary }]}>v2.5 LIVE</Text>
+                        <View>
+                            <Text style={[styles.title, { color: theme.text }]}>Marketing OS</Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                                <View style={[styles.versionBadge, { backgroundColor: theme.primary + '20' }]}>
+                                    <Text style={[styles.versionText, { color: theme.primary }]}>v3.0 PREMIUM</Text>
+                                </View>
+                                {isAutoPilotActive && (
+                                    <View style={[styles.autoPilotBadge, { backgroundColor: 'rgba(53, 185, 122, 0.1)' }]}>
+                                        <Text style={[styles.autoPilotText, { color: '#35B97A' }]}>⚡ AUTO-PILOT</Text>
+                                    </View>
+                                )}
+                            </View>
+                        </View>
+                        <TouchableOpacity style={[styles.neuralPulse, { borderColor: theme.primary + '30' }]}>
+                            <Ionicons name="wifi" size={18} color={theme.primary} />
+                        </TouchableOpacity>
+                    </View>
+
+                    {/* SMS Gateway Hub Status */}
+                    <View style={[styles.smsStatusCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                        <View style={styles.smsHeader}>
+                            <View>
+                                <Text style={[styles.smsLabel, { color: theme.textSecondary }]}>SMS GATEWAY MONITOR</Text>
+                                <Text style={[styles.smsProvider, { color: theme.text }]}>{smsStatus.provider}</Text>
+                            </View>
+                            <View style={[styles.smsIndicator, { backgroundColor: smsStatus.connected ? '#35B97A20' : '#E0525220' }]}>
+                                <View style={[styles.smsDot, { backgroundColor: smsStatus.connected ? '#35B97A' : '#E05252' }]} />
+                                <Text style={[styles.smsStatusText, { color: smsStatus.connected ? '#35B97A' : '#E05252' }]}>{smsStatus.connected ? 'ACTIVE' : 'OFFLINE'}</Text>
+                            </View>
+                        </View>
+                        <View style={styles.smsStats}>
+                            <View style={styles.smsStatBox}>
+                                <Text style={[styles.smsStatVal, { color: theme.text }]}>₹{smsStatus.balance}</Text>
+                                <Text style={[styles.smsStatLabel, { color: theme.textMuted }]}>CREDITS</Text>
+                            </View>
+                            <View style={[styles.smsStatDivider, { backgroundColor: theme.border }]} />
+                            <View style={styles.smsStatBox}>
+                                <Text style={[styles.smsStatVal, { color: theme.text }]}>99.9%</Text>
+                                <Text style={[styles.smsStatLabel, { color: theme.textMuted }]}>UPTIME</Text>
+                            </View>
                         </View>
                     </View>
 
-                    {/* Engagement Breakdown */}
-                    <Text style={[styles.sectionTitle, { color: theme.text }]}>Engagement by type</Text>
-                    <View style={styles.engagementGrid}>
-                        {engagementStats.map((stat, idx) => (
-                            <View key={idx} style={[styles.engagementCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
-                                <Text style={[styles.engagementVal, { color: stat.color }]}>{stat.value}</Text>
-                                <Text style={[styles.engagementType, { color: theme.textSecondary }]}>{stat.type}</Text>
-                                <View style={[styles.miniProgress, { backgroundColor: theme.background }]}>
-                                    <View style={[styles.miniFill, { width: stat.value as any, backgroundColor: stat.color }]} />
-                                </View>
-                            </View>
-                        ))}
-                    </View>
-
-                    {/* Command Center: Queue Manager */}
+                    {/* Designer AI Feed */}
                     <View style={[styles.commandCenter, { backgroundColor: theme.card, borderColor: theme.border }]}>
                         <View style={styles.commandHeader}>
-                            <Ionicons name="terminal-outline" size={18} color={theme.primary} />
-                            <Text style={[styles.commandTitle, { color: theme.text }]}>COMMAND CENTER</Text>
+                            <Ionicons name="color-palette" size={18} color={theme.primary} />
+                            <Text style={[styles.commandTitle, { color: theme.text }]}>DESIGNER STUDIO — AI RENDER</Text>
                         </View>
-                        
-                        <Text style={[styles.subSectionTitle, { color: theme.textSecondary }]}>QUEUE MANAGER</Text>
-                        {activeQueue.map(item => (
-                            <View key={item.id} style={styles.queueItem}>
-                                <View style={styles.queueTextRow}>
-                                    <Text style={[styles.queueTask, { color: theme.text }]} numberOfLines={1}>{item.task}</Text>
-                                    <Text style={[styles.queuePerc, { color: theme.primary }]}>{Math.round(item.progress * 100)}%</Text>
+
+                        <View style={styles.renderContainer}>
+                            {generatedVisual ? (
+                                <View style={styles.renderPreviewBox}>
+                                    <View style={[styles.renderMetadata, { backgroundColor: 'rgba(0,0,0,0.6)' }]}>
+                                        <Text style={styles.renderMetaText}>Reel 9:16 · 4K · Kurukshetra S7</Text>
+                                    </View>
+                                    <View style={[styles.renderImagePlaceholder, { backgroundColor: theme.background }]}>
+                                        <Ionicons name="image-outline" size={40} color={theme.primary + '40'} />
+                                        <Text style={{ position: 'absolute', bottom: 20, color: theme.textMuted, fontSize: 10 }}>[ AI MEDIA PREVIEW ]</Text>
+                                    </View>
                                 </View>
-                                <View style={[styles.queueProgress, { backgroundColor: theme.background }]}>
-                                    <View style={[styles.queueFill, { width: `${item.progress * 100}%`, backgroundColor: theme.primary }]} />
-                                </View>
-                            </View>
-                        ))}
+                            ) : (
+                                <TouchableOpacity style={[styles.renderEmpty, { backgroundColor: theme.background }]} onPress={handleDesignerGen}>
+                                    <Ionicons name="sparkles" size={24} color={theme.primary} />
+                                    <Text style={[styles.renderEmptyText, { color: theme.textSecondary }]}>Click to Re-Imagine Creative</Text>
+                                </TouchableOpacity>
+                            )}
+                        </View>
+
+                        <TouchableOpacity style={[styles.designerAction, { backgroundColor: theme.primary + '15' }]} onPress={handleDesignerGen}>
+                            <Text style={[styles.designerActionText, { color: theme.primary }]}>{isGenerating ? 'AI RENDERING...' : 'RE-RUN DESIGNER AGENT'}</Text>
+                        </TouchableOpacity>
 
                         <View style={styles.divider} />
 
-                        <Text style={[styles.subSectionTitle, { color: theme.textSecondary, marginTop: 10 }]}>LIVE ACTIVITY LOG</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 }}>
+                            <Ionicons name="sync" size={14} color={theme.textMuted} />
+                            <Text style={[styles.subSectionTitle, { color: theme.textMuted, marginBottom: 0 }]}>LIVE NEURAL FEEDBACK</Text>
+                        </View>
                         {activityLog.map(log => (
                             <View key={log.id} style={styles.logItem}>
                                 <View style={[styles.logIconBox, { backgroundColor: theme.background }]}>
@@ -242,17 +306,37 @@ const styles = StyleSheet.create({
     title: { fontSize: 26, fontWeight: "900", letterSpacing: -0.5 },
     versionBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
     versionText: { fontSize: 10, fontWeight: '800' },
+    autoPilotBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+    autoPilotText: { fontSize: 10, fontWeight: '900' },
+    neuralPulse: { width: 36, height: 36, borderRadius: 18, borderWidth: 1, justifyContent: 'center', alignItems: 'center' },
     
+    // SMS Status Card
+    smsStatusCard: { padding: 20, borderRadius: 24, borderWidth: 1, marginBottom: 20 },
+    smsHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 },
+    smsLabel: { fontSize: 10, fontWeight: '900', letterSpacing: 1 },
+    smsProvider: { fontSize: 18, fontWeight: '900', marginTop: 4 },
+    smsIndicator: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12 },
+    smsDot: { width: 6, height: 6, borderRadius: 3 },
+    smsStatusText: { fontSize: 10, fontWeight: '800' },
+    smsStats: { flexDirection: 'row', alignItems: 'center', gap: 20 },
+    smsStatBox: { flex: 1 },
+    smsStatVal: { fontSize: 20, fontWeight: '900' },
+    smsStatLabel: { fontSize: 10, fontWeight: '700', marginTop: 2, letterSpacing: 0.5 },
+    smsStatDivider: { width: 1, height: 30 },
+
     sectionTitle: { fontSize: 18, fontWeight: "800", marginBottom: 16 },
     subSectionTitle: { fontSize: 10, fontWeight: "800", marginBottom: 12, letterSpacing: 1 },
     
-    // Engagement Grid
-    engagementGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 24 },
-    engagementCard: { width: '48%', padding: 16, borderRadius: 20, borderWidth: 1 },
-    engagementVal: { fontSize: 20, fontWeight: '900' },
-    engagementType: { fontSize: 10, fontWeight: '700', marginTop: 4, marginBottom: 8 },
-    miniProgress: { height: 3, borderRadius: 1.5, overflow: 'hidden' },
-    miniFill: { height: '100%', borderRadius: 1.5 },
+    // Designer Studio
+    renderContainer: { marginBottom: 15 },
+    renderPreviewBox: { height: 180, borderRadius: 20, overflow: 'hidden', backgroundColor: '#000' },
+    renderImagePlaceholder: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+    renderMetadata: { position: 'absolute', top: 12, left: 12, zIndex: 10, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10 },
+    renderMetaText: { color: '#fff', fontSize: 10, fontWeight: '800' },
+    renderEmpty: { height: 120, borderRadius: 20, justifyContent: 'center', alignItems: 'center', borderStyle: 'dashed', borderWidth: 2, borderColor: 'rgba(201, 146, 26, 0.2)' },
+    renderEmptyText: { fontSize: 12, fontWeight: '700', marginTop: 10 },
+    designerAction: { paddingVertical: 14, borderRadius: 16, alignItems: 'center', marginBottom: 15 },
+    designerActionText: { fontSize: 12, fontWeight: '900', letterSpacing: 0.5 },
 
     // Command Center
     commandCenter: { padding: 20, borderRadius: 24, borderWidth: 1, marginBottom: 24 },

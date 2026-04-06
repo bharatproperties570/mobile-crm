@@ -9,6 +9,7 @@ import { Audio } from 'expo-av';
 import { getActivities, Activity, deleteActivity, updateActivity } from "@/services/activities.service";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Swipeable from "react-native-gesture-handler/Swipeable";
+import { useUsers } from "@/context/UserContext";
 
 const TYPE_META: Record<string, { color: string; icon: string; emoji: string }> = {
     "Call": { color: "#3B82F6", icon: "call", emoji: "📞" },
@@ -41,6 +42,7 @@ export default function ActivitiesScreen() {
     const [search, setSearch] = useState("");
     const [typeFilter, setTypeFilter] = useState("All");
     const [statusFilter, setStatusFilter] = useState("Pending");
+    const { findUser } = useUsers();
 
     // Audio Playback State
     const [playingId, setPlayingId] = useState<string | null>(null);
@@ -177,6 +179,7 @@ export default function ActivitiesScreen() {
         isPlaying: boolean;
         onCall: (mobile: string) => void;
         onWhatsApp: (mobile: string) => void;
+        findUser: (id: string) => any;
     }) => {
         const meta = TYPE_META[item.type] || { color: "#64748B", icon: "list", emoji: "📌" };
         const statusStyle = STATUS_COLORS[item.status] || { bg: "#F1F5F9", text: "#64748B" };
@@ -186,6 +189,13 @@ export default function ActivitiesScreen() {
         const related = (item as any).relatedTo?.[0];
         const relatedName = related?.name || (item as any).entityName || "";
         const relatedMobile = related?.mobile || "";
+
+        const assignedName = useMemo(() => {
+            if (!item.assignedTo) return "Unassigned";
+            if (typeof item.assignedTo === 'object') return item.assignedTo.fullName || item.assignedTo.name || "Unassigned";
+            const user = findUser(item.assignedTo);
+            return user ? (user.fullName || user.name) : "Unassigned";
+        }, [item.assignedTo, findUser]);
 
         const renderLeftActions = () => (
             <View style={styles.leftActions}>
@@ -287,7 +297,7 @@ export default function ActivitiesScreen() {
                             </View>
                             <View style={styles.assigneeContainer}>
                                 <View style={styles.assigneeTextContent}>
-                                    <Text style={styles.assigneeName} numberOfLines={1}>{item.assignedTo?.fullName || item.assignedTo?.name || "Unassigned"}</Text>
+                                    <Text style={styles.assigneeName} numberOfLines={1}>{assignedName}</Text>
                                     {item.assignedTo?.team && (
                                         <View style={styles.teamBadge}>
                                             <Text style={styles.teamBadgeText}>{item.assignedTo.team.substring(0, 3).toUpperCase()}</Text>
@@ -395,6 +405,7 @@ export default function ActivitiesScreen() {
                             isPlaying={playingId === item._id}
                             onCall={handleCall}
                             onWhatsApp={handleWhatsApp}
+                            findUser={findUser}
                             onDelete={(id) => {
                                 Alert.alert("Delete Activity", "Are you sure? This cannot be undone.", [
                                     { text: "Cancel", style: "cancel" },

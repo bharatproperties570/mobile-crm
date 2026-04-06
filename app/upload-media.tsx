@@ -21,6 +21,7 @@ export default function UploadMediaScreen() {
     const [loading, setLoading] = useState(true);
     const [uploading, setUploading] = useState(false);
     const [media, setMedia] = useState<any[]>([]);
+    const [entityName, setEntityName] = useState("");
 
     useEffect(() => {
         if (id) fetchInventory();
@@ -31,6 +32,7 @@ export default function UploadMediaScreen() {
             const body = await getInventoryById(id!);
             const data = body.data || body;
             setMedia(data.media || data.images || []);
+            setEntityName(`Unit ${data.unitNumber || data.unitNo} - ${data.projectName || "Property"}`);
         } catch (error) {
             console.error("Fetch error:", error);
             Alert.alert("Error", "Failed to load media");
@@ -67,6 +69,12 @@ export default function UploadMediaScreen() {
                     name: asset.name || `upload_${Date.now()}`,
                     type: asset.mimeType || "image/jpeg"
                 } as any);
+
+                // Add GDrive metadata
+                formData.append("entityType", "Inventory");
+                formData.append("entityName", entityName);
+                formData.append("docCategory", "Media");
+                formData.append("docType", asset.mimeType?.startsWith('video') ? "Video" : "Image");
 
                 const res = await api.post("/upload", formData, {
                     headers: { "Content-Type": "multipart/form-data" }

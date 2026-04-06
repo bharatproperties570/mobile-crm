@@ -903,10 +903,7 @@ export default function DealsScreen() {
                             deal={item}
                             idx={index}
                             onPress={() => router.push(`/deal-detail?id=${item._id}`)}
-                            onLongPress={() => {
-                                setSelectedDeal(item);
-                                setHubVisible(true);
-                            }}
+                            onLongPress={() => openHub(item)}
                             onCall={() => {
                                 const contacts = getContactsForDeal(item);
                                 if (contacts.length > 0) {
@@ -918,10 +915,7 @@ export default function DealsScreen() {
                             onWhatsApp={() => handleWhatsApp(item)}
                             onSMS={() => handleSMS(item)}
                             onEmail={() => handleEmail(item)}
-                            onMenuPress={() => {
-                                setSelectedDeal(item);
-                                setHubVisible(true);
-                            }}
+                            onMenuPress={() => openHub(item)}
                             getLookupValue={getLookupValue}
                             findUser={findUser}
                             liveScore={dealScores[item._id]}

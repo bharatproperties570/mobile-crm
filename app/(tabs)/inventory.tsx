@@ -665,7 +665,15 @@ export default function InventoryScreen() {
                                 </TouchableOpacity>
 
                                 <TouchableOpacity style={styles.actionItem} onPress={() => {
-                                    if (selectedInv) router.push(`/add-deal?inventoryId=${selectedInv._id}&prefill=true`);
+                                    if (selectedInv) {
+                                        const params = new URLSearchParams();
+                                        params.append('inventoryId', selectedInv._id);
+                                        params.append('projectName', selectedInv.projectName || "");
+                                        params.append('block', selectedInv.block || "");
+                                        params.append('unitNo', selectedInv.unitNumber || selectedInv.unitNo || "");
+                                        params.append('prefill', 'true');
+                                        router.push(`/add-deal?${params.toString()}`);
+                                    }
                                     closeHub();
                                 }}>
                                     <View style={[styles.actionIcon, { backgroundColor: "#DCFCE7" }]}>

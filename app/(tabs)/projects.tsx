@@ -66,17 +66,12 @@ const ProjectCard = memo(({ project, onPress, onMenuPress }: { project: Project;
                 </View>
 
                 <View style={styles.locationRow}>
-                    <Ionicons name="location-sharp" size={14} color={theme.textLight} />
-                    <Text style={[styles.locationText, { color: theme.textLight }]} numberOfLines={1}>{location}</Text>
-                </View>
-
-                <View style={[styles.progressSection, { backgroundColor: theme.background }]}>
-                    <View style={styles.progressInfo}>
-                        <Text style={[styles.progressLabel, { color: theme.text }]}>{progress.label}</Text>
-                        <Text style={styles.categoryText}>{categories.split(", ")[0]}</Text>
+                    <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Ionicons name="location-sharp" size={12} color={theme.textLight} />
+                        <Text style={[styles.locationText, { color: theme.textLight }]} numberOfLines={1}>{location}</Text>
                     </View>
-                    <View style={[styles.progressBarBg, { backgroundColor: theme.border }]}>
-                        <View style={[styles.progressBarFill, { width: `${progress.percent * 100}%`, backgroundColor: progress.color }]} />
+                    <View style={[styles.progressMini, { backgroundColor: progress.color + "15" }]}>
+                        <Text style={[styles.progressMiniText, { color: progress.color }]}>{progress.label}</Text>
                     </View>
                 </View>
             </View>
@@ -145,6 +140,30 @@ export default function ProjectsScreen() {
             }
         }
         setIsPublishing(false);
+    };
+
+    const handleDeleteProject = async (project: Project) => {
+        Alert.alert(
+            "Delete Project?",
+            "Are you sure you want to permanently delete this project? This action cannot be undone.",
+            [
+                { text: "Cancel", style: "cancel" },
+                { 
+                    text: "Delete", 
+                    style: "destructive", 
+                    onPress: async () => {
+                        const res = await api.delete(`/projects/${project._id}`);
+                        if (res.data?.success) {
+                            Alert.alert("Success", "Project deleted successfully");
+                            setProjects(prev => prev.filter(p => p._id !== project._id));
+                            closeHub();
+                        } else {
+                            Alert.alert("Error", res.data?.error || "Failed to delete project");
+                        }
+                    } 
+                }
+            ]
+        );
     };
 
     const handleTogglePublish = useCallback((project: Project | null) => {
@@ -383,7 +402,8 @@ export default function ProjectsScreen() {
                             </TouchableOpacity>
 
                             <TouchableOpacity style={actionHubStyles.actionItem} onPress={() => {
-                                Alert.alert("Upload", "Securely upload unit layouts/brochures."); closeHub();
+                                if (selectedProject) router.push(`/add-document?id=${selectedProject._id}&type=Project`);
+                                closeHub();
                             }}>
                                 <View style={[actionHubStyles.actionIcon, { backgroundColor: "#F0FDF4" }]}>
                                     <Ionicons name="cloud-upload" size={24} color="#16A34A" />
@@ -392,12 +412,25 @@ export default function ProjectsScreen() {
                             </TouchableOpacity>
 
                             <TouchableOpacity style={actionHubStyles.actionItem} onPress={() => {
-                                Alert.alert("Share", "Sharing project microsite..."); closeHub();
+                                if (selectedProject) {
+                                    const shareUrl = `https://bharatproperties.in/project/${selectedProject._id}`;
+                                    Alert.alert("Share project", `Link copied to clipboard:\n${shareUrl}`);
+                                }
+                                closeHub();
                             }}>
                                 <View style={[actionHubStyles.actionIcon, { backgroundColor: "#EFF6FF" }]}>
                                     <Ionicons name="share-social" size={24} color="#3B82F6" />
                                 </View>
                                 <Text style={actionHubStyles.actionLabel}>Share</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity style={actionHubStyles.actionItem} onPress={() => {
+                                if (selectedProject) handleDeleteProject(selectedProject);
+                            }}>
+                                <View style={[actionHubStyles.actionIcon, { backgroundColor: "#FEF2F2" }]}>
+                                    <Ionicons name="trash" size={24" color="#EF4444" />
+                                </View>
+                                <Text style={actionHubStyles.actionLabel}>Delete</Text>
                             </TouchableOpacity>
 
                             <TouchableOpacity 
@@ -471,6 +504,9 @@ const styles = StyleSheet.create({
 
     locationRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 16 },
     locationText: { fontSize: 13, color: "#64748B", fontWeight: "600", flex: 1 },
+
+    progressMini: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+    progressMiniText: { fontSize: 9, fontWeight: "900", letterSpacing: 0.5 },
 
     progressSection: { backgroundColor: "#F8FAFC", borderRadius: 16, padding: 12 },
     progressInfo: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },

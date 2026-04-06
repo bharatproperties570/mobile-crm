@@ -723,7 +723,14 @@ export default function MissionControlScreen() {
                             />
                             <View>
                                 <Text style={[styles.greetText, { color: theme.text }]}>Morning, Bharat</Text>
-                                <Text style={[styles.subGreet, { color: theme.textMuted }]}>Sales Command Center</Text>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                                    <View style={[styles.versionBadge, { backgroundColor: theme.primary + '20' }]}>
+                                        <Text style={[styles.versionText, { color: theme.primary }]}>v3.0 PREMIUM</Text>
+                                    </View>
+                                    <View style={[styles.autoPilotBadge, { backgroundColor: 'rgba(53, 185, 122, 0.1)' }]}>
+                                        <Text style={[styles.autoPilotText, { color: '#35B97A' }]}>⚡ AUTO-PILOT</Text>
+                                    </View>
+                                </View>
                             </View>
                         </View>
                         <View style={{ flexDirection: 'row', gap: 10 }}>
@@ -866,8 +873,12 @@ const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: "#F8FAFC" },
     header: { padding: 20, paddingTop: 60, backgroundColor: "#fff", borderBottomLeftRadius: 30, borderBottomRightRadius: 30 },
     headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
-    greetText: { fontSize: 22, fontWeight: "800", color: "#1E293B" },
-    subGreet: { fontSize: 13, color: "#94A3B8", fontWeight: "600" },
+    greetText: { fontSize: 20, fontWeight: "900", letterSpacing: -0.5 },
+    subGreet: { fontSize: 12, fontWeight: "600", color: "#94A3B8" },
+    versionBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
+    versionText: { fontSize: 8, fontWeight: '800' },
+    autoPilotBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
+    autoPilotText: { fontSize: 8, fontWeight: '900' },
     headerLogo: { width: 44, height: 44, borderRadius: 10 },
     notifBtn: { width: 44, height: 44, borderRadius: 14, backgroundColor: "#F8FAFC", justifyContent: 'center', alignItems: 'center' },
 
