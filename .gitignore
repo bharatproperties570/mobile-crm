@@ -46,3 +46,5 @@ app-example
 # local logs
 *.log
 qrcode.png
+expo.pid
+
