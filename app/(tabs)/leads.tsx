@@ -501,14 +501,13 @@ const StaggeredLeadItem = memo(({ item, index, renderItem }: any) => {
     );
 });
 
-const LeadCard = memo(({ lead, index, onPress, onMore, isSelected, onLongPress, getLookupValue, liveScore }: {
+const LeadCard = memo(({ lead, index, onPress, onMore, isSelected, onLongPress, liveScore }: {
     lead: Lead;
     index: number;
     onPress: () => void;
     onMore: () => void;
     isSelected?: boolean;
     onLongPress?: () => void;
-    getLookupValue: (type: string, id: any) => string;
     liveScore?: { score: number; color: string; label: string };
 }) => {
     const { theme } = useTheme();
@@ -1090,7 +1089,6 @@ export default function LeadsScreen() {
                             index={index}
                             isSelected={selectedIds.includes(item._id)}
                             onLongPress={() => { toggleSelection(item._id); }}
-                            getLookupValue={getLookupValue}
                             liveScore={liveScores[item._id]}
                             onPress={() => {
                                 if (selectedIds.length > 0) toggleSelection(item._id);
