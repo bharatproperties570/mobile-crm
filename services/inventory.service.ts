@@ -17,6 +17,8 @@ export interface Inventory {
     owners?: any[]; // For compatibility with inventory data actions
     size?: any;
     sizeUnit?: string;
+    sizeConfig?: any;
+    sizeLabel?: string;
     city?: string;
     sector?: string;
     associates?: any[];

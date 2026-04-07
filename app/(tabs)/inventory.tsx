@@ -76,7 +76,7 @@ const STATUS_COLORS: Record<string, string> = {
     'Hold': '#8B5CF6'
 };
 
-const ACTIVE_STATUSES = ['Available', 'Interested / Warm', 'Interested / Hot', 'Request Call Back', 'Busy / Driving', 'Market Feedback', 'General Inquiry'];
+const ACTIVE_STATUSES = ['Available', 'Interested / Medium', 'Interested / High', 'Request Call Back', 'Busy / Driving', 'Market Feedback', 'General Inquiry'];
 const INACTIVE_STATUSES = ['Sold Out', 'Rented Out', 'Not Interested', 'Inactive', 'Wrong Number / Invalid', 'Switch Off / Unreachable'];
 
 const TYPE_ICONS: Record<string, string> = {
@@ -120,7 +120,7 @@ const InventoryCard = memo(({ item, onPress, onCall, onWhatsApp, onSMS, onEmail,
             typeLabel: [subCat, unitType].filter(v => v && v !== "—").join(' · '),
             sizeLabel: getSizeLabel(item, getLookupValue)
         };
-    }, [item.category, item.subCategory, item.unitType, item.size, item.sizeUnit, getLookupValue]);
+    }, [item.category, item.subCategory, item.unitType, item.size, item.sizeUnit, item.sizeConfig, item.sizeLabel, getLookupValue]);
 
     const assignedName = useMemo(() => {
         if (!item.assignedTo) return "—";
@@ -197,7 +197,7 @@ const InventoryCard = memo(({ item, onPress, onCall, onWhatsApp, onSMS, onEmail,
                                 <Text style={styles.listBlockName}> • {item.block || "No Block"}</Text>
                             </Text>
                             {/* Size shown below project name */}
-                            {(item.size || item.sizeUnit) ? (
+                            {(item.size || item.sizeUnit || item.sizeConfig || item.sizeLabel) ? (
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 }}>
                                     <Ionicons name="expand-outline" size={11} color="#94A3B8" />
                                     <Text style={{ fontSize: 11, color: '#94A3B8', fontWeight: '600' }}>
@@ -280,6 +280,8 @@ export default function InventoryScreen() {
     const [hasMore, setHasMore] = useState(true);
     const [loadingMore, setLoadingMore] = useState(false);
     const lastFetchTime = useRef<number>(0);
+    const [activeQuickFilter, setActiveQuickFilter] = useState<'active' | 'inactive' | null>(null);
+    const { getLookupsByType } = useLookup();
 
     // Action Hub State
     const [selectedInv, setSelectedInv] = useState<Inventory | null>(null);
@@ -331,8 +333,18 @@ export default function InventoryScreen() {
         if (pageNum > 1) setLoadingMore(true);
         else if (inventory.length === 0) setLoading(true);
 
+        // Normalize filters: Convert arrays to comma-separated strings for the backend
+        const apiFilters: any = { ...filters };
+        Object.keys(apiFilters).forEach(key => {
+            if (Array.isArray(apiFilters[key])) {
+                apiFilters[key] = apiFilters[key].join(',');
+            }
+        });
+
+        console.log("[Frontend] Fetching Inventory with params:", JSON.stringify({ ...apiFilters, page: pageNum }, null, 2));
+
         const result = await safeApiCall<any>(() => getInventory({ 
-            ...filters, 
+            ...apiFilters, 
             page: String(pageNum), 
             limit: "50" 
         }));
@@ -361,15 +373,15 @@ export default function InventoryScreen() {
                 return filtered;
             });
             
-            setActiveCount(dataObj.activeCount || 0);
-            setInactiveCount(dataObj.inactiveCount || 0);
+            setActiveCount(result.activeCount || 0);
+            setInactiveCount(result.inactiveCount || 0);
             setHasMore(newItems.length === 50);
             setPage(pageNum);
         }
         setLoading(false);
         setLoadingMore(false);
         setRefreshing(false);
-    }, [filters, inventory.length]);
+    }, [filters]); // Removed inventory.length to prevent redundant fetches
 
     const onRefresh = useCallback(() => {
         setRefreshing(true);
@@ -392,6 +404,11 @@ export default function InventoryScreen() {
         }, [fetchInventory, inventory.length])
     );
 
+    // FIX: Refetch when filters change!
+    useEffect(() => {
+        fetchInventory(1, false);
+    }, [filters]);
+
     const filtered = useMemo(() => {
         const q = search.toLowerCase();
         return inventory.filter(i => {
@@ -400,13 +417,23 @@ export default function InventoryScreen() {
                 (i.unitNo || "").toLowerCase().includes(q) ||
                 (i.block || "").toLowerCase().includes(q);
 
-            if (!matchesSearch) return false;
-
-            // Apply Filters
-            if (filters.status?.length > 0 && !filters.status.includes(i.status)) return false;
-            if (filters.category?.length > 0 && !filters.category.includes(i.category)) return false;
-            if (filters.subCategory?.length > 0 && !filters.subCategory.includes(i.subCategory)) return false;
-            if (filters.unitType?.length > 0 && !filters.unitType.includes(i.unitType)) return false;
+            // Apply Filters (Robust handling for ID vs Object)
+            if (filters.status?.length > 0 && !filters.status.includes('active') && !filters.status.includes('inactive')) {
+                const itemStatusId = typeof i.status === 'object' && i.status !== null ? i.status._id : i.status;
+                if (!filters.status.includes(itemStatusId)) return false;
+            }
+            if (filters.category?.length > 0) {
+                const itemCategoryId = typeof i.category === 'object' && i.category !== null ? i.category._id : i.category;
+                if (!filters.category.includes(itemCategoryId)) return false;
+            }
+            if (filters.subCategory?.length > 0) {
+                const itemSubCategoryId = typeof i.subCategory === 'object' && i.subCategory !== null ? i.subCategory._id : i.subCategory;
+                if (!filters.subCategory.includes(itemSubCategoryId)) return false;
+            }
+            if (filters.unitType?.length > 0) {
+                const itemUnitTypeId = typeof i.unitType === 'object' && i.unitType !== null ? i.unitType._id : i.unitType;
+                if (!filters.unitType.includes(itemUnitTypeId)) return false;
+            }
 
             return true;
         });
@@ -492,62 +519,107 @@ export default function InventoryScreen() {
         }
     };
 
+    const handleQuickFilter = (type: 'active' | 'inactive') => {
+        if (activeQuickFilter === type) {
+            setActiveQuickFilter(null);
+            setFilters((prev: any) => ({ ...prev, status: [] }));
+            return;
+        }
+
+        console.log(`[Frontend] Applying Quick Filter: ${type}`);
+
+        setActiveQuickFilter(type);
+        setFilters((prev: any) => ({ ...prev, status: [type] }));
+    };
+
     const handleCall = (item: Inventory) => handleCommunicationAction(item, 'CALL');
     const handleWhatsApp = (item: Inventory) => handleCommunicationAction(item, 'WHATSAPP');
     const handleSMS = (item: Inventory) => handleCommunicationAction(item, 'SMS');
     const handleEmail = (item: Inventory) => handleCommunicationAction(item, 'EMAIL');
 
-    const renderHeader = () => (
-        <View style={styles.headerContainer}>
-            <View style={styles.header}>
-                <View>
-                    <Text style={styles.headerTitle}>Inventory</Text>
+    const renderHeader = () => {
+        const total = activeCount + inactiveCount;
+        const activePct = total > 0 ? Math.round((activeCount / total) * 100) : 0;
+        const inactivePct = total > 0 ? Math.round((inactiveCount / total) * 100) : 0;
+
+        return (
+            <View style={styles.headerContainer}>
+                <View style={styles.header}>
+                    <View>
+                        <Text style={styles.headerTitle}>Inventory</Text>
+                    </View>
+                    <View style={styles.headerActions}>
+                        <TouchableOpacity style={[styles.actionBtn, styles.actionBtnPrimary]} onPress={() => router.push("/add-inventory")}>
+                            <Ionicons name="add" size={24} color="#fff" />
+                        </TouchableOpacity>
+                    </View>
                 </View>
-                <View style={styles.headerActions}>
-                    <TouchableOpacity style={[styles.actionBtn, styles.actionBtnPrimary]} onPress={() => router.push("/add-inventory")}>
-                        <Ionicons name="add" size={24} color="#fff" />
+
+                <View style={styles.metricsFlowContainer}>
+                    {/* Inactive Segment (Left) */}
+                    <TouchableOpacity 
+                        style={[
+                            styles.flowSegment, 
+                            styles.inactiveSegment,
+                            activeQuickFilter === 'inactive' && styles.inactiveSelected
+                        ]}
+                        onPress={() => handleQuickFilter('inactive')}
+                        activeOpacity={0.7}
+                    >
+                        <View style={styles.flowInfo}>
+                            <Text style={styles.flowLabel}>INACTIVE</Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
+                                <Text style={styles.flowValue}>{inactiveCount.toLocaleString()}</Text>
+                                <Text style={styles.flowPercent}>{inactivePct}%</Text>
+                            </View>
+                        </View>
+                        <Ionicons name="archive-outline" size={24} color="#64748B20" style={styles.flowIcon} />
+                        <View style={[styles.chevronPoint, activeQuickFilter === 'inactive' && { backgroundColor: '#E2E8F0' }]} />
+                    </TouchableOpacity>
+
+                    {/* Active Segment (Right) */}
+                    <TouchableOpacity 
+                        style={[
+                            styles.flowSegment, 
+                            styles.activeSegment,
+                            activeQuickFilter === 'active' && styles.activeSelected
+                        ]}
+                        onPress={() => handleQuickFilter('active')}
+                        activeOpacity={0.7}
+                    >
+                        <View style={[styles.flowInfo, { paddingLeft: 24 }]}>
+                            <Text style={styles.flowLabelActive}>ACTIVE</Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
+                                <Text style={styles.flowValueActive}>{activeCount.toLocaleString()}</Text>
+                                <Text style={styles.flowPercentActive}>{activePct}%</Text>
+                            </View>
+                        </View>
+                        <Ionicons name="trending-up" size={24} color="#16A34A20" style={styles.flowIcon} />
                     </TouchableOpacity>
                 </View>
-            </View>
 
-            <View style={styles.metricsRow}>
-                <View style={[styles.metricCard, { borderLeftColor: '#22C55E' }]}>
-                    <View>
-                        <Text style={styles.metricLabel}>ACTIVE</Text>
-                        <Text style={[styles.metricValue, { color: '#16A34A' }]}>{activeCount.toLocaleString()}</Text>
-                    </View>
-                    <Ionicons name="trending-up" size={20} color="#22C55E20" />
-                </View>
-                <View style={[styles.metricCard, { borderLeftColor: '#94A3B8' }]}>
-                    <View>
-                        <Text style={styles.metricLabel}>INACTIVE</Text>
-                        <Text style={[styles.metricValue, { color: '#64748B' }]}>{inactiveCount.toLocaleString()}</Text>
-                    </View>
-                    <Ionicons name="archive-outline" size={20} color="#94A3B820" />
-                </View>
-            </View>
-
-            <View style={styles.commandBar}>
-                <Ionicons name="search" size={20} color="#94A3B8" />
-                <TextInput
-                    style={styles.commandInput}
-                    placeholder="Search Project or Unit..."
-                    placeholderTextColor="#94A3B8"
-                    value={search}
-                    onChangeText={setSearch}
-                />
-                <TouchableOpacity onPress={() => setShowFilterModal(true)} style={styles.filterBtn}>
-                    <Ionicons name="filter" size={20} color={Object.keys(filters).length > 0 ? "#2563EB" : "#94A3B8"} />
-                    {Object.keys(filters).length > 0 && <View style={styles.filterBadge} />}
-                </TouchableOpacity>
-                {search.length > 0 && (
-                    <TouchableOpacity onPress={() => setSearch("")} style={{ marginLeft: 8 }}>
-                        <Ionicons name="close-circle" size={18} color="#CBD5E1" />
+                <View style={styles.commandBar}>
+                    <Ionicons name="search" size={20} color="#94A3B8" />
+                    <TextInput
+                        style={styles.commandInput}
+                        placeholder="Search Project or Unit..."
+                        placeholderTextColor="#94A3B8"
+                        value={search}
+                        onChangeText={setSearch}
+                    />
+                    <TouchableOpacity onPress={() => setShowFilterModal(true)} style={styles.filterBtn}>
+                        <Ionicons name="filter" size={20} color={Object.keys(filters).length > 0 ? "#2563EB" : "#94A3B8"} />
+                        {Object.keys(filters).length > 0 && <View style={styles.filterBadge} />}
                     </TouchableOpacity>
-                )}
+                    {search.length > 0 && (
+                        <TouchableOpacity onPress={() => setSearch("")} style={{ marginLeft: 8 }}>
+                            <Ionicons name="close-circle" size={18} color="#CBD5E1" />
+                        </TouchableOpacity>
+                    )}
+                </View>
             </View>
-        </View >
-    );
+        );
+    };
 
     return (
         <SafeAreaView style={styles.safeArea}>
@@ -766,25 +838,71 @@ const styles = StyleSheet.create({
     },
     headerTitle: { fontSize: 28, fontWeight: "900", color: "#0F172A", letterSpacing: -0.5 },
     headerSubtitle: { fontSize: 13, color: "#64748B", fontWeight: "600", marginTop: 2 },
-    metricsRow: { flexDirection: 'row', gap: 12, marginHorizontal: 20, marginBottom: 16 },
-    metricCard: {
-        flex: 1,
+    metricsFlowContainer: {
+        flexDirection: 'row',
+        height: 85,
+        marginHorizontal: 20,
+        marginBottom: 20,
+        borderRadius: 20,
         backgroundColor: '#fff',
-        paddingHorizontal: 16,
-        paddingVertical: 14,
-        borderRadius: 16,
-        borderLeftWidth: 5,
+        overflow: 'hidden',
         shadowColor: '#000',
         shadowOpacity: 0.06,
-        shadowRadius: 10,
+        shadowRadius: 12,
         shadowOffset: { width: 0, height: 4 },
         elevation: 3,
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center'
     },
-    metricLabel: { fontSize: 10, fontWeight: '800', color: '#64748B', marginBottom: 4, letterSpacing: 0.5 },
-    metricValue: { fontSize: 22, fontWeight: '900' },
+    flowSegment: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 20,
+        position: 'relative',
+    },
+    inactiveSegment: {
+        backgroundColor: '#F1F5F9', // Slate 100
+        zIndex: 2,
+    },
+    activeSegment: {
+        backgroundColor: '#DCFCE7', // Green 100
+        zIndex: 1,
+    },
+    chevronPoint: {
+        position: 'absolute',
+        right: -15, // Half of height/width to center the point
+        top: 27.5, // (85 - 30) / 2
+        width: 30,
+        height: 30,
+        backgroundColor: '#F1F5F9',
+        transform: [{ rotate: '45deg' }],
+        zIndex: 3,
+        borderRadius: 4,
+    },
+    flowInfo: {
+        justifyContent: 'center',
+    },
+    flowLabel: {
+        fontSize: 10,
+        fontWeight: '900',
+        color: '#64748B',
+        letterSpacing: 1,
+        marginBottom: 2,
+    },
+    flowLabelActive: {
+        fontSize: 10,
+        fontWeight: '900',
+        color: '#16A34A',
+        letterSpacing: 1,
+        marginBottom: 2,
+    },
+    flowValue: { fontSize: 22, fontWeight: "900", color: "#475569" },
+    flowPercent: { fontSize: 12, fontWeight: "700", color: "#94A3B8" },
+    flowValueActive: { fontSize: 22, fontWeight: "900", color: "#16A34A" },
+    flowPercentActive: { fontSize: 12, fontWeight: "700", color: "#16A34A80" },
+    flowIcon: {
+        opacity: 0.8,
+    },
     headerActions: { flexDirection: 'row', gap: 8 },
     actionBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: "#F1F5F9", justifyContent: 'center', alignItems: 'center' },
     actionBtnPrimary: { backgroundColor: "#2563EB" },
@@ -828,6 +946,16 @@ const styles = StyleSheet.create({
     listMetaText: { fontSize: 12, color: "#475569", fontWeight: "700" },
 
     // Grid Card Styles
+    inactiveSelected: {
+        backgroundColor: '#E2E8F0', // Slate 200
+        borderWidth: 2,
+        borderColor: '#94A3B8',
+    },
+    activeSelected: {
+        backgroundColor: '#BBF7D0', // Green 200
+        borderWidth: 2,
+        borderColor: '#22C55E',
+    },
     gridCard: {
         width: COLUMN_WIDTH, backgroundColor: "#fff", borderRadius: 24,
         padding: 12, marginBottom: 16, borderWidth: 1, borderColor: "#F1F5F9",

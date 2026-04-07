@@ -285,9 +285,14 @@ export default function AddLead() {
         funding: "", timeline: "", furnishing: "", transactionType: "",
         searchLocation: "", locCity: "", locArea: "", locPinCode: "", locRange: 5,
         projectName: [], projectTowers: [], propertyNo: "", propertyNoEnd: "", unitSelectionMode: "Single",
+        sizeLabel: "", inventoryId: "",
         status: "", source: "", subSource: "", campaign: "", subCampaign: "",
         owner: "", team: "", visibleTo: "Everyone", stage: "", description: "", tags: [],
     });
+
+    const [units, setUnits] = useState<any[]>([]);
+    const [isLoadingUnits, setIsLoadingUnits] = useState(false);
+    const [activeDropdown, setActiveDropdown] = useState<'unit' | null>(null);
 
     const allowedSubCategoryNames = useMemo(() => {
         if (!propertyConfig || formData.propertyType.length === 0) return [];
@@ -300,8 +305,100 @@ export default function AddLead() {
                 catConfig.subCategories.forEach((sc: any) => names.push(sc.name));
             }
         });
-        return [...new Set(names)];
-    }, [propertyConfig, formData.propertyType, getLookupValue]);
+        return names;
+    }, [propertyConfig, formData.propertyType]);
+
+function SearchableDropdown({
+    visible, onClose, options, onSelect, placeholder
+}: {
+    visible: boolean; onClose: () => void; options: { label: string, value: string }[]; onSelect: (v: string) => void; placeholder: string;
+}) {
+    const { theme } = useTheme();
+    const [search, setSearch] = useState("");
+    const filtered = (options || []).filter(o =>
+        o?.label?.toString().toLowerCase().includes(search.toLowerCase())
+    );
+
+    return (
+        <Modal visible={visible} animationType="slide" transparent={true} onRequestClose={onClose}>
+            <View style={styles.modalOverlay}>
+                <View style={[styles.modalContent, { backgroundColor: theme.cardBg }]}>
+                    <View style={styles.modalHeader}>
+                        <Text style={[styles.modalTitle, { color: theme.textPrimary }]}>{placeholder}</Text>
+                        <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                            <Ionicons name="close" size={26} color={theme.textSecondary} />
+                        </TouchableOpacity>
+                    </View>
+                    <TextInput
+                        style={[styles.modalSearchInput, { backgroundColor: theme.inputBg, color: theme.textPrimary }]}
+                        placeholder="Search units..."
+                        value={search}
+                        onChangeText={setSearch}
+                        placeholderTextColor={theme.textMuted}
+                    />
+                    <FlatList
+                        data={filtered}
+                        keyExtractor={(item, idx) => `${item.value}-${idx}`}
+                        renderItem={({ item }) => (
+                            <TouchableOpacity style={[styles.modalListItem, { borderBottomColor: theme.border }]} onPress={() => { onSelect(item.value); onClose(); }}>
+                                <Text style={[styles.modalListItemText, { color: theme.textPrimary }]}>{item.label}</Text>
+                            </TouchableOpacity>
+                        )}
+                        keyboardShouldPersistTaps="handled"
+                    />
+                </View>
+            </View>
+        </Modal>
+    );
+}
+
+    // ─── Inventory Logic (Senior Professional) ──────────────────────────────────
+    useEffect(() => {
+        const fetchUnits = async () => {
+            // Only fetch if exactly one project is selected for clarity
+            if (formData.projectName.length !== 1) {
+                setUnits([]);
+                return;
+            }
+            
+            setIsLoadingUnits(true);
+            try {
+                const projName = formData.projectName[0];
+                const params = new URLSearchParams();
+                params.append('area', projName);
+                
+                // If specific tower/block is selected
+                if (formData.projectTowers.length > 0) {
+                    const blockKey = formData.projectTowers[0]; // Take first selected block for unit lookup
+                    const blockName = blockKey.split('-').pop(); // Handle "Project-Block" format
+                    if (blockName) params.append('location', blockName);
+                }
+
+                const response = await api.get(`/inventory?${params.toString()}`);
+                if (response.data && response.data.success) {
+                    setUnits(response.data.records || response.data.data || []);
+                }
+            } catch (error) {
+                console.error("Error fetching units for Lead:", error);
+            } finally {
+                setIsLoadingUnits(false);
+            }
+        };
+        fetchUnits();
+    }, [formData.projectName, formData.projectTowers]);
+
+    const handleUnitSelect = (unit: any) => {
+        setFormData({
+            ...formData,
+            propertyNo: unit.unitNo || unit.unitNumber,
+            inventoryId: unit._id,
+            sizeLabel: unit.sizeLabel || `${unit.size} ${unit.sizeUnit}`,
+            // Auto-fill requirement area if it's empty
+            areaMin: formData.areaMin || String(unit.size || ""),
+            areaMax: formData.areaMax || String(unit.size || ""),
+            areaMetric: unit.sizeUnit || formData.areaMetric
+        });
+    };
 
     const allowedUnitTypeNames = useMemo(() => {
         if (!propertyConfig || formData.subType.length === 0) return [];
@@ -802,6 +899,7 @@ export default function AddLead() {
                                         </View>
                                     </Field>
                                     <Field label="Selection Mode"><SelectButton value={formData.unitSelectionMode} options={["Single", "Multiple", "Range"].map(m => ({ label: m, value: m }))} onSelect={(v) => setFormData({ ...formData, unitSelectionMode: v })} /></Field>
+                                    
                                     <Field label="Unit Details">
                                         <View style={styles.row}>
                                             {formData.unitSelectionMode === "Range" ? (
@@ -810,10 +908,67 @@ export default function AddLead() {
                                                     <View style={{ flex: 1 }}><Input label="End" value={formData.propertyNoEnd} onChangeText={v => setFormData({ ...formData, propertyNoEnd: v })} placeholder="e.g. 10" /></View>
                                                 </>
                                             ) : (
-                                                <View style={{ flex: 1 }}><Input label={formData.unitSelectionMode === "Multiple" ? "Unit Nos (CSV)" : "Unit Number"} value={formData.propertyNo} onChangeText={v => setFormData({ ...formData, propertyNo: v })} placeholder={formData.unitSelectionMode === "Multiple" ? "101, 102..." : "e.g. 101"} /></View>
+                                                formData.unitSelectionMode === "Single" ? (
+                                                    <TouchableOpacity 
+                                                        style={[styles.inputWrapper, { flex: 1, backgroundColor: theme.inputBg, borderColor: theme.border, paddingHorizontal: 16, justifyContent: 'center' }]} 
+                                                        onPress={() => setActiveDropdown('unit')}
+                                                    >
+                                                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                                                            <Text style={{ color: formData.propertyNo ? theme.textPrimary : theme.textMuted, fontSize: 16, fontWeight: '600' }}>
+                                                                {formData.propertyNo || "Select Unit"}
+                                                            </Text>
+                                                            <Ionicons name="chevron-down" size={20} color={theme.textSecondary} />
+                                                        </View>
+                                                    </TouchableOpacity>
+                                                ) : (
+                                                    <View style={{ flex: 1 }}><Input label={formData.unitSelectionMode === "Multiple" ? "Unit Nos (CSV)" : "Unit Number"} value={formData.propertyNo} onChangeText={v => setFormData({ ...formData, propertyNo: v })} placeholder={formData.unitSelectionMode === "Multiple" ? "101, 102..." : "e.g. 101"} /></View>
+                                                )
                                             )}
                                         </View>
                                     </Field>
+
+                                    {formData.sizeLabel ? (
+                                        <FadeInView delay={100}>
+                                            <View style={[styles.tagBox, { backgroundColor: theme.primary + '08', borderColor: theme.primary + '30', borderStyle: 'dashed' }]}>
+                                                <View style={styles.rowAlign}>
+                                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                                        <View style={[styles.smallIcon, { backgroundColor: theme.primary }]}>
+                                                            <Ionicons name="expand" size={14} color="#fff" />
+                                                        </View>
+                                                        <View>
+                                                            <Text style={[styles.tagLabel, { color: theme.textSecondary }]}>Inventory Size</Text>
+                                                            <Text style={[styles.tagValue, { color: theme.primary }]}>{formData.sizeLabel}</Text>
+                                                        </View>
+                                                    </View>
+                                                    {formData.unitSelectionMode === "Single" && (
+                                                        <TouchableOpacity onPress={() => setFormData({ ...formData, propertyNo: "", sizeLabel: "", inventoryId: "" })}>
+                                                            <Ionicons name="close-circle" size={20} color={theme.textMuted} />
+                                                        </TouchableOpacity>
+                                                    )}
+                                                </View>
+                                            </View>
+                                        </FadeInView>
+                                    ) : (
+                                        formData.unitSelectionMode === "Single" && (
+                                            <Text style={{ fontSize: 12, color: theme.textMuted, marginLeft: 4, marginTop: -8, fontStyle: 'italic' }}>
+                                                Select a unit to auto-fill requirement size
+                                            </Text>
+                                        )
+                                    )}
+
+                                    <SearchableDropdown
+                                        visible={activeDropdown === 'unit'}
+                                        onClose={() => setActiveDropdown(null)}
+                                        placeholder="Select Unit Number"
+                                        options={units.map(u => ({ 
+                                            label: `${u.unitNo || u.unitNumber} (${u.sizeLabel || (u.size + ' ' + u.sizeUnit)})`, 
+                                            value: u._id 
+                                        }))}
+                                        onSelect={(val) => {
+                                            const unit = units.find(u => u._id === val);
+                                            if (unit) handleUnitSelect(unit);
+                                        }}
+                                    />
                                 </View>
                             )}
                         </View>
@@ -995,4 +1150,15 @@ const styles = StyleSheet.create({
     dupItem: { fontSize: 13, marginBottom: 4, fontWeight: '500' },
     helperText: { fontSize: 11, marginTop: 4, marginLeft: 4 },
     textMuted: { opacity: 0.6 },
+    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+    modalContent: { borderTopLeftRadius: 32, borderTopRightRadius: 32, height: '75%', padding: 24, shadowColor: "#000", shadowOffset: { width: 0, height: -10 }, shadowOpacity: 0.1, shadowRadius: 20, elevation: 20 },
+    modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+    modalTitle: { fontSize: 20, fontWeight: '800', letterSpacing: -0.5 },
+    modalSearchInput: { borderRadius: 16, padding: 16, fontSize: 16, fontWeight: '600', marginBottom: 16 },
+    modalListItem: { paddingVertical: 18, borderBottomWidth: 1 },
+    modalListItemText: { fontSize: 17, fontWeight: '600' },
+    tagBox: { padding: 16, borderRadius: 20, borderWidth: 1, marginTop: 12 },
+    tagLabel: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 },
+    tagValue: { fontSize: 15, fontWeight: '800' },
+    smallIcon: { width: 24, height: 24, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
 });

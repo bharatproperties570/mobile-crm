@@ -367,7 +367,7 @@ export default function ContactDetailScreen() {
                                     let color = theme.primary;
 
                                     if (isAudit) {
-                                        icon = "history-outline";
+                                        icon = "time-outline";
                                         color = "#8B5CF6";
                                     } else if (act.type.toLowerCase().includes("call")) {
                                         icon = "call-outline";

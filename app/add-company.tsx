@@ -172,6 +172,8 @@ function SelectButton({
 
 interface CompanyForm {
     name: string;
+    registrationNo: string;
+    website: string;
     phone1: string;
     phone2: string;
     email1: string;
@@ -182,11 +184,16 @@ interface CompanyForm {
     gstNumber: string;
     source: string;
     subSource: string;
+    // New Fields
+    companySize: string;
+    annualTurnover: string;
+    // Addresses
     hNo: string;
     street: string;
     city: string;
     state: string;
     pinCode: string;
+    country: string;
     employees: any[];
     team: string;
     owner: string;
@@ -194,10 +201,12 @@ interface CompanyForm {
 }
 
 const INITIAL: CompanyForm = {
-    name: "", phone1: "", phone2: "", email1: "", email2: "",
+    name: "", registrationNo: "", website: "",
+    phone1: "", phone2: "", email1: "", email2: "",
     companyType: "", industry: "", description: "", gstNumber: "",
     source: "", subSource: "",
-    hNo: "", street: "", city: "", state: "", pinCode: "",
+    companySize: "", annualTurnover: "",
+    hNo: "", street: "", city: "", state: "", pinCode: "", country: "India",
     employees: [],
     team: "", owner: "", visibleTo: "Everyone",
 };
@@ -332,6 +341,10 @@ export default function AddCompanyScreen() {
             const getValidHexId = (val: string) => val?.length === 24 ? val : undefined;
             const payload = {
                 name: form.name.trim(),
+                registrationNo: form.registrationNo || undefined,
+                website: form.website || undefined,
+                companySize: form.companySize || undefined,
+                annualTurnover: form.annualTurnover || undefined,
                 phones: [
                     ...(form.phone1 ? [{ phoneCode: "+91", phoneNumber: form.phone1, type: "Work" }] : []),
                     ...(form.phone2 ? [{ phoneCode: "+91", phoneNumber: form.phone2, type: "Work" }] : []),
@@ -353,6 +366,7 @@ export default function AddCompanyScreen() {
                         city: getValidHexId(form.city),
                         state: getValidHexId(form.state),
                         pinCode: form.pinCode || undefined,
+                        country: form.country
                     }
                 },
                 employees: form.employees.map(emp => emp._id || emp.id).filter(Boolean),
@@ -392,20 +406,28 @@ export default function AddCompanyScreen() {
                         <Field required>
                             <Input label="Company Name" value={form.name} onChangeText={set("name")} placeholder="Tech Innovators Inc." />
                         </Field>
+                        <View style={styles.row}>
+                            <View style={{ flex: 1 }}><Input label="Registration No" value={form.registrationNo} onChangeText={set("registrationNo")} placeholder="U12345DL2024..." /></View>
+                            <View style={{ flex: 1 }}><Input label="Website" value={form.website} onChangeText={set("website")} placeholder="www.example.com" keyboardType="url" /></View>
+                        </View>
                         <Field required>
                             <Input label="Primary Mobile" value={form.phone1} onChangeText={set("phone1")} placeholder="+91 98765 43210" keyboardType="phone-pad" icon="call-outline" />
-                        </Field>
-                        <Field>
-                            <Input label="Alternate Mobile" value={form.phone2} onChangeText={set("phone2")} placeholder="Optional" keyboardType="phone-pad" icon="call-outline" />
                         </Field>
                         <Field>
                             <Input label="Primary Email" value={form.email1} onChangeText={set("email1")} placeholder="contact@company.com" keyboardType="email-address" icon="mail-outline" />
                         </Field>
                         <Field>
-                            <Input label="Alternate Email" value={form.email2} onChangeText={set("email2")} placeholder="Optional" keyboardType="email-address" icon="mail-outline" />
-                        </Field>
-                        <Field>
                             <Input label="GST Number" value={form.gstNumber} onChangeText={set("gstNumber")} placeholder="Optional GSTIN" icon="document-text-outline" />
+                        </Field>
+                        <View style={styles.row}>
+                            <View style={{ flex: 1 }}>
+                                <Field label="Company Size">
+                                    <SelectButton value={form.companySize} options={["1-10", "11-50", "51-200", "201-500", "500+"].map(s => ({ label: s, value: s }))} onSelect={set("companySize")} />
+                                </Field>
+                            </View>
+                        </View>
+                        <Field>
+                            <Input label="Annual Turnover" value={form.annualTurnover} onChangeText={set("annualTurnover")} placeholder="e.g. 5 Cr" icon="cash-outline" />
                         </Field>
                         <Field>
                             <Input label="Company Profile" value={form.description} onChangeText={set("description")} placeholder="Notes about this company..." multiline numberOfLines={3} />

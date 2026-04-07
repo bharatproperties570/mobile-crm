@@ -713,13 +713,8 @@ export default function MissionControlScreen() {
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                             <Image 
                                 source={theme.background === '#0F172A' ? require("../../assets/images/logo_dark.png") : require("../../assets/images/logo.png")} 
-                                style={[styles.headerLogo, { 
-                                    opacity: 1,
-                                    shadowColor: '#3b82f6',
-                                    shadowOffset: { width: 0, height: 0 },
-                                    shadowOpacity: 0.5,
-                                    shadowRadius: 10
-                                }]} 
+                                resizeMode="contain"
+                                style={styles.headerLogo} 
                             />
                             <View>
                                 <Text style={[styles.greetText, { color: theme.text }]}>Morning, Bharat</Text>
@@ -767,7 +762,7 @@ export default function MissionControlScreen() {
                             {/* Simulation Button for Testing */}
                             <TouchableOpacity
                                 style={[styles.notifBtn, { backgroundColor: theme.primary + '15' }]}
-                                onPress={() => simulateIncomingCall('9876543210')}
+                                onPress={() => simulateIncomingCall('9416031737')}
                             >
                                 <Ionicons name="flask" size={22} color={theme.primary} />
                             </TouchableOpacity>

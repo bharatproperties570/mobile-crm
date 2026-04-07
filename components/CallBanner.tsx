@@ -15,7 +15,7 @@ interface Props {
 export default function CallBanner({ info, onClose }: Props) {
     const { theme } = useTheme();
     const router = useRouter();
-    const slideAnim = useRef(new Animated.Value(-200)).current;
+    const slideAnim = useRef(new Animated.Value(-300)).current;
 
     useEffect(() => {
         if (info) {
@@ -23,11 +23,11 @@ export default function CallBanner({ info, onClose }: Props) {
                 toValue: 20,
                 useNativeDriver: true,
                 tension: 50,
-                friction: 8
+                friction: 10
             }).start();
         } else {
             Animated.timing(slideAnim, {
-                toValue: -200,
+                toValue: -300,
                 duration: 300,
                 useNativeDriver: true
             }).start();
@@ -36,14 +36,16 @@ export default function CallBanner({ info, onClose }: Props) {
 
     if (!info) return null;
 
-    const getTypeColor = () => {
+    const getTypeConfig = () => {
         switch (info.type) {
-            case 'Lead': return '#3B82F6';
-            case 'Deal': return '#10B981';
-            case 'Inventory': return '#8B5CF6';
-            default: return '#64748B';
+            case 'Lead': return { color: '#3B82F6', icon: 'person-add' };
+            case 'Deal': return { color: '#10B981', icon: 'cash' };
+            case 'Inventory': return { color: '#8B5CF6', icon: 'business' };
+            default: return { color: '#64748B', icon: 'call' };
         }
     };
+
+    const config = getTypeConfig();
 
     const handlePress = () => {
         onClose();
@@ -59,55 +61,58 @@ export default function CallBanner({ info, onClose }: Props) {
             ]}
         >
             <View style={[styles.banner, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                {/* Header: Meta info */}
                 <View style={styles.header}>
-                    <View style={[styles.typeBadge, { backgroundColor: getTypeColor() + '20' }]}>
-                        <Text style={[styles.typeText, { color: getTypeColor() }]}>{info.type.toUpperCase()}</Text>
+                    <View style={styles.callerIdentity}>
+                        <View style={[styles.avatar, { backgroundColor: config.color }]}>
+                            <Text style={styles.avatarText}>{info.name.charAt(0).toUpperCase()}</Text>
+                        </View>
+                        <View>
+                            <Text style={[styles.name, { color: theme.text }]}>{info.name}</Text>
+                            <Text style={[styles.mobile, { color: theme.textLight }]}>{info.mobile || info.type}</Text>
+                        </View>
                     </View>
-                    <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-                        <Ionicons name="close" size={18} color={theme.textLight} />
-                    </TouchableOpacity>
+                    <View style={[styles.typeBadge, { backgroundColor: config.color + '15' }]}>
+                        <Ionicons name={config.icon as any} size={10} color={config.color} />
+                        <Text style={[styles.typeText, { color: config.color }]}>{info.type.toUpperCase()}</Text>
+                    </View>
                 </View>
 
-                <View style={styles.content}>
-                    <Text style={[styles.name, { color: theme.text }]}>{info.name}</Text>
-
-                    {(info.projectName || info.unitNumber) && (
-                        <View style={styles.detailsRow}>
-                            {info.projectName && (
-                                <View style={styles.detailItem}>
-                                    <Ionicons name="business-outline" size={14} color={theme.textLight} />
-                                    <Text style={[styles.detailText, { color: theme.textLight }]} numberOfLines={1}>
-                                        {info.projectName}
-                                    </Text>
-                                </View>
-                            )}
-                            {info.unitNumber && (
-                                <View style={styles.detailItem}>
-                                    <Ionicons name="home-outline" size={14} color={theme.textLight} />
-                                    <Text style={[styles.detailText, { color: theme.textLight }]}>
-                                        Unit: {info.unitNumber}
-                                    </Text>
-                                </View>
-                            )}
+                {/* Middle: Professional Context Grid */}
+                <View style={styles.contextGrid}>
+                    <View style={styles.contextItem}>
+                        <View style={[styles.intentBadge, { backgroundColor: info.intent === 'Rent' ? '#F59E0B' : '#2563EB' }]}>
+                            <Text style={styles.intentText}>{info.intent || 'Potential'}</Text>
                         </View>
-                    )}
+                        <Text style={[styles.subCategoryText, { color: theme.text }]}>{info.subCategory || 'General Inquiry'}</Text>
+                    </View>
 
-                    {info.activity && (
-                        <View style={[styles.activityRow, { backgroundColor: theme.primary + '08' }]}>
-                            <Ionicons name="calendar-outline" size={14} color={theme.primary} />
-                            <Text style={[styles.activityText, { color: theme.primary }]}>
-                                {info.activity}
-                            </Text>
-                        </View>
-                    )}
+                    <View style={styles.verticalDivider} />
+
+                    <View style={styles.contextItem}>
+                        <Text style={[styles.projectLabel, { color: theme.textLight }]}>PROJECT / UNIT</Text>
+                        <Text style={[styles.projectName, { color: theme.text }]} numberOfLines={1}>
+                            {info.projectName || info.unitNumber || 'Global Selection'}
+                        </Text>
+                    </View>
                 </View>
 
+                {/* Bottom: Budget Highlight */}
+                {info.budget && (
+                    <View style={[styles.budgetRow, { backgroundColor: theme.primary + '08' }]}>
+                        <Text style={[styles.budgetLabel, { color: theme.textLight }]}>Max Budget</Text>
+                        <Text style={[styles.budgetValue, { color: theme.primary }]}>{info.budget}</Text>
+                    </View>
+                )}
+
+                {/* Footer: Actions */}
                 <View style={styles.actionRow}>
                     <TouchableOpacity
-                        style={[styles.actionBtn, { backgroundColor: theme.primary + '15', flex: 1 }]}
+                        style={[styles.actionBtn, { backgroundColor: theme.border, flex: 1 }]}
                         onPress={handlePress}
                     >
-                        <Text style={[styles.actionBtnText, { color: theme.primary }]}>Profile</Text>
+                        <Ionicons name="eye-outline" size={16} color={theme.text} />
+                        <Text style={[styles.actionBtnText, { color: theme.text }]}>Profile</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
@@ -128,10 +133,14 @@ export default function CallBanner({ info, onClose }: Props) {
                             });
                         }}
                     >
-                        <Text style={styles.actionBtnText}>Log Outcome</Text>
-                        <Ionicons name="checkmark-circle" size={16} color="#fff" />
+                        <Ionicons name="checkmark-circle" size={18} color="#fff" />
+                        <Text style={styles.actionBtnText}>Log Result</Text>
                     </TouchableOpacity>
                 </View>
+
+                <TouchableOpacity onPress={onClose} style={styles.absCloseBtn}>
+                    <Ionicons name="close-circle" size={24} color={theme.textLight} />
+                </TouchableOpacity>
             </View>
         </Animated.View>
     );
@@ -140,27 +149,29 @@ export default function CallBanner({ info, onClose }: Props) {
 const styles = StyleSheet.create({
     container: {
         position: 'absolute',
-        top: 40,
+        top: Platform.OS === 'ios' ? 60 : 40,
         left: 0,
         right: 0,
         alignItems: 'center',
         zIndex: 9999,
-        paddingHorizontal: 16,
+        paddingHorizontal: 12,
     },
     banner: {
-        width: width - 32,
+        width: width - 24,
         borderRadius: 24,
         borderWidth: 1,
         padding: 20,
+        paddingTop: 24,
+        overflow: 'hidden',
         ...Platform.select({
             ios: {
                 shadowColor: '#000',
-                shadowOffset: { width: 0, height: 10 },
-                shadowOpacity: 0.15,
-                shadowRadius: 20,
+                shadowOffset: { width: 0, height: 12 },
+                shadowOpacity: 0.2,
+                shadowRadius: 24,
             },
             android: {
-                elevation: 10,
+                elevation: 12,
             },
         }),
     },
@@ -168,71 +179,129 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 12,
+        marginBottom: 16,
+    },
+    callerIdentity: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+    },
+    avatar: {
+        width: 48,
+        height: 48,
+        borderRadius: 16,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    avatarText: {
+        fontSize: 20,
+        fontWeight: '900',
+        color: '#fff',
+    },
+    name: {
+        fontSize: 20,
+        fontWeight: '900',
+        letterSpacing: -0.5,
+    },
+    mobile: {
+        fontSize: 13,
+        fontWeight: '600',
+        marginTop: 2,
     },
     typeBadge: {
-        paddingHorizontal: 10,
-        paddingVertical: 4,
-        borderRadius: 8,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        paddingHorizontal: 8,
+        paddingVertical: 5,
+        borderRadius: 10,
     },
     typeText: {
         fontSize: 10,
         fontWeight: '900',
+    },
+    contextGrid: {
+        flexDirection: 'row',
+        backgroundColor: '#F8FAFC',
+        borderRadius: 16,
+        padding: 14,
+        marginBottom: 12,
+        alignItems: 'center',
+    },
+    contextItem: {
+        flex: 1,
+        justifyContent: 'center',
+    },
+    verticalDivider: {
+        width: 1,
+        height: 24,
+        backgroundColor: '#E2E8F0',
+        marginHorizontal: 16,
+    },
+    intentBadge: {
+        alignSelf: 'flex-start',
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 6,
+        marginBottom: 4,
+    },
+    intentText: {
+        fontSize: 9,
+        fontWeight: '900',
+        color: '#fff',
+        textTransform: 'uppercase',
+    },
+    subCategoryText: {
+        fontSize: 14,
+        fontWeight: '700',
+    },
+    projectLabel: {
+        fontSize: 9,
+        fontWeight: '800',
+        marginBottom: 2,
         letterSpacing: 0.5,
     },
-    closeBtn: {
-        padding: 4,
+    projectName: {
+        fontSize: 14,
+        fontWeight: '800',
     },
-    content: {
+    budgetRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        borderRadius: 16,
         marginBottom: 16,
     },
-    name: {
-        fontSize: 22,
-        fontWeight: '800',
-        marginBottom: 8,
-    },
-    detailsRow: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: 16,
-        marginBottom: 8,
-    },
-    detailItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-    },
-    detailText: {
-        fontSize: 14,
-        fontWeight: '600',
-    },
-    activityRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
-        padding: 10,
-        borderRadius: 12,
-        marginTop: 4,
-    },
-    activityText: {
+    budgetLabel: {
         fontSize: 13,
         fontWeight: '700',
     },
+    budgetValue: {
+        fontSize: 18,
+        fontWeight: '900',
+    },
     actionRow: {
         flexDirection: 'row',
-        gap: 10,
+        gap: 12,
     },
     actionBtn: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        paddingVertical: 12,
-        borderRadius: 14,
+        paddingVertical: 14,
+        borderRadius: 16,
         gap: 8,
     },
     actionBtnText: {
-        color: '#fff',
         fontSize: 15,
-        fontWeight: '700',
+        fontWeight: '800',
+    },
+    absCloseBtn: {
+        position: 'absolute',
+        top: 10,
+        right: 10,
+        padding: 4,
     },
 });

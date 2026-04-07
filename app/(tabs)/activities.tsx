@@ -191,11 +191,41 @@ export default function ActivitiesScreen() {
         const relatedMobile = related?.mobile || "";
 
         const assignedName = useMemo(() => {
-            if (!item.assignedTo) return "Unassigned";
-            if (typeof item.assignedTo === 'object') return item.assignedTo.fullName || item.assignedTo.name || "Unassigned";
-            const user = findUser(item.assignedTo);
-            return user ? (user.fullName || user.name) : "Unassigned";
-        }, [item.assignedTo, findUser]);
+            // 0. Resolve Performed By (Direct backend string name - Most reliable)
+            const performedBy = (item as any).performedBy;
+            if (performedBy && typeof performedBy === 'string' && performedBy !== "System") {
+                return performedBy;
+            }
+
+            // 1. Resolve Assigned To (Object or ID)
+            const assigned = item.assignedTo;
+            if (assigned) {
+                if (typeof assigned === 'object' && assigned !== null) {
+                    return assigned.fullName || assigned.name || assigned.lookup_value || assigned.label || "Unassigned";
+                }
+                const user = findUser(assigned);
+                if (user) return user.fullName || user.name;
+            }
+
+            // 2. Resolve Creator (Fallback)
+            const creator = (item as any).createdBy || (item as any).creator || (item as any).user || (item as any).author;
+            if (creator) {
+                if (typeof creator === 'object' && creator !== null) {
+                    return creator.fullName || creator.name || creator.lookup_value || creator.label || "Staff User";
+                }
+                const user = findUser(creator);
+                if (user) return user.fullName || user.name;
+                
+                if (/^[a-f0-9]{24}$/i.test(String(creator))) {
+                    return `Staff (${String(creator).substring(0, 4)})`;
+                }
+            }
+
+            // Final check on performedBy for system actions
+            if (performedBy) return performedBy;
+
+            return "Unassigned";
+        }, [item.assignedTo, (item as any).createdBy, (item as any).creator, (item as any).user, (item as any).author, (item as any).performedBy, findUser]);
 
         const renderLeftActions = () => (
             <View style={styles.leftActions}>

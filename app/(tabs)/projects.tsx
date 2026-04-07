@@ -428,7 +428,7 @@ export default function ProjectsScreen() {
                                 if (selectedProject) handleDeleteProject(selectedProject);
                             }}>
                                 <View style={[actionHubStyles.actionIcon, { backgroundColor: "#FEF2F2" }]}>
-                                    <Ionicons name="trash" size={24" color="#EF4444" />
+                                    <Ionicons name="trash" size={24} color="#EF4444" />
                                 </View>
                                 <Text style={actionHubStyles.actionLabel}>Delete</Text>
                             </TouchableOpacity>

@@ -19,6 +19,7 @@ export interface Activity {
     description?: string;
     details?: any;
     assignedTo?: any;
+    performedBy?: string;
     createdAt?: string;
 }
 

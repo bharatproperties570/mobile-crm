@@ -75,6 +75,7 @@ export async function safeApiCall<T>(fn: () => Promise<any>): Promise<{
     total: number;
     activeCount?: number;
     inactiveCount?: number;
+    stats?: any;
     error: string | null
 }> {
     try {
@@ -84,6 +85,7 @@ export async function safeApiCall<T>(fn: () => Promise<any>): Promise<{
             total: extractTotal(res),
             activeCount: res.activeCount ?? res.data?.activeCount,
             inactiveCount: res.inactiveCount ?? res.data?.inactiveCount,
+            stats: res.stats || res.data?.stats,
             error: null
         };
     } catch (err: any) {

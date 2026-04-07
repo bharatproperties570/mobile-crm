@@ -8,7 +8,7 @@ import { useTheme } from "@/context/ThemeContext";
 import api from "@/services/api";
 import { getActivities } from "@/services/activities.service";
 import { useLookup } from "@/context/LookupContext";
-import { getSizeLabel } from "@/utils/format.utils";
+import { getSizeLabel, formatSize } from "@/utils/format.utils";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -19,12 +19,15 @@ const TABS = ["Details", "Location", "Activities", "Owner", "Document", "History
 function lv(field: unknown): string {
     if (field === null || field === undefined || field === "" || field === "null" || field === "undefined") return "—";
     if (typeof field === "object" && field !== null) {
-        if ("lookup_value" in field && (field as any).lookup_value) return (field as any).lookup_value;
-        if ("fullName" in field && (field as any).fullName) return (field as any).fullName;
-        if ("name" in field && (field as any).name) return (field as any).name;
+        const val = (field as any).lookup_value || (field as any).fullName || (field as any).name || (field as any).label || (field as any).value;
+        if (val && typeof val !== 'object') return String(val).trim();
+        if (typeof val === 'object' && val !== null) {
+            const nested = (val as any).lookup_value || (val as any).name || (val as any).fullName || "";
+            if (nested && typeof nested !== 'object') return String(nested).trim();
+        }
     }
     const str = String(field).trim();
-    return str || "—";
+    return (str && str !== "[object Object]") ? str : "—";
 }
 
 function InfoRow({ label, value, accent, icon }: { label: string; value: string; accent?: boolean; icon?: any }) {
@@ -41,7 +44,7 @@ function InfoRow({ label, value, accent, icon }: { label: string; value: string;
     );
 }
 
-const ACTIVE_STATUSES = ['Available', 'Interested / Warm', 'Interested / Hot', 'Request Call Back', 'Busy / Driving', 'Market Feedback', 'General Inquiry'];
+const ACTIVE_STATUSES = ['Available', 'Interested / Medium', 'Interested / High', 'Request Call Back', 'Busy / Driving', 'Market Feedback', 'General Inquiry'];
 const INACTIVE_STATUSES = ['Sold Out', 'Rented Out', 'Not Interested', 'Inactive', 'Wrong Number / Invalid', 'Switch Off / Unreachable'];
 
 export default function InventoryDetailScreen() {
@@ -141,10 +144,10 @@ export default function InventoryDetailScreen() {
     const resolvedStatus = resolveStatus(inv.status);
     const stageLabel = INACTIVE_STATUSES.includes(resolvedStatus) ? 'InActive' : 'Active';
     const stageColor = stageLabel === 'Active' ? '#10B981' : '#F59E0B';
-    const unitNo = inv.unitNumber || inv.unitNo || "N/A";
+    const unitNo = lv(inv.unitNumber || inv.unitNo);
     const unitType = lv(inv.unitType);
-    const projectName = inv.projectName || "Unknown Project";
-    const block = inv.block || "—";
+    const projectName = lv(inv.projectName || "Unknown Project");
+    const block = lv(inv.block);
 
     return (
         <View style={[styles.container, { backgroundColor: theme.background }]}>
@@ -303,7 +306,7 @@ export default function InventoryDetailScreen() {
                                     />
                                 );
                             })()}
-                            <InfoRow label="Maintenance" value={inv.maintenance} icon="construct-outline" />
+                            <InfoRow label="Maintenance" value={lv(inv.maintenance)} icon="construct-outline" />
                             <InfoRow label="Ownership" value={lv(inv.ownership)} icon="document-text-outline" />
                         </View>
 
@@ -313,14 +316,14 @@ export default function InventoryDetailScreen() {
                             <InfoRow label="Sub-Category" value={lv(inv.subCategory)} icon="layers-outline" />
                             <InfoRow label="Size Label" value={getSizeLabel(inv, getLookupValue) || "—"} icon="cube-outline" accent />
                             <InfoRow label="Facing" value={lv(inv.facing)} icon="compass-outline" />
-                            <InfoRow label="Floor" value={inv.floor} icon="layers-outline" />
-                            <InfoRow label="Road Width" value={inv.roadWidth} icon="trail-sign-outline" />
+                            <InfoRow label="Floor" value={lv(inv.floor)} icon="layers-outline" />
+                            <InfoRow label="Road Width" value={lv(inv.roadWidth)} icon="trail-sign-outline" />
                         </View>
 
                         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
                             <Text style={[styles.cardTitle, { color: theme.text }]}>Area Breakdown</Text>
-                            <InfoRow label="Built-up Area" value={inv.builtUpArea} icon="business-outline" />
-                            <InfoRow label="Carpet Area" value={inv.carpetArea} icon="grid-outline" />
+                            <InfoRow label="Built-up Area" value={formatSize(inv.builtUpArea, 'Sq.Ft.', getLookupValue)} icon="business-outline" />
+                            <InfoRow label="Carpet Area" value={formatSize(inv.carpetArea, 'Sq.Ft.', getLookupValue)} icon="grid-outline" />
                         </View>
 
                         {inv.amenities && (
@@ -343,9 +346,9 @@ export default function InventoryDetailScreen() {
                     <ScrollView contentContainerStyle={styles.innerScroll}>
                         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
                             <Text style={[styles.cardTitle, { color: theme.text }]}>Property Location</Text>
-                            <InfoRow label="City" value={inv.city || inv.address?.city} icon="business-outline" />
-                            <InfoRow label="Sector/Locality" value={inv.sector || inv.address?.locality} icon="map-outline" />
-                            <InfoRow label="Address" value={inv.address?.street || inv.address?.hNo} icon="location-outline" />
+                            <InfoRow label="City" value={lv(inv.city || inv.address?.city)} icon="business-outline" />
+                            <InfoRow label="Sector/Locality" value={lv(inv.sector || inv.address?.locality)} icon="map-outline" />
+                            <InfoRow label="Address" value={lv(inv.address?.street || inv.address?.hNo)} icon="location-outline" />
                         </View>
 
                         {(inv.latitude || inv.address?.lat) && (

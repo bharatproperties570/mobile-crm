@@ -150,7 +150,7 @@ export default function AddDealScreen() {
 
         // Deal Details & Categorization
         status: "Open", // Open, Quote, Negotiation, Booked, Won, Lost
-        dealType: "Warm",
+        dealType: "Registry case",
         transactionType: "Full White",
         flexiblePercentage: 50,
         source: "Walk-in",
@@ -178,7 +178,7 @@ export default function AddDealScreen() {
         },
         team: "",
         assignedTo: "",
-        visibleTo: "Public",
+        visibleTo: "Everyone",
         remarks: "",
         stage: "Open",
 
@@ -203,7 +203,7 @@ export default function AddDealScreen() {
                     const existing = await getDealById(id);
                     if (existing) {
                         const d = existing.data || existing;
-                        setFormData(prev => ({
+                        setFormData((prev: any) => ({
                             ...prev,
                             ...d,
                             price: String(d.price || ""),
@@ -238,7 +238,7 @@ export default function AddDealScreen() {
                         } catch (e) { console.warn("Prefill fetch failed", e); }
                     }
 
-                    setFormData(prev => ({ ...prev, ...updates }));
+                    setFormData((prev: any) => ({ ...prev, ...updates }));
                 }
             } catch (e) {
                 console.error(e);
@@ -402,31 +402,35 @@ export default function AddDealScreen() {
                 payload.projectId = selectedProj._id || selectedProj.id;
             }
 
-            // Map Lookup String Values to their ObjectId references
-            const mapLookupField = (fieldKey: string, lookupKey: string) => {
-                if (payload[fieldKey] && typeof payload[fieldKey] === 'string') {
-                    const lookupsForType = getLookupsByType(lookupKey);
-                    const foundId = lookupsForType.find((l: any) => l.lookup_value === payload[fieldKey])?._id;
-                    if (foundId) payload[fieldKey] = foundId;
-                }
+            // Map Lookup String Values to their ObjectId references for specific fields only
+            // Following Web CRM logic: Property Type, Unit Type, Source, Category, SubCategory are IDs
+            // Status, Deal Type, Transaction Type, Intent are Strings
+            const referenceLookupFields = ['Unit Type', 'Property Type', 'Source'];
+            const enumStringFields = ['Status', 'Deal Type', 'Transaction Type', 'Intent'];
+
+            const lookupMeta: Record<string, string> = {
+                'Unit Type': 'unitType', 'Property Type': 'propertyType', 'Status': 'status',
+                'Deal Type': 'dealType', 'Transaction Type': 'transactionType', 'Source': 'source',
+                'Intent': 'intent'
             };
 
-            // assuming Lookups hold values for these based on Web CRM logic
-            // Add Deal form Lookups -> Deal schema ObjectIds
-            ['Unit Type', 'Property Type', 'Status', 'Deal Type', 'Transaction Type', 'Source', 'Intent'].forEach(lookupKey => {
-                const formFieldKeys: Record<string, string> = {
-                    'Unit Type': 'unitType', 'Property Type': 'propertyType', 'Status': 'status',
-                    'Deal Type': 'dealType', 'Transaction Type': 'transactionType', 'Source': 'source',
-                    'Intent': 'intent'
-                };
-
-                const fieldKey = formFieldKeys[lookupKey];
+            referenceLookupFields.forEach(lookupKey => {
+                const fieldKey = lookupMeta[lookupKey];
                 if (fieldKey && payload[fieldKey] && typeof payload[fieldKey] === 'string') {
                     const lookupsForType = getLookupsByType(lookupKey);
                     const foundId = lookupsForType.find((l: any) => l.lookup_value === payload[fieldKey])?._id;
                     if (foundId) payload[fieldKey] = foundId;
                 }
             });
+
+            // Ensure enumStringFields remain as strings (labels)
+            // No transformation needed as they are already labels in payload from formData
+
+            // Cast numerical fields
+            if (payload.price) payload.price = parseFloat(String(payload.price).replace(/[^0-9.]/g, '')) || 0;
+            if (payload.size) payload.size = parseFloat(String(payload.size).replace(/[^0-9.]/g, '')) || 0;
+            if (payload.quotePrice) payload.quotePrice = parseFloat(String(payload.quotePrice).replace(/[^0-9.]/g, '')) || 0;
+            if (payload.ratePrice) payload.ratePrice = parseFloat(String(payload.ratePrice).replace(/[^0-9.]/g, '')) || 0;
 
 
             // Strip nested objects to strictly send IDs strings for party/lookup fields
@@ -451,15 +455,27 @@ export default function AddDealScreen() {
                 payload.inventoryId = selectedUnit._id;
             }
 
+            // ━━ DEBUG LOGGING (Senior Professional) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            console.log('[DEBUG-DEAL] Starting Save Workflow...');
+            console.log('[DEBUG-DEAL] Payload:', JSON.stringify(payload, null, 2));
+
             const res = id ? await api.put(`/deals/${id}`, payload) : await api.post('/deals', payload);
-            if (res.data && res.data.success) {
+            
+            console.log('[DEBUG-DEAL] API Response Status:', res.status);
+            console.log('[DEBUG-DEAL] API Response Data:', JSON.stringify(res.data, null, 2));
+
+            if (res.data && (res.data.success || res.status === 200 || res.status === 201)) {
                 router.dismissAll();
                 router.replace("/(tabs)/deals");
+            } else {
+                const errorMsg = res.data?.error || res.data?.message || "Server returned failure without an error message.";
+                console.error("Deal save logic failure:", res.data);
+                Alert.alert("Failed to Save", errorMsg);
             }
         } catch (e: any) {
-            console.error("Deal save error:", e?.response?.data || e);
-            const errMsg = e?.response?.data?.error || e?.response?.data?.message || e.message || "Failed to save deal.";
-            Alert.alert("Error", errMsg);
+            console.error("Deal save network/runtime error:", e?.response?.data || e);
+            const errMsg = e?.response?.data?.error || e?.response?.data?.message || e.message || "An unexpected error occurred while saving.";
+            Alert.alert("Save Error", errMsg);
         } finally {
             setIsSaving(false);
         }
@@ -695,8 +711,20 @@ export default function AddDealScreen() {
                                 <SelectButton value={formData.status} placeholder="Status" options={["Open", "Quote", "Negotiation", "Booked", "Won", "Lost"].map(s => ({ label: s, value: s }))} onSelect={v => setFormData({ ...formData, status: v })} />
                             </View>
                             <View style={{ flex: 1 }}>
-                                <FormLabel label="Deal Type" />
-                                <SelectButton value={formData.dealType} placeholder="Type" options={["Hot", "Warm", "Cold"].map(s => ({ label: s, value: s }))} onSelect={v => setFormData({ ...formData, dealType: v })} />
+                                <FormLabel label="Deal Type (Documentation)" />
+                                <SelectButton 
+                                    value={formData.dealType} 
+                                    placeholder="Type" 
+                                    options={[
+                                        "Registry case", 
+                                        "Transfer case", 
+                                        "GPA", 
+                                        "Society case", 
+                                        "Lease/Rent", 
+                                        "Other"
+                                    ].map(s => ({ label: s, value: s }))} 
+                                    onSelect={v => setFormData({ ...formData, dealType: v })} 
+                                />
                             </View>
                         </View>
 
@@ -731,6 +759,9 @@ export default function AddDealScreen() {
 
                 {step === 3 && (
                     <View>
+                        <SectionTitle title="Marketing Command Center" icon="🚀" />
+                        <Text style={{ fontSize: 12, color: '#64748b', marginBottom: 15, paddingHorizontal: 4 }}>Select platforms to automatically publish this deal. Our AI engine will generate platform-specific content.</Text>
+                        
                         <SectionTitle title="Publish On" icon="📢" />
                         <View style={styles.gridContainer}>
                             {[
@@ -755,6 +786,11 @@ export default function AddDealScreen() {
                             ))}
                         </View>
 
+                        <View style={{ marginTop: 20 }}>
+                            <SectionTitle title="AI Lead Matching & Outreach" icon="🎯" />
+                            <Text style={{ fontSize: 12, color: '#64748b', marginBottom: 15, paddingHorizontal: 4 }}>Automatically notify matching leads via selected channels upon deal creation.</Text>
+                        </View>
+                        
                         <SectionTitle title="Send Matched Deal" icon="✉️" />
                         <View style={styles.gridContainer}>
                             {[

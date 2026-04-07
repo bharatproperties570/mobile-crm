@@ -138,6 +138,35 @@ export const LookupProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const getLookupValue = useCallback((type: string, idOrValue: any): string => {
         if (!idOrValue) return "—";
 
+        // 0. Helper: Recursive Search in propertyConfig
+        const findInConfig = (id: string, obj: any): string | null => {
+            if (!obj || typeof obj !== 'object') return null;
+
+            // If it's an array, scan items
+            if (Array.isArray(obj)) {
+                for (const item of obj) {
+                    const found = findInConfig(id, item);
+                    if (found) return found;
+                }
+                return null;
+            }
+
+            // If this object is a match
+            if (obj._id === id || obj.id === id) {
+                return obj.lookup_value || obj.name || obj.label || obj.fullName || null;
+            }
+
+            // Otherwise, recurse into all object keys (like 'subCategories', 'fields', 'options', etc.)
+            for (const key in obj) {
+                if (Object.prototype.hasOwnProperty.call(obj, key) && typeof obj[key] === 'object') {
+                    const found = findInConfig(id, obj[key]);
+                    if (found) return found;
+                }
+            }
+
+            return null;
+        };
+
         const resolve = (t: string, val: any): string => {
             if (!val) return "—";
 
@@ -152,33 +181,49 @@ export const LookupProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
             // 2. Handle objects (already populated by backend)
             if (typeof val === 'object' && val !== null) {
-                return val.lookup_value || val.name || val.fullName || "—";
+                const resolvedVal = val.lookup_value || val.name || val.fullName || val.label || val.value || "—";
+                return typeof resolvedVal === 'object' ? "—" : String(resolvedVal);
             }
 
-            // 3. Handle IDs/Strings with O(1) Map Access
-            // First try direct ID match (most efficient)
-            const foundById = idIndex.get(val);
+            // 3. Handle IDs/Strings
+            const idVal = String(val).trim();
+
+            // A. Check idIndex (O(1) global lookups)
+            const foundById = idIndex.get(idVal);
             if (foundById) return foundById.lookup_value;
 
-            // If not found by ID, handle string values or legacy types
+            // B. Check typeIndex (legacy fallback)
             const normalizedType = t.toLowerCase();
             const typeGroup = typeIndex.get(normalizedType);
-            
             if (typeGroup) {
-                const foundInType = typeGroup.find(l => l.lookup_value === val);
+                const foundInType = typeGroup.find(l => l.lookup_value === idVal);
                 if (foundInType) return foundInType.lookup_value;
             }
 
-            // Handle pure MongoDB ID that wasn't indexed (e.g. not a lookup)
-            if (typeof val === 'string' && /^[a-f0-9]{24}$/i.test(val)) {
+            // C. DEEP SEARCH in propertyConfig (V2 Fix for project-specific IDs)
+            if (propertyConfig && typeof idVal === 'string' && /^[a-f0-9]{24}$/i.test(idVal)) {
+                const foundInConfig = findInConfig(idVal, propertyConfig);
+                if (foundInConfig) return foundInConfig;
+            }
+
+            // D. Fallback to any lookup (type-insensitive search)
+            // Sometimes a "Size" ID is asked as "Any" type or vice versa
+            if (typeof idVal === 'string' && /^[a-f0-9]{24}$/i.test(idVal)) {
+               // We already checked idIndex (Map), but maybe it's untyped in lookups? 
+               // Actually idIndex is global. If it's not in idIndex, it's not in lookups.
+            }
+
+            // Fallback to Raw String
+            // Handle pure MongoDB ID that wasn't indexed anywhere
+            if (typeof idVal === 'string' && /^[a-f0-9]{24}$/i.test(idVal)) {
                 return "—";
             }
 
-            return String(val);
+            return idVal;
         };
 
         return resolve(type, idOrValue);
-    }, [idIndex, typeIndex]);
+    }, [idIndex, typeIndex, propertyConfig]);
 
     return (
         <LookupContext.Provider value={{ lookups, propertyConfig, leadMasterFields, loading, getLookupValue, getLookupsByType, refreshLookups }}>

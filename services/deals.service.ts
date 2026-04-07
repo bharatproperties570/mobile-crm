@@ -51,6 +51,8 @@ export interface Deal {
     unitType?: string;
     size?: string;
     sizeUnit?: string;
+    sizeConfig?: any;
+    sizeLabel?: string;
     floor?: number | string;
     corner?: string;
     intent?: string | { lookup_value: string };

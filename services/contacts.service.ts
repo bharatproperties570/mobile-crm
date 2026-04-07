@@ -82,10 +82,22 @@ export interface CallerInfo {
     activity?: string;
     entityId: string;
     mobile?: string;
+    // Enhanced Fields for Professional Caller ID
+    intent?: string;           // Buy / Rent / Sell
+    subCategory?: string;      // 3BHK, Commercial Plot, etc.
+    budget?: string;           // Max Budget or Budget Range
+    status?: string;           // High-level status (Qualified, Warm, etc.)
 }
 
 export const lookupCallerInfo = async (phoneNumber: string): Promise<CallerInfo | null> => {
     try {
+        // We'll use a local helper for lookups if needed, or assume the backend provides some names
+        const getVal = (field: any) => {
+            if (!field) return undefined;
+            if (typeof field === 'object') return field.lookup_value || field.name || field.fullName || field.label;
+            return field;
+        };
+
         // 1. Check Leads
         const leadsRes = await getLeads({ mobile: phoneNumber });
         const leads = extractList(leadsRes.data);
@@ -94,9 +106,13 @@ export const lookupCallerInfo = async (phoneNumber: string): Promise<CallerInfo 
             return {
                 name: [lead.firstName, lead.lastName].filter(Boolean).join(" ") || "Lead",
                 type: 'Lead',
-                projectName: lead.projectName?.[0],
+                projectName: lead.projectName?.[0] || lead.project?.name,
                 entityId: lead._id,
-                mobile: phoneNumber
+                mobile: phoneNumber,
+                intent: getVal(lead.requirement),
+                subCategory: getVal(lead.subType?.[0]) || getVal(lead.subRequirement),
+                budget: lead.budgetMax ? `₹${(lead.budgetMax / 10000000).toFixed(2)}Cr` : getVal(lead.budget),
+                status: getVal(lead.stage)
             };
         }
 
@@ -106,12 +122,16 @@ export const lookupCallerInfo = async (phoneNumber: string): Promise<CallerInfo 
         if (deals.length > 0) {
             const deal = deals[0];
             return {
-                name: deal.projectName || "Deal",
+                name: deal.partyStructure?.buyer?.name || deal.projectName || "Deal",
                 type: 'Deal',
                 projectName: deal.projectName,
-                unitNumber: deal.unitNumber || deal.unitNo,
+                unitNumber: deal.unitNumber || deal.unitNo || deal.dealId,
                 entityId: deal._id,
-                mobile: phoneNumber
+                mobile: phoneNumber,
+                intent: deal.intent || deal.dealType,
+                subCategory: getVal(deal.subCategory) || deal.unitType,
+                budget: deal.price ? `₹${(deal.price / 10000000).toFixed(2)}Cr` : undefined,
+                status: deal.stage
             };
         }
 
@@ -121,12 +141,16 @@ export const lookupCallerInfo = async (phoneNumber: string): Promise<CallerInfo 
         if (inventories.length > 0) {
             const inv = inventories[0];
             return {
-                name: inv.projectName || "Inventory",
+                name: inv.ownerName || inv.projectName || "Inventory",
                 type: 'Inventory',
                 projectName: inv.projectName,
                 unitNumber: inv.unitNumber || inv.unitNo,
                 entityId: inv._id,
-                mobile: phoneNumber
+                mobile: phoneNumber,
+                intent: inv.intent || 'Sell',
+                subCategory: inv.subCategory || inv.unitType,
+                budget: inv.price ? `₹${(inv.price / 10000000).toFixed(2)}Cr` : undefined,
+                status: inv.status
             };
         }
 
@@ -139,7 +163,9 @@ export const lookupCallerInfo = async (phoneNumber: string): Promise<CallerInfo 
                 name: [contact.name, contact.surname].filter(Boolean).join(" ") || "Contact",
                 type: 'Contact',
                 entityId: contact._id,
-                mobile: phoneNumber
+                mobile: phoneNumber,
+                intent: getVal(contact.professionCategory),
+                status: getVal(contact.stage)
             };
         }
 

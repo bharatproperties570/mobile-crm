@@ -18,7 +18,7 @@ const PROD_URL = "https://api.bharatproperties.co/api";
 const TUNNEL_URL = "https://bharat-crm-stable-api.loca.lt/api";
 const LAN_URL = `http://${MACHINE_IP}:${BACKEND_PORT}/api`;
 
-const NATIVE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || PROD_URL;
+const NATIVE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || LAN_URL || PROD_URL;
 
 const BASE_URL = Platform.OS === "web" ? WEB_URL : NATIVE_URL;
 
@@ -30,7 +30,7 @@ console.log(`- Tunnel URL: ${TUNNEL_URL}`);
 
 const api = axios.create({
   baseURL: BASE_URL,
-  timeout: 60000,
+  timeout: 10000,
   headers: {
     "Origin": "https://crm.bharatproperties.co",
     "Content-Type": "application/json",
