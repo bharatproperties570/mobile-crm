@@ -6,8 +6,8 @@ import {
 import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { getProjects, updateProject, type Project } from "@/services/projects.service";
-import { lookupVal } from "@/services/api.helpers";
-import { safeApiCall } from "@/services/api.helpers";
+import { lookupVal, safeApiCall } from "@/services/api.helpers";
+import api from "@/services/api";
 import { useTheme } from "@/context/ThemeContext";
 import { useLookup } from "@/context/LookupContext";
 import FilterModal, { FilterField } from "@/components/FilterModal";
@@ -217,8 +217,7 @@ export default function ProjectsScreen() {
         const result = await safeApiCall<any>(() => getProjects({ page: String(pageNum), limit: "50" }));
 
         if (!result.error && result.data) {
-            const dataObj = result.data as any;
-            const newRecords = dataObj.data || dataObj.records || (Array.isArray(dataObj) ? dataObj : []);
+            const newRecords = result.data;
             
             setProjects(prev => {
                 const combined = shouldAppend ? [...prev, ...newRecords] : newRecords;

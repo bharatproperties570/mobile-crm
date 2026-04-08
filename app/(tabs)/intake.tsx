@@ -22,6 +22,9 @@ export default function IntakeScreen() {
     const [isProcessing, setIsProcessing] = useState(false);
     const [parserConfig, setParserConfig] = useState<ParserConfig | undefined>(undefined);
 
+    const DEFAULT_CITIES = ['Chandigarh', 'Mohali', 'Zirakpur', 'Panchkula', 'Kharar', 'New Chandigarh', 'Derabassi'];
+    const DEFAULT_LOCATIONS = ['Sector', 'Aerocity', 'IT City', 'Eco City', 'JLPL', 'TDP', 'Bestech', 'Homeland', 'Marbella', 'Green Lotus', 'Escon Arena'];
+
     // Fetch dynamic rules on mount
     useEffect(() => {
         loadRules();
@@ -48,10 +51,21 @@ export default function IntakeScreen() {
                 });
                 config.types = typesMap;
 
+                // Sync with state, favor DB but keep defaults as baseline
+                if (config.cities?.length === 0) config.cities = DEFAULT_CITIES;
+                if (config.locations?.length === 0) config.locations = DEFAULT_LOCATIONS;
+
                 setParserConfig(config);
+                console.log("[Intake] Professional rules synchronized with backend.");
             }
         } catch (error) {
             console.error("Failed to load parsing rules:", error);
+            // Fallback to static defaults to ensure the scanner never breaks
+            setParserConfig({
+                cities: DEFAULT_CITIES,
+                locations: DEFAULT_LOCATIONS,
+                types: {}
+            });
         }
     };
 
@@ -67,13 +81,20 @@ export default function IntakeScreen() {
             const res = await parsingService.createIntake(pastedText);
 
             if (res.success) {
-                const segments = splitIntakeMessage(pastedText);
-                const parsed = segments.map(seg => parseDealContent(seg, parserConfig));
+                // Favor backend parsing results for 100% rule alignment
+                const backendParsed = res.data?.meta?.parsedData;
+                if (backendParsed) {
+                    setParsedItems(prev => [backendParsed, ...prev]);
+                } else {
+                    // Fallback to local if meta is missing
+                    const segments = splitIntakeMessage(pastedText);
+                    const parsed = segments.map(seg => parseDealContent(seg, parserConfig));
+                    setParsedItems(prev => [...parsed, ...prev]);
+                }
 
-                setParsedItems(prev => [...parsed, ...prev]);
                 setPastedText('');
                 setIsModalOpen(false);
-                Alert.alert("Success", "Deals extracted and synced to backend.");
+                Alert.alert("Success", "Deals extracted and synced with professional rules.");
             } else {
                 throw new Error(res.message || "Failed to sync with server");
             }
@@ -100,19 +121,16 @@ export default function IntakeScreen() {
             const ocrRes = await parsingService.processOCR(file.uri);
 
             if (ocrRes.success) {
-                const text = ocrRes.data.content;
-                if (!text || !text.trim()) {
-                    Alert.alert("OCR Error", "We couldn't detect any readable text in the image. Please try a clearer photo.");
-                    return;
-                }
-
-                const segments = splitIntakeMessage(text);
-                const parsed = segments.map(seg => parseDealContent(seg, parserConfig))
-                    .filter(p => p.confidenceScore > 10);
-
-                if (parsed.length === 0) {
-                    Alert.alert("No Deals Found", "Text was extracted but we couldn't identify structured property deals.");
+                // Use backend parsed data from OCR result
+                const backendData = ocrRes.data?.meta?.parsedData;
+                if (backendData) {
+                    setParsedItems(prev => [backendData, ...prev]);
+                    Alert.alert("Success", "Professional OCR complete. Deal extracted.");
                 } else {
+                    // Manual fallback if backend only returned text
+                    const text = ocrRes.data.content || ocrRes.data.text;
+                    const segments = splitIntakeMessage(text);
+                    const parsed = segments.map(seg => parseDealContent(seg, parserConfig)).filter(p => p.confidenceScore > 10);
                     setParsedItems(prev => [...parsed, ...prev]);
                 }
             } else {
@@ -154,17 +172,15 @@ export default function IntakeScreen() {
                     console.log("Local parse fail, trying backend fallback...");
                 }
 
-                // 2. Professional Backend ZIP Parser Fallback
+                // 2. Professional Backend ZIP Parser Fallback (Multi-file support)
                 const zipRes = await parsingService.processZip(file.uri, file.name);
                 if (zipRes.success && zipRes.data) {
-                    const text = zipRes.data.content;
-                    const segments = splitIntakeMessage(text);
-                    const parsed = segments.map(seg => parseDealContent(seg, parserConfig))
-                        .filter(p => p.confidenceScore > 20);
-
-                    if (parsed.length > 0) {
-                        setParsedItems(prev => [...parsed, ...prev]);
-                        Alert.alert("Success", `Processed archive and extracted ${parsed.length} deals.`);
+                    const backendItems = zipRes.data.meta?.parsedData;
+                    if (Array.isArray(backendItems)) {
+                        setParsedItems(prev => [...backendItems, ...prev]);
+                        Alert.alert("Success", `Extracted ${backendItems.length} deals from archive.`);
+                    } else if (backendItems) {
+                        setParsedItems(prev => [backendItems, ...prev]);
                     } else {
                         Alert.alert("No Data", "No usable property deals found in archive files.");
                     }

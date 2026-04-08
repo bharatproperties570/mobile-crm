@@ -76,7 +76,7 @@ const STATUS_COLORS: Record<string, string> = {
     'Hold': '#8B5CF6'
 };
 
-const ACTIVE_STATUSES = ['Available', 'Interested / Medium', 'Interested / High', 'Request Call Back', 'Busy / Driving', 'Market Feedback', 'General Inquiry'];
+const ACTIVE_STATUSES = ['Available', 'Active', 'Interested / Warm', 'Interested / Hot', 'Request Call Back', 'Busy / Driving', 'Market Feedback', 'General Inquiry', 'Blocked', 'Booked', 'Interested'];
 const INACTIVE_STATUSES = ['Sold Out', 'Rented Out', 'Not Interested', 'Inactive', 'Wrong Number / Invalid', 'Switch Off / Unreachable'];
 
 const TYPE_ICONS: Record<string, string> = {
@@ -281,7 +281,7 @@ export default function InventoryScreen() {
     const [loadingMore, setLoadingMore] = useState(false);
     const lastFetchTime = useRef<number>(0);
     const [activeQuickFilter, setActiveQuickFilter] = useState<'active' | 'inactive' | null>(null);
-    const { getLookupsByType } = useLookup();
+    const { getLookupsByType, getLookupValue } = useLookup();
 
     // Action Hub State
     const [selectedInv, setSelectedInv] = useState<Inventory | null>(null);
@@ -350,8 +350,7 @@ export default function InventoryScreen() {
         }));
 
         if (!result.error && result.data) {
-            const dataObj = result.data as any;
-            const newItems = dataObj.data || dataObj.records || (Array.isArray(dataObj) ? dataObj : []);
+            const newItems = result.data;
             
             setInventory(prev => {
                 const combined = shouldAppend ? [...prev, ...newItems] : newItems;
@@ -417,54 +416,71 @@ export default function InventoryScreen() {
                 (i.unitNo || "").toLowerCase().includes(q) ||
                 (i.block || "").toLowerCase().includes(q);
 
-            // Apply Filters (Robust handling for ID vs Object)
+            if (!matchesSearch) return false;
+
+            // Apply Status Filters (Real IDs)
             if (filters.status?.length > 0 && !filters.status.includes('active') && !filters.status.includes('inactive')) {
-                const itemStatusId = typeof i.status === 'object' && i.status !== null ? i.status._id : i.status;
+                const itemStatusId = (typeof i.status === 'object' && i.status !== null) ? (i.status as any)._id : i.status;
                 if (!filters.status.includes(itemStatusId)) return false;
             }
+            
+            // Quick status filters (Active/Inactive) - Instant Local Filter
+            if (activeQuickFilter) {
+                const statusStr = getLookupValue("Status", i.status);
+                const isItemInactive = INACTIVE_STATUSES.some(s => s.toLowerCase() === statusStr.toLowerCase());
+                if (activeQuickFilter === 'inactive' && !isItemInactive) return false;
+                if (activeQuickFilter === 'active' && isItemInactive) return false;
+            }
+
             if (filters.category?.length > 0) {
-                const itemCategoryId = typeof i.category === 'object' && i.category !== null ? i.category._id : i.category;
+                const itemCategoryId = (typeof i.category === 'object' && i.category !== null) ? (i.category as any)._id : i.category;
                 if (!filters.category.includes(itemCategoryId)) return false;
             }
             if (filters.subCategory?.length > 0) {
-                const itemSubCategoryId = typeof i.subCategory === 'object' && i.subCategory !== null ? i.subCategory._id : i.subCategory;
+                const itemSubCategoryId = (typeof i.subCategory === 'object' && i.subCategory !== null) ? (i.subCategory as any)._id : i.subCategory;
                 if (!filters.subCategory.includes(itemSubCategoryId)) return false;
             }
-            if (filters.unitType?.length > 0) {
-                const itemUnitTypeId = typeof i.unitType === 'object' && i.unitType !== null ? i.unitType._id : i.unitType;
-                if (!filters.unitType.includes(itemUnitTypeId)) return false;
-            }
-
+            
             return true;
         });
-    }, [inventory, search, filters]);
+    }, [inventory, search, filters, activeQuickFilter]);
 
     // Communication Logic with Multi-Contact Support
     const getContactsForInventory = (item: Inventory) => {
         const contacts: any[] = [];
 
-        // Extract from Owners
         if (item.owners && item.owners.length > 0) {
             item.owners.forEach(owner => {
+                if (typeof owner === 'string') {
+                    // Handle raw ID or string if population failed
+                    return;
+                }
                 const name = owner.name || "Owner";
                 if (owner.phones && owner.phones.length > 0) {
                     owner.phones.forEach((p: any) => {
-                        contacts.push({ name, phone: p.phone, type: 'Owner', email: owner.email });
+                        contacts.push({ name, phone: p.number || p.phone, type: 'Owner', email: owner.email });
                     });
-                } else if (owner.phone) {
-                    contacts.push({ name, phone: owner.phone, type: 'Owner', email: owner.email });
+                } else if (owner.phone || owner.number) {
+                     contacts.push({ name, phone: owner.phone || owner.number, type: 'Owner', email: owner.email });
                 }
             });
-        } else if (item.ownerPhone) {
-            contacts.push({ name: item.ownerName || "Owner", phone: item.ownerPhone, type: 'Owner' });
+        }
+
+        // Fallback to top-level owner fields if owners array is empty or lacks data
+        if (contacts.length === 0) {
+            if (item.ownerPhone) {
+                contacts.push({ name: item.ownerName || "Owner", phone: item.ownerPhone, type: 'Owner' });
+            } else if (item.associatedPhone) {
+                contacts.push({ name: item.associatedContact || "Associate", phone: item.associatedPhone, type: 'Associate' });
+            }
         }
 
         // Extract from Associates
         if (item.associates && item.associates.length > 0) {
             item.associates.forEach(assoc => {
                 const name = assoc.name || "Associate";
-                if (assoc.phone) {
-                    contacts.push({ name, phone: assoc.phone, type: 'Associate', email: assoc.email });
+                if (assoc.phone || assoc.number) {
+                    contacts.push({ name, phone: assoc.phone || assoc.number, type: 'Associate', email: assoc.email });
                 }
             });
         }
@@ -495,11 +511,12 @@ export default function InventoryScreen() {
 
         switch (type) {
             case 'CALL':
-                if (!contact.phone) {
-                    Alert.alert("Error", "No phone number for this contact.");
+                if (!phone) {
+                    Alert.alert("Error", "No valid phone number for this contact.");
                     return;
                 }
-                trackCall(contact.phone, item._id, "Inventory", `${item.projectName} - ${item.unitNumber || item.unitNo}`);
+                // Track with original display number, dial with cleaned number
+                trackCall(phone, item._id, "Inventory", `${item.projectName} - ${item.unitNumber || item.unitNo}`);
                 break;
             case 'WHATSAPP':
                 if (!phone) return;

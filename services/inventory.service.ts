@@ -3,8 +3,8 @@ import api from "./api";
 export interface Inventory {
     _id: string;
     category?: any;
-    subCategory?: string;
-    unitType?: string;
+    subCategory?: any;
+    unitType?: any;
     projectName?: string;
     block?: string;
     location?: string;

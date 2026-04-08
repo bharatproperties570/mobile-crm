@@ -113,8 +113,13 @@ function InfoRow({ label, value, accent, icon }: { label: string; value: string;
 }
 
 const STAGE_COLORS: Record<string, string> = {
-    open: "#3B82F6", quote: "#8B5CF6", negotiation: "#F59E0B",
-    booked: "#10B981", closed: "#059669", cancelled: "#EF4444",
+    open: "#3B82F6",
+    quote: "#8B5CF6",
+    negotiation: "#F59E0B",
+    booked: "#10B981",
+    closed: "#059669",
+    cancelled: "#EF4444",
+    dormant: "#64748B",
 };
 
 export default function DealDetailScreen() {
@@ -332,7 +337,8 @@ export default function DealDetailScreen() {
                         { icon: 'chatbubble-ellipses', color: '#3B82F6', onPress: () => buyerPhone ? Linking.openURL(`sms:${buyerPhone.replace(/\D/g, "")}`) : Alert.alert("No Phone", "Contact number not available") },
                         { icon: 'logo-whatsapp', color: '#128C7E', onPress: () => buyerPhone ? Linking.openURL(`https://wa.me/${buyerPhone.replace(/\D/g, "")}`) : Alert.alert("No Phone", "Contact number not available") },
                         { icon: 'mail', color: '#EA4335', onPress: () => buyerEmail ? Linking.openURL(`mailto:${buyerEmail}`) : Alert.alert("No Email", "Email address not available") },
-                        { icon: 'share-social', color: '#6366F1', onPress: () => Alert.alert("Share Wall", `Sharing details for Deal ${unitNo} at ${projectName}`) },
+                        { icon: 'people', color: '#6366F1', onPress: () => router.push(`/match-lead?dealId=${id}`) },
+                        { icon: 'share-social', color: '#94A3B8', onPress: () => Alert.alert("Share Wall", `Sharing details for Deal ${unitNo} at ${projectName}`) },
                     ].map((action, i) => (
                         <TouchableOpacity key={i} style={[styles.modernHubBtn, { backgroundColor: action.color }]} onPress={action.onPress}>
                             <Ionicons name={action.icon as any} size={20} color="#fff" />
@@ -520,19 +526,47 @@ export default function DealDetailScreen() {
                             {matchingLeads.length === 0 ? (
                                 <Text style={styles.emptyText}>No matching leads found for this configuration.</Text>
                             ) : (
-                                matchingLeads.map((lead, i) => (
-                                    <TouchableOpacity key={i} style={[styles.matchItem, { borderBottomColor: theme.border }]} onPress={() => router.push(`/lead-detail?id=${lead._._id || lead._id}`)}>
-                                        <View style={styles.matchLeft}>
-                                            <Text style={[styles.matchUnit, { color: theme.text }]}>{lead.firstName} {lead.lastName}</Text>
-                                            <Text style={[styles.matchProject, { color: theme.textLight }]}>{lv(lead.requirement, getLookupValue, users)} • Budget: {lv(lead.budget, getLookupValue, users)}</Text>
-                                        </View>
-                                        <View style={styles.matchRight}>
-                                            <View style={[styles.relationBadge, { backgroundColor: theme.primary + '10' }]}>
-                                                <Text style={{ fontSize: 10, color: theme.primary, fontWeight: '700' }}>{lead.score ? `${lead.score}% MATCH` : "MATCH"}</Text>
+                                matchingLeads.map((lead: any, i: number) => {
+                                    const score = lead.score || 0;
+                                    const scoreColor = score > 80 ? "#10B981" : score > 50 ? "#F59E0B" : "#EF4444";
+                                    return (
+                                        <TouchableOpacity key={i} style={[styles.matchItem, { borderBottomColor: theme.border }]} onPress={() => router.push(`/lead-detail?id=${lead._id || lead._}`)}>
+                                            <View style={styles.matchLeft}>
+                                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                                                    <View style={[styles.scorePill, { backgroundColor: scoreColor + '15', borderColor: scoreColor + '30' }]}>
+                                                        <Text style={[styles.scorePillText, { color: scoreColor }]}>{score}% Match</Text>
+                                                    </View>
+                                                    <Text style={[styles.matchUnit, { color: theme.text }]}>{lead.firstName} {lead.lastName || ""}</Text>
+                                                </View>
+                                                
+                                                <Text style={[styles.matchProject, { color: theme.textLight }]}>
+                                                    {lv(lead.requirement, getLookupValue, users)} • Budget: {lv(lead.budget, getLookupValue, users)}
+                                                </Text>
+
+                                                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 8 }}>
+                                                    {lead.matchDetails?.map((tag: string, idx: number) => {
+                                                        let tagBg = theme.primary + '08';
+                                                        let tagColor = theme.primary;
+                                                        if (tag.includes("Budget")) { tagBg = '#DCFCE7'; tagColor = '#15803D'; }
+                                                        if (tag.includes("Orientation")) { tagBg = '#FEF3C7'; tagColor = '#92400E'; }
+                                                        if (tag.includes("Unit") || tag.includes("Category")) { tagBg = '#E0F2FE'; tagColor = '#0369A1'; }
+                                                        
+                                                        return (
+                                                            <View key={idx} style={[styles.matchDetailTag, { backgroundColor: tagBg }]}>
+                                                                <Text style={[styles.matchDetailTagText, { color: tagColor }]}>{tag}</Text>
+                                                            </View>
+                                                        );
+                                                    })}
+                                                </View>
                                             </View>
-                                        </View>
-                                    </TouchableOpacity>
-                                ))
+                                            <View style={styles.matchRight}>
+                                                <View style={[styles.relationBadge, { backgroundColor: '#3B82F6' + '10' }]}>
+                                                    <Text style={{ fontSize: 9, color: '#3B82F6', fontWeight: '700' }}>{lv(lead.status || lead.stage) || 'NEW'}</Text>
+                                                </View>
+                                            </View>
+                                        </TouchableOpacity>
+                                    );
+                                })
                             )}
                         </View>
                     </ScrollView>
@@ -682,6 +716,10 @@ const styles = StyleSheet.create({
     matchProject: { fontSize: 12, fontWeight: '600' },
     matchRight: { alignItems: 'flex-end' },
     relationBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 },
+    scorePill: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, borderWidth: 1 },
+    scorePillText: { fontSize: 10, fontWeight: '900' },
+    matchDetailTag: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+    matchDetailTagText: { fontSize: 9, fontWeight: '800', textTransform: 'uppercase' },
     googleMapsBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 12, borderRadius: 14, marginTop: 15 },
     googleMapsBtnText: { color: '#fff', fontSize: 14, fontWeight: '800' },
     fab: {

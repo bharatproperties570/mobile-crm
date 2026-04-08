@@ -95,22 +95,22 @@ const CompanyCard = ({ company, onPress, onMenuPress, idx }: { company: Company,
                         </TouchableOpacity>
                     </View>
 
-                    {(phone || email) && (
+                    {(phone || email) ? (
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10, marginTop: -2 }}>
-                            {phone && (
+                            {phone ? (
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                                     <Ionicons name="call-outline" size={12} color={theme.textLight} />
                                     <Text style={{ fontSize: 12, color: theme.textLight, fontWeight: '600' }}>{phone}</Text>
                                 </View>
-                            )}
-                            {email && (
+                            ) : null}
+                            {email ? (
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flex: 1 }}>
                                     <Ionicons name="mail-outline" size={12} color={theme.textLight} />
                                     <Text style={{ fontSize: 12, color: theme.textLight, fontWeight: '600' }} numberOfLines={1}>{email}</Text>
                                 </View>
-                            )}
+                            ) : null}
                         </View>
-                    )}
+                    ) : null}
 
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 4 }}>
                         <View style={{ flex: 1, paddingRight: 8 }}>
@@ -292,7 +292,7 @@ export default function CompaniesScreen() {
                         <CompanyCard
                             company={item}
                             idx={idx}
-                            onPress={() => router.push(`/company/${item._id}`)}
+                            onPress={() => router.push(`/company-detail?id=${item._id}`)}
                             onMenuPress={() => openHub(item)}
                         />
                     )}

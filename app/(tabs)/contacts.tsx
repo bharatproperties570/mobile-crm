@@ -49,30 +49,20 @@ const ContactCard = memo(({ contact, idx, onPress, onMenuPress }: { contact: Con
     const { trackCall } = useCallTracking();
     const { getLookupValue } = useLookup();
     const color = AVATAR_COLORS[idx % AVATAR_COLORS.length];
-
     const name = contactFullName(contact);
     const phone = contactPhone(contact);
     const email = contactEmail(contact);
     const stage = (contact.stage || "new").toLowerCase();
     const stageColor = STAGE_COLORS[stage] ?? "#94A3B8";
-
     const fadeAnim = useRef(new Animated.Value(0)).current;
     const scaleValue = useRef(new Animated.Value(1)).current;
 
     useEffect(() => {
-        Animated.timing(fadeAnim, {
-            toValue: 1,
-            duration: 400,
-            delay: idx * 30,
-            useNativeDriver: true,
-        }).start();
+        Animated.timing(fadeAnim, { toValue: 1, duration: 400, delay: idx * 30, useNativeDriver: true }).start();
     }, [idx]);
 
-    const openWhatsApp = () => {
-        if (!phone) return;
-        const cleanPhone = phone.replace(/[^0-9]/g, "");
-        Linking.openURL(`whatsapp://send?phone=${cleanPhone.length === 10 ? "91" + cleanPhone : cleanPhone}`);
-    };
+    const onPressIn = () => Animated.spring(scaleValue, { toValue: 0.98, useNativeDriver: true }).start();
+    const onPressOut = () => Animated.spring(scaleValue, { toValue: 1, useNativeDriver: true }).start();
 
     const renderRightActions = () => (
         <View style={styles.rightActions}>
@@ -89,30 +79,24 @@ const ContactCard = memo(({ contact, idx, onPress, onMenuPress }: { contact: Con
 
     const renderLeftActions = () => (
         <View style={styles.leftActions}>
-            <TouchableOpacity style={[styles.swipeAction, { backgroundColor: "#10B981" }]} onPress={openWhatsApp}>
+            <TouchableOpacity style={[styles.swipeAction, { backgroundColor: "#10B981" }]} onPress={() => {
+                const cleanPhone = (phone || "").replace(/[^0-9]/g, "");
+                Linking.openURL(`whatsapp://send?phone=${cleanPhone.length === 10 ? "91" + cleanPhone : cleanPhone}`);
+            }}>
                 <Ionicons name="logo-whatsapp" size={20} color="#fff" />
                 <Text style={styles.swipeLabel}>WhatsApp</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.swipeAction, { backgroundColor: "#6366F1" }]} onPress={() => email && Linking.openURL(`mailto:${email}`)}>
+            <TouchableOpacity style={[styles.swipeAction, { backgroundColor: "#6366F1" }]} onPress={() => email ? Linking.openURL(`mailto:${email}`) : null}>
                 <Ionicons name="mail" size={20} color="#fff" />
                 <Text style={styles.swipeLabel}>Email</Text>
             </TouchableOpacity>
         </View>
     );
 
-    const onPressIn = () => Animated.spring(scaleValue, { toValue: 0.98, useNativeDriver: true }).start();
-    const onPressOut = () => Animated.spring(scaleValue, { toValue: 1, useNativeDriver: true }).start();
-
     return (
         <Swipeable renderRightActions={renderRightActions} renderLeftActions={renderLeftActions}>
             <Animated.View style={{ opacity: fadeAnim, transform: [{ scale: scaleValue }, { translateY: fadeAnim.interpolate({ inputRange: [0, 1], outputRange: [20, 0] }) }] }}>
-                <TouchableOpacity
-                    activeOpacity={1}
-                    onPressIn={onPressIn}
-                    onPressOut={onPressOut}
-                    onPress={onPress}
-                    style={styles.card}
-                >
+                <TouchableOpacity activeOpacity={1} onPressIn={onPressIn} onPressOut={onPressOut} onPress={onPress} style={styles.card}>
                     <View style={[styles.avatar, { backgroundColor: color + "15" }]}>
                         <Text style={[styles.avatarText, { color }]}>{getInitials(contact)}</Text>
                     </View>
@@ -122,30 +106,28 @@ const ContactCard = memo(({ contact, idx, onPress, onMenuPress }: { contact: Con
                             <View style={[styles.stageDot, { backgroundColor: stageColor }]} />
                         </View>
                         <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
-                            {phone && (
+                            {phone ? (
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                                     <Ionicons name="call-outline" size={12} color="#94A3B8" />
                                     <Text style={{ fontSize: 12, color: "#64748B", fontWeight: "600" }}>{phone}</Text>
                                 </View>
-                            )}
-                            {phone && email && (
+                            ) : null}
+                            {(phone && email) ? (
                                 <Text style={{ fontSize: 12, color: "#E2E8F0", marginHorizontal: 6 }}>•</Text>
-                            )}
-                            {email && (
+                            ) : null}
+                            {email ? (
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flex: 1 }}>
                                     <Ionicons name="mail-outline" size={12} color="#94A3B8" />
                                     <Text style={{ fontSize: 12, color: "#64748B", fontWeight: "600" }} numberOfLines={1}>{email}</Text>
                                 </View>
-                            )}
+                            ) : null}
                         </View>
                         <Text style={styles.cardSubtitle} numberOfLines={1}>
-                            {(getLookupValue("ProfessionalDesignation", contact.designation) !== "—" && getLookupValue("ProfessionalDesignation", contact.designation) !== "")
+                            {(getLookupValue("ProfessionalDesignation", contact.designation) && getLookupValue("ProfessionalDesignation", contact.designation) !== "—")
                                 ? `${getLookupValue("ProfessionalDesignation", contact.designation)} • `
-                                : ""}
-                            {contact.company || "Individual"}
+                                : ""}{contact.company || "Individual"}
                         </Text>
                     </View>
-
                     <TouchableOpacity style={styles.menuTrigger} onPress={(e) => { e.stopPropagation(); onMenuPress(); }}>
                         <Ionicons name="ellipsis-vertical" size={18} color="#94A3B8" />
                     </TouchableOpacity>
@@ -197,11 +179,10 @@ export default function ContactsScreen() {
 
     const fetchContacts = useCallback(async (pageNum = 1, shouldAppend = false) => {
         setLoading(true);
-        const result = await safeApiCall<any>(() => getContacts({ page: String(pageNum), limit: "50" }));
+        const result = await safeApiCall<Contact>(() => getContacts({ page: String(pageNum), limit: "50" }));
 
         if (!result.error && result.data) {
-            const dataObj = result.data as any;
-            const newContacts = dataObj.data || dataObj.records || (Array.isArray(dataObj) ? dataObj : []);
+            const newContacts = result.data;
             
             setContacts(prev => {
                 const combined = shouldAppend ? [...prev, ...newContacts] : newContacts;

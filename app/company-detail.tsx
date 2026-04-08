@@ -47,7 +47,8 @@ function InfoRow({ label, value, accent, icon }: { label: string; value: string;
 }
 
 export default function CompanyDetailScreen() {
-    const { id } = useLocalSearchParams<{ id: string }>();
+    const params = useLocalSearchParams<{ id: string }>();
+    const id = params.id;
     const router = useRouter();
     const { theme } = useTheme();
 
@@ -70,19 +71,28 @@ export default function CompanyDetailScreen() {
     const fetchAssociatedData = async (comp: any) => {
         try {
             const compId = comp._id;
-            // 1. Use explicitly linked employees from company data
             const emps = comp.employees || [];
             setEmployees(emps);
 
-            // 2. Fetch Projects developed by this company
-            // 3. Aggregate Deal & Inventory data
-            // 4. Fetch Activities
-            const [projRes, dRes, iRes, actRes] = await Promise.all([
+            const empIds = emps.map((e: any) => e._id).filter(Boolean);
+            const empIdsString = empIds.join(',');
+
+            // Run sub-queries only if relevant IDs exist
+            const requests: Promise<any>[] = [
                 api.get(`/projects`, { params: { developerId: compId } }),
-                api.get(`/deals`, { params: { contactId: emps.map((e: any) => e._id).join(','), limit: '200' } }),
-                api.get(`/inventory`, { params: { contactId: emps.map((e: any) => e._id).join(','), limit: '200' } }),
                 getActivities({ entityId: compId, limit: 100 })
-            ]);
+            ];
+
+            if (empIdsString) {
+                requests.push(api.get(`/deals`, { params: { contactId: empIdsString, limit: '200' } }));
+                requests.push(api.get(`/inventory`, { params: { contactId: empIdsString, limit: '200' } }));
+            } else {
+                // Return empty mocks for Promise.all if no employees
+                requests.push(Promise.resolve({ data: { records: [] } }));
+                requests.push(Promise.resolve({ data: { records: [] } }));
+            }
+
+            const [projRes, actRes, dRes, iRes] = await Promise.all(requests);
 
             const projs = projRes.data?.data || [];
             const fetchedDeals = dRes.data?.records || [];
@@ -110,10 +120,12 @@ export default function CompanyDetailScreen() {
                 setCompany(compData);
                 await fetchAssociatedData(compData);
                 Animated.timing(fadeAnim, { toValue: 1, duration: 600, useNativeDriver: true }).start();
+            } else {
+                Alert.alert("Error", "Company details not found");
             }
         } catch (error) {
             console.error("Failed to load company:", error);
-            Alert.alert("Error", "Could not load company details");
+            Alert.alert("Error", "Could not load company details from server");
         } finally {
             setLoading(false);
         }
@@ -148,7 +160,7 @@ export default function CompanyDetailScreen() {
         <View style={[styles.container, { backgroundColor: theme.background }]}>
             <SafeAreaView style={[styles.headerCard, { backgroundColor: theme.card }]}>
                 <View style={styles.headerTop}>
-                    <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace("/(tabs)/contacts")} style={styles.backBtnCircle}>
+                    <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace("/(tabs)/companies")} style={styles.backBtnCircle}>
                         <Ionicons name="chevron-back" size={24} color={theme.text} />
                     </TouchableOpacity>
                     <View style={styles.headerTitleContainer}>

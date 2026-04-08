@@ -9,7 +9,7 @@ export interface ParsingRule {
 
 export const parsingService = {
     getRules: async () => {
-        const response = await api.get('/parsing-rules');
+        const response = await api.get('/public/parsing-rules');
         return response.data;
     },
 
@@ -26,9 +26,7 @@ export const parsingService = {
         } as any);
 
         const response = await api.post('/intake/ocr', formData, {
-            headers: {
-                'Content-Type': 'multipart/form-data',
-            },
+            timeout: 120000, // 2 minutes for OCR
         });
         return response.data;
     },
@@ -42,9 +40,7 @@ export const parsingService = {
         } as any);
 
         const response = await api.post('/intake/zip', formData, {
-            headers: {
-                'Content-Type': 'multipart/form-data',
-            },
+            timeout: 120000, 
         });
         return response.data;
     },
@@ -63,9 +59,7 @@ export const parsingService = {
         } as any);
 
         const response = await api.post('/intake/pdf', formData, {
-            headers: {
-                'Content-Type': 'multipart/form-data',
-            },
+            timeout: 120000,
         });
         return response.data;
     }

@@ -805,11 +805,10 @@ export default function MissionControlScreen() {
                 <View style={styles.kpiContainer}>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.kpiScroll}>
                         <KPIItem label="Total Leads" value={stats.leads || 0} icon="people" color="#3B82F6" delay={0} />
-                        <KPIItem label="Hot Leads" value={dashboardData?.leads?.find(l => l.status === 'OPPORTUNITY' || l.status.toLowerCase().includes('hot'))?.count || 0} icon="flame" color="#EF4444" delay={100} trend="up" />
-                        <KPIItem label="Active Deals" value={stats.deals || 0} icon="briefcase" color="#F59E0B" delay={200} />
-                        <KPIItem label="Revenue" value={Math.round((dashboardData?.performance?.revenue || 0) / 1000)} icon="wallet" color="#10B981" delay={300} trend="up" />
-                        <KPIItem label="Inventory" value={stats.inventory || 0} icon="cube" color="#8B5CF6" delay={400} />
-                        <KPIItem label="Projects" value={dashboardData?.projects || 0} icon="business" color="#4F46E5" delay={500} />
+                        <KPIItem label="Active Deals" value={stats.deals || 0} icon="briefcase" color="#F59E0B" delay={100} />
+                        <KPIItem label="Revenue" value={Math.round((dashboardData?.performance?.revenue || 0) / 1000)} icon="wallet" color="#10B981" delay={200} trend="up" />
+                        <KPIItem label="Inventory" value={stats.inventory || 0} icon="cube" color="#8B5CF6" delay={300} />
+                        <KPIItem label="Projects" value={dashboardData?.projects || 0} icon="business" color="#4F46E5" delay={400} />
                     </ScrollView>
                 </View>
 

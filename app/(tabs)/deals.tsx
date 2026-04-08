@@ -39,6 +39,7 @@ const STAGE_COLORS: Record<string, string> = {
     "closed won": "#10B981",
     "closed lost": "#EF4444",
     cancelled: "#64748B",
+    dormant: "#64748B",
 };
 
 function resolveName(field: unknown, getLookupValue?: (type: string, val: any) => string, findUser?: (id: string) => any): string {
@@ -138,6 +139,7 @@ const SHORT_NAMES: Record<string, string> = {
     booked: "Book",
     "closed won": "Won",
     "closed lost": "Lost",
+    dormant: "Dorm",
 };
 
 const ChevronSegment = memo(({
@@ -486,7 +488,7 @@ export default function DealsScreen() {
         });
 
         // Logical pipeline sequence
-        const order = ['open', 'quote', 'negotiation', 'booked', 'closed won', 'closed lost'];
+        const order = ['open', 'quote', 'negotiation', 'booked', 'closed won', 'closed lost', 'dormant'];
         return order.map(s => ({
             label: s,
             count: stats[s] || 0,
@@ -521,8 +523,7 @@ export default function DealsScreen() {
                 Alert.alert("Data Load Error", `Could not load deals:\n${result.error}`, [{ text: "Retry", onPress: () => fetchDeals(pageNum, shouldAppend) }]);
             }
         } else if (result.data) {
-            const dataObj = result.data as any;
-            const newDeals = dataObj.data || dataObj.records || (Array.isArray(dataObj) ? dataObj : []);
+            const newDeals = result.data;
             
             setDeals(prev => {
                 const combined = shouldAppend ? [...prev, ...newDeals] : newDeals;

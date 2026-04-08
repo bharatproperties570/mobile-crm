@@ -41,7 +41,7 @@ export default function ActivitiesScreen() {
     const [refreshing, setRefreshing] = useState(false);
     const [search, setSearch] = useState("");
     const [typeFilter, setTypeFilter] = useState("All");
-    const [statusFilter, setStatusFilter] = useState("Pending");
+    const [statusFilter, setStatusFilter] = useState("All");
     const { findUser } = useUsers();
 
     // Audio Playback State
@@ -50,19 +50,23 @@ export default function ActivitiesScreen() {
 
     const fetchActivities = async (isRefreshing = false) => {
         if (!isRefreshing) setLoading(true);
+        console.log("[Activities] Fetching with type:", typeFilter, "status:", statusFilter);
         try {
             const params: any = { search, limit: 500 };
             if (typeFilter !== "All") params.type = typeFilter;
 
             // Only send actual statuses to backend
-            if (["Pending", "Completed"].includes(statusFilter)) {
+            if (["Pending", "Completed", "In Progress"].includes(statusFilter)) {
                 params.status = statusFilter;
+            } else if (statusFilter === "Today" || statusFilter === "Overdue" || statusFilter === "All") {
+                // Backend returns all if status is not provided, 
+                // client-side filteredActivities handles Today/Overdue
+                delete params.status;
             }
 
             const res = await getActivities(params);
-            if (res.data) {
-                setActivities(res.data);
-            }
+            const data = (res.data || res.records || (Array.isArray(res) ? res : [])) as Activity[];
+            setActivities(data);
         } catch (error) {
             console.error("Fetch activities error:", error);
             Alert.alert("Error", "Could not synchronize activities with backend");
@@ -108,7 +112,7 @@ export default function ActivitiesScreen() {
 
     const filteredActivities = useMemo(() => {
         return activities.filter(a => {
-            if (statusFilter === "Pending") return a.status === "Pending";
+            if (statusFilter === "Pending") return ["Pending", "In Progress", "Overdue"].includes(a.status);
             if (statusFilter === "Completed") return a.status === "Completed";
             if (statusFilter === "Today") {
                 if (!a.dueDate) return false;
@@ -168,7 +172,7 @@ export default function ActivitiesScreen() {
         Linking.openURL(url).catch(() => Alert.alert("Error", "WhatsApp is not installed"));
     };
 
-    const ActivityCard = memo(({ item, onPress, onDelete, onEdit, onReschedule, onComplete, onPlayAudio, isPlaying, onCall, onWhatsApp }: {
+    const ActivityCard = memo(({ item, onPress, onDelete, onEdit, onReschedule, onComplete, onPlayAudio, isPlaying, onCall, onWhatsApp, findUser }: {
         item: Activity;
         onPress: () => void;
         onDelete: (id: string) => void;
@@ -191,38 +195,38 @@ export default function ActivitiesScreen() {
         const relatedMobile = related?.mobile || "";
 
         const assignedName = useMemo(() => {
-            // 0. Resolve Performed By (Direct backend string name - Most reliable)
-            const performedBy = (item as any).performedBy;
-            if (performedBy && typeof performedBy === 'string' && performedBy !== "System") {
-                return performedBy;
-            }
-
-            // 1. Resolve Assigned To (Object or ID)
+            // 1. Resolve Assigned To (Object or ID) - Primary Target
             const assigned = item.assignedTo;
             if (assigned) {
                 if (typeof assigned === 'object' && assigned !== null) {
-                    return assigned.fullName || assigned.name || assigned.lookup_value || assigned.label || "Unassigned";
+                    const name = (assigned as any).fullName || (assigned as any).name || (assigned as any).lookup_value;
+                    if (name && name !== "Bharat Properties") return name;
                 }
-                const user = findUser(assigned);
-                if (user) return user.fullName || user.name;
+                const user = findUser(String(assigned));
+                if (user && (user.fullName || user.name) && user.name !== "Bharat Properties") return user.fullName || user.name;
             }
 
-            // 2. Resolve Creator (Fallback)
+            // 2. Resolve Performed By (Direct backend string name)
+            const performedBy = (item as any).performedBy;
+            if (performedBy && typeof performedBy === 'string' && 
+                performedBy !== "System" && 
+                performedBy !== "Bharat Properties") { 
+                return performedBy;
+            }
+
+            // 3. Resolve Creator (Fallback)
             const creator = (item as any).createdBy || (item as any).creator || (item as any).user || (item as any).author;
             if (creator) {
                 if (typeof creator === 'object' && creator !== null) {
-                    return creator.fullName || creator.name || creator.lookup_value || creator.label || "Staff User";
+                    const name = (creator as any).fullName || (creator as any).name || (creator as any).lookup_value;
+                    if (name && name !== "Bharat Properties") return name;
                 }
-                const user = findUser(creator);
-                if (user) return user.fullName || user.name;
-                
-                if (/^[a-f0-9]{24}$/i.test(String(creator))) {
-                    return `Staff (${String(creator).substring(0, 4)})`;
-                }
+                const user = findUser(String(creator));
+                if (user && (user.fullName || user.name)) return user.fullName || user.name;
             }
 
-            // Final check on performedBy for system actions
-            if (performedBy) return performedBy;
+            // Final fallback
+            if (performedBy && performedBy !== "System" && performedBy !== "Bharat Properties") return performedBy;
 
             return "Unassigned";
         }, [item.assignedTo, (item as any).createdBy, (item as any).creator, (item as any).user, (item as any).author, (item as any).performedBy, findUser]);
@@ -427,7 +431,21 @@ export default function ActivitiesScreen() {
                             onPress={() => {
                                 if (item.entityId && item.entityType) {
                                     const type = item.entityType.toLowerCase();
-                                    const route = `/${type}-detail` as any;
+                                    let route = `/${type}-detail` as any;
+                                    
+                                    // Map backend entity types to frontend file routes
+                                    if (type === 'developer' || type === 'company') {
+                                        route = '/company-detail';
+                                    } else if (type === 'project') {
+                                        route = '/project-detail';
+                                    } else if (type === 'inventory') {
+                                        route = '/inventory-detail';
+                                    } else if (type === 'deal') {
+                                        route = '/deal-detail';
+                                    } else if (type === 'lead') {
+                                        route = '/lead-detail';
+                                    }
+                                    
                                     router.push({ pathname: route, params: { id: item.entityId } });
                                 }
                             }}

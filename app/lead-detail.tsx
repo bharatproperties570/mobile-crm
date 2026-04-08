@@ -553,34 +553,64 @@ export default function LeadDetailScreen() {
                     <ScrollView contentContainerStyle={styles.innerScroll}>
                         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
                             <View style={styles.sectionHeader}>
-                                <Text style={[styles.cardTitle, { color: theme.text, marginBottom: 0 }]}>Matching Deals</Text>
+                                <Text style={[styles.cardTitle, { color: theme.text, marginBottom: 0 }]}>Intelligent Deal Matches</Text>
                                 <View style={{ backgroundColor: theme.primary + '20', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 20 }}>
-                                    <Text style={{ color: theme.primary, fontSize: 12, fontWeight: '700' }}>{matchingDeals.length} Found</Text>
+                                    <Text style={{ color: theme.primary, fontSize: 12, fontWeight: '700' }}>{matchingDeals.length} Best Matches</Text>
                                 </View>
                             </View>
                             {Array.isArray(matchingDeals) && matchingDeals.length === 0 ? (
-                                <Text style={styles.emptyText}>No matching deals found for this requirement.</Text>
+                                <Text style={styles.emptyText}>No matching deals found for this lead's requirement. Adjust criteria to find potential fits.</Text>
                             ) : (
-                                Array.isArray(matchingDeals) && matchingDeals.map((deal: any, i: number) => (
-                                    <TouchableOpacity key={i} style={[styles.matchItem, { borderBottomColor: theme.border }]} onPress={() => router.push(`/deal-detail?id=${deal._id}`)}>
-                                        <View style={styles.matchLeft}>
-                                            <Text style={[styles.matchUnit, { color: theme.text }]}>Deal #{deal.dealId || deal._id.slice(-6).toUpperCase()}</Text>
-                                            <Text style={[styles.matchProject, { color: theme.textLight }]}>{deal.projectName || (typeof deal.projectId === 'object' ? deal.projectId?.name : lv(deal.projectId))}</Text>
-                                            <View style={{ flexDirection: 'row', gap: 6, marginTop: 4 }}>
-                                                <View style={[styles.relationBadge, { backgroundColor: theme.border + '40' }]}>
-                                                    <Text style={{ fontSize: 9, fontWeight: '700', color: theme.textLight }}>{lv(deal.category)}</Text>
+                                Array.isArray(matchingDeals) && matchingDeals.map((deal: any, i: number) => {
+                                    const score = deal.score || 0;
+                                    let scoreColor = '#EF4444'; // Low
+                                    if (score >= 70) scoreColor = '#10B981'; // High
+                                    else if (score >= 40) scoreColor = '#F59E0B'; // Medium
+
+                                    return (
+                                        <TouchableOpacity key={i} style={[styles.matchItem, { borderBottomColor: theme.border }]} onPress={() => router.push(`/deal-detail?id=${deal._id}`)}>
+                                            <View style={styles.matchLeft}>
+                                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                                                    <View style={[styles.scorePill, { backgroundColor: scoreColor + '15', borderColor: scoreColor + '30' }]}>
+                                                        <Text style={[styles.scorePillText, { color: scoreColor }]}>{score}% Match</Text>
+                                                    </View>
+                                                    <Text style={[styles.matchUnit, { color: theme.text }]}>Deal #{deal.dealId || deal._id.slice(-6).toUpperCase()}</Text>
                                                 </View>
-                                                <View style={[styles.relationBadge, { backgroundColor: theme.primary + '15' }]}>
-                                                    <Text style={{ fontSize: 9, fontWeight: '700', color: theme.primary }}>{lv(deal.status)}</Text>
+                                                
+                                                <Text style={[styles.matchProject, { color: theme.textLight }]}>
+                                                    {deal.projectName || (typeof deal.projectId === 'object' ? deal.projectId?.name : lv(deal.projectId))}
+                                                </Text>
+
+                                                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 8 }}>
+                                                    {deal.matchDetails?.map((tag: string, idx: number) => {
+                                                        let tagBg = theme.primary + '08';
+                                                        let tagColor = theme.primary;
+                                                        if (tag.includes("Budget")) { tagBg = '#DCFCE7'; tagColor = '#15803D'; }
+                                                        if (tag.includes("Orientation")) { tagBg = '#FEF3C7'; tagColor = '#92400E'; }
+                                                        if (tag.includes("Unit") || tag.includes("Category")) { tagBg = '#E0F2FE'; tagColor = '#0369A1'; }
+                                                        
+                                                        return (
+                                                            <View key={idx} style={[styles.matchDetailTag, { backgroundColor: tagBg }]}>
+                                                                <Text style={[styles.matchDetailTagText, { color: tagColor }]}>{tag}</Text>
+                                                            </View>
+                                                        );
+                                                    })}
+                                                    {!deal.matchDetails && (
+                                                         <View style={[styles.relationBadge, { backgroundColor: theme.border + '40' }]}>
+                                                            <Text style={{ fontSize: 9, fontWeight: '700', color: theme.textLight }}>{lv(deal.category)}</Text>
+                                                        </View>
+                                                    )}
                                                 </View>
                                             </View>
-                                        </View>
-                                        <View style={styles.matchRight}>
-                                            <Text style={[styles.matchPrice, { color: theme.primary }]}>₹{deal.price || 0}</Text>
-                                            <Text style={[styles.matchStatus, { color: '#10B981' }]}>{deal.stage || 'Open'}</Text>
-                                        </View>
-                                    </TouchableOpacity>
-                                ))
+                                            <View style={styles.matchRight}>
+                                                <Text style={[styles.matchPrice, { color: theme.primary }]}>₹{deal.price || deal.quotePrice || 0}</Text>
+                                                <View style={[styles.statusBadge, { backgroundColor: '#10B981' + '10' }]}>
+                                                    <Text style={[styles.statusBadgeText, { color: '#10B981' }]}>{deal.stage || 'Active'}</Text>
+                                                </View>
+                                            </View>
+                                        </TouchableOpacity>
+                                    );
+                                })
                             )}
                         </View>
                     </ScrollView>
@@ -693,6 +723,12 @@ const styles = StyleSheet.create({
     matchPrice: { fontSize: 13, fontWeight: '700' },
     matchStatus: { fontSize: 10, fontWeight: '800', marginTop: 2 },
     relationBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
+    scorePill: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 12, borderWidth: 1 },
+    scorePillText: { fontSize: 10, fontWeight: '800' },
+    matchDetailTag: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, marginRight: 4 },
+    matchDetailTagText: { fontSize: 10, fontWeight: '600' },
+    statusBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, marginTop: 4 },
+    statusBadgeText: { fontSize: 10, fontWeight: '800' },
     fab: {
         position: 'absolute',
         bottom: 30,

@@ -27,6 +27,8 @@ import { getCompanyById } from "@/services/companies.service";
 import { getSystemSettingsByKey } from "@/services/system-settings.service";
 import { safeApiCall, safeApiCallSingle, extractList } from "@/services/api.helpers";
 import api from "@/services/api";
+import { useUsers } from "@/context/UserContext";
+import { useAuth } from "@/context/AuthContext";
 
 const TYPES = ["Call", "Meeting", "Site Visit", "Task", "Email"];
 const PRIORITIES = ["Low", "Normal", "High"];
@@ -105,6 +107,8 @@ export default function AddActivityScreen() {
         subject?: string;
         actType?: string;
     }>();
+    const { users, findUser } = useUsers();
+    const { user: currentUser } = useAuth();
 
     console.log("[AddActivity] Rendered with params:", params);
 
@@ -119,6 +123,7 @@ export default function AddActivityScreen() {
         dueTime: new Date().toTimeString().slice(0, 5),
         priority: "Normal" as any,
         status: "Pending" as any,
+        assignedTo: (currentUser?.id || currentUser?._id || "") as string,
         description: "",
         clientFeedback: "",
         details: {
@@ -162,6 +167,7 @@ export default function AddActivityScreen() {
 
     const [activityMasterFields, setActivityMasterFields] = useState<any>(DEFAULT_ACTIVITY_MASTER_FIELDS);
     const [isPurposeModalVisible, setIsPurposeModalVisible] = useState(false);
+    const [isUserModalVisible, setIsUserModalVisible] = useState(false);
 
     // Dynamic Purposes based on Activity Type
     const currentActivityConfig = activityMasterFields?.activities?.find((a: any) => a.name === formData.type);
@@ -271,6 +277,11 @@ export default function AddActivityScreen() {
                 if (settingValue) {
                     setActivityMasterFields(settingValue);
                 }
+            }
+            
+            // 4. Default assignment if not set
+            if (!formData.assignedTo && currentUser) {
+                setFormData(p => ({ ...p, assignedTo: currentUser.id || currentUser._id || "" }));
             }
         } catch (error) {
             console.error("[AddActivity] Init failed:", error);
@@ -450,6 +461,24 @@ export default function AddActivityScreen() {
                             </Text>
                         </View>
                         <Ionicons name="search" size={20} color="#64748B" />
+                    </TouchableOpacity>
+                </Section>
+                                
+                {/* 1.5 Staff Assignment */}
+                <Section title="Assignment">
+                    <TouchableOpacity style={styles.entitySelector} onPress={() => setIsUserModalVisible(true)}>
+                        <View style={styles.entityInfo}>
+                            <View style={[styles.entityIcon, { backgroundColor: "#F5F3FF" }]}>
+                                <Ionicons name="person-circle" size={20} color="#7C3AED" />
+                            </View>
+                            <View>
+                                <Text style={styles.labelSmall}>Assigned To</Text>
+                                <Text style={styles.entityText}>
+                                    {findUser(formData.assignedTo)?.fullName || findUser(formData.assignedTo)?.name || "Select Staff Member"}
+                                </Text>
+                            </View>
+                        </View>
+                        <Ionicons name="chevron-down" size={20} color="#64748B" />
                     </TouchableOpacity>
                 </Section>
 
@@ -1225,6 +1254,43 @@ export default function AddActivityScreen() {
                     </View>
                 </View>
             </Modal>
+
+            {/* User Selection Modal */}
+            <Modal visible={isUserModalVisible} animationType="slide" transparent>
+                <View style={styles.centeredModal}>
+                    <View style={[styles.pickerCard, { maxHeight: '80%' }]}>
+                        <View style={styles.pickerHeader}>
+                            <Text style={styles.pickerTitle}>Assign Staff Member</Text>
+                            <TouchableOpacity onPress={() => setIsUserModalVisible(false)}>
+                                <Ionicons name="close" size={24} color="#64748B" />
+                            </TouchableOpacity>
+                        </View>
+                        <FlatList
+                            data={users}
+                            keyExtractor={i => i._id || i.id}
+                            renderItem={({ item }) => (
+                                <TouchableOpacity 
+                                    style={[styles.pickerRow, formData.assignedTo === (item._id || item.id) && { backgroundColor: '#F5F3FF' }]}
+                                    onPress={() => {
+                                        setFormData(p => ({ ...p, assignedTo: item._id || item.id }));
+                                        setIsUserModalVisible(false);
+                                    }}
+                                >
+                                    <View>
+                                        <Text style={[styles.pickerText, formData.assignedTo === (item._id || item.id) && { color: '#7C3AED', fontWeight: '800' }]}>
+                                            {item.fullName || item.name}
+                                        </Text>
+                                        <Text style={{ fontSize: 10, color: '#94A3B8', fontWeight: '600' }}>{item.team || "General Staff"}</Text>
+                                    </View>
+                                    {formData.assignedTo === (item._id || item.id) && (
+                                        <Ionicons name="checkmark-circle" size={18} color="#7C3AED" />
+                                    )}
+                                </TouchableOpacity>
+                            )}
+                        />
+                    </View>
+                </View>
+            </Modal>
         </SafeAreaView>
     );
 }
@@ -1309,6 +1375,7 @@ const styles = StyleSheet.create({
     emptyContainer: { alignItems: 'center', justifyContent: 'center', padding: 20, backgroundColor: '#F8FAFC', borderRadius: 16, borderStyle: 'dashed', borderWidth: 1, borderColor: '#CBD5E1' },
     emptyText: { fontSize: 13, color: "#94A3B8", fontStyle: "italic", textAlign: "center", marginTop: 8 },
     label: { fontSize: 13, fontWeight: "700", color: "#475569", marginBottom: 8 },
+    labelSmall: { fontSize: 10, fontWeight: "800", color: "#94A3B8", textTransform: 'uppercase', marginBottom: 2 },
     input: {
         backgroundColor: "#F8FAFC", borderWidth: 1, borderColor: "#E2E8F0",
         borderRadius: 16, padding: 14, fontSize: 15, color: "#1E293B",

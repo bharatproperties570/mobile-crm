@@ -3,7 +3,7 @@ import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
     ActivityIndicator, RefreshControl, Linking, Alert, Animated, SafeAreaView, Dimensions
 } from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/context/ThemeContext";
 import { getProjectById, deleteProject, type Project } from "@/services/projects.service";
@@ -41,9 +41,11 @@ function InfoRow({ label, value, accent, icon }: { label: string; value: string 
 }
 
 export default function ProjectDetailScreen() {
-    const { id } = useLocalSearchParams();
+    const params = useLocalSearchParams<{ id: string }>();
+    const id = params.id;
     const router = useRouter();
     const { theme } = useTheme();
+    
     const [project, setProject] = useState<Project | null>(null);
     const [activities, setActivities] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -56,10 +58,11 @@ export default function ProjectDetailScreen() {
 
     const fetchData = useCallback(async () => {
         if (!id) return;
+        setLoading(true);
         try {
             const [projRes, actRes] = await Promise.all([
                 getProjectById(id as string),
-                getActivities({ entityId: id as string, limit: 50 })
+                getActivities({ entityId: id as string, limit: 100 })
             ]);
 
             const found = projRes.data || projRes.record || projRes;
@@ -68,14 +71,19 @@ export default function ProjectDetailScreen() {
 
             Animated.timing(fadeAnim, { toValue: 1, duration: 600, useNativeDriver: true }).start();
         } catch (err) {
-            console.error(err);
+            console.error("[ProjectDetail] Fetch error:", err);
+            Alert.alert("Error", "Could not load project info. Please try again.");
         } finally {
             setLoading(false);
             setRefreshing(false);
         }
     }, [id]);
 
-    useEffect(() => { fetchData(); }, [id]);
+    useFocusEffect(
+        useCallback(() => {
+            fetchData();
+        }, [fetchData])
+    );
 
     const onTabPress = (index: number) => {
         setActiveTab(index);

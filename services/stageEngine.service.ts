@@ -19,6 +19,7 @@ export const STAGE_COLORS: Record<string, string> = {
     "Closed Won": "#22c55e",
     "Closed Lost": "#ef4444",
     Stalled: "#78716c",
+    Dormant: "#64748b",
 };
 
 const OUTCOME_TO_STAGE: Record<string, string> = {
@@ -37,11 +38,12 @@ const OUTCOME_TO_STAGE: Record<string, string> = {
     "Weather": "Prospect",
     "Client Requested": "Prospect",
     // Negative — keep or downgrade
-    "Not Interested": "Prospect",
+    "Not Interested": "Dormant",
+    "Lost Interest": "Dormant",
     "No Answer": "Prospect",
     "No response": "Prospect",
     "Call Back Later": "Prospect",
-    "Invalid Lead": "Prospect",
+    "Invalid Lead": "Dormant",
     "No Show": "Prospect",
     "Location Issue": "Opportunity",
     "Price Issue": "Opportunity",

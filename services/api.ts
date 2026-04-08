@@ -10,7 +10,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 // On Native (Expo Go on phone): use the Mac's LAN IP
 // The env var EXPO_PUBLIC_API_BASE_URL can override this.
 // ============================================================
-const MACHINE_IP = "192.168.29.78";
+const MACHINE_IP = "192.168.1.6";
 const BACKEND_PORT = "4000";
 
 const WEB_URL = `http://localhost:${BACKEND_PORT}/api`;
@@ -18,7 +18,7 @@ const PROD_URL = "https://api.bharatproperties.co/api";
 const TUNNEL_URL = "https://bharat-crm-stable-api.loca.lt/api";
 const LAN_URL = `http://${MACHINE_IP}:${BACKEND_PORT}/api`;
 
-const NATIVE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || LAN_URL || PROD_URL;
+const NATIVE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || LAN_URL;
 
 const BASE_URL = Platform.OS === "web" ? WEB_URL : NATIVE_URL;
 
@@ -30,7 +30,7 @@ console.log(`- Tunnel URL: ${TUNNEL_URL}`);
 
 const api = axios.create({
   baseURL: BASE_URL,
-  timeout: 10000,
+  timeout: 120000,
   headers: {
     "Origin": "https://crm.bharatproperties.co",
     "Content-Type": "application/json",

@@ -26,7 +26,7 @@ const STATUS_COLORS: Record<string, string> = {
     active: "#10B981", new: "#64748B", contacted: "#8B5CF6",
     qualified: "#7C3AED", prospect: "#3B82F6", opportunity: "#F59E0B",
     negotiation: "#F97316", booked: "#10B981", won: "#059669", 
-    lost: "#EF4444", stalled: "#78716C",
+    lost: "#EF4444", stalled: "#78716C", dormant: "#64748B",
     hot: "#EF4444", warm: "#F59E0B", cold: "#3B82F6",
     urgent: "#E11D48"
 };
@@ -41,6 +41,7 @@ const STAGE_CONFIG: Record<string, { color: string; icon: any }> = {
     "Closed Won": { color: "#059669", icon: "trophy" },
     "Closed Lost": { color: "#EF4444", icon: "close-circle" },
     "Stalled": { color: "#78716C", icon: "pause-circle" },
+    "Dormant": { color: "#64748B", icon: "moon" },
     "default": { color: "#94A3B8", icon: "help-circle" }
 };
 
@@ -83,6 +84,7 @@ function getLeadScore(lead: Lead) {
     if (["new", "contacted"].includes(stage)) return { val: 65, color: "#3B82F6", bg: "#EFF6FF" };
     if (["qualified", "active"].includes(stage)) return { val: 85, color: "#10B981", bg: "#F0FDF4" };
     if (["won"].includes(stage)) return { val: 100, color: "#059669", bg: "#ECFDF5" };
+    if (stage === "dormant") return { val: 0, color: "#64748B", bg: "#F8FAFC" };
     return { val: 30, color: "#64748B", bg: "#F8FAFC" };
 }
 
@@ -511,14 +513,12 @@ const LeadCard = memo(({ lead, index, onPress, onMore, isSelected, onLongPress, 
     liveScore?: { score: number; color: string; label: string };
 }) => {
     const { theme } = useTheme();
-    const { trackCall, simulateIncomingCall } = useCallTracking();
-    const { getLookupsByType, getLookupValue } = useLookup();
+    const { trackCall } = useCallTracking();
+    const { getLookupValue } = useLookup();
     const name = leadName(lead);
     const stageLabel = getLookupValue("Stage", lead.stage) || "New";
     const stageCfg = STAGE_CONFIG[stageLabel] || STAGE_CONFIG.default;
-    // Use backend live score if available; fallback to local intent_index heuristic
     const score = liveScore ? { val: liveScore.score, color: liveScore.color } : getLeadScore(lead);
-    const req = REQ_CONFIG[lookupVal(lead.requirement).toLowerCase()] || REQ_CONFIG.default;
 
     const scaleValue = useRef(new Animated.Value(1)).current;
     const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -587,15 +587,13 @@ const LeadCard = memo(({ lead, index, onPress, onMore, isSelected, onLongPress, 
                     onLongPress={onLongPress}
                     style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border, position: 'relative' }, isSelected && styles.cardSelected]}
                 >
-                    {/* Intent Ribbon / Gift Wrap Style */}
-                    {currentIntent && (
+                    {currentIntent ? (
                         <View style={[styles.intentRibbon, { backgroundColor: currentIntent.bg }]}>
                             <Text style={[styles.intentRibbonText, { color: currentIntent.text }]}>{intent.toUpperCase()}</Text>
                         </View>
-                    )}
+                    ) : null}
 
                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        {/* Score Round Icon - Left Centered */}
                         <View style={styles.leftScoreContainer}>
                             <LeadScoreRing score={score.val} color={score.color} size={42} />
                         </View>
@@ -609,13 +607,13 @@ const LeadCard = memo(({ lead, index, onPress, onMore, isSelected, onLongPress, 
                                     <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
                                         <Ionicons name="call-outline" size={12} color={theme.textLight} />
                                         <Text style={{ fontSize: 12, color: theme.textLight, fontWeight: '600', marginLeft: 4 }}>{lead.mobile}</Text>
-                                        {lead.email && (
+                                        {lead.email ? (
                                             <>
                                                 <Text style={{ fontSize: 12, color: theme.textLight, marginHorizontal: 6 }}>•</Text>
                                                 <Ionicons name="mail-outline" size={12} color={theme.textLight} />
                                                 <Text style={{ fontSize: 12, color: theme.textLight, fontWeight: '600', marginLeft: 4, flex: 1 }} numberOfLines={1}>{lead.email}</Text>
                                             </>
-                                        )}
+                                        ) : null}
                                     </View>
                                 </View>
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -630,7 +628,7 @@ const LeadCard = memo(({ lead, index, onPress, onMore, isSelected, onLongPress, 
                             </View>
 
                             <View style={styles.cardBody}>
-                                {(lead.propertyType || lead.subType || lead.subRequirement) && (
+                                {(lead.propertyType || lead.subType || lead.subRequirement) ? (
                                     <View style={styles.reqRow}>
                                         <Ionicons name="business-outline" size={12} color={theme.textLight} />
                                         <Text style={[styles.reqText, { color: theme.textMuted }]}>
@@ -641,44 +639,39 @@ const LeadCard = memo(({ lead, index, onPress, onMore, isSelected, onLongPress, 
                                             }
                                         </Text>
                                     </View>
-                                )}
+                                ) : null}
                                 <View style={styles.reqRow}>
                                     <Ionicons name="home-outline" size={12} color={theme.textLight} />
                                     <Text style={[styles.reqText, { color: theme.textMuted }]}>{getLookupValue("UnitType", lead.unitType)}</Text>
                                 </View>
-                                {(lead.locCity || lead.location || lead.locArea) && (
+                                {(lead.locCity || lead.location || lead.locArea) ? (
                                     <View style={styles.locRow}>
                                         <Ionicons name="location-outline" size={12} color={theme.textLight} />
-                                        <Text style={[styles.locText, { color: theme.textLight }]} numberOfLines={1}>
+                                        <Text style={[styles.reqText, { color: theme.textMuted }]}>
                                             {[getLookupValue("City", lead.locCity), lead.locArea, getLookupValue("Location", lead.location)].filter(v => v && v !== "—").join(", ") || "No Location"}
                                         </Text>
                                     </View>
-                                )}
+                                ) : null}
                             </View>
 
-                            <View style={[styles.cardFooter, theme.background === '#0F172A' ? { borderTopColor: theme.border } : {}]}>
-                                <View style={styles.footerLeftTicker}>
-                                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ alignItems: 'center', gap: 6 }}>
-                                        {lead.lead_classification && (
-                                            <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFBEB', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, borderWidth: 1, borderColor: '#FEF3C7' }}>
-                                                <Ionicons name="shield-checkmark" size={10} color="#F59E0B" />
-                                                <Text style={{ fontSize: 8, fontWeight: '800', color: '#F59E0B', marginLeft: 3 }}>{lead.lead_classification.toUpperCase()}</Text>
-                                            </View>
-                                        )}
-                                        {lead.intent_tags?.map((tag, i) => (
-                                            <View key={i} style={{ backgroundColor: theme.primary + '08', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, borderWidth: 1, borderColor: theme.primary + '15' }}>
-                                                <Text style={{ fontSize: 8, fontWeight: '800', color: theme.primary }}>#{tag.toUpperCase()}</Text>
-                                            </View>
-                                        ))}
-                                    </ScrollView>
+                            <View style={styles.cardFooter}>
+                                <View style={styles.tagStrip}>
+                                    {lead.tags?.slice(0, 3).map((tag, i) => (
+                                        <View key={i} style={[styles.miniTag, { backgroundColor: theme.border }]}>
+                                            <Text style={[styles.miniTagText, { color: theme.textMuted }]}>{tag}</Text>
+                                        </View>
+                                    ))}
+                                    {(lead.tags?.length || 0) > 3 && (
+                                        <Text style={{ fontSize: 10, color: theme.textLight }}>+{(lead.tags?.length || 0) - 3}</Text>
+                                    )}
                                 </View>
                                 <View style={styles.footerRight}>
-                                    {lead.source && (
+                                    {lead.source ? (
                                         <View style={[styles.sourceBadge, { backgroundColor: theme.border }]}>
                                             <Ionicons name="radio-outline" size={10} color="#94A3B8" />
                                             <Text style={[styles.sourceText, { color: theme.textLight }]}>{getLookupValue("Source", lead.source)}</Text>
                                         </View>
-                                    )}
+                                    ) : null}
                                     <Text style={[styles.timeLabel, { color: theme.textLight }]}>{formatTimeAgo(lead.createdAt)}</Text>
                                 </View>
                             </View>
@@ -760,18 +753,14 @@ export default function LeadsScreen() {
         const params: any = { page: String(pageNum), limit: "50" };
         if (qFilter) params.status = qFilter;
 
-        const result = await safeApiCall<any>(() => getLeads(params));
+        const result = await safeApiCall<Lead>(() => getLeads(params));
 
         if (!result.error && result.data) {
-            const dataObj = result.data as any;
-            const newLeads = dataObj || [];
+            if (result.stats) setLeadsStats(result.stats);
+            const recs = result.data;
             
-            if (result.data && result.data.stats) {
-                setLeadsStats(result.data.stats);
-            }
-
             setLeads(prev => {
-                const combined = shouldAppend ? [...prev, ...newLeads] : newLeads;
+                const combined = shouldAppend ? [...prev, ...recs] : recs;
                 // Deduplicate
                 const seen = new Set();
                 const filtered = combined.filter((l: any) => {
@@ -789,7 +778,7 @@ export default function LeadsScreen() {
                 return filtered;
             });
             
-            setHasMore(newLeads.length === 50);
+            setHasMore(recs.length === 50);
             setPage(pageNum);
             if (!shouldAppend) {
                 getLeadScores().then(scores => setLiveScores(scores)).catch(() => { });
@@ -935,56 +924,18 @@ export default function LeadsScreen() {
                 <View style={styles.headerTop}>
                     <View>
                         <Text style={styles.screenTitle}>{selectedIds.length > 0 ? `${selectedIds.length} Selected` : "SALES PIPELINE"}</Text>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
-                            <Text style={styles.screenSub}>{leadsStats.total} Total Records</Text>
-                            <View style={{ width: 3, height: 3, borderRadius: 1.5, backgroundColor: "#CBD5E1" }} />
-                            <Text style={[styles.screenSub, { color: "#2563EB" }]}>{leadsStats.today} New Today</Text>
+                        <View style={{ marginTop: 2 }}>
+                            <Text style={styles.screenSub}>{(leadsStats?.total || 0).toLocaleString()} Total Records</Text>
                         </View>
                     </View>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                        <TouchableOpacity 
-                            style={[styles.headerActionBtn, { backgroundColor: '#F0F9FF' }]} 
-                            onPress={() => simulateIncomingCall('9416031737')}
-                        >
-                            <Ionicons name="call" size={20} color="#0369A1" />
-                        </TouchableOpacity>
                         <TouchableOpacity style={styles.headerAddBtn} onPress={() => router.push("/add-lead")}>
                             <Ionicons name="add-circle" size={28} color="#2563EB" />
                         </TouchableOpacity>
                     </View>
                 </View>
 
-                {/* 🚀 Professional Metrics Flow (Senior UX) */}
-                <View style={styles.metricsFlowContainer}>
-                    <TouchableOpacity 
-                        style={[styles.flowSegment, styles.freshSegment, activeQuickFilter === 'fresh' && styles.freshSelected]}
-                        onPress={() => handleQuickFilter(activeQuickFilter === 'fresh' ? null : 'fresh')}
-                    >
-                        <View style={styles.flowInfo}>
-                            <Text style={styles.flowLabel}>FRESH LEADS</Text>
-                            <Text style={styles.flowValue}>{leadsStats.fresh || 0}</Text>
-                        </View>
-                        <View style={styles.flowIcon}>
-                            <Ionicons name="leaf" size={20} color="#6366F1" opacity={0.3} />
-                        </View>
-                        <View style={styles.chevronPoint} />
-                    </TouchableOpacity>
-
-                    <TouchableOpacity 
-                        style={[styles.flowSegment, styles.hotSegment, activeQuickFilter === 'hot' && styles.hotSelected]}
-                        onPress={() => handleQuickFilter(activeQuickFilter === 'hot' ? null : 'hot')}
-                    >
-                        <View style={styles.flowInfo}>
-                            <Text style={styles.flowLabelHot}>🔥 HOT LEADS</Text>
-                            <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
-                                <Text style={styles.flowValueHot}>{leadsStats.hot || 0}</Text>
-                                <Text style={styles.flowPercentHot}>{leadsStats.total > 0 ? Math.round(((leadsStats.hot || 0) / leadsStats.total) * 100) : 0}%</Text>
-                            </View>
-                        </View>
-                    </TouchableOpacity>
-                </View>
-
-                {/* Professional Sales Pipeline Metrics Header */}
+                {/* Professional Arrow Style Sales Pipeline Flow */}
                 <View style={styles.modernPipelineRoot}>
                     <View style={styles.pipelineTitleInnerRow}>
                         <Text style={styles.pipelineTitleText}>SALES PIPELINE STAGES</Text>
@@ -999,47 +950,59 @@ export default function LeadsScreen() {
                         showsHorizontalScrollIndicator={false} 
                         contentContainerStyle={styles.modernPipelineScroll}
                         decelerationRate="fast"
-                        snapToInterval={145}
                     >
                         {[
-                            { key: "incoming", label: "INCOMING", icon: "arrow-down-circle", color: "#6366F1" },
-                            { key: "prospect", label: "PROSPECT", icon: "search", color: "#3B82F6" },
-                            { key: "opportunity", label: "OPPORTUNITY", icon: "rocket", color: "#EC4899" },
-                            { key: "negotiation", label: "NEGOTIATION", icon: "cash", color: "#F59E0B" },
-                            { key: "won", label: "CLOSED WON", icon: "checkmark-done-circle", color: "#10B981" },
-                            { key: "lost", label: "CLOSED LOST", icon: "close-circle", color: "#EF4444" }
+                            { key: "incoming", label: "NEW", color: "#6366F1" },
+                            { key: "prospect", label: "PROSPECT", color: "#3B82F6" },
+                            { key: "opportunity", label: "OPPORTUNITY", color: "#EC4899" },
+                            { key: "negotiation", label: "NEGOTIATION", color: "#F59E0B" },
+                            { key: "won", label: "WON", color: "#10B981" }
                         ].map((item, idx) => {
                             const count = (leadsStats.pipeline as any)?.[item.key] || 0;
                             const isActive = activeQuickFilter === item.key;
-                            const percentage = leadsStats.total > 0 ? Math.round((count / leadsStats.total) * 100) : 0;
+                            const isFirst = idx === 0;
                             
                             return (
                                 <TouchableOpacity 
                                     key={item.key}
                                     style={[
-                                        styles.modernStageCard,
-                                        isActive && { borderColor: item.color, backgroundColor: `${item.color}05`, transform: [{ scale: 0.98 }] }
+                                        styles.arrowStageSegment,
+                                        { 
+                                            backgroundColor: isActive ? item.color : `${item.color}15`,
+                                            zIndex: 10 - idx,
+                                            marginLeft: isFirst ? 0 : -20, // Tighter overlap for sharper arrow flow
+                                            borderTopLeftRadius: isFirst ? 12 : 0,
+                                            borderBottomLeftRadius: isFirst ? 12 : 0,
+                                            width: 145,
+                                            // Add subtle shadow for depth on active state
+                                            ...(isActive ? { shadowColor: item.color, shadowOpacity: 0.3, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 5 } : {})
+                                        }
                                     ]}
                                     onPress={() => handleQuickFilter(item.key)}
-                                    activeOpacity={0.7}
+                                    activeOpacity={0.8}
                                 >
-                                    <View style={styles.cardTopRow}>
-                                        <View style={[styles.stageIconBox, { backgroundColor: `${item.color}15` }]}>
-                                            <Ionicons name={item.icon as any} size={14} color={item.color} />
-                                        </View>
-                                        <View style={[styles.percentageBadge, { backgroundColor: isActive ? item.color : '#F1F5F9' }]}>
-                                            <Text style={[styles.percentageText, { color: isActive ? '#fff' : '#64748B' }]}>{percentage}%</Text>
-                                        </View>
+                                    <View style={[styles.arrowContent, { paddingLeft: isFirst ? 20 : 35 }]}>
+                                        <Text style={[styles.arrowCountText, { color: isActive ? '#fff' : item.color }]}>{count}</Text>
+                                        <Text style={[styles.arrowLabelText, { color: isActive ? 'rgba(255,255,255,0.9)' : '#64748B' }]}>{item.label}</Text>
                                     </View>
                                     
-                                    <View style={styles.cardCountLayer}>
-                                        <Text style={[styles.cardCountText, { color: isActive ? item.color : '#1E293B' }]}>{count}</Text>
-                                        <Text style={[styles.cardLabelText, isActive && { color: item.color }]}>{item.label}</Text>
-                                    </View>
-                                    
-                                    {isActive && (
-                                        <View style={[styles.activeIndicator, { backgroundColor: item.color }]} />
-                                    )}
+                                    {/* The Chevron Point */}
+                                    <View style={[
+                                        styles.arrowChevron, 
+                                        { 
+                                            backgroundColor: isActive ? item.color : '#F8FAFC',
+                                            borderColor: isActive ? '#fff' : `${item.color}30`,
+                                            borderLeftWidth: 2,
+                                            borderTopWidth: 2,
+                                            right: -15, // Perfect overlap
+                                            borderRadius: 2,
+                                            top: 15,
+                                            width: 30,
+                                            height: 30,
+                                            transform: [{ rotate: '45deg' }],
+                                            zIndex: 2
+                                        }
+                                    ]} />
                                 </TouchableOpacity>
                             );
                         })}
@@ -1193,36 +1156,44 @@ const styles = StyleSheet.create({
     screenTitle: { fontSize: 22, fontWeight: "900", letterSpacing: -0.5 },
     screenSub: { fontSize: 10, fontWeight: "800", marginTop: 2, letterSpacing: 0.5 },
     
-    modernPipelineRoot: { marginTop: 12, marginBottom: 16, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+    modernPipelineRoot: { marginTop: 12, marginBottom: 16 },
     pipelineTitleInnerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, marginBottom: 12 },
     pipelineTitleText: { fontSize: 10, fontWeight: '900', color: '#94A3B8', letterSpacing: 1.2 },
     pipelineActionHint: { flexDirection: 'row', alignItems: 'center', gap: 4 },
     pipelineActionText: { fontSize: 8, fontWeight: '800', color: '#CBD5E1' },
-    modernPipelineScroll: { paddingLeft: 16, paddingRight: 20, paddingBottom: 16, gap: 12 },
-    modernStageCard: { 
-        width: 135, 
-        height: 100, 
-        backgroundColor: '#fff', 
-        borderRadius: 20, 
-        padding: 14, 
-        borderWidth: 1.5, 
-        borderColor: '#F1F5F9',
-        shadowColor: '#000',
-        shadowOpacity: 0.03,
-        shadowRadius: 10,
-        shadowOffset: { width: 0, height: 4 },
-        justifyContent: 'space-between',
-        position: 'relative',
-        overflow: 'hidden'
+    modernPipelineScroll: { paddingLeft: 16, paddingRight: 40, paddingBottom: 16 },
+    
+    arrowStageSegment: { 
+        width: 130, 
+        height: 60, 
+        justifyContent: 'center',
+        paddingLeft: 20,
+        paddingRight: 10,
+        position: 'relative'
     },
-    cardTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-    stageIconBox: { width: 28, height: 28, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
-    percentageBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
-    percentageText: { fontSize: 10, fontWeight: '900' },
-    cardCountLayer: { marginTop: 8 },
-    cardCountText: { fontSize: 24, fontWeight: '900', letterSpacing: -1 },
-    cardLabelText: { fontSize: 11, fontWeight: '800', color: '#64748B', marginTop: -2 },
-    activeIndicator: { position: 'absolute', bottom: 0, left: 14, right: 14, height: 3, borderTopLeftRadius: 3, borderTopRightRadius: 3 },
+    arrowContent: {
+        zIndex: 5,
+    },
+    arrowCountText: { 
+        fontSize: 20, 
+        fontWeight: '900', 
+        lineHeight: 22 
+    },
+    arrowLabelText: { 
+        fontSize: 9, 
+        fontWeight: '800', 
+        textTransform: 'uppercase',
+        letterSpacing: 0.5
+    },
+    arrowChevron: {
+        position: 'absolute',
+        right: -15,
+        top: 15,
+        width: 30,
+        height: 30,
+        transform: [{ rotate: '45deg' }],
+        zIndex: 4,
+    },
 
     stageBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, borderWidth: 1 },
     stageText: { fontSize: 10, fontWeight: '900' },
@@ -1249,80 +1220,6 @@ const styles = StyleSheet.create({
     segmentText: { fontSize: 13, fontWeight: "700", color: "#64748B" },
     segmentTextActive: { color: "#fff" },
 
-    metricsFlowContainer: {
-        flexDirection: 'row',
-        height: 76,
-        backgroundColor: '#fff',
-        borderRadius: 20,
-        marginBottom: 16,
-        marginTop: 12,
-        overflow: 'hidden',
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-    },
-    flowSegment: {
-        flex: 1,
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 16,
-        position: 'relative',
-    },
-    freshSegment: {
-        backgroundColor: '#F8FAFC',
-    },
-    hotSegment: {
-        backgroundColor: '#FFF1F2',
-    },
-    freshSelected: {
-        backgroundColor: '#EEF2FF',
-        borderWidth: 2,
-        borderColor: '#2563EB',
-    },
-    hotSelected: {
-        backgroundColor: '#FFE4E6',
-        borderWidth: 2,
-        borderColor: '#EF4444',
-    },
-    flowInfo: {
-        flex: 1,
-        justifyContent: 'center',
-    },
-    flowLabel: {
-        fontSize: 10,
-        fontWeight: '800',
-        color: '#64748B',
-        letterSpacing: 1,
-        marginBottom: 2,
-    },
-    flowLabelHot: {
-        fontSize: 10,
-        fontWeight: '800',
-        color: '#EF4444',
-        letterSpacing: 1,
-        marginBottom: 2,
-    },
-    flowValue: { fontSize: 22, fontWeight: "900", color: "#475569" },
-    flowPercent: { fontSize: 12, fontWeight: "700", color: "#94A3B8" },
-    flowValueHot: { fontSize: 22, fontWeight: "900", color: "#EF4444" },
-    flowPercentHot: { fontSize: 12, fontWeight: "700", color: "#EF444480" },
-    flowIcon: {
-        position: 'absolute',
-        right: 12,
-        top: 12,
-    },
-    chevronPoint: {
-        position: 'absolute',
-        right: -10,
-        top: 18,
-        width: 40,
-        height: 40,
-        backgroundColor: '#F8FAFC',
-        transform: [{ rotate: '45deg' }],
-        zIndex: 2,
-        borderTopWidth: 1,
-        borderRightWidth: 1,
-        borderColor: '#E2E8F0',
-    },
 
     card: { backgroundColor: "#fff", borderRadius: 16, paddingHorizontal: 3, paddingBottom: 3, paddingTop: 8, marginBottom: 6, borderWidth: 1, borderColor: "#F1F5F9", shadowColor: "#000", shadowOpacity: 0.03, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, overflow: 'hidden' },
     cardSelected: { borderColor: "#2563EB", borderWidth: 2, backgroundColor: "#F8FAFF" },
@@ -1357,6 +1254,10 @@ const styles = StyleSheet.create({
     leftActions: { flexDirection: 'row', gap: 8, paddingRight: 10, marginBottom: 12 },
     swipeAction: { width: 60, height: '100%', borderRadius: 16, justifyContent: 'center', alignItems: 'center' },
     swipeLabel: { color: '#fff', fontSize: 10, fontWeight: '800', marginTop: 4 },
+
+    tagStrip: { flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 },
+    miniTag: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, borderWidth: 1 },
+    miniTagText: { fontSize: 10, fontWeight: '700' },
 
     fab: { width: 56, height: 56, borderRadius: 28, backgroundColor: "#2563EB", justifyContent: 'center', alignItems: 'center', elevation: 8, shadowColor: "#2563EB", shadowOpacity: 0.4, shadowRadius: 12, shadowOffset: { width: 0, height: 6 } },
     empty: { alignItems: 'center', marginTop: 100, gap: 12 },

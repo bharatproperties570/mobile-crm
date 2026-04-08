@@ -25,7 +25,7 @@ const DEFAULT_OUTCOMES: any = {
         "Wrong Number": [{ label: "Invalid Lead" }]
     },
     "Meeting": {
-        "Conducted": [{ label: "Interested" }, { label: "Next Step Decided" }, { label: "Price Discussion" }, { label: "Closing Soon" }],
+        "Conducted": [{ label: "Interested" }, { label: "Next Step Decided" }, { label: "Price Discussion" }, { label: "Closing Soon" }, { label: "Lost Interest" }],
         "Rescheduled": [{ label: "Client Requested" }, { label: "Mutual" }],
         "Cancelled": [{ label: "Client Cancelled" }, { label: "No Show" }]
     },
