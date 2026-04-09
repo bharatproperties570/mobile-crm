@@ -20,18 +20,19 @@ const PROJECT_FILTER_FIELDS: FilterField[] = [
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
-function getStatusProgress(status: string) {
+function getStatusProgress(status: string, isDark: boolean) {
     const s = status.toLowerCase();
-    if (s.includes("ready") || s.includes("completed")) return { percent: 1, color: "#10B981", label: "COMPLETED" };
-    if (s.includes("construction") || s.includes("building")) return { percent: 0.65, color: "#F59E0B", label: "65% BUILT" };
-    return { percent: 0.2, color: "#6366F1", label: "PLANNED" };
+    if (s.includes("ready") || s.includes("completed")) return { percent: 1, color: isDark ? '#34D399' : "#10B981", label: "COMPLETED" };
+    if (s.includes("construction") || s.includes("building")) return { percent: 0.65, color: isDark ? '#FBBF24' : "#F59E0B", label: "65% BUILT" };
+    return { percent: 0.2, color: isDark ? '#818CF8' : "#6366F1", label: "PLANNED" };
 }
 
 const ProjectCard = memo(({ project, onPress, onMenuPress }: { project: Project; onPress: () => void; onMenuPress: () => void }) => {
     const { theme } = useTheme();
+    const isDark = theme.background === '#0F172A';
     const { getLookupValue } = useLookup();
     const statusLabel = getLookupValue('ProjectStatus', project.status);
-    const progress = getStatusProgress(statusLabel);
+    const progress = getStatusProgress(statusLabel, isDark);
     const categories = getLookupValue('Category', project.category);
     const location = project.locationSearch || project.address?.location || project.address?.city || "No Location";
 
@@ -50,9 +51,9 @@ const ProjectCard = memo(({ project, onPress, onMenuPress }: { project: Project;
                     </View>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                         {project.isPublished && (
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: '#10B98115', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
-                                <Ionicons name="globe" size={12} color="#10B981" />
-                                <Text style={{ fontSize: 10, color: '#10B981', fontWeight: '800' }}>LIVE</Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: isDark ? 'rgba(52, 211, 153, 0.15)' : '#10B98115', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                                <Ionicons name="globe" size={12} color={isDark ? '#34D399' : "#10B981"} />
+                                <Text style={{ fontSize: 10, color: isDark ? '#34D399' : '#10B981', fontWeight: '800' }}>LIVE</Text>
                             </View>
                         )}
                         <View style={[styles.statusPill, { backgroundColor: progress.color + "15" }]}>
@@ -81,6 +82,7 @@ const ProjectCard = memo(({ project, onPress, onMenuPress }: { project: Project;
 
 export default function ProjectsScreen() {
     const { theme } = useTheme();
+    const isDark = theme.background === '#0F172A';
     const router = useRouter();
     const [projects, setProjects] = useState<Project[]>([]);
     const [search, setSearch] = useState("");
@@ -355,59 +357,59 @@ export default function ProjectsScreen() {
 
             {/* Action Hub Modal */}
             <Modal transparent visible={hubVisible} animationType="none" onRequestClose={closeHub}>
-                <Pressable style={actionHubStyles.modalOverlay} onPress={closeHub}>
-                    <Animated.View style={[actionHubStyles.sheetContainer, { transform: [{ translateY: slideAnim }] }]}>
-                        <View style={actionHubStyles.sheetHandle} />
+                <Pressable style={[actionHubStyles.modalOverlay, { backgroundColor: isDark ? "rgba(0, 0, 0, 0.7)" : "rgba(15, 23, 42, 0.4)" }]} onPress={closeHub}>
+                    <Animated.View style={[actionHubStyles.sheetContainer, { backgroundColor: theme.card, transform: [{ translateY: slideAnim }] }]}>
+                        <View style={[actionHubStyles.sheetHandle, { backgroundColor: theme.border }]} />
                         <View style={actionHubStyles.sheetHeader}>
-                            <Text style={actionHubStyles.sheetTitle}>{selectedProject ? selectedProject.name : "Project Actions"}</Text>
-                            <Text style={actionHubStyles.sheetSub}>PRJ-{selectedProject?._id?.substring(0, 6).toUpperCase()}</Text>
+                            <Text style={[actionHubStyles.sheetTitle, { color: theme.text }]}>{selectedProject ? selectedProject.name : "Project Actions"}</Text>
+                            <Text style={[actionHubStyles.sheetSub, { color: theme.textLight }]}>PRJ-{selectedProject?._id?.substring(0, 6).toUpperCase()}</Text>
                         </View>
 
                         <View style={actionHubStyles.actionGrid}>
                             <TouchableOpacity style={actionHubStyles.actionItem} onPress={() => {
                                 router.push(`/add-project?id=${selectedProject?._id}`); closeHub();
                             }}>
-                                <View style={[actionHubStyles.actionIcon, { backgroundColor: "#F1F5F9" }]}>
-                                    <Ionicons name="create" size={24} color="#64748B" />
+                                <View style={[actionHubStyles.actionIcon, { backgroundColor: isDark ? 'rgba(255, 255, 255, 0.05)' : "#F1F5F9" }]}>
+                                    <Ionicons name="create" size={24} color={isDark ? theme.textLight : "#64748B"} />
                                 </View>
-                                <Text style={actionHubStyles.actionLabel}>Edit</Text>
+                                <Text style={[actionHubStyles.actionLabel, { color: theme.textLight }]}>Edit</Text>
                             </TouchableOpacity >
 
                             <TouchableOpacity style={actionHubStyles.actionItem} onPress={() => {
                                 Alert.alert("Add Price", "Navigating to Pricing form..."); closeHub();
                             }}>
-                                <View style={[actionHubStyles.actionIcon, { backgroundColor: "#FDF2F8" }]}>
-                                    <Ionicons name="cash" size={24} color="#DB2777" />
+                                <View style={[actionHubStyles.actionIcon, { backgroundColor: isDark ? 'rgba(219, 39, 119, 0.15)' : "#FDF2F8" }]}>
+                                    <Ionicons name="cash" size={24} color={isDark ? '#F472B6' : "#DB2777"} />
                                 </View>
-                                <Text style={actionHubStyles.actionLabel}>Add Price</Text>
+                                <Text style={[actionHubStyles.actionLabel, { color: theme.textLight }]}>Add Price</Text>
                             </TouchableOpacity>
 
                             <TouchableOpacity style={actionHubStyles.actionItem} onPress={() => {
                                 router.push(`/match-lead?projectId=${selectedProject?._id}`); closeHub();
                             }}>
-                                <View style={[actionHubStyles.actionIcon, { backgroundColor: "#F5F3FF" }]}>
-                                    <Ionicons name="git-compare" size={24} color="#7C3AED" />
+                                <View style={[actionHubStyles.actionIcon, { backgroundColor: isDark ? 'rgba(124, 58, 237, 0.15)' : "#F5F3FF" }]}>
+                                    <Ionicons name="git-compare" size={24} color={isDark ? '#A78BFA' : "#7C3AED"} />
                                 </View>
-                                <Text style={actionHubStyles.actionLabel}>Match Leads</Text>
+                                <Text style={[actionHubStyles.actionLabel, { color: theme.textLight }]}>Match Leads</Text>
                             </TouchableOpacity>
 
                             <TouchableOpacity style={actionHubStyles.actionItem} onPress={() => {
                                 router.push(`/documents?projectId=${selectedProject?._id}`); closeHub();
                             }}>
-                                <View style={[actionHubStyles.actionIcon, { backgroundColor: "#F0F9FF" }]}>
-                                    <Ionicons name="document-attach" size={24} color="#0EA5E9" />
+                                <View style={[actionHubStyles.actionIcon, { backgroundColor: isDark ? 'rgba(14, 165, 233, 0.15)' : "#F0F9FF" }]}>
+                                    <Ionicons name="document-attach" size={24} color={isDark ? '#38BDF8' : "#0EA5E9"} />
                                 </View>
-                                <Text style={actionHubStyles.actionLabel}>Documents</Text>
+                                <Text style={[actionHubStyles.actionLabel, { color: theme.textLight }]}>Documents</Text>
                             </TouchableOpacity>
 
                             <TouchableOpacity style={actionHubStyles.actionItem} onPress={() => {
                                 if (selectedProject) router.push(`/add-document?id=${selectedProject._id}&type=Project`);
                                 closeHub();
                             }}>
-                                <View style={[actionHubStyles.actionIcon, { backgroundColor: "#F0FDF4" }]}>
-                                    <Ionicons name="cloud-upload" size={24} color="#16A34A" />
+                                <View style={[actionHubStyles.actionIcon, { backgroundColor: isDark ? 'rgba(22, 163, 74, 0.15)' : "#F0FDF4" }]}>
+                                    <Ionicons name="cloud-upload" size={24} color={isDark ? '#4ADE80' : "#16A34A"} />
                                 </View>
-                                <Text style={actionHubStyles.actionLabel}>Upload</Text>
+                                <Text style={[actionHubStyles.actionLabel, { color: theme.textLight }]}>Upload</Text>
                             </TouchableOpacity>
 
                             <TouchableOpacity style={actionHubStyles.actionItem} onPress={() => {
@@ -417,19 +419,19 @@ export default function ProjectsScreen() {
                                 }
                                 closeHub();
                             }}>
-                                <View style={[actionHubStyles.actionIcon, { backgroundColor: "#EFF6FF" }]}>
-                                    <Ionicons name="share-social" size={24} color="#3B82F6" />
+                                <View style={[actionHubStyles.actionIcon, { backgroundColor: isDark ? 'rgba(59, 130, 246, 0.15)' : "#EFF6FF" }]}>
+                                    <Ionicons name="share-social" size={24} color={isDark ? '#60A5FA' : "#3B82F6"} />
                                 </View>
-                                <Text style={actionHubStyles.actionLabel}>Share</Text>
+                                <Text style={[actionHubStyles.actionLabel, { color: theme.textLight }]}>Share</Text>
                             </TouchableOpacity>
 
                             <TouchableOpacity style={actionHubStyles.actionItem} onPress={() => {
                                 if (selectedProject) handleDeleteProject(selectedProject);
                             }}>
-                                <View style={[actionHubStyles.actionIcon, { backgroundColor: "#FEF2F2" }]}>
-                                    <Ionicons name="trash" size={24} color="#EF4444" />
+                                <View style={[actionHubStyles.actionIcon, { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : "#FEF2F2" }]}>
+                                    <Ionicons name="trash" size={24} color={isDark ? '#F87171' : "#EF4444"} />
                                 </View>
-                                <Text style={actionHubStyles.actionLabel}>Delete</Text>
+                                <Text style={[actionHubStyles.actionLabel, { color: theme.textLight }]}>Delete</Text>
                             </TouchableOpacity>
 
                             <TouchableOpacity 
@@ -437,14 +439,14 @@ export default function ProjectsScreen() {
                                 onPress={() => handleTogglePublish(selectedProject)}
                                 disabled={isPublishing}
                             >
-                                <View style={[actionHubStyles.actionIcon, { backgroundColor: selectedProject?.isPublished ? "#FEF2F2" : "#ECFDF5" }]}>
+                                <View style={[actionHubStyles.actionIcon, { backgroundColor: selectedProject?.isPublished ? (isDark ? 'rgba(239, 68, 68, 0.15)' : "#FEF2F2") : (isDark ? 'rgba(16, 185, 129, 0.15)' : "#ECFDF5") }]}>
                                     {isPublishing ? (
-                                        <ActivityIndicator size="small" color={selectedProject?.isPublished ? "#EF4444" : "#10B981"} />
+                                        <ActivityIndicator size="small" color={selectedProject?.isPublished ? (isDark ? '#F87171' : "#EF4444") : (isDark ? '#34D399' : "#10B981")} />
                                     ) : (
-                                        <Ionicons name={selectedProject?.isPublished ? "globe" : "globe-outline"} size={24} color={selectedProject?.isPublished ? "#EF4444" : "#10B981"} />
+                                        <Ionicons name={selectedProject?.isPublished ? "globe" : "globe-outline"} size={24} color={selectedProject?.isPublished ? (isDark ? '#F87171' : "#EF4444") : (isDark ? '#34D399' : "#10B981")} />
                                     )}
                                 </View>
-                                <Text style={actionHubStyles.actionLabel}>{selectedProject?.isPublished ? "Unpublish" : "Publish"}</Text>
+                                <Text style={[actionHubStyles.actionLabel, { color: theme.textLight }]}>{selectedProject?.isPublished ? "Unpublish" : "Publish"}</Text>
                             </TouchableOpacity>
                         </View >
                     </Animated.View >

@@ -17,12 +17,20 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const CACHE_KEY_DASHBOARD = "@cache_dashboard_stats";
 
-const STAGE_COLORS: Record<string, string> = {
+const STAGE_COLORS_LIGHT: Record<string, string> = {
     incoming: "#6366F1",
     prospect: "#8B5CF6",
     opportunity: "#F59E0B",
     negotiation: "#F97316",
     closed: "#10B981",
+};
+
+const STAGE_COLORS_DARK: Record<string, string> = {
+    incoming: "#818CF8",
+    prospect: "#A78BFA",
+    opportunity: "#FBBF24",
+    negotiation: "#FB923C",
+    closed: "#34D399",
 };
 
 const SHORT_NAMES: Record<string, string> = {
@@ -97,7 +105,7 @@ function ProgressRing({ progress, size = 80, strokeWidth = 8, color = "#2563EB" 
         <View style={{ width: size, height: size, justifyContent: 'center', alignItems: 'center' }}>
             <View style={{
                 width: size, height: size, borderRadius: size / 2,
-                borderWidth: strokeWidth, borderColor: 'rgba(241, 245, 249, 0.5)',
+                borderWidth: strokeWidth, borderColor: theme.border,
                 position: 'absolute'
             }} />
             <View style={{
@@ -121,6 +129,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 const PulseTile = memo(({ count, label, icon, color, bgColor, filter, router }: any) => {
     const { theme } = useTheme();
+    const isDark = theme.background === '#0F172A';
     const pulseAnim = useRef(new Animated.Value(1)).current;
     useEffect(() => {
         if (count > 0 && label === 'Overdue') {
@@ -140,7 +149,7 @@ const PulseTile = memo(({ count, label, icon, color, bgColor, filter, router }: 
                 onPress={() => router.push({ pathname: "/(tabs)/activities", params: { filter } })}
             >
                 <View style={styles.monitorIconBoxCompact}>
-                    <View style={[styles.monitorIconBox, { backgroundColor: theme.background === '#0F172A' ? color + '20' : bgColor }]}>
+                    <View style={[styles.monitorIconBox, { backgroundColor: isDark ? color + '20' : bgColor }]}>
                         <Ionicons name={icon} size={14} color={color} />
                     </View>
                     <Counter value={count} style={[styles.monitorValueSmall, { color: theme.text }]} />
@@ -196,7 +205,7 @@ const MiniDonut = memo(({ value, total, color = "#2563EB", size = 50 }: { value:
         <View style={{ width: size, height: size, justifyContent: 'center', alignItems: 'center' }}>
             <View style={{
                 width: size, height: size, borderRadius: size / 2,
-                borderWidth: strokeWidth, borderColor: 'rgba(241, 245, 249, 0.4)',
+                borderWidth: strokeWidth, borderColor: theme.border,
                 position: 'absolute'
             }} />
             <View style={{
@@ -246,8 +255,8 @@ const ActivityTypeGrid = memo(({ data, theme }: { data: any[]; theme: any }) => 
         <View style={styles.activityBreakdownRow}>
             {data.slice(0, 4).map((item, idx) => (
                 <View key={idx} style={[styles.activityTypeCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
-                    <View style={[styles.activityTypeIcon, { backgroundColor: (colors[item._id] || '#64748B') + '15' }]}>
-                        <Ionicons name={icons[item._id] || 'apps'} size={14} color={colors[item._id] || '#64748B'} />
+                    <View style={[styles.activityTypeIcon, { backgroundColor: (colors[item._id] || '#64748B') + (theme.background === '#0F172A' ? '30' : '15') }]}>
+                        <Ionicons name={icons[item._id] || 'apps'} size={14} color={theme.background === '#0F172A' ? Colors.dark.textSecondary : (colors[item._id] || '#64748B')} />
                     </View>
                     <Text style={[styles.activityTypeCount, { color: theme.text }]}>{item.count}</Text>
                     <Text style={[styles.activityTypeLabel, { color: theme.textMuted }]}>{item._id}</Text>
@@ -268,7 +277,7 @@ const LeadSourceList = memo(({ data, theme }: { data: any[]; theme: any }) => {
                         <Text style={[styles.sourceCount, { color: theme.text }]}>{item.count} leads</Text>
                     </View>
                     <View style={[styles.sourceBarBase, { backgroundColor: theme.border }]}>
-                        <View style={[styles.sourceBarFill, { width: `${(item.count / (data[0].count || 1)) * 100}%`, backgroundColor: '#4F46E5' }]} />
+                        <View style={[styles.sourceBarFill, { width: `${(item.count / (data[0].count || 1)) * 100}%`, backgroundColor: theme.primary }]} />
                     </View>
                 </View>
             ))}
@@ -277,6 +286,7 @@ const LeadSourceList = memo(({ data, theme }: { data: any[]; theme: any }) => {
 });
 
 const AIRecommendationsList = memo(({ suggestions, theme }: { suggestions: any; theme: any }) => {
+    const isDark = theme.background === '#0F172A';
     const all = [
         ...(suggestions?.leads || []),
         ...(suggestions?.performance || []),
@@ -284,12 +294,12 @@ const AIRecommendationsList = memo(({ suggestions, theme }: { suggestions: any; 
         ...(suggestions?.strategy || [])
     ];
     if (all.length === 0) return (
-        <View style={styles.insightCard}>
+        <View style={[styles.insightCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
             <View style={styles.insightHeader}>
-                <View style={styles.insightIconCircle}><Ionicons name="bulb" size={16} color="#4F46E5" /></View>
-                <Text style={styles.insightTitle}>Smart Insight</Text>
+                <View style={[styles.insightIconCircle, { backgroundColor: theme.primary + '15' }]}><Ionicons name="bulb" size={16} color={theme.primary} /></View>
+                <Text style={[styles.insightTitle, { color: theme.text }]}>Smart Insight</Text>
             </View>
-            <Text style={styles.insightText}>Consistency is key. Focus on 'Qualified' leads to maintain a healthy deal funnel.</Text>
+            <Text style={[styles.insightText, { color: theme.textSecondary }]}>Consistency is key. Focus on 'Qualified' leads to maintain a healthy deal funnel.</Text>
         </View>
     );
 
@@ -299,7 +309,7 @@ const AIRecommendationsList = memo(({ suggestions, theme }: { suggestions: any; 
             {all.slice(0, 3).map((s, i) => {
                 const glyphs: any = { optimization: '⚡', training: '📚', growth: '🚀', strategy: '🎯' };
                 return (
-                    <View key={i} style={[styles.recommendationItem, { backgroundColor: theme.background }]}>
+                    <View key={i} style={[styles.recommendationItem, { backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : theme.background }]}>
                         <Text style={styles.recommendationGlyph}>{glyphs[s.type] || '💡'}</Text>
                         <Text style={[styles.recommendationText, { color: theme.text }]}>{s.text}</Text>
                     </View>
@@ -340,6 +350,7 @@ export default function MissionControlScreen() {
     const { currentDept, config } = useDepartment();
     const router = useRouter();
     const { theme } = useTheme();
+    const isDark = theme.background === '#0F172A';
     const { getLookupValue } = useLookup();
     const { simulateIncomingCall } = useCallTracking();
     const [dashboardData, setDashboardData] = useState<DashboardStats | null>(null);
@@ -442,24 +453,24 @@ export default function MissionControlScreen() {
                 <View style={styles.alertHubContainer}>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12 }}>
                         {dashboardData.aiAlertHub?.followupFailure && dashboardData.aiAlertHub.followupFailure.length > 0 && dashboardData.aiAlertHub.followupFailure.map((alert: any) => (
-                            <TouchableOpacity key={alert.id} style={[styles.alertCard, { borderColor: '#EF4444' }]}>
-                                <View style={[styles.alertIcon, { backgroundColor: '#FEE2E2' }]}>
-                                    <Ionicons name="warning" size={16} color="#EF4444" />
+                            <TouchableOpacity key={alert.id} style={[styles.alertCard, { borderColor: theme.error, backgroundColor: isDark ? 'rgba(239, 68, 68, 0.05)' : '#FEE2E2' }]}>
+                                <View style={[styles.alertIcon, { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.2)' : '#FEE2E2' }]}>
+                                    <Ionicons name="warning" size={16} color={theme.error} />
                                 </View>
                                 <View>
-                                    <Text style={styles.alertTitle}>{alert.title}</Text>
-                                    <Text style={styles.alertMsg} numberOfLines={1}>{alert.message}</Text>
+                                    <Text style={[styles.alertTitle, { color: theme.text }]}>{alert.title}</Text>
+                                    <Text style={[styles.alertMsg, { color: theme.textSecondary }]} numberOfLines={1}>{alert.message}</Text>
                                 </View>
                             </TouchableOpacity>
                         ))}
                         {dashboardData.aiAlertHub?.hotLeads && dashboardData.aiAlertHub.hotLeads.length > 0 && dashboardData.aiAlertHub.hotLeads.map((alert: any) => (
-                            <TouchableOpacity key={alert.id} style={[styles.alertCard, { borderColor: '#F59E0B' }]}>
-                                <View style={[styles.alertIcon, { backgroundColor: '#FEF3C7' }]}>
+                            <TouchableOpacity key={alert.id} style={[styles.alertCard, { borderColor: '#F59E0B', backgroundColor: isDark ? 'rgba(245, 158, 11, 0.05)' : '#FEF3C7' }]}>
+                                <View style={[styles.alertIcon, { backgroundColor: isDark ? 'rgba(245, 158, 11, 0.2)' : '#FEF3C7' }]}>
                                     <Ionicons name="flame" size={16} color="#F59E0B" />
                                 </View>
                                 <View>
-                                    <Text style={styles.alertTitle}>{alert.title}</Text>
-                                    <Text style={styles.alertMsg} numberOfLines={1}>{alert.message}</Text>
+                                    <Text style={[styles.alertTitle, { color: theme.text }]}>{alert.title}</Text>
+                                    <Text style={[styles.alertMsg, { color: theme.textSecondary }]} numberOfLines={1}>{alert.message}</Text>
                                 </View>
                             </TouchableOpacity>
                         ))}
@@ -516,7 +527,7 @@ export default function MissionControlScreen() {
                 <View style={styles.pipeHeaderRow}>
                     <Text style={[styles.sectionHeader, { color: theme.textMuted }]}>Deal Pipeline</Text>
                     <TouchableOpacity onPress={() => router.push("/(tabs)/deals")}>
-                        <Text style={[styles.pipeTotal, { color: '#2563EB', fontWeight: '800' }]}>View All</Text>
+                        <Text style={[styles.pipeTotal, { color: theme.primary, fontWeight: '800' }]}>View All</Text>
                     </TouchableOpacity>
                 </View>
 
@@ -524,13 +535,14 @@ export default function MissionControlScreen() {
                     {['INCOMING', 'PROSPECT', 'OPPORTUNITY', 'NEGOTIATION', 'CLOSED'].map((cat, idx) => {
                         const item = (dashboardData?.deals || []).find(d => d.stage.toLowerCase() === cat.toLowerCase()) || { count: 0 };
                         const total = dashboardData?.deals?.reduce((acc: number, d: any) => acc + d.count, 0) || 1;
+                        const colors = isDark ? STAGE_COLORS_DARK : STAGE_COLORS_LIGHT;
                         return (
                             <ChevronSegment
                                 key={idx}
                                 label={cat}
                                 count={item.count}
                                 percentage={Math.round((item.count / total) * 100)}
-                                color={STAGE_COLORS[cat.toLowerCase()] || '#6366F1'}
+                                color={colors[cat.toLowerCase()] || '#6366F1'}
                                 isFirst={idx === 0}
                                 isLast={idx === 4}
                             />
@@ -557,27 +569,27 @@ export default function MissionControlScreen() {
                     <Text style={[styles.sectionHeader, { color: theme.textMuted }]}>High-Value Agenda</Text>
                     {dashboardData.agenda.siteVisits?.map((sv: any) => (
                         <View key={sv.id} style={styles.agendaItem}>
-                            <View style={[styles.agendaIcon, { backgroundColor: '#F0FDF4' }]}>
-                                <Ionicons name="navigate" size={16} color="#10B981" />
+                            <View style={[styles.agendaIcon, { backgroundColor: isDark ? 'rgba(16, 185, 129, 0.15)' : '#F0FDF4' }]}>
+                                <Ionicons name="navigate" size={16} color={isDark ? '#34D399' : "#10B981"} />
                             </View>
                             <View style={{ flex: 1 }}>
                                 <Text style={[styles.agendaTitle, { color: theme.text }]}>{sv.target}</Text>
-                                <Text style={styles.agendaSub}>{sv.client} • {sv.time}</Text>
+                                <Text style={[styles.agendaSub, { color: theme.textSecondary }]}>{sv.client} • {sv.time}</Text>
                             </View>
-                            <View style={styles.activeTag}><Text style={styles.activeTagText}>VISIT</Text></View>
+                            <View style={[styles.activeTag, { backgroundColor: isDark ? 'rgba(16, 185, 129, 0.2)' : '#10B981' }]}><Text style={[styles.activeTagText, { color: isDark ? '#34D399' : '#fff' }]}>VISIT</Text></View>
                         </View>
                     ))}
                     {dashboardData.agenda.tasks?.map((t: any) => (
                         <View key={t.id} style={styles.agendaItem}>
-                            <View style={[styles.agendaIcon, { backgroundColor: '#F0F9FF' }]}>
-                                <Ionicons name="call" size={16} color="#3B82F6" />
+                            <View style={[styles.agendaIcon, { backgroundColor: isDark ? 'rgba(59, 130, 246, 0.15)' : '#F0F9FF' }]}>
+                                <Ionicons name="call" size={16} color={isDark ? '#60A5FA' : "#3B82F6"} />
                             </View>
                             <View style={{ flex: 1 }}>
                                 <Text style={[styles.agendaTitle, { color: theme.text }]}>{t.title}</Text>
-                                <Text style={styles.agendaSub}>{t.target} • {t.time}</Text>
+                                <Text style={[styles.agendaSub, { color: theme.textSecondary }]}>{t.target} • {t.time}</Text>
                             </View>
-                            <View style={[styles.statusTag, { backgroundColor: t.status === 'overdue' ? '#FEE2E2' : '#F1F5F9' }]}>
-                                <Text style={[styles.statusTagText, { color: t.status === 'overdue' ? '#EF4444' : '#64748B' }]}>{t.status.toUpperCase()}</Text>
+                            <View style={[styles.statusTag, { backgroundColor: t.status === 'overdue' ? (isDark ? 'rgba(239, 68, 68, 0.15)' : '#FEE2E2') : (isDark ? 'rgba(255,255,255,0.05)' : '#F1F5F9') }]}>
+                                <Text style={[styles.statusTagText, { color: t.status === 'overdue' ? (isDark ? '#F87171' : '#EF4444') : theme.textMuted }]}>{t.status.toUpperCase()}</Text>
                             </View>
                         </View>
                     ))}
@@ -649,7 +661,7 @@ export default function MissionControlScreen() {
                         <View style={styles.pipeHeaderRow}>
                             <Text style={[styles.sectionHeader, { color: theme.textMuted }]}>Recent Projects</Text>
                             <TouchableOpacity onPress={() => router.push("/(tabs)/projects")}>
-                                <Text style={[styles.pipeTotal, { color: '#2563EB', fontWeight: '800' }]}>View All</Text>
+                                <Text style={[styles.pipeTotal, { color: theme.primary, fontWeight: '800' }]}>View All</Text>
                             </TouchableOpacity>
                         </View>
                         <ProjectQuickList data={dashboardData.projectList} theme={theme} router={router} />
@@ -784,20 +796,20 @@ export default function MissionControlScreen() {
                                     <Text style={[styles.targetLabelSmall, { color: theme.textMuted }]}>Target</Text>
                                 </View>
                                 <View style={styles.targetCell}>
-                                    <Text style={[styles.targetValSmall, { color: "#10B981" }]}>₹{(dashboardData?.performance?.achieved || 0) / 100000}L</Text>
+                                    <Text style={[styles.targetValSmall, { color: isDark ? '#34D399' : "#10B981" }]}>₹{(dashboardData?.performance?.achieved || 0) / 100000}L</Text>
                                     <Text style={[styles.targetLabelSmall, { color: theme.textMuted }]}>Achieved</Text>
                                 </View>
                                 <View style={styles.targetCell}>
-                                    <Text style={[styles.targetValSmall, { color: "#F59E0B" }]}>₹{(dashboardData?.performance?.remaining || 0) / 100000}L</Text>
+                                    <Text style={[styles.targetValSmall, { color: isDark ? '#FBBF24' : "#F59E0B" }]}>₹{(dashboardData?.performance?.remaining || 0) / 100000}L</Text>
                                     <Text style={styles.targetLabelSmall}>Rem.</Text>
                                 </View>
                                 <View style={styles.targetCell}>
-                                    <Text style={[styles.targetValSmall, { color: "#3B82F6" }]}>{Math.round(dashboardData?.performance?.conversion || 0)}%</Text>
+                                    <Text style={[styles.targetValSmall, { color: isDark ? '#60A5FA' : "#3B82F6" }]}>{Math.round(dashboardData?.performance?.conversion || 0)}%</Text>
                                     <Text style={styles.targetLabelSmall}>Conv.</Text>
                                 </View>
                             </View>
                         </View>
-                        <ProgressRing progress={dashboardData?.performance?.conversion || 0} size={84} strokeWidth={9} color="#2563EB" />
+                        <ProgressRing progress={dashboardData?.performance?.conversion || 0} size={84} strokeWidth={9} color={theme.primary} />
                     </View>
                 </View>
 

@@ -38,8 +38,11 @@ export interface Project {
     approvedBank?: string;
     owner?: any;
     assign?: any[];
+    assignedTo?: any[];
     team?: any[];
+    teams?: any[];
     visibleTo?: string;
+    visibility?: string;
     locationSearch?: string;
     latitude?: string;
     longitude?: string;

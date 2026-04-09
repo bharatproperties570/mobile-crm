@@ -13,6 +13,7 @@ import { useLookup } from "@/context/LookupContext";
 import { useUsers } from "@/context/UserContext";
 import api from "@/services/api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useTheme } from "@/context/ThemeContext";
 import FilterModal, { FilterField } from "@/components/FilterModal";
 import { formatSize, getSizeLabel } from "@/utils/format.utils";
 
@@ -68,12 +69,20 @@ function resolveNameFromObject(obj: any, fallback?: any, getLookupValue?: (type:
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const COLUMN_WIDTH = (SCREEN_WIDTH - 48) / 2;
 
-const STATUS_COLORS: Record<string, string> = {
+const STATUS_COLORS_LIGHT: Record<string, string> = {
     'Available': '#10B981',
     'Sold': '#EF4444',
     'Reserved': '#F59E0B',
     'Blocked': '#64748B',
     'Hold': '#8B5CF6'
+};
+
+const STATUS_COLORS_DARK: Record<string, string> = {
+    'Available': '#34D399',
+    'Sold': '#F87171',
+    'Reserved': '#FBBF24',
+    'Blocked': '#94A3B8',
+    'Hold': '#A78BFA'
 };
 
 const ACTIVE_STATUSES = ['Available', 'Active', 'Interested / Warm', 'Interested / Hot', 'Request Call Back', 'Busy / Driving', 'Market Feedback', 'General Inquiry', 'Blocked', 'Booked', 'Interested'];
@@ -97,8 +106,12 @@ const InventoryCard = memo(({ item, onPress, onCall, onWhatsApp, onSMS, onEmail,
     onMenuPress: () => void;
     viewMode: 'list' | 'grid';
 }) => {
+    const { theme } = useTheme();
     const { getLookupValue } = useLookup();
     const { findUser } = useUsers();
+    const isDark = theme.background === '#0F172A';
+
+    const statusColors = isDark ? STATUS_COLORS_DARK : STATUS_COLORS_LIGHT;
 
     const statusInfo = useMemo(() => {
         const status = getLookupValue("Status", item.status);
@@ -106,9 +119,9 @@ const InventoryCard = memo(({ item, onPress, onCall, onWhatsApp, onSMS, onEmail,
         return {
             status,
             label: isActive ? "Active" : "InActive",
-            color: isActive ? '#10B981' : '#F59E0B'
+            color: statusColors[status] || (isActive ? '#10B981' : '#F59E0B')
         };
-    }, [item.status, getLookupValue]);
+    }, [item.status, getLookupValue, statusColors]);
 
     const displayInfo = useMemo(() => {
         const type = getLookupValue("Category", item.category);
@@ -135,11 +148,11 @@ const InventoryCard = memo(({ item, onPress, onCall, onWhatsApp, onSMS, onEmail,
 
     const renderRightActions = () => (
         <View style={styles.rightActions}>
-            <TouchableOpacity style={[styles.swipeAction, { backgroundColor: '#3B82F6' }]} onPress={onCall}>
+            <TouchableOpacity style={[styles.swipeAction, { backgroundColor: theme.primary }]} onPress={onCall}>
                 <Ionicons name="call" size={20} color="#fff" />
                 <Text style={styles.swipeLabel}>Call</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.swipeAction, { backgroundColor: '#64748B' }]} onPress={onSMS}>
+            <TouchableOpacity style={[styles.swipeAction, { backgroundColor: isDark ? '#1E293B' : '#64748B' }]} onPress={onSMS}>
                 <Ionicons name="chatbubble" size={20} color="#fff" />
                 <Text style={styles.swipeLabel}>SMS</Text>
             </TouchableOpacity>
@@ -148,21 +161,21 @@ const InventoryCard = memo(({ item, onPress, onCall, onWhatsApp, onSMS, onEmail,
 
     const renderLeftActions = () => (
         <View style={styles.leftActions}>
-            <TouchableOpacity style={[styles.swipeAction, { backgroundColor: '#25D366' }]} onPress={onWhatsApp}>
+            <TouchableOpacity style={[styles.swipeAction, { backgroundColor: isDark ? '#166534' : '#25D366' }]} onPress={onWhatsApp}>
                 <Ionicons name="logo-whatsapp" size={22} color="#fff" />
                 <Text style={styles.swipeLabel}>WhatsApp</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.swipeAction, { backgroundColor: '#BBF7D0' }]} onPress={onEmail}>
-                <Ionicons name="mail" size={22} color="#166534" />
-                <Text style={[styles.swipeLabel, { color: '#166534' }]}>Email</Text>
+            <TouchableOpacity style={[styles.swipeAction, { backgroundColor: isDark ? 'rgba(52, 211, 153, 0.15)' : '#BBF7D0' }]} onPress={onEmail}>
+                <Ionicons name="mail" size={22} color={isDark ? '#34D399' : '#166534'} />
+                <Text style={[styles.swipeLabel, { color: isDark ? '#34D399' : '#166534' }]}>Email</Text>
             </TouchableOpacity>
         </View>
     );
 
     if (viewMode === 'grid') {
         return (
-            <TouchableOpacity style={styles.gridCard} onPress={onPress} activeOpacity={0.8}>
-                <View style={[styles.gridMediaSlot, { backgroundColor: statusColor + "10" }]}>
+            <TouchableOpacity style={[styles.gridCard, { backgroundColor: theme.card, borderColor: theme.border }]} onPress={onPress} activeOpacity={0.8}>
+                <View style={[styles.gridMediaSlot, { backgroundColor: statusColor + (isDark ? '20' : '10') }]}>
                     <Ionicons name={iconName as any} size={32} color={statusColor} />
                     <View style={[styles.gridStatusDot, { backgroundColor: statusColor }]} />
                     <TouchableOpacity style={styles.gridMenuTrigger} onPress={(e) => { e.stopPropagation(); onMenuPress(); }}>
@@ -170,8 +183,8 @@ const InventoryCard = memo(({ item, onPress, onCall, onWhatsApp, onSMS, onEmail,
                     </TouchableOpacity>
                 </View>
                 <View style={styles.gridInfo}>
-                    <Text style={styles.gridProject} numberOfLines={1}>{item.projectName}</Text>
-                    <Text style={styles.gridUnit}>{item.block} • {item.unitNumber || item.unitNo}</Text>
+                    <Text style={[styles.gridProject, { color: theme.text }]} numberOfLines={1}>{item.projectName}</Text>
+                    <Text style={[styles.gridUnit, { color: theme.textLight }]}>{item.block} • {item.unitNumber || item.unitNo}</Text>
                 </View>
             </TouchableOpacity>
         );
@@ -179,13 +192,13 @@ const InventoryCard = memo(({ item, onPress, onCall, onWhatsApp, onSMS, onEmail,
 
     return (
         <Swipeable renderRightActions={renderRightActions} renderLeftActions={renderLeftActions} friction={2}>
-            <TouchableOpacity style={styles.listCard} onPress={onPress} activeOpacity={0.8}>
+            <TouchableOpacity style={[styles.listCard, { backgroundColor: theme.card, borderColor: theme.border }]} onPress={onPress} activeOpacity={0.8}>
                 <View style={[styles.cardAccent, { backgroundColor: statusColor }]} />
                 <View style={styles.listMain}>
                     <View style={styles.listHeader}>
                         <View style={{ flex: 1 }}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 2 }}>
-                                <Text style={styles.listUnitNumber}>{item.unitNumber || item.unitNo || "N/A"}</Text>
+                                <Text style={[styles.listUnitNumber, { color: theme.text }]}>{item.unitNumber || item.unitNo || "N/A"}</Text>
                                 {displayType ? (
                                     <View style={[styles.typePill, { backgroundColor: statusColor + '10' }]}>
                                         <Text style={[styles.typePillText, { color: statusColor }]}>{displayType}</Text>
@@ -193,14 +206,14 @@ const InventoryCard = memo(({ item, onPress, onCall, onWhatsApp, onSMS, onEmail,
                                 ) : null}
                             </View>
                             <Text numberOfLines={1} style={styles.listProjectContainer}>
-                                <Text style={styles.listProjectName}>{item.projectName || "N/A"}</Text>
-                                <Text style={styles.listBlockName}> • {item.block || "No Block"}</Text>
+                                <Text style={[styles.listProjectName, { color: theme.textSecondary }]}>{item.projectName || "N/A"}</Text>
+                                <Text style={[styles.listBlockName, { color: theme.textLight }]}> • {item.block || "No Block"}</Text>
                             </Text>
                             {/* Size shown below project name */}
                             {(item.size || item.sizeUnit || item.sizeConfig || item.sizeLabel) ? (
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 }}>
-                                    <Ionicons name="expand-outline" size={11} color="#94A3B8" />
-                                    <Text style={{ fontSize: 11, color: '#94A3B8', fontWeight: '600' }}>
+                                    <Ionicons name="expand-outline" size={11} color={theme.textMuted} />
+                                    <Text style={{ fontSize: 11, color: theme.textMuted, fontWeight: '600' }}>
                                         {displayInfo.sizeLabel}
                                     </Text>
                                 </View>
@@ -212,10 +225,9 @@ const InventoryCard = memo(({ item, onPress, onCall, onWhatsApp, onSMS, onEmail,
                                     <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
                                     <Text style={[styles.statusPillText, { color: statusColor }]}>{statusLabel}</Text>
                                 </View>
-                                 {/* Removed redundant subtext to prevent double "Active" display */}
                             </View>
                             <TouchableOpacity style={styles.menuTrigger} onPress={onMenuPress}>
-                                <Ionicons name="ellipsis-vertical" size={18} color="#94A3B8" />
+                                <Ionicons name="ellipsis-vertical" size={18} color={theme.textMuted} />
                             </TouchableOpacity>
                         </View>
                     </View>
@@ -225,12 +237,12 @@ const InventoryCard = memo(({ item, onPress, onCall, onWhatsApp, onSMS, onEmail,
                         {/* Owner */}
                         {(item.owners?.[0]?.name || item.ownerName) ? (
                             <View style={styles.listMeta}>
-                                <Ionicons name="home-outline" size={13} color="#10B981" />
-                                <Text style={[styles.listMetaText, { color: '#0F172A' }]} numberOfLines={1}>
+                                <Ionicons name="home-outline" size={13} color={isDark ? '#34D399' : "#10B981"} />
+                                <Text style={[styles.listMetaText, { color: theme.text }]} numberOfLines={1}>
                                     {resolveNameFromObject(item.owners?.[0], item.ownerName, getLookupValue, findUser)}
                                 </Text>
                                 {(item.owners?.[0]?.phones?.[0]?.number || item.owners?.[0]?.phone || item.ownerPhone) ? (
-                                    <Text style={[styles.listMetaText, { color: '#64748B' }]}>
+                                    <Text style={[styles.listMetaText, { color: theme.textLight }]}>
                                         • {item.owners?.[0]?.phones?.[0]?.number || item.owners?.[0]?.phone || item.ownerPhone}
                                     </Text>
                                 ) : null}
@@ -239,12 +251,12 @@ const InventoryCard = memo(({ item, onPress, onCall, onWhatsApp, onSMS, onEmail,
                         {/* Associate */}
                         {(item.associates?.[0]?.name || item.associatedContact) ? (
                             <View style={styles.listMeta}>
-                                <Ionicons name="people-outline" size={13} color="#6366F1" />
-                                <Text style={[styles.listMetaText, { color: '#0F172A' }]} numberOfLines={1}>
+                                <Ionicons name="people-outline" size={13} color={isDark ? '#818CF8' : "#6366F1"} />
+                                <Text style={[styles.listMetaText, { color: theme.text }]} numberOfLines={1}>
                                     {resolveNameFromObject(item.associates?.[0], item.associatedContact, getLookupValue, findUser)}
                                 </Text>
                                 {(item.associates?.[0]?.phones?.[0]?.number || item.associates?.[0]?.phone || item.associatedPhone) ? (
-                                    <Text style={[styles.listMetaText, { color: '#64748B' }]}>
+                                    <Text style={[styles.listMetaText, { color: theme.textLight }]}>
                                         • {item.associates?.[0]?.phones?.[0]?.number || item.associates?.[0]?.phone || item.associatedPhone}
                                     </Text>
                                 ) : null}
@@ -253,8 +265,8 @@ const InventoryCard = memo(({ item, onPress, onCall, onWhatsApp, onSMS, onEmail,
                         {/* If neither owner nor associate, show a subtle placeholder */}
                         {(!item.owners?.[0]?.name && !item.ownerName && !item.associates?.[0]?.name && !item.associatedContact) ? (
                             <View style={styles.listMeta}>
-                                <Ionicons name="person-outline" size={13} color="#CBD5E1" />
-                                <Text style={[styles.listMetaText, { color: '#CBD5E1' }]}>No contact info</Text>
+                                <Ionicons name="person-outline" size={13} color={theme.textMuted} />
+                                <Text style={[styles.listMetaText, { color: theme.textMuted }]}>No contact info</Text>
                             </View>
                         ) : null}
                     </View>
@@ -265,6 +277,8 @@ const InventoryCard = memo(({ item, onPress, onCall, onWhatsApp, onSMS, onEmail,
 });
 
 export default function InventoryScreen() {
+    const { theme } = useTheme();
+    const isDark = theme.background === '#0F172A';
     const { trackCall } = useCallTracking();
     const router = useRouter();
     const [inventory, setInventory] = useState<Inventory[]>([]);
@@ -563,10 +577,10 @@ export default function InventoryScreen() {
             <View style={styles.headerContainer}>
                 <View style={styles.header}>
                     <View>
-                        <Text style={styles.headerTitle}>Inventory</Text>
+                        <Text style={[styles.headerTitle, { color: theme.text }]}>Inventory</Text>
                     </View>
                     <View style={styles.headerActions}>
-                        <TouchableOpacity style={[styles.actionBtn, styles.actionBtnPrimary]} onPress={() => router.push("/add-inventory")}>
+                        <TouchableOpacity style={[styles.mainAddBtn, { backgroundColor: theme.primary }]} onPress={() => router.push("/add-inventory")}>
                             <Ionicons name="add" size={24} color="#fff" />
                         </TouchableOpacity>
                     </View>
@@ -577,60 +591,62 @@ export default function InventoryScreen() {
                     <TouchableOpacity 
                         style={[
                             styles.flowSegment, 
+                            { backgroundColor: isDark ? '#1E293B' : '#F1F5F9' },
                             styles.inactiveSegment,
-                            activeQuickFilter === 'inactive' && styles.inactiveSelected
+                            activeQuickFilter === 'inactive' && { backgroundColor: isDark ? '#0F172A' : '#E2E8F0', borderColor: theme.primary }
                         ]}
                         onPress={() => handleQuickFilter('inactive')}
                         activeOpacity={0.7}
                     >
                         <View style={styles.flowInfo}>
-                            <Text style={styles.flowLabel}>INACTIVE</Text>
+                            <Text style={[styles.flowLabel, { color: theme.textSecondary }]}>INACTIVE</Text>
                             <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
-                                <Text style={styles.flowValue}>{inactiveCount.toLocaleString()}</Text>
-                                <Text style={styles.flowPercent}>{inactivePct}%</Text>
+                                <Text style={[styles.flowValue, { color: theme.text }]}>{inactiveCount.toLocaleString()}</Text>
+                                <Text style={[styles.flowPercent, { color: theme.textLight }]}>{inactivePct}%</Text>
                             </View>
                         </View>
-                        <Ionicons name="archive-outline" size={24} color="#64748B20" style={styles.flowIcon} />
-                        <View style={[styles.chevronPoint, activeQuickFilter === 'inactive' && { backgroundColor: '#E2E8F0' }]} />
+                        <Ionicons name="archive-outline" size={24} color={isDark ? 'rgba(255,255,255,0.05)' : '#64748B20'} style={styles.flowIcon} />
+                        <View style={[styles.chevronPoint, { backgroundColor: isDark ? '#1E293B' : '#F1F5F9' }, activeQuickFilter === 'inactive' && { backgroundColor: isDark ? '#0F172A' : '#E2E8F0' }]} />
                     </TouchableOpacity>
 
                     {/* Active Segment (Right) */}
                     <TouchableOpacity 
                         style={[
                             styles.flowSegment, 
+                            { backgroundColor: isDark ? '#1E293B' : '#F0FDF4' },
                             styles.activeSegment,
-                            activeQuickFilter === 'active' && styles.activeSelected
+                            activeQuickFilter === 'active' && { backgroundColor: isDark ? '#0F172A' : '#DCFCE7', borderColor: theme.primary }
                         ]}
                         onPress={() => handleQuickFilter('active')}
                         activeOpacity={0.7}
                     >
                         <View style={[styles.flowInfo, { paddingLeft: 24 }]}>
-                            <Text style={styles.flowLabelActive}>ACTIVE</Text>
+                            <Text style={[styles.flowLabelActive, { color: isDark ? '#34D399' : '#16A34A' }]}>ACTIVE</Text>
                             <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
-                                <Text style={styles.flowValueActive}>{activeCount.toLocaleString()}</Text>
-                                <Text style={styles.flowPercentActive}>{activePct}%</Text>
+                                <Text style={[styles.flowValueActive, { color: isDark ? '#34D399' : '#16A34A' }]}>{activeCount.toLocaleString()}</Text>
+                                <Text style={[styles.flowPercentActive, { color: isDark ? '#34D399' : '#16A34A', opacity: 0.6 }]}>{activePct}%</Text>
                             </View>
                         </View>
-                        <Ionicons name="trending-up" size={24} color="#16A34A20" style={styles.flowIcon} />
+                        <Ionicons name="trending-up" size={24} color={isDark ? 'rgba(52,211,153,0.1)' : '#16A34A20'} style={styles.flowIcon} />
                     </TouchableOpacity>
                 </View>
 
-                <View style={styles.commandBar}>
-                    <Ionicons name="search" size={20} color="#94A3B8" />
+                <View style={[styles.commandBar, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                    <Ionicons name="search" size={20} color={theme.textMuted} />
                     <TextInput
-                        style={styles.commandInput}
+                        style={[styles.commandInput, { color: theme.text }]}
                         placeholder="Search Project or Unit..."
-                        placeholderTextColor="#94A3B8"
+                        placeholderTextColor={theme.textMuted}
                         value={search}
                         onChangeText={setSearch}
                     />
                     <TouchableOpacity onPress={() => setShowFilterModal(true)} style={styles.filterBtn}>
-                        <Ionicons name="filter" size={20} color={Object.keys(filters).length > 0 ? "#2563EB" : "#94A3B8"} />
-                        {Object.keys(filters).length > 0 && <View style={styles.filterBadge} />}
+                        <Ionicons name="filter" size={20} color={Object.keys(filters).length > 0 ? theme.primary : theme.textMuted} />
+                        {Object.keys(filters).length > 0 && <View style={[styles.filterBadge, { backgroundColor: theme.primary }]} />}
                     </TouchableOpacity>
                     {search.length > 0 && (
                         <TouchableOpacity onPress={() => setSearch("")} style={{ marginLeft: 8 }}>
-                            <Ionicons name="close-circle" size={18} color="#CBD5E1" />
+                            <Ionicons name="close-circle" size={18} color={theme.textMuted} />
                         </TouchableOpacity>
                     )}
                 </View>
@@ -639,7 +655,7 @@ export default function InventoryScreen() {
     };
 
     return (
-        <SafeAreaView style={styles.safeArea}>
+        <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]}>
             {loading ? (
                 <View style={styles.center}><ActivityIndicator size="large" color="#2563EB" /></View>
             ) : (
@@ -669,12 +685,12 @@ export default function InventoryScreen() {
                     onEndReached={loadMore}
                     onEndReachedThreshold={0.5}
                     removeClippedSubviews={true}
-                    refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#2563EB" />}
-                    ListFooterComponent={loadingMore ? <ActivityIndicator size="small" color="#2563EB" style={{ marginVertical: 10 }} /> : null}
+                    refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />}
+                    ListFooterComponent={loadingMore ? <ActivityIndicator size="small" color={theme.primary} style={{ marginVertical: 10 }} /> : null}
                     ListEmptyComponent={
                         <View style={styles.empty}>
-                            <Ionicons name="cube-outline" size={60} color="#E2E8F0" />
-                            <Text style={styles.emptyText}>{search ? "No matches found" : "Waiting for property records..."}</Text>
+                            <Ionicons name="cube-outline" size={60} color={theme.border} />
+                            <Text style={[styles.emptyText, { color: theme.textLight }]}>{search ? "No matches found" : "Waiting for property records..."}</Text>
                         </View>
                     }
                 />
@@ -683,10 +699,10 @@ export default function InventoryScreen() {
             {/* Contact Picker Modal */}
             <Modal transparent visible={contactPickerVisible} animationType="fade" onRequestClose={() => setContactPickerVisible(false)}>
                 <Pressable style={styles.modalOverlay} onPress={() => setContactPickerVisible(false)}>
-                    <View style={styles.contactPickerSheet}>
-                        <View style={styles.sheetHandle} />
-                        <Text style={styles.sheetTitle}>Select Contact</Text>
-                        <Text style={styles.sheetSub}>Choose who to {pendingAction?.type.toLowerCase()}</Text>
+                    <View style={[styles.contactPickerSheet, { backgroundColor: theme.card }]}>
+                        <View style={[styles.sheetHandle, { backgroundColor: theme.border }]} />
+                        <Text style={[styles.sheetTitle, { color: theme.text }]}>Select Contact</Text>
+                        <Text style={[styles.sheetSub, { color: theme.textLight }]}>Choose who to {pendingAction?.type.toLowerCase()}</Text>
 
                         <View style={{ marginTop: 10 }}>
                             {availableContacts.map((contact, idx) => (
@@ -707,8 +723,8 @@ export default function InventoryScreen() {
                                             />
                                         </View>
                                         <View>
-                                            <Text style={styles.contactName}>{contact.name}</Text>
-                                            <Text style={styles.contactRole}>{contact.type} • {contact.phone || contact.email}</Text>
+                                            <Text style={[styles.contactName, { color: theme.text }]}>{contact.name}</Text>
+                                            <Text style={[styles.contactRole, { color: theme.textLight }]}>{contact.type} • {contact.phone || contact.email}</Text>
                                         </View>
                                     </View>
                                     <Ionicons name="chevron-forward" size={18} color="#CBD5E1" />
@@ -722,35 +738,35 @@ export default function InventoryScreen() {
             {/* Action Hub Modal */}
             <Modal transparent visible={hubVisible} animationType="none" onRequestClose={closeHub}>
                 <Pressable style={styles.modalOverlay} onPress={closeHub}>
-                    <Animated.View style={[styles.sheetContainer, { transform: [{ translateY: slideAnim }] }]}>
-                        <View style={styles.sheetHandle} />
+                    <Animated.View style={[styles.sheetContainer, { backgroundColor: theme.card, transform: [{ translateY: slideAnim }] }]}>
+                        <View style={[styles.sheetHandle, { backgroundColor: theme.border }]} />
                         <ScrollView 
                             showsVerticalScrollIndicator={false}
                             contentContainerStyle={{ paddingBottom: 60 }}
                         >
                             <View style={styles.sheetHeader}>
-                                <Text style={styles.sheetTitle}>{selectedInv ? `Unit ${selectedInv.unitNumber || selectedInv.unitNo}` : "Unit Actions"}</Text>
-                                <Text style={styles.sheetSub}>{selectedInv?.projectName || "Quick Actions"}</Text>
+                                <Text style={[styles.sheetTitle, { color: theme.text }]}>{selectedInv ? `Unit ${selectedInv.unitNumber || selectedInv.unitNo}` : "Unit Actions"}</Text>
+                                <Text style={[styles.sheetSub, { color: theme.textLight }]}>{selectedInv?.projectName || "Quick Actions"}</Text>
                             </View>
 
                             <View style={styles.actionGrid}>
                                 <TouchableOpacity style={styles.actionItem} onPress={() => {
                                     router.push(`/add-inventory?id=${selectedInv?._id}`); closeHub();
                                 }}>
-                                    <View style={[styles.actionIcon, { backgroundColor: "#F1F5F9" }]}>
-                                        <Ionicons name="create" size={24} color="#64748B" />
+                                    <View style={[styles.actionIcon, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : "#F1F5F9" }]}>
+                                        <Ionicons name="create" size={24} color={theme.textLight} />
                                     </View>
-                                    <Text style={styles.actionLabel}>Edit</Text>
+                                    <Text style={[styles.actionLabel, { color: theme.text }]}>Edit</Text>
                                 </TouchableOpacity >
 
                                 <TouchableOpacity style={styles.actionItem} onPress={() => {
                                     if (selectedInv) router.push(`/add-activity?id=${selectedInv._id}&type=Inventory`);
                                     closeHub();
                                 }}>
-                                    <View style={[styles.actionIcon, { backgroundColor: "#E0F2FE" }]}>
+                                    <View style={[styles.actionIcon, { backgroundColor: isDark ? '#0EA5E920' : "#E0F2FE" }]}>
                                         <Ionicons name="calendar" size={24} color="#0EA5E9" />
                                     </View>
-                                    <Text style={styles.actionLabel}>Activities</Text>
+                                    <Text style={[styles.actionLabel, { color: theme.text }]}>Activities</Text>
                                 </TouchableOpacity>
 
                                 <TouchableOpacity style={styles.actionItem} onPress={() => {
@@ -765,37 +781,37 @@ export default function InventoryScreen() {
                                     }
                                     closeHub();
                                 }}>
-                                    <View style={[styles.actionIcon, { backgroundColor: "#DCFCE7" }]}>
+                                    <View style={[styles.actionIcon, { backgroundColor: isDark ? '#22C55E20' : "#DCFCE7" }]}>
                                         <Ionicons name="briefcase" size={24} color="#22C55E" />
                                     </View>
-                                    <Text style={styles.actionLabel}>Create Deal</Text>
+                                    <Text style={[styles.actionLabel, { color: theme.text }]}>Create Deal</Text>
                                 </TouchableOpacity>
 
                                 <TouchableOpacity style={styles.actionItem} onPress={() => {
                                     if (selectedInv) router.push(`/manage-owners?id=${selectedInv._id}`);
                                     closeHub();
                                 }}>
-                                    <View style={[styles.actionIcon, { backgroundColor: "#FEF9C3" }]}>
+                                    <View style={[styles.actionIcon, { backgroundColor: isDark ? '#A1620720' : "#FEF9C3" }]}>
                                         <Ionicons name="person-add" size={24} color="#A16207" />
                                     </View>
-                                    <Text style={styles.actionLabel}>Add Owner</Text>
+                                    <Text style={[styles.actionLabel, { color: theme.text }]}>Add Owner</Text>
                                 </TouchableOpacity>
 
                                 <TouchableOpacity style={styles.actionItem} onPress={() => {
                                     if (selectedInv) router.push(`/manage-tags?id=${selectedInv._id}`);
                                     closeHub();
                                 }}>
-                                    <View style={[styles.actionIcon, { backgroundColor: "#F3E8FF" }]}>
+                                    <View style={[styles.actionIcon, { backgroundColor: isDark ? '#9333EA20' : "#F3E8FF" }]}>
                                         <Ionicons name="pricetag" size={24} color="#9333EA" />
                                     </View>
-                                    <Text style={styles.actionLabel}>Tag</Text>
+                                    <Text style={[styles.actionLabel, { color: theme.text }]}>Tag</Text>
                                 </TouchableOpacity>
 
                                 <TouchableOpacity style={styles.actionItem} onPress={() => {
                                     if (selectedInv) router.push(`/upload-media?id=${selectedInv._id}`);
                                     closeHub();
                                 }}>
-                                    <View style={[styles.actionIcon, { backgroundColor: "#FFEDD5" }]}>
+                                    <View style={[styles.actionIcon, { backgroundColor: isDark ? '#F9731620' : "#FFEDD5" }]}>
                                         <Ionicons name="images" size={24} color="#F97316" />
                                     </View>
                                     <Text style={styles.actionLabel}>Upload</Text>
@@ -853,8 +869,9 @@ const styles = StyleSheet.create({
         flexDirection: "row", justifyContent: "space-between", alignItems: "center",
         paddingHorizontal: 20, paddingTop: 12, paddingBottom: 16
     },
-    headerTitle: { fontSize: 28, fontWeight: "900", color: "#0F172A", letterSpacing: -0.5 },
+    headerTitle: { fontSize: 28, fontWeight: "900", letterSpacing: -0.5 },
     headerSubtitle: { fontSize: 13, color: "#64748B", fontWeight: "600", marginTop: 2 },
+    mainAddBtn: { width: 44, height: 44, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
     metricsFlowContainer: {
         flexDirection: 'row',
         height: 85,

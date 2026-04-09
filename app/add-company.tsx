@@ -8,6 +8,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import api from "@/services/api";
 import { useTheme, SPACING } from "@/context/ThemeContext";
+import { MultiSearchableDropdown } from "@/components/MultiSearchableDropdown";
 
 // ─── Reusable Components ──────────────────────────────────────────────────────
 
@@ -196,6 +197,7 @@ interface CompanyForm {
     country: string;
     employees: any[];
     team: string;
+    teams: string[];
     owner: string;
     visibleTo: string;
 }
@@ -208,7 +210,7 @@ const INITIAL: CompanyForm = {
     companySize: "", annualTurnover: "",
     hNo: "", street: "", city: "", state: "", pinCode: "", country: "India",
     employees: [],
-    team: "", owner: "", visibleTo: "Everyone",
+    team: "", teams: [], owner: "", visibleTo: "Everyone",
 };
 
 export default function AddCompanyScreen() {
@@ -216,6 +218,7 @@ export default function AddCompanyScreen() {
     const { theme } = useTheme();
     const [form, setForm] = useState<CompanyForm>(INITIAL);
     const [saving, setSaving] = useState(false);
+    const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
 
     // Lookups & System Data
     const [sources, setSources] = useState<{ label: string, value: string }[]>([]);
@@ -271,7 +274,7 @@ export default function AddCompanyScreen() {
                 if (teamsRes.data?.data) {
                     setTeams(teamsRes.data.data.map((t: any) => ({ label: t.name, value: t._id })));
                     const sales = teamsRes.data.data.find((t: any) => t.name === 'Sales');
-                    if (sales) setForm(f => ({ ...f, team: sales._id }));
+                    if (sales) setForm(f => ({ ...f, teams: [sales._id] }));
                 }
 
                 const usersRes = await api.get('/users', { params: { limit: 100 } });
@@ -370,7 +373,8 @@ export default function AddCompanyScreen() {
                     }
                 },
                 employees: form.employees.map(emp => emp._id || emp.id).filter(Boolean),
-                team: form.team || undefined,
+                team: form.teams[0] || form.team,
+                teams: form.teams,
                 owner: form.owner || undefined,
                 visibleTo: form.visibleTo || "Everyone"
             };
@@ -516,9 +520,22 @@ export default function AddCompanyScreen() {
 
                     <SectionHeader title="System Assignment" icon="⚙️" subtitle="Internal routing & ownership" />
                     <View style={[styles.card, { backgroundColor: theme.cardBg, borderColor: theme.border }]}>
-                        <Field label="Assigned Team"><SelectButton value={form.team} options={teams} onSelect={(val) => setForm(f => ({ ...f, team: val, owner: "" }))} /></Field>
+                        <Field required label="Assigned Teams">
+                            <TouchableOpacity
+                                style={[styles.inputWrapper, { backgroundColor: theme.inputBg, borderColor: theme.border, paddingHorizontal: 16 }]}
+                                onPress={() => setActiveDropdown('teams')}
+                            >
+                                <View style={styles.row}>
+                                    <Ionicons name="people-outline" size={18} color={theme.textMuted} />
+                                    <Text style={{ color: form.teams?.length ? theme.textPrimary : theme.textMuted, fontSize: 16, fontWeight: '600', marginLeft: 12 }}>
+                                        {form.teams?.length ? `${form.teams.length} Teams Selected` : "Select Teams..."}
+                                    </Text>
+                                </View>
+                            </TouchableOpacity>
+                        </Field>
+
                         <Field label="Owner">
-                            <SelectButton value={form.owner} options={users.filter(u => !form.team || u.team === form.team).map(u => ({ label: u.name, value: u._id }))} onSelect={set("owner")} />
+                            <SelectButton value={form.owner} options={users.filter(u => !form.teams?.length || form.teams.includes(u.team)).map(u => ({ label: u.name, value: u._id }))} onSelect={set("owner")} />
                         </Field>
                         <Field label="Data Visibility">
                             <SelectButton value={form.visibleTo} options={[{ label: "Everyone", value: "Everyone" }, { label: "Team", value: "Team" }, { label: "Private", value: "Private" }]} onSelect={set("visibleTo")} />
@@ -534,6 +551,19 @@ export default function AddCompanyScreen() {
                         )}
                     </TouchableOpacity>
                 </ScrollView>
+
+                <MultiSearchableDropdown
+                    visible={activeDropdown === 'teams'}
+                    onClose={() => setActiveDropdown(null)}
+                    options={teams}
+                    selectedValues={form.teams || []}
+                    onToggle={(tid) => {
+                        const current = form.teams || [];
+                        const newList = current.includes(tid) ? current.filter((i: string) => i !== tid) : [...current, tid];
+                        setForm(f => ({ ...f, teams: newList, owner: "" }));
+                    }}
+                    placeholder="Select Assigned Teams"
+                />
             </KeyboardAvoidingView>
         </SafeAreaView>
     );

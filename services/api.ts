@@ -119,8 +119,14 @@ api.interceptors.response.use(
     console.warn(`[API] ❌ ${status || "NO_RESPONSE"} ${url} — ${msg}`);
 
     if (status === 401) {
-      await storage.deleteItem("authToken").catch(() => { });
-      if (on401Callback) on401Callback();
+      // Professional Hardening: Do not logout on public route failures
+      const isPublicRoute = url.includes('/public/') || url.includes('/health');
+      if (!isPublicRoute) {
+        await storage.deleteItem("authToken").catch(() => { });
+        if (on401Callback) on401Callback();
+      } else {
+        console.warn(`[API] 401 on public route ignored to prevent session termination: ${url}`);
+      }
     }
     return Promise.reject(error);
   }

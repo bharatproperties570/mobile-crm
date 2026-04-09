@@ -8,6 +8,8 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import api from "@/services/api";
 import { useTheme, SPACING } from "@/context/ThemeContext";
+import { MultiSearchableDropdown } from "@/components/MultiSearchableDropdown";
+import { getTeams } from "@/services/teams.service";
 
 // ─── Reusable Components ──────────────────────────────────────────────────────
 
@@ -189,6 +191,7 @@ interface ContactForm {
     tags: string[];
     // System
     team: string;
+    teams: string[];
     owner: string;
     visibleTo: string;
     // Addresses
@@ -208,11 +211,60 @@ const INITIAL: ContactForm = {
     description: "",
     category: "", subCategory: "", designation: "", company: "",
     source: "", subSource: "", tags: [],
-    team: "", owner: "", visibleTo: "Everyone",
+    team: "", teams: [], owner: "", visibleTo: "Everyone",
     personalAddress: { hNo: "", street: "", city: "", state: "", pinCode: "", country: "India" },
     correspondenceAddress: { hNo: "", street: "", city: "", state: "", pinCode: "", country: "India" },
     gender: "", maritalStatus: "", birthDate: "", anniversaryDate: "",
 };
+
+function ModernPicker({
+    label, value, options, onSelect, placeholder = "Select..."
+}: {
+    label: string; value: string; options: { label: string, value: string }[]; onSelect: (v: string) => void; placeholder?: string;
+}) {
+    const { theme } = useTheme();
+    const [visible, setVisible] = useState(false);
+    const selectedLabel = options.find(o => o.value === value)?.label || placeholder;
+
+    return (
+        <>
+            <TouchableOpacity
+                style={[styles.pickerTrigger, { backgroundColor: theme.inputBg, borderColor: theme.border }]}
+                onPress={() => setVisible(true)}
+            >
+                <Text style={[styles.fieldLabel, { marginBottom: 0, color: theme.textMuted, fontSize: 12 }]}>{label}</Text>
+                <View style={styles.pickerValueRow}>
+                    <Text style={[styles.pickerValue, { color: value ? theme.textPrimary : theme.textMuted }]}>{selectedLabel}</Text>
+                    <Ionicons name="chevron-down" size={18} color={theme.textMuted} />
+                </View>
+            </TouchableOpacity>
+
+            <Modal visible={visible} transparent animationType="slide">
+                <View style={styles.modalOverlay}>
+                    <View style={[styles.modalContent, { backgroundColor: theme.cardBg }]}>
+                        <View style={styles.modalHeader}>
+                            <Text style={[styles.modalTitle, { color: theme.textPrimary }]}>{label}</Text>
+                            <TouchableOpacity onPress={() => setVisible(false)}><Ionicons name="close" size={24} color={theme.textPrimary} /></TouchableOpacity>
+                        </View>
+                        <FlatList
+                            data={options}
+                            keyExtractor={item => item.value}
+                            renderItem={({ item }) => (
+                                <TouchableOpacity
+                                    style={[styles.optionItem, { borderBottomColor: theme.border + '50' }]}
+                                    onPress={() => { onSelect(item.value); setVisible(false); }}
+                                >
+                                    <Text style={[styles.optionLabel, { color: theme.textPrimary }, value === item.value && { color: theme.primary, fontWeight: '700' }]}>{item.label}</Text>
+                                    {value === item.value && <Ionicons name="checkmark" size={20} color={theme.primary} />}
+                                </TouchableOpacity>
+                            )}
+                        />
+                    </View>
+                </View>
+            </Modal>
+        </>
+    );
+}
 
 export default function AddContactScreen() {
     const { id, companyId } = useLocalSearchParams<{ id?: string, companyId?: string }>();
@@ -223,16 +275,28 @@ export default function AddContactScreen() {
     const [saving, setSaving] = useState(false);
     const [loadingContact, setLoadingContact] = useState(false);
     const [form, setForm] = useState<ContactForm>(INITIAL);
+    const [teams, setTeams] = useState<any[]>([]);
+    const [users, setUsers] = useState<any[]>([]);
+    const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
 
     useEffect(() => {
         if (id) {
             const fetchContact = async () => {
                 setLoadingContact(true);
                 try {
-                    const res = await api.get(`/contacts/${id}`);
+                    const [res, teamsRes, usersRes] = await Promise.all([
+                        api.get(`/contacts/${id}`),
+                        getTeams(),
+                        api.get("/users?limit=1000")
+                    ]);
+                    
                     const c = res.data?.data || res.data;
+                    setTeams(teamsRes.data || []);
+                    setUsers(usersRes.data?.data || []);
+
                     if (c) {
                         setForm({
+                            ...INITIAL,
                             salutation: typeof c.title === 'object' ? c.title?.lookup_value : c.title || "Mr.",
                             firstName: c.firstName || c.name?.split(' ')[0] || "",
                             lastName: c.lastName || c.name?.split(' ').slice(1).join(' ') || "",
@@ -248,6 +312,7 @@ export default function AddContactScreen() {
                             subSource: typeof c.subSource === 'object' ? c.subSource?._id : c.subSource || "",
                             tags: Array.isArray(c.tags) ? c.tags : [],
                             team: typeof c.team === 'object' ? c.team?._id : c.team || "",
+                            teams: Array.isArray(c.teams) ? c.teams.map((t: any) => t._id || t) : (c.team ? [c.team._id || c.team] : []),
                             owner: typeof c.owner === 'object' ? c.owner?._id : c.owner || "",
                             visibleTo: c.visibleTo || "Everyone",
                             personalAddress: c.addresses?.personal || INITIAL.personalAddress,
@@ -266,6 +331,20 @@ export default function AddContactScreen() {
                 }
             };
             fetchContact();
+        }
+    }, [id]);
+
+    useEffect(() => {
+        if (!id) {
+            const loadLookups = async () => {
+                const [teamsRes, usersRes] = await Promise.all([
+                    getTeams(),
+                    api.get("/users?limit=1000")
+                ]);
+                setTeams(teamsRes.data || []);
+                setUsers(usersRes.data?.data || []);
+            };
+            loadLookups();
         }
     }, [id]);
 
@@ -305,7 +384,8 @@ export default function AddContactScreen() {
                 source: form.source || undefined,
                 subSource: form.subSource || undefined,
                 tags: form.tags.length > 0 ? form.tags : undefined,
-                team: form.team || undefined,
+                team: form.teams[0] || form.team || undefined,
+                teams: form.teams.length > 0 ? form.teams : (form.team ? [form.team] : []),
                 owner: form.owner || undefined,
                 visibleTo: form.visibleTo || "Everyone",
                 addresses: {
@@ -483,10 +563,34 @@ export default function AddContactScreen() {
                             <View style={{ flex: 1 }}><Input label="Anniversary" value={form.anniversaryDate} onChangeText={set("anniversaryDate")} placeholder="YYYY-MM-DD" /></View>
                         </View>
 
-                        <View style={{ height: 20 }} />
-                        <Field label="Source">
-                            <SelectButton value={form.source} options={getLookupsByType('Source').map(l => ({ label: l.lookup_value, value: l._id }))} onSelect={set("source")} />
+                        <Field label="Team Assignment">
+                            <TouchableOpacity
+                                style={[styles.pickerTrigger, { backgroundColor: theme.inputBg, borderColor: theme.border }]}
+                                onPress={() => setActiveDropdown('teams')}
+                            >
+                                <Text style={[styles.fieldLabel, { marginBottom: 0, color: theme.textMuted, fontSize: 12 }]}>Assigned Teams</Text>
+                                <View style={styles.pickerValueRow}>
+                                    <Text style={[styles.pickerValue, { color: form.teams.length ? theme.textPrimary : theme.textMuted }]} numberOfLines={1}>
+                                        {form.teams.length ? `${form.teams.length} Teams Selected` : "Select Teams..."}
+                                    </Text>
+                                    <Ionicons name="people" size={18} color={theme.textMuted} />
+                                </View>
+                            </TouchableOpacity>
                         </Field>
+
+                        <Field label="Assigned Manager">
+                            <ModernPicker
+                                label="Primary Owner"
+                                value={form.owner}
+                                options={users.filter(u => !form.teams.length || form.teams.includes(u.team?._id || u.team)).map(u => ({ label: u.fullName || u.name, value: u._id }))}
+                                onSelect={set("owner")}
+                            />
+                        </Field>
+
+                        <Field label="Visibility">
+                            <SelectButton value={form.visibleTo} options={[{ label: "Everyone", value: "Everyone" }, { label: "Team", value: "Team" }, { label: "Owner Only", value: "Owner Only" }]} onSelect={set("visibleTo")} />
+                        </Field>
+                        
                         <Field label="Priority Tags">
                             <MultiSelectButton values={form.tags} options={[{ label: "High Priority", value: "High Priority" }, { label: "Medium", value: "Medium" }, { label: "Standard", value: "Standard" }]} onToggle={(v) => {
                                 const newTags = form.tags.includes(v) ? form.tags.filter(t => t !== v) : [...form.tags, v];
@@ -510,6 +614,19 @@ export default function AddContactScreen() {
                         )}
                     </TouchableOpacity>
                 </ScrollView>
+
+                <MultiSearchableDropdown
+                    visible={activeDropdown === 'teams'}
+                    onClose={() => setActiveDropdown(null)}
+                    options={teams.map(t => ({ label: t.name, value: t._id }))}
+                    selectedValues={form.teams}
+                    onToggle={(tid) => {
+                        const current = form.teams || [];
+                        const newList = current.includes(tid) ? current.filter((i: string) => i !== tid) : [...current, tid];
+                        setForm(f => ({ ...f, teams: newList, owner: "" }));
+                    }}
+                    placeholder="Select Assigned Teams"
+                />
             </KeyboardAvoidingView>
         </SafeAreaView>
     );
@@ -597,6 +714,16 @@ const styles = StyleSheet.create({
     saveBtnDisabled: { opacity: 0.6 },
     subSectionTitle: { fontSize: 15, fontWeight: "700", marginBottom: 16, marginLeft: 4 },
     row: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+
+    pickerTrigger: { height: 56, borderRadius: 12, borderWidth: 1.5, paddingHorizontal: 16, justifyContent: 'center', marginBottom: 12 },
+    pickerValueRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 2 },
+    pickerValue: { fontSize: 15, fontWeight: '600' },
+    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+    modalContent: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, maxHeight: '80%' },
+    modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+    modalTitle: { fontSize: 18, fontWeight: '800' },
+    optionItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 16, borderBottomWidth: 1 },
+    optionLabel: { fontSize: 16, fontWeight: '600' },
 });
 
 function MultiSelectButton({

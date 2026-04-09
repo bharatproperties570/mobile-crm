@@ -37,16 +37,17 @@ function lv(field: unknown): string {
     return val;
 }
 
-function getLeadScore(lead: any) {
+function getLeadScore(lead: any, isDark = false) {
+    const bgOpacity = isDark ? '20' : '10';
     if (lead.intent_index !== undefined && lead.intent_index !== null) {
         const scoreVal = lead.intent_index || 0;
         let color = "#64748B";
-        if (scoreVal >= 81) color = "#7C3AED";
+        if (scoreVal >= 81) color = "#8B5CF6";
         else if (scoreVal >= 61) color = "#EF4444";
         else if (scoreVal >= 31) color = "#F59E0B";
-        return { val: scoreVal, color };
+        return { val: scoreVal, color, bg: color + bgOpacity };
     }
-    return { val: 50, color: "#F59E0B" };
+    return { val: 50, color: "#F59E0B", bg: "#F59E0B" + bgOpacity };
 }
 
 function InfoRow({ label, value, accent, icon }: { label: string; value: string; accent?: boolean; icon?: any }) {
@@ -163,32 +164,33 @@ export default function LeadDetailScreen() {
     if (loading) return <View style={styles.center}><ActivityIndicator size="large" color={theme.primary} /></View>;
     if (!lead) return <View style={styles.center}><Text style={styles.noData}>Lead not found</Text></View>;
 
-    const score = getLeadScore(lead);
+    const isDark = theme.background === '#0F172A';
+    const score = getLeadScore(lead, isDark);
     const name = leadName(lead);
 
     return (
         <View style={[styles.container, { backgroundColor: theme.background }]}>
             {/* Premium SaaS Header */}
             <SafeAreaView style={[styles.headerCard, { backgroundColor: theme.card }]} edges={['top', 'left', 'right']}>
-                <View style={styles.headerTop}>
-                    <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace("/(tabs)/leads")} style={styles.backBtnCircle}>
+                <View style={[styles.headerTop, { backgroundColor: isDark ? theme.glassBg : theme.card }]}>
+                    <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace("/(tabs)/leads")} style={[styles.backBtnCircle, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }]}>
                         <Ionicons name="chevron-back" size={22} color={theme.text} />
                     </TouchableOpacity>
                     <View style={styles.headerTitleContainer}>
                         <Text style={[styles.headerNamePremium, { color: theme.text }]} numberOfLines={1}>{name}</Text>
                         <View style={styles.headerBadgeRow}>
-                            <View style={[styles.miniBadge, { backgroundColor: theme.primary + '20' }]}>
-                                <Text style={[styles.miniBadgeText, { color: theme.primary }]}>{lead.mobile}</Text>
+                            <View style={[styles.miniBadge, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : theme.primary + '20' }]}>
+                                <Text style={[styles.miniBadgeText, { color: isDark ? theme.textSecondary : theme.primary }]}>{lead.mobile}</Text>
                             </View>
                             {lead.email && (
-                                <View style={[styles.miniBadge, { backgroundColor: theme.border + '40' }]}>
+                                <View style={[styles.miniBadge, { backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : theme.border + '40' }]}>
                                     <Text style={[styles.miniBadgeText, { color: theme.textLight }]}>{lead.email}</Text>
                                 </View>
                             )}
                         </View>
                     </View>
                     <View style={styles.scoreContainer}>
-                        <View style={[styles.scoreRing, { borderColor: score.color + '20' }]}>
+                        <View style={[styles.scoreRing, { borderColor: score.color + (isDark ? '40' : '20') }]}>
                             <Text style={[styles.scoreValue, { color: score.color }]}>{score.val}</Text>
                         </View>
                     </View>
@@ -209,12 +211,22 @@ export default function LeadDetailScreen() {
                     <View style={[styles.strategyDivider, { backgroundColor: theme.border }]} />
 
                     <View style={styles.strategyBlock}>
-                        <Text style={[styles.strategyLabel, { color: theme.textLight }]}>TEAM</Text>
-                        <View style={styles.strategyValueRow}>
-                            <Ionicons name="people-outline" size={14} color="#6366F1" />
-                            <Text style={[styles.strategyValue, { color: theme.text }]} numberOfLines={1}>
-                                {lv(lead.assignment?.team) || "General"}
-                            </Text>
+                        <Text style={[styles.strategyLabel, { color: theme.textLight }]}>TEAM(S)</Text>
+                        <View style={[styles.strategyValueRow, { flexWrap: 'wrap', gap: 4 }]}>
+                            {Array.isArray(lead.assignment?.teams) && lead.assignment.teams.length > 0 ? (
+                                lead.assignment.teams.map((t: any, i: number) => (
+                                    <View key={i} style={{ backgroundColor: isDark ? 'rgba(129, 140, 248, 0.15)' : '#6366F110', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                                        <Text style={{ fontSize: 9, fontWeight: '800', color: isDark ? '#C7D2FE' : '#6366F1' }}>{lv(t).toUpperCase()}</Text>
+                                    </View>
+                                ))
+                            ) : (
+                                <>
+                                    <Ionicons name="people-outline" size={12} color={isDark ? '#818CF8' : "#6366F1"} />
+                                    <Text style={[styles.strategyValue, { color: theme.text }]} numberOfLines={1}>
+                                        {lv(lead.assignment?.team) || "General"}
+                                    </Text>
+                                </>
+                            )}
                         </View>
                     </View>
 
@@ -255,9 +267,9 @@ export default function LeadDetailScreen() {
                     </View>
 
                     {(lv(lead.campaign) || lv(lead.contactDetails?.campaign)) && (
-                        <View style={[styles.marketingPill, { backgroundColor: '#7C3AED' + '10' }]}>
-                            <Ionicons name="flag" size={12} color="#7C3AED" />
-                            <Text style={[styles.marketingText, { color: '#7C3AED' }]}>
+                        <View style={[styles.marketingPill, { backgroundColor: isDark ? 'rgba(124, 58, 237, 0.15)' : '#7C3AED' + '10' }]}>
+                            <Ionicons name="flag" size={12} color={isDark ? '#A78BFA' : "#7C3AED"} />
+                            <Text style={[styles.marketingText, { color: isDark ? '#A78BFA' : '#7C3AED' }]}>
                                 {lv(lead.campaign) || lv(lead.contactDetails?.campaign)}
                             </Text>
                         </View>
@@ -271,10 +283,10 @@ export default function LeadDetailScreen() {
                 <View style={styles.modernActionHub}>
                     {[
                         { icon: 'call', color: theme.primary, onPress: () => lead?.mobile && trackCall(lead.mobile, id!, "Lead", name) },
-                        { icon: 'chatbubble-ellipses', color: '#3B82F6', onPress: () => lead?.mobile && Linking.openURL(`sms:${lead.mobile.replace(/\D/g, "")}`) },
+                        { icon: 'chatbubble-ellipses', color: isDark ? '#3B82F6' : '#3B82F6', onPress: () => lead?.mobile && Linking.openURL(`sms:${lead.mobile.replace(/\D/g, "")}`) },
                         { icon: 'logo-whatsapp', color: '#128C7E', onPress: () => lead?.mobile && Linking.openURL(`https://wa.me/${lead.mobile.replace(/\D/g, "")}`) },
-                        { icon: 'mail', color: '#EA4335', onPress: () => lead?.email && Linking.openURL(`mailto:${lead.email}`) },
-                        { icon: 'calendar', color: '#6366F1', onPress: () => router.push(`/add-activity?id=${id}&type=Lead`) },
+                        { icon: 'mail', color: isDark ? '#F87171' : '#EA4335', onPress: () => lead?.email && Linking.openURL(`mailto:${lead.email}`) },
+                        { icon: 'calendar', color: isDark ? '#818CF8' : '#6366F1', onPress: () => router.push(`/add-activity?id=${id}&type=Lead`) },
                     ].map((action, i) => (
                         <TouchableOpacity key={i} style={[styles.modernHubBtn, { backgroundColor: action.color }]} onPress={action.onPress}>
                             <Ionicons name={action.icon as any} size={20} color="#fff" />
@@ -401,8 +413,8 @@ export default function LeadDetailScreen() {
                                     </View>
                                 )}
                                 {getLookupValue("ProfessionalSubCategory", lead.contactDetails?.professionSubCategory) !== "—" && (
-                                    <View style={{ backgroundColor: theme.primary + '10', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 }}>
-                                        <Text style={{ fontSize: 11, fontWeight: '700', color: theme.primary }}>{getLookupValue("ProfessionalSubCategory", lead.contactDetails?.professionSubCategory)}</Text>
+                                    <View style={[styles.miniBadge, { backgroundColor: isDark ? 'rgba(37, 99, 235, 0.15)' : theme.primary + '10' }]}>
+                                        <Text style={{ fontSize: 11, fontWeight: '700', color: isDark ? '#60A5FA' : theme.primary }}>{getLookupValue("ProfessionalSubCategory", lead.contactDetails?.professionSubCategory)}</Text>
                                     </View>
                                 )}
                             </View>
@@ -477,16 +489,16 @@ export default function LeadDetailScreen() {
 
                                     if (isAudit) {
                                         icon = "time-outline";
-                                        color = "#8B5CF6";
+                                        color = isDark ? "#A78BFA" : "#8B5CF6";
                                     } else if (act.type.toLowerCase().includes("call")) {
                                         icon = "call-outline";
-                                        color = "#3B82F6";
+                                        color = isDark ? "#60A5FA" : "#3B82F6";
                                     } else if (act.type.toLowerCase().includes("task")) {
                                         icon = "checkbox-outline";
-                                        color = "#F59E0B";
+                                        color = isDark ? "#FBBF24" : "#F59E0B";
                                     } else if (act.type.toLowerCase().includes("email")) {
                                         icon = "mail-outline";
-                                        color = "#EF4444";
+                                        color = isDark ? "#F87171" : "#EF4444";
                                     }
 
                                     return (
@@ -494,7 +506,7 @@ export default function LeadDetailScreen() {
                                             <View style={[styles.timelineDot, { backgroundColor: color }]}>
                                                 <Ionicons name={icon} size={8} color="#fff" />
                                             </View>
-                                            <View style={[styles.timelineBody, isAudit && { borderLeftWidth: 3, borderLeftColor: color }]}>
+                                            <View style={[styles.timelineBody, { backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)' }, isAudit && { borderLeftWidth: 3, borderLeftColor: color }]}>
                                                 <View style={styles.timelineHeader}>
                                                     <Text style={[styles.timelineType, { color: color }]}>
                                                         {isAudit ? "AUDIT LOG" : act.type.toUpperCase()}
@@ -571,8 +583,8 @@ export default function LeadDetailScreen() {
                                         <TouchableOpacity key={i} style={[styles.matchItem, { borderBottomColor: theme.border }]} onPress={() => router.push(`/deal-detail?id=${deal._id}`)}>
                                             <View style={styles.matchLeft}>
                                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                                                    <View style={[styles.scorePill, { backgroundColor: scoreColor + '15', borderColor: scoreColor + '30' }]}>
-                                                        <Text style={[styles.scorePillText, { color: scoreColor }]}>{score}% Match</Text>
+                                                    <View style={[styles.scorePill, { backgroundColor: isDark ? scoreColor + '25' : scoreColor + '15', borderColor: isDark ? scoreColor + '40' : scoreColor + '30' }]}>
+                                                        <Text style={[styles.scorePillText, { color: isDark ? (score >= 70 ? '#34D399' : (score >= 40 ? '#FBBF24' : '#F87171')) : scoreColor }]}>{score}% Match</Text>
                                                     </View>
                                                     <Text style={[styles.matchUnit, { color: theme.text }]}>Deal #{deal.dealId || deal._id.slice(-6).toUpperCase()}</Text>
                                                 </View>
@@ -588,6 +600,9 @@ export default function LeadDetailScreen() {
                                                         if (tag.includes("Budget")) { tagBg = '#DCFCE7'; tagColor = '#15803D'; }
                                                         if (tag.includes("Orientation")) { tagBg = '#FEF3C7'; tagColor = '#92400E'; }
                                                         if (tag.includes("Unit") || tag.includes("Category")) { tagBg = '#E0F2FE'; tagColor = '#0369A1'; }
+                                                        if (tag.includes("Location") || tag.includes("Project") || tag.includes("Sector") || tag.includes("City")) { 
+                                                            tagBg = "#F3E8FF"; tagColor = "#7E22CE"; 
+                                                        }
                                                         
                                                         return (
                                                             <View key={idx} style={[styles.matchDetailTag, { backgroundColor: tagBg }]}>
@@ -631,8 +646,8 @@ export default function LeadDetailScreen() {
                                             <Text style={[styles.matchProject, { color: theme.textLight }]}>{inv.projectName} • {inv.block}</Text>
                                         </View>
                                         <View style={styles.matchRight}>
-                                            <View style={[styles.relationBadge, { backgroundColor: theme.primary + '10' }]}>
-                                                <Text style={{ fontSize: 10, color: theme.primary, fontWeight: '700' }}>OWNER</Text>
+                                            <View style={[styles.relationBadge, { backgroundColor: isDark ? 'rgba(37, 99, 235, 0.15)' : theme.primary + '10' }]}>
+                                                <Text style={{ fontSize: 10, color: isDark ? '#60A5FA' : theme.primary, fontWeight: '700' }}>OWNER</Text>
                                             </View>
                                         </View>
                                     </TouchableOpacity>
@@ -658,7 +673,7 @@ export default function LeadDetailScreen() {
 const styles = StyleSheet.create({
     container: { flex: 1 },
     center: { flex: 1, justifyContent: "center", alignItems: "center" },
-    noData: { fontSize: 16, color: "#94A3B8" },
+    noData: { fontSize: 16, fontWeight: '700' },
 
     headerCard: { borderBottomLeftRadius: 30, borderBottomRightRadius: 30, elevation: 12, shadowOpacity: 0.1, shadowRadius: 15, paddingBottom: 8 },
     headerTop: { flexDirection: 'row', alignItems: 'center', padding: 20, gap: 15 },
@@ -707,8 +722,8 @@ const styles = StyleSheet.create({
     emptyText: { textAlign: 'center', color: '#94A3B8', padding: 20, fontSize: 13 },
 
     timelineItem: { paddingLeft: 20, borderLeftWidth: 2, paddingBottom: 20 },
-    timelineDot: { width: 10, height: 10, borderRadius: 5, position: 'absolute', left: -6, top: 4 },
-    timelineBody: { backgroundColor: 'rgba(0,0,0,0.02)', padding: 12, borderRadius: 12 },
+    timelineDot: { width: 10, height: 10, borderRadius: 5, position: 'absolute', left: -6, top: 4, justifyContent: 'center', alignItems: 'center' },
+    timelineBody: { padding: 12, borderRadius: 12 },
     timelineHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
     timelineType: { fontSize: 10, fontWeight: '900' },
     timelineDate: { fontSize: 10, color: '#94A3B8' },

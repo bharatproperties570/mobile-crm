@@ -15,6 +15,8 @@ export interface Contact {
     subSource?: { _id: string; lookup_value: string } | string;
     campaign?: { _id: string; lookup_value: string } | string;
     owner?: string | { _id: string; fullName?: string; name?: string; email?: string };
+    team?: string | { _id: string; name: string };
+    teams?: Array<string | { _id: string; name: string }>;
     tags?: string[];
     description?: string;
     stage?: string;
@@ -91,87 +93,102 @@ export interface CallerInfo {
 
 export const lookupCallerInfo = async (phoneNumber: string): Promise<CallerInfo | null> => {
     try {
-        // We'll use a local helper for lookups if needed, or assume the backend provides some names
+        const clean = (num: string) => (num || "").replace(/[^0-9]/g, "").slice(-10);
+        const cleanedPhone = clean(phoneNumber);
+        if (!cleanedPhone) return null;
+
         const getVal = (field: any) => {
             if (!field) return undefined;
             if (typeof field === 'object') return field.lookup_value || field.name || field.fullName || field.label;
             return field;
         };
 
-        // 1. Check Leads
-        const leadsRes = await getLeads({ mobile: phoneNumber });
-        const leads = extractList(leadsRes.data);
-        if (leads.length > 0) {
-            const lead = leads[0];
-            return {
-                name: [lead.firstName, lead.lastName].filter(Boolean).join(" ") || "Lead",
-                type: 'Lead',
-                projectName: lead.projectName?.[0] || lead.project?.name,
-                entityId: lead._id,
-                mobile: phoneNumber,
-                intent: getVal(lead.requirement),
-                subCategory: getVal(lead.subType?.[0]) || getVal(lead.subRequirement),
-                budget: lead.budgetMax ? `₹${(lead.budgetMax / 10000000).toFixed(2)}Cr` : getVal(lead.budget),
-                status: getVal(lead.stage)
-            };
+        // Performance: Concurrent parallel lookups for zero-latency identification
+        const [leadsRes, dealsRes, invRes, contactsRes] = await Promise.allSettled([
+            getLeads({ mobile: cleanedPhone }),
+            api.get("/deals", { params: { contactPhone: cleanedPhone } }),
+            api.get("/inventory", { params: { ownerPhone: cleanedPhone } }),
+            getContacts({ phone: cleanedPhone })
+        ]);
+
+        // 1. Leads Primary
+        if (leadsRes.status === 'fulfilled') {
+            const leads = extractList(leadsRes.value.data);
+            if (leads.length > 0) {
+                const lead = leads[0];
+                return {
+                    name: [lead.firstName, lead.lastName].filter(Boolean).join(" ") || "Lead",
+                    type: 'Lead',
+                    projectName: lead.projectName?.[0] || lead.project?.name,
+                    entityId: lead._id,
+                    mobile: phoneNumber,
+                    intent: getVal(lead.requirement),
+                    subCategory: getVal(lead.subType?.[0]) || getVal(lead.subRequirement),
+                    budget: lead.budgetMax ? `₹${(lead.budgetMax / 10000000).toFixed(2)}Cr` : getVal(lead.budget),
+                    status: getVal(lead.stage)
+                };
+            }
         }
 
-        // 2. Check Deals
-        const dealsRes = await api.get("/deals", { params: { contactPhone: phoneNumber } });
-        const deals = extractList(dealsRes.data);
-        if (deals.length > 0) {
-            const deal = deals[0];
-            return {
-                name: deal.partyStructure?.buyer?.name || deal.projectName || "Deal",
-                type: 'Deal',
-                projectName: deal.projectName,
-                unitNumber: deal.unitNumber || deal.unitNo || deal.dealId,
-                entityId: deal._id,
-                mobile: phoneNumber,
-                intent: deal.intent || deal.dealType,
-                subCategory: getVal(deal.subCategory) || deal.unitType,
-                budget: deal.price ? `₹${(deal.price / 10000000).toFixed(2)}Cr` : undefined,
-                status: deal.stage
-            };
+        // 2. Deals High Priority
+        if (dealsRes.status === 'fulfilled') {
+            const deals = extractList(dealsRes.value.data);
+            if (deals.length > 0) {
+                const deal = deals[0];
+                return {
+                    name: deal.partyStructure?.buyer?.name || deal.projectName || "Deal",
+                    type: 'Deal',
+                    projectName: deal.projectName,
+                    unitNumber: deal.unitNumber || deal.unitNo || deal.dealId,
+                    entityId: deal._id,
+                    mobile: phoneNumber,
+                    intent: deal.intent || deal.dealType,
+                    subCategory: getVal(deal.subCategory) || deal.unitType,
+                    budget: deal.price ? `₹${(deal.price / 10000000).toFixed(2)}Cr` : undefined,
+                    status: deal.stage
+                };
+            }
         }
 
-        // 3. Check Inventory
-        const invRes = await api.get("/inventory", { params: { ownerPhone: phoneNumber } });
-        const inventories = extractList(invRes.data);
-        if (inventories.length > 0) {
-            const inv = inventories[0];
-            return {
-                name: inv.ownerName || inv.projectName || "Inventory",
-                type: 'Inventory',
-                projectName: inv.projectName,
-                unitNumber: inv.unitNumber || inv.unitNo,
-                entityId: inv._id,
-                mobile: phoneNumber,
-                intent: inv.intent || 'Sell',
-                subCategory: inv.subCategory || inv.unitType,
-                budget: inv.price ? `₹${(inv.price / 10000000).toFixed(2)}Cr` : undefined,
-                status: inv.status
-            };
+        // 3. Inventory Owner Context
+        if (invRes.status === 'fulfilled') {
+            const inventories = extractList(invRes.value.data);
+            if (inventories.length > 0) {
+                const inv = inventories[0];
+                return {
+                    name: inv.ownerName || inv.projectName || "Inventory",
+                    type: 'Inventory',
+                    projectName: inv.projectName,
+                    unitNumber: inv.unitNumber || inv.unitNo,
+                    entityId: inv._id,
+                    mobile: phoneNumber,
+                    intent: inv.intent || 'Sell',
+                    subCategory: inv.subCategory || inv.unitType,
+                    budget: inv.price ? `₹${(inv.price / 10000000).toFixed(2)}Cr` : undefined,
+                    status: inv.status
+                };
+            }
         }
 
-        // 4. Check Contacts
-        const contactsRes = await getContacts({ phone: phoneNumber });
-        const contacts = extractList(contactsRes.data);
-        if (contacts.length > 0) {
-            const contact = contacts[0];
-            return {
-                name: [contact.name, contact.surname].filter(Boolean).join(" ") || "Contact",
-                type: 'Contact',
-                entityId: contact._id,
-                mobile: phoneNumber,
-                intent: getVal(contact.professionCategory),
-                status: getVal(contact.stage)
-            };
+        // 4. Contacts General
+        if (contactsRes.status === 'fulfilled') {
+            const contacts = extractList(contactsRes.value.data);
+            if (contacts.length > 0) {
+                const contact = contacts[0];
+                return {
+                    name: [contact.name, contact.surname].filter(Boolean).join(" ") || "Contact",
+                    type: 'Contact',
+                    entityId: contact._id,
+                    mobile: phoneNumber,
+                    intent: getVal(contact.professionCategory),
+                    status: getVal(contact.stage)
+                };
+            }
         }
 
         return null;
-    } catch (error) {
-        console.error("Error looking up caller info:", error);
+    } catch (e) {
+        console.error("lookupCallerInfo Error:", e);
         return null;
     }
 };

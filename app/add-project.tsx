@@ -14,6 +14,7 @@ import api from "@/services/api";
 import { safeApiCall, lookupVal, safeApiCallSingle } from "@/services/api.helpers";
 import { useTheme, SPACING } from "@/context/ThemeContext";
 import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
+import { MultiSearchableDropdown } from "@/components/MultiSearchableDropdown";
 
 const GOOGLE_MAPS_API_KEY = "AIzaSyBd2gdMJVt5C_tgYqWoRbBiatzmevYdB9U";
 
@@ -276,7 +277,9 @@ export default function AddProjectScreen() {
         amenities: {},
         blocks: [],
         team: [],
+        teams: [],
         assign: [],
+        assignedTo: [],
         visibility: "Public"
     });
 
@@ -321,7 +324,10 @@ export default function AddProjectScreen() {
             }
 
             const teamsRes = await safeApiCall<any>(() => getTeams());
-            if (!teamsRes.error) setTeams(teamsRes.data?.map((t: any) => ({ label: t.name, value: t._id })));
+            if (!teamsRes.error) {
+                const teamList = teamsRes.data || [];
+                setTeams(teamList.map((t: any) => ({ label: t.name, value: t._id })));
+            }
 
             const usersRes = await safeApiCall<any>(() => api.get("/users?limit=1000"));
             if (!usersRes.error) {
@@ -351,7 +357,9 @@ export default function AddProjectScreen() {
                                 ...b,
                                 status: (b.status as any)?.lookup_value || b.status || "",
                                 parkingType: (b.parkingType as any)?.lookup_value || b.parkingType || "",
-                            }))
+                            })),
+                            teams: Array.isArray(p.teams) ? p.teams.map((t: any) => t._id || t) : (p.team ? [p.team._id || p.team] : []),
+                            assignedTo: Array.isArray(p.assign) ? p.assign.map((u: any) => u._id || u) : [],
                         });
                     }
                 } catch (e) {
@@ -365,9 +373,9 @@ export default function AddProjectScreen() {
     }, [id]);
 
     const filteredUsersByTeam = useMemo(() => {
-        if (!formData.team || formData.team.length === 0) return users;
-        return users.filter(u => formData.team?.includes(u.team));
-    }, [users, formData.team]);
+        if (!formData.teams || formData.teams.length === 0) return users;
+        return users.filter(u => formData.teams?.includes(u.team));
+    }, [users, formData.teams]);
 
     const getLookupId = (cat: string, val: any) => {
         if (!val) return "";
@@ -376,7 +384,7 @@ export default function AddProjectScreen() {
     };
 
     const handleSave = async () => {
-        if (!formData.team?.length || !formData.assign?.length) {
+        if (!formData.teams?.length || !formData.assignedTo?.length) {
             Alert.alert("Required", "Please complete all Assignment fields (Team and Assign).");
             return;
         }
@@ -394,7 +402,11 @@ export default function AddProjectScreen() {
                 ...b,
                 status: getLookupId("ProjectStatus", b.status),
                 parkingType: getLookupId("ParkingType", b.parkingType)
-            }))
+            })),
+            team: formData.teams[0] || formData.team,
+            teams: formData.teams,
+            assign: formData.assignedTo,
+            owner: formData.assignedTo[0] || (formData as any).owner
         };
 
         const res = id ? await safeApiCall(() => api.put(`/projects/${id}`, payload)) : await safeApiCall(() => createProject(payload));
@@ -434,10 +446,12 @@ export default function AddProjectScreen() {
             case 1: return <LocationStep data={formData} update={setFormData} />;
             case 2: return <BlockStep data={formData} update={setFormData} lookups={lookups} />;
             case 3: return <AmenitiesStep data={formData} update={setFormData} />;
-            case 4: return <AssignmentStep data={formData} update={setFormData} teams={teams} users={filteredUsersByTeam} />;
+            case 4: return <AssignmentStep data={formData} update={setFormData} teams={teams} users={filteredUsersByTeam} activeDropdown={activeDropdown} setActiveDropdown={setActiveDropdown} />;
             default: return null;
         }
     };
+
+    const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
 
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
@@ -462,6 +476,32 @@ export default function AddProjectScreen() {
                 <ScrollView style={styles.content} contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
                     {renderStepContent()}
                 </ScrollView>
+
+                <MultiSearchableDropdown
+                    visible={activeDropdown === 'teams'}
+                    onClose={() => setActiveDropdown(null)}
+                    options={teams}
+                    selectedValues={formData.teams || []}
+                    onToggle={(tid) => {
+                        const current = formData.teams || [];
+                        const newList = current.includes(tid) ? current.filter((i: string) => i !== tid) : [...current, tid];
+                        setFormData({ ...formData, teams: newList, assignedTo: [] });
+                    }}
+                    placeholder="Select Assigned Teams"
+                />
+
+                <MultiSearchableDropdown
+                    visible={activeDropdown === 'users'}
+                    onClose={() => setActiveDropdown(null)}
+                    options={filteredUsersByTeam}
+                    selectedValues={formData.assignedTo || []}
+                    onToggle={(uid) => {
+                        const current = formData.assignedTo || [];
+                        const newList = current.includes(uid) ? current.filter((i: string) => i !== uid) : [...current, uid];
+                        setFormData({ ...formData, assignedTo: newList });
+                    }}
+                    placeholder="Select Assigned Users"
+                />
 
                 <View style={[styles.footer, { backgroundColor: theme.cardBg, borderTopColor: theme.border }]}>
                     <TouchableOpacity style={[styles.footerBtnSecondary, { backgroundColor: theme.background, borderColor: theme.border }]} onPress={prevStep}>
@@ -873,17 +913,37 @@ function BlockStep({ data, update, lookups }: any) {
     );
 }
 
-function AssignmentStep({ data, update, teams, users }: any) {
+function AssignmentStep({ data, update, teams, users, activeDropdown, setActiveDropdown }: any) {
     const { theme } = useTheme();
     return (
         <View style={styles.stepContainer}>
             <SectionHeader title="Assignment" icon="👥" subtitle="Team and ownership (Mandatory)" />
             <View style={[styles.card, { backgroundColor: theme.cardBg, borderColor: theme.border }]}>
-                <Field required label="Select Team">
-                    <SelectButton multiple value={data.team} options={teams} onSelect={v => update({ ...data, team: v })} />
+                <Field required label="Select Teams">
+                    <TouchableOpacity
+                        style={[styles.pickerTrigger, { backgroundColor: theme.inputBg, borderColor: theme.border }]}
+                        onPress={() => setActiveDropdown('teams')}
+                    >
+                        <View style={styles.pickerValueRow}>
+                            <Text style={[styles.pickerValue, { color: data.teams?.length ? theme.textPrimary : theme.textMuted }]}>
+                                {data.teams?.length ? `${data.teams.length} Teams Selected` : "Select Teams..."}
+                            </Text>
+                            <Ionicons name="people" size={18} color={theme.textMuted} />
+                        </View>
+                    </TouchableOpacity>
                 </Field>
                 <Field required label="Assign Users">
-                    <SelectButton multiple value={data.assign} options={users} onSelect={v => update({ ...data, assign: v })} />
+                    <TouchableOpacity
+                        style={[styles.pickerTrigger, { backgroundColor: theme.inputBg, borderColor: theme.border }]}
+                        onPress={() => setActiveDropdown('users')}
+                    >
+                        <View style={styles.pickerValueRow}>
+                            <Text style={[styles.pickerValue, { color: data.assignedTo?.length ? theme.textPrimary : theme.textMuted }]}>
+                                {data.assignedTo?.length ? `${data.assignedTo.length} Users Selected` : "Select Users..."}
+                            </Text>
+                            <Ionicons name="person-add" size={18} color={theme.textMuted} />
+                        </View>
+                    </TouchableOpacity>
                 </Field>
                 <Field required label="Visibility">
                     <SelectButton value={data.visibility} options={[{ label: "Public", value: "Public" }, { label: "Team", value: "Team" }, { label: "Private", value: "Private" }]} onSelect={v => update({ ...data, visibility: v })} />

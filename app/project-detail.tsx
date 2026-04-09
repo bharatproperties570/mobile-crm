@@ -13,17 +13,22 @@ import { getActivities } from "@/services/activities.service";
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const TABS = ["Overview", "Activities"];
 
-function lv(field: unknown): string {
-    if (!field) return "—";
+function lv(field: unknown): any {
+    if (field === null || field === undefined || field === "" || field === "null" || field === "undefined") return "—";
+    
+    // Handle array of objects/strings (Multi-team support)
     if (Array.isArray(field)) {
-        return field.map(item => lv(item)).filter(v => v !== "—").join(", ") || "—";
+        if (field.length === 0) return "—";
+        return field.map(item => lv(item)).filter(v => v !== "—");
     }
+
     if (typeof field === "object" && field !== null) {
-        if ("lookup_value" in field) return (field as any).lookup_value ?? "—";
-        if ("fullName" in field) return (field as any).fullName ?? "—";
-        if ("name" in field) return (field as any).name ?? "—";
+        if ("lookup_value" in field && (field as any).lookup_value) return (field as any).lookup_value;
+        if ("fullName" in field && (field as any).fullName) return (field as any).fullName;
+        if ("name" in field && (field as any).name) return (field as any).name;
     }
-    return String(field) || "—";
+    const str = String(field).trim();
+    return str || "—";
 }
 
 function InfoRow({ label, value, accent, icon }: { label: string; value: string | undefined | null; accent?: boolean; icon?: any }) {
@@ -121,6 +126,7 @@ export default function ProjectDetailScreen() {
     if (loading) return <View style={[styles.center, { backgroundColor: theme.background }]}><ActivityIndicator size="large" color={theme.primary} /></View>;
     if (!project) return <View style={[styles.center, { backgroundColor: theme.background }]}><Text style={[styles.noData, { color: theme.textLight }]}>Project not found</Text></View>;
 
+    const isDark = theme.background === '#0F172A';
     const statusLabel = lookupVal(project.status);
     const location = project.locationSearch || project.address?.location || project.address?.city || "No Location Specified";
 
@@ -133,19 +139,19 @@ export default function ProjectDetailScreen() {
                     </TouchableOpacity>
                     <Text style={[styles.navTitle, { color: theme.text }]}>Project Command</Text>
                     <TouchableOpacity style={[styles.navBtn, { backgroundColor: theme.background }]} onPress={handleDelete}>
-                        <Ionicons name="trash-outline" size={22} color="#EF4444" />
+                        <Ionicons name="trash-outline" size={22} color={isDark ? '#F87171' : "#EF4444"} />
                     </TouchableOpacity>
                 </View>
 
                 {/* Hero Summary */}
                 <View style={styles.heroSummary}>
-                    <View style={[styles.avatarBox, { backgroundColor: theme.primary + '15' }]}>
-                        <Ionicons name="business" size={28} color={theme.primary} />
+                    <View style={[styles.avatarBox, { backgroundColor: isDark ? 'rgba(99, 102, 241, 0.15)' : theme.primary + '15' }]}>
+                        <Ionicons name="business" size={28} color={isDark ? '#818CF8' : theme.primary} />
                     </View>
                     <View style={styles.heroText}>
                         <Text style={[styles.heroName, { color: theme.text }]} numberOfLines={1}>{project.name}</Text>
-                        <View style={[styles.statusCapsule, { backgroundColor: theme.primary + '15' }]}>
-                            <Text style={[styles.statusCapsuleText, { color: theme.primary }]}>{statusLabel.toUpperCase()}</Text>
+                        <View style={[styles.statusCapsule, { backgroundColor: isDark ? 'rgba(52, 211, 153, 0.15)' : theme.primary + '15' }]}>
+                            <Text style={[styles.statusCapsuleText, { color: isDark ? '#34D399' : theme.primary }]}>{statusLabel.toUpperCase()}</Text>
                         </View>
                     </View>
                 </View>
@@ -226,7 +232,26 @@ export default function ProjectDetailScreen() {
                                     <InfoRow label="Sub-Category" value={lookupVal(project.subCategory)} icon="list-outline" />
                                     <InfoRow label="Land Area" value={project.landArea ? `${project.landArea} ${project.landAreaUnit}` : "—"} icon="resize-outline" />
                                     <InfoRow label="City" value={project.address?.city} icon="location-outline" />
-                                    <InfoRow label="Team" value={lv(project.team)} icon="people-outline" />
+                                    
+                                    <View style={[styles.infoRow, { borderBottomColor: theme.border, alignItems: 'flex-start' }]}>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 4 }}>
+                                            <Ionicons name="people-outline" size={14} color={theme.textLight} />
+                                            <Text style={[styles.infoLabel, { color: theme.textLight }]}>Teams</Text>
+                                        </View>
+                                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, flex: 1, justifyContent: 'flex-end' }}>
+                                            {(() => {
+                                                const teamData = lv(project.teams || project.team);
+                                                if (Array.isArray(teamData)) {
+                                                    return teamData.map((t, idx) => (
+                                                        <View key={idx} style={[styles.teamBadge, { backgroundColor: isDark ? 'rgba(99, 102, 241, 0.15)' : '#6366F1' + '10' }]}>
+                                                            <Text style={[styles.teamBadgeText, { color: isDark ? '#818CF8' : '#6366F1' }]}>{t}</Text>
+                                                        </View>
+                                                    ));
+                                                }
+                                                return <Text style={[styles.infoValue, { color: theme.text }]}>{teamData}</Text>;
+                                            })()}
+                                        </View>
+                                    </View>
                                 </View>
 
                                 {project.blocks && project.blocks.length > 0 && (
@@ -246,9 +271,9 @@ export default function ProjectDetailScreen() {
                                 <View style={[styles.sectionCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
                                     <Text style={[styles.sectionTitle, { color: theme.text }]}>Location Summary</Text>
                                     <Text style={[styles.locAddress, { color: theme.text }]}>{location}</Text>
-                                    <TouchableOpacity style={[styles.mapLink, { backgroundColor: theme.primary + '10' }]} onPress={() => Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location)}`)}>
-                                        <Text style={[styles.mapLinkText, { color: theme.primary }]}>Detailed View on Maps</Text>
-                                        <Ionicons name="chevron-forward" size={14} color={theme.primary} />
+                                    <TouchableOpacity style={[styles.mapLink, { backgroundColor: isDark ? 'rgba(99, 102, 241, 0.1)' : theme.primary + '10' }]} onPress={() => Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location)}`)}>
+                                        <Text style={[styles.mapLinkText, { color: isDark ? '#818CF8' : theme.primary }]}>Detailed View on Maps</Text>
+                                        <Ionicons name="chevron-forward" size={14} color={isDark ? '#818CF8' : theme.primary} />
                                     </TouchableOpacity>
                                 </View>
 
@@ -370,4 +395,17 @@ const styles = StyleSheet.create({
     timelineDate: { fontSize: 10, color: '#94a3b8', fontWeight: '600' },
     timelineSubject: { fontSize: 14, fontWeight: '700', marginBottom: 4 },
     timelineNote: { fontSize: 12, lineHeight: 18 },
+
+    teamBadge: {
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 6,
+        borderWidth: 1,
+        borderColor: 'rgba(99, 102, 241, 0.2)',
+    },
+    teamBadgeText: {
+        fontSize: 10,
+        fontWeight: '800',
+        textTransform: 'uppercase',
+    },
 });

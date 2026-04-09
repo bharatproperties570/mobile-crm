@@ -79,7 +79,7 @@ export default function CallBanner({ info, onClose }: Props) {
                 </View>
 
                 {/* Middle: Professional Context Grid */}
-                <View style={styles.contextGrid}>
+                <View style={[styles.contextGrid, { backgroundColor: theme.background }]}>
                     <View style={styles.contextItem}>
                         <View style={[styles.intentBadge, { backgroundColor: info.intent === 'Rent' ? '#F59E0B' : '#2563EB' }]}>
                             <Text style={styles.intentText}>{info.intent || 'Potential'}</Text>
@@ -222,7 +222,6 @@ const styles = StyleSheet.create({
     },
     contextGrid: {
         flexDirection: 'row',
-        backgroundColor: '#F8FAFC',
         borderRadius: 16,
         padding: 14,
         marginBottom: 12,

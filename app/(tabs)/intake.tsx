@@ -32,7 +32,12 @@ export default function IntakeScreen() {
 
     const loadRules = async () => {
         try {
-            const response = await parsingService.getRules();
+            // Use a timeout or specific check to avoid global logout on this non-critical fetch
+            const response = await parsingService.getRules().catch(err => {
+                console.warn("[Intake] Rules fetch failed, using defaults:", err.message);
+                return { success: false };
+            });
+
             if (response.success) {
                 const rules: ParsingRule[] = response.data;
                 const config: ParserConfig = {

@@ -12,6 +12,7 @@ import { useTheme, SPACING } from "@/context/ThemeContext";
 import { useLookup } from "@/context/LookupContext";
 import { useUsers } from "@/context/UserContext";
 import { useProjects } from "@/context/ProjectContext";
+import { MultiSearchableDropdown } from "@/components/MultiSearchableDropdown";
 
 const FORM_STEPS = ["Basic Info", "Builtup & Furnishing", "Location", "Owner & Assignment"];
 
@@ -333,7 +334,7 @@ interface InventoryForm {
     direction: string; facing: string; roadWidth: string; ownership: string; builtupDetail: string; builtupType: string; builtupDetails: BuiltupRow[];
     occupationDate: string; ageOfConstruction: string; possessionStatus: string; furnishType: string; furnishedItems: string; locationSearch: string;
     address: { country: string; state: string; city: string; location: string; tehsil: string; postOffice: string; pinCode: string; hNo: string; street: string; area: string; };
-    owners: OwnerLink[]; userId?: string; assignment?: string; assignedTo: string; team: string; status: string; intent: string; visibleTo: string;
+    owners: OwnerLink[]; userId?: string; assignment?: string; assignedTo: string; team: string; teams: string[]; status: string; intent: string; visibleTo: string;
 }
 
 const INITIAL: InventoryForm = {
@@ -346,7 +347,7 @@ const INITIAL: InventoryForm = {
     locationSearch: "",
     address: { country: "", state: "", city: "", location: "", tehsil: "", postOffice: "", pinCode: "", hNo: "", street: "", area: "" },
     owners: [],
-    assignedTo: "", team: "", status: "Available", intent: "Sell", visibleTo: "Everyone",
+    assignedTo: "", team: "", teams: [], status: "Available", intent: "Sell", visibleTo: "Everyone",
 };
 
 export default function AddInventoryScreen() {
@@ -500,6 +501,7 @@ export default function AddInventoryScreen() {
                             })),
                             assignedTo: inv.assignedTo?._id || inv.assignedTo || "",
                             team: inv.team?._id || inv.team || "",
+                            teams: Array.isArray(inv.teams) ? inv.teams.map((t: any) => t._id || t) : (inv.team ? [inv.team._id || inv.team] : []),
                             status: inv.status?.lookup_value || inv.status || "Available",
                             intent: inv.intent?.lookup_value || inv.intent || "Sell",
                             visibleTo: inv.visibleTo || "Everyone",
@@ -554,6 +556,7 @@ export default function AddInventoryScreen() {
                 address: { ...form.address, city: form.address.city, location: form.address.location, area: form.address.area },
                 owners: form.owners.filter(o => o.role === 'Property Owner').map(o => o.id), 
                 associates: form.owners.filter(o => o.role === 'Associate').map(o => ({ contact: o.id, relationship: o.relationship })),
+                teams: form.teams.length > 0 ? form.teams : (form.team ? [form.team] : [])
             };
             const finalPayload: any = { ...payload }; 
             delete finalPayload.locationSearch;
@@ -783,10 +786,44 @@ export default function AddInventoryScreen() {
 
                     <SectionHeader title="System & Assignment" icon="⚙️" subtitle="Lead routing and visibility" />
                     <View style={[styles.card, { backgroundColor: theme.cardBg, borderColor: theme.border }]}>
-                        <Field label="Team"><TouchableOpacity activeOpacity={0.7} style={[styles.selector, { backgroundColor: theme.inputBg, borderColor: theme.border }]} onPress={() => setActiveLocDropdown('team')}><Text style={[styles.selectorText, { color: theme.textPrimary }, !form.team && { color: theme.textMuted }]}>{findTeam(form.team)?.name || "Select Team"}</Text><Ionicons name="chevron-down" size={18} color={theme.textSecondary} /></TouchableOpacity></Field>
+                        <Field label="Team(s)" helperText="Records will be visible to all members of selected teams">
+                            <TouchableOpacity 
+                                activeOpacity={0.7} 
+                                style={[styles.selector, { backgroundColor: theme.inputBg, borderColor: theme.border }]} 
+                                onPress={() => setActiveLocDropdown('team')}
+                            >
+                                <Text style={[styles.selectorText, { color: theme.textPrimary }, form.teams.length === 0 && { color: theme.textMuted }]}>
+                                    {form.teams.length > 0 
+                                        ? `${form.teams.length} Team(s) Selected` 
+                                        : "Select Team(s)"}
+                                </Text>
+                                <Ionicons name="people-outline" size={18} color={theme.textSecondary} />
+                            </TouchableOpacity>
+                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 8 }}>
+                                {form.teams.map(tid => (
+                                    <View key={tid} style={{ backgroundColor: theme.primary + '15', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, marginRight: 6, marginBottom: 6 }}>
+                                        <Text style={{ fontSize: 10, fontWeight: '700', color: theme.primary }}>{findTeam(tid)?.name || tid}</Text>
+                                    </View>
+                                ))}
+                            </View>
+                        </Field>
                         <Field label="Assigned To"><TouchableOpacity activeOpacity={0.7} style={[styles.selector, { backgroundColor: theme.inputBg, borderColor: theme.border }]} onPress={() => setActiveLocDropdown('assignedTo')}><Text style={[styles.selectorText, { color: theme.textPrimary }, !form.assignedTo && { color: theme.textMuted }]}>{(findUser(form.assignedTo)?.fullName || findUser(form.assignedTo)?.name) || "Select User"}</Text><Ionicons name="chevron-down" size={18} color={theme.textSecondary} /></TouchableOpacity></Field>
                         <Field label="Visible To"><SelectButton value={form.visibleTo} options={[{ label: 'Everyone', value: 'Everyone' }, { label: 'Team Only', value: 'Team Only' }, { label: 'Me Only', value: 'Me Only' }]} onSelect={set("visibleTo")} /></Field>
                     </View>
+                    
+                    <MultiSearchableDropdown
+                        visible={activeLocDropdown === 'team'}
+                        onClose={() => setActiveLocDropdown(null)}
+                        options={teams}
+                        selectedValues={form.teams}
+                        onToggle={(tid) => {
+                            const newTeams = form.teams.includes(tid) 
+                                ? form.teams.filter(t => t !== tid) 
+                                : [...form.teams, tid];
+                            set("teams")(newTeams);
+                        }}
+                        placeholder="Select Teams"
+                    />
                 </FadeInView>
             );
             default: return null;

@@ -10,8 +10,9 @@ import { getActivities, Activity, deleteActivity, updateActivity } from "@/servi
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Swipeable from "react-native-gesture-handler/Swipeable";
 import { useUsers } from "@/context/UserContext";
+import { useTheme } from "@/context/ThemeContext";
 
-const TYPE_META: Record<string, { color: string; icon: string; emoji: string }> = {
+const TYPE_META_LIGHT: Record<string, { color: string; icon: string; emoji: string }> = {
     "Call": { color: "#3B82F6", icon: "call", emoji: "📞" },
     "Meeting": { color: "#8B5CF6", icon: "people", emoji: "🤝" },
     "Site Visit": { color: "#10B981", icon: "map", emoji: "🏠" },
@@ -19,12 +20,28 @@ const TYPE_META: Record<string, { color: string; icon: string; emoji: string }> 
     "Email": { color: "#64748B", icon: "mail", emoji: "📧" },
 };
 
-const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
+const TYPE_META_DARK: Record<string, { color: string; icon: string; emoji: string }> = {
+    "Call": { color: "#60A5FA", icon: "call", emoji: "📞" },
+    "Meeting": { color: "#A78BFA", icon: "people", emoji: "🤝" },
+    "Site Visit": { color: "#34D399", icon: "map", emoji: "🏠" },
+    "Task": { color: "#FBBF24", icon: "checkbox", emoji: "✅" },
+    "Email": { color: "#94A3B8", icon: "mail", emoji: "📧" },
+};
+
+const STATUS_COLORS_LIGHT: Record<string, { bg: string; text: string }> = {
     "Pending": { bg: "#FEF3C7", text: "#92400E" },
     "In Progress": { bg: "#DBEAFE", text: "#1E40AF" },
     "Completed": { bg: "#D1FAE5", text: "#065F46" },
     "Deferred": { bg: "#F1F5F9", text: "#64748B" },
     "Overdue": { bg: "#FEE2E2", text: "#991B1B" },
+};
+
+const STATUS_COLORS_DARK: Record<string, { bg: string; text: string }> = {
+    "Pending": { bg: "#92400E30", text: "#FBBF24" },
+    "In Progress": { bg: "#1E40AF30", text: "#60A5FA" },
+    "Completed": { bg: "#065F4630", text: "#34D399" },
+    "Deferred": { bg: "#47556930", text: "#94A3B8" },
+    "Overdue": { bg: "#991B1B30", text: "#F87171" },
 };
 
 const PRIORITY_ICONS: Record<string, string> = {
@@ -35,6 +52,8 @@ const TYPE_TABS = ["All", "Call", "Meeting", "Site Visit", "Task", "Email"];
 const STATUS_TABS = ["Pending", "Today", "Overdue", "Completed", "All"];
 
 export default function ActivitiesScreen() {
+    const { theme } = useTheme();
+    const isDark = theme.background === '#0F172A';
     const router = useRouter();
     const [activities, setActivities] = useState<Activity[]>([]);
     const [loading, setLoading] = useState(true);
@@ -185,8 +204,11 @@ export default function ActivitiesScreen() {
         onWhatsApp: (mobile: string) => void;
         findUser: (id: string) => any;
     }) => {
-        const meta = TYPE_META[item.type] || { color: "#64748B", icon: "list", emoji: "📌" };
-        const statusStyle = STATUS_COLORS[item.status] || { bg: "#F1F5F9", text: "#64748B" };
+        const { theme } = useTheme();
+        const isDark = theme.background === '#0F172A';
+        const metaMap = isDark ? TYPE_META_DARK : TYPE_META_LIGHT;
+        const meta = metaMap[item.type] || { color: isDark ? "#94A3B8" : "#64748B", icon: "list", emoji: "📌" };
+        const statusStyle = isDark ? (STATUS_COLORS_DARK[item.status] || { bg: "#1E293B", text: "#94A3B8" }) : (STATUS_COLORS_LIGHT[item.status] || { bg: "#F1F5F9", text: "#64748B" });
         const dueDate = item.dueDate ? new Date(item.dueDate) : null;
         const isToday = dueDate?.toDateString() === new Date().toDateString();
         const isOverdue = dueDate && dueDate < new Date() && item.status !== "Completed";
@@ -195,7 +217,15 @@ export default function ActivitiesScreen() {
         const relatedMobile = related?.mobile || "";
 
         const assignedName = useMemo(() => {
-            // 1. Resolve Assigned To (Object or ID) - Primary Target
+            // 1. Resolve Performed By (The ACTUAL Actor) - HIGHEST PRIORITY for professional oversight
+            const performedBy = (item as any).performedBy;
+            if (performedBy && typeof performedBy === 'string' && 
+                performedBy !== "System" && 
+                performedBy !== "Bharat Properties") { 
+                return performedBy;
+            }
+
+            // 2. Resolve Assigned To (Object or ID) 
             const assigned = item.assignedTo;
             if (assigned) {
                 if (typeof assigned === 'object' && assigned !== null) {
@@ -204,14 +234,6 @@ export default function ActivitiesScreen() {
                 }
                 const user = findUser(String(assigned));
                 if (user && (user.fullName || user.name) && user.name !== "Bharat Properties") return user.fullName || user.name;
-            }
-
-            // 2. Resolve Performed By (Direct backend string name)
-            const performedBy = (item as any).performedBy;
-            if (performedBy && typeof performedBy === 'string' && 
-                performedBy !== "System" && 
-                performedBy !== "Bharat Properties") { 
-                return performedBy;
             }
 
             // 3. Resolve Creator (Fallback)
@@ -225,19 +247,16 @@ export default function ActivitiesScreen() {
                 if (user && (user.fullName || user.name)) return user.fullName || user.name;
             }
 
-            // Final fallback
-            if (performedBy && performedBy !== "System" && performedBy !== "Bharat Properties") return performedBy;
-
             return "Unassigned";
         }, [item.assignedTo, (item as any).createdBy, (item as any).creator, (item as any).user, (item as any).author, (item as any).performedBy, findUser]);
 
         const renderLeftActions = () => (
             <View style={styles.leftActions}>
-                <TouchableOpacity style={[styles.swipeAction, { backgroundColor: "#2563EB" }]} onPress={() => onEdit(item._id)}>
+                <TouchableOpacity style={[styles.swipeAction, { backgroundColor: isDark ? '#1E40AF' : "#2563EB" }]} onPress={() => onEdit(item._id)}>
                     <Ionicons name="create" size={22} color="#fff" />
                     <Text style={styles.swipeLabel}>Edit</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={[styles.swipeAction, { backgroundColor: "#EF4444" }]} onPress={() => onDelete(item._id!)}>
+                <TouchableOpacity style={[styles.swipeAction, { backgroundColor: isDark ? '#991B1B' : "#EF4444" }]} onPress={() => onDelete(item._id!)}>
                     <Ionicons name="trash" size={22} color="#fff" />
                     <Text style={styles.swipeLabel}>Delete</Text>
                 </TouchableOpacity>
@@ -246,11 +265,11 @@ export default function ActivitiesScreen() {
 
         const renderRightActions = () => (
             <View style={styles.rightActions}>
-                <TouchableOpacity style={[styles.swipeAction, { backgroundColor: "#F59E0B" }]} onPress={() => onReschedule(item)}>
+                <TouchableOpacity style={[styles.swipeAction, { backgroundColor: isDark ? '#92400E' : "#F59E0B" }]} onPress={() => onReschedule(item)}>
                     <Ionicons name="calendar-outline" size={22} color="#fff" />
                     <Text style={styles.swipeLabel}>Reschedule</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={[styles.swipeAction, { backgroundColor: "#10B981" }]} onPress={() => onComplete(item)}>
+                <TouchableOpacity style={[styles.swipeAction, { backgroundColor: isDark ? '#065F46' : "#10B981" }]} onPress={() => onComplete(item)}>
                     <Ionicons name="checkmark-circle-outline" size={22} color="#fff" />
                     <Text style={styles.swipeLabel}>Complete</Text>
                 </TouchableOpacity>
@@ -260,7 +279,7 @@ export default function ActivitiesScreen() {
         return (
             <Swipeable renderLeftActions={renderLeftActions} renderRightActions={renderRightActions} overshootLeft={false} overshootRight={false}>
                 <TouchableOpacity
-                    style={[styles.card, isOverdue && styles.cardOverdue]}
+                    style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }, isOverdue && styles.cardOverdue, isOverdue && isDark && { borderColor: '#EF444430', backgroundColor: '#EF444410' }]}
                     activeOpacity={0.9}
                     onPress={onPress}
                 >
@@ -276,28 +295,28 @@ export default function ActivitiesScreen() {
                             </View>
                         </View>
 
-                        <Text style={styles.subject} numberOfLines={2}>{item.subject}</Text>
+                        <Text style={[styles.subject, { color: theme.text }]} numberOfLines={2}>{item.subject}</Text>
 
                         {relatedName ? (
                             <View style={styles.clientRow}>
                                 <View style={{ flex: 1 }}>
                                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-                                        <Ionicons name="person-circle-outline" size={14} color="#64748B" />
-                                        <Text style={styles.clientName}>{relatedName}</Text>
+                                        <Ionicons name="person-circle-outline" size={14} color={theme.textLight} />
+                                        <Text style={[styles.clientName, { color: theme.textSecondary }]}>{relatedName}</Text>
                                     </View>
                                     {relatedMobile ? (
-                                        <Text style={styles.clientMobile}>{relatedMobile}</Text>
+                                        <Text style={[styles.clientMobile, { color: theme.textLight }]}>{relatedMobile}</Text>
                                     ) : null}
                                 </View>
 
                                 <View style={styles.actionGroup}>
                                     {relatedMobile ? (
                                         <>
-                                            <TouchableOpacity style={styles.actionBtn} onPress={() => onCall(relatedMobile)}>
-                                                <Ionicons name="call" size={16} color="#2563EB" />
+                                            <TouchableOpacity style={[styles.actionBtn, { backgroundColor: theme.primary + '15' }]} onPress={() => onCall(relatedMobile)}>
+                                                <Ionicons name="call" size={16} color={theme.primary} />
                                             </TouchableOpacity>
-                                            <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#DCFCE7' }]} onPress={() => onWhatsApp(relatedMobile)}>
-                                                <Ionicons name="logo-whatsapp" size={16} color="#166534" />
+                                            <TouchableOpacity style={[styles.actionBtn, { backgroundColor: isDark ? '#065F4630' : '#DCFCE7' }]} onPress={() => onWhatsApp(relatedMobile)}>
+                                                <Ionicons name="logo-whatsapp" size={16} color={isDark ? '#34D399' : '#166534'} />
                                             </TouchableOpacity>
                                         </>
                                     ) : null}
@@ -319,22 +338,22 @@ export default function ActivitiesScreen() {
 
                         <View style={styles.cardFooter}>
                             <View style={styles.metaGroup}>
-                                <Ionicons name={isOverdue ? "alert-circle" : "calendar-outline"} size={13} color={isOverdue ? "#EF4444" : "#94A3B8"} />
-                                <Text style={[styles.metaText, isOverdue && { color: "#EF4444", fontWeight: "800" }]}>
+                                <Ionicons name={isOverdue ? "alert-circle" : "calendar-outline"} size={13} color={isOverdue ? "#EF4444" : theme.textMuted} />
+                                <Text style={[styles.metaText, { color: theme.textMuted }, isOverdue && { color: "#EF4444", fontWeight: "800" }]}>
                                     {isToday ? "Today" : dueDate?.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
                                     {item.dueTime ? ` @ ${item.dueTime}` : ""}
                                 </Text>
                             </View>
                             <View style={styles.metaGroup}>
                                 <Text style={styles.priorityEmoji}>{PRIORITY_ICONS[item.priority] || "🟡"}</Text>
-                                <Text style={styles.metaText}>{item.priority}</Text>
+                                <Text style={[styles.metaText, { color: theme.textMuted }]}>{item.priority}</Text>
                             </View>
                             <View style={styles.assigneeContainer}>
-                                <View style={styles.assigneeTextContent}>
-                                    <Text style={styles.assigneeName} numberOfLines={1}>{assignedName}</Text>
+                                <View style={[styles.assigneeTextContent, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#F8FAFC', borderColor: theme.border }]}>
+                                    <Text style={[styles.assigneeName, { color: theme.textSecondary }]} numberOfLines={1}>{assignedName}</Text>
                                     {item.assignedTo?.team && (
-                                        <View style={styles.teamBadge}>
-                                            <Text style={styles.teamBadgeText}>{item.assignedTo.team.substring(0, 3).toUpperCase()}</Text>
+                                        <View style={[styles.teamBadge, { backgroundColor: theme.primary + '15', borderColor: theme.primary + '25' }]}>
+                                            <Text style={[styles.teamBadgeText, { color: theme.primary }]}>{item.assignedTo.team.substring(0, 3).toUpperCase()}</Text>
                                         </View>
                                     )}
                                 </View>
@@ -347,38 +366,38 @@ export default function ActivitiesScreen() {
     });
 
     return (
-        <View style={styles.container}>
+        <View style={[styles.container, { backgroundColor: theme.background }]}>
             <View style={styles.header}>
                 <View>
-                    <Text style={styles.headerTitle}>Activities</Text>
-                    <Text style={styles.headerSubtitle}>{activities.length} scheduled interactions</Text>
+                    <Text style={[styles.headerTitle, { color: theme.text }]}>Activities</Text>
+                    <Text style={[styles.headerSubtitle, { color: theme.textLight }]}>{activities.length} scheduled interactions</Text>
                 </View>
-                <TouchableOpacity style={styles.addBtn} onPress={() => router.push("/add-activity" as any)}>
+                <TouchableOpacity style={[styles.addBtn, { backgroundColor: theme.primary }]} onPress={() => router.push("/add-activity" as any)}>
                     <Ionicons name="add" size={26} color="#fff" />
                 </TouchableOpacity>
             </View>
 
             <View style={styles.statsGrid}>
-                <View style={[styles.statTile, { backgroundColor: "#FFF7ED" }]}>
-                    <Text style={[styles.statValue, { color: "#EA580C" }]}>{pendingCount}</Text>
-                    <Text style={styles.statLabel}>PENDING</Text>
+                <View style={[styles.statTile, { backgroundColor: isDark ? '#9A341230' : "#FFF7ED" }]}>
+                    <Text style={[styles.statValue, { color: isDark ? '#FB923C' : "#EA580C" }]}>{pendingCount}</Text>
+                    <Text style={[styles.statLabel, { color: isDark ? '#FB923C' : "#64748B" }]}>PENDING</Text>
                 </View>
-                <View style={[styles.statTile, { backgroundColor: "#EFF6FF" }]}>
-                    <Text style={[styles.statValue, { color: "#2563EB" }]}>{todayCount}</Text>
-                    <Text style={styles.statLabel}>TODAY</Text>
+                <View style={[styles.statTile, { backgroundColor: isDark ? '#1E40AF30' : "#EFF6FF" }]}>
+                    <Text style={[styles.statValue, { color: isDark ? '#60A5FA' : "#2563EB" }]}>{todayCount}</Text>
+                    <Text style={[styles.statLabel, { color: isDark ? '#60A5FA' : "#64748B" }]}>TODAY</Text>
                 </View>
-                <View style={[styles.statTile, { backgroundColor: "#FEF2F2" }]}>
-                    <Text style={[styles.statValue, { color: "#DC2626" }]}>{overdueCount}</Text>
-                    <Text style={styles.statLabel}>OVERDUE</Text>
+                <View style={[styles.statTile, { backgroundColor: isDark ? '#991B1B30' : "#FEF2F2" }]}>
+                    <Text style={[styles.statValue, { color: isDark ? '#F87171' : "#DC2626" }]}>{overdueCount}</Text>
+                    <Text style={[styles.statLabel, { color: isDark ? '#F87171' : "#64748B" }]}>OVERDUE</Text>
                 </View>
             </View>
 
-            <View style={styles.commandBar}>
-                <Ionicons name="search" size={20} color="#94A3B8" />
+            <View style={[styles.commandBar, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                <Ionicons name="search" size={20} color={theme.textMuted} />
                 <TextInput
-                    style={styles.commandInput}
+                    style={[styles.commandInput, { color: theme.text }]}
                     placeholder="Search Client or Subject..."
-                    placeholderTextColor="#94A3B8"
+                    placeholderTextColor={theme.textMuted}
                     value={search}
                     onChangeText={setSearch}
                 />
@@ -393,28 +412,29 @@ export default function ActivitiesScreen() {
                     contentContainerStyle={styles.filterScroll}
                     renderItem={({ item: t }) => {
                         const active = typeFilter === t;
-                        const meta = TYPE_META[t];
+                        const metaMap = isDark ? TYPE_META_DARK : TYPE_META_LIGHT;
+                        const meta = metaMap[t];
                         return (
                             <TouchableOpacity
-                                style={[styles.filterChip, active && { backgroundColor: "#0F172A", borderColor: "#0F172A" }]}
+                                style={[styles.filterChip, { backgroundColor: theme.card, borderColor: theme.border }, active && { backgroundColor: theme.primary, borderColor: theme.primary }]}
                                 onPress={() => setTypeFilter(t)}
                             >
                                 {meta && <Text style={styles.chipEmoji}>{meta.emoji}</Text>}
-                                <Text style={[styles.chipText, active && { color: "#fff" }]}>{t}</Text>
+                                <Text style={[styles.chipText, { color: theme.textLight }, active && { color: "#fff" }]}>{t}</Text>
                             </TouchableOpacity>
                         );
                     }}
                 />
             </View>
 
-            <View style={styles.statusDock}>
+            <View style={[styles.statusDock, { borderBottomColor: theme.border }]}>
                 {STATUS_TABS.map(s => (
                     <TouchableOpacity
                         key={s}
-                        style={[styles.dockItem, statusFilter === s && styles.dockItemActive]}
+                        style={[styles.dockItem, statusFilter === s && { borderBottomColor: theme.primary }]}
                         onPress={() => setStatusFilter(s)}
                     >
-                        <Text style={[styles.dockText, statusFilter === s && styles.dockTextActive]}>{s}</Text>
+                        <Text style={[styles.dockText, { color: theme.textLight }, statusFilter === s && { color: theme.primary }]}>{s}</Text>
                     </TouchableOpacity>
                 ))}
             </View>
@@ -488,15 +508,15 @@ export default function ActivitiesScreen() {
                     windowSize={5}
                     removeClippedSubviews={true}
                     getItemLayout={(data, index) => ({
-                        length: 160,
-                        offset: 160 * index,
+                        length: 135,
+                        offset: 135 * index,
                         index,
                     })}
-                    refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchActivities(); }} tintColor="#2563EB" />}
+                    refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchActivities(); }} tintColor={theme.primary} />}
                     ListEmptyComponent={
                         <View style={styles.empty}>
-                            <Ionicons name="calendar-outline" size={64} color="#E2E8F0" />
-                            <Text style={styles.emptyText}>No activities scheduled</Text>
+                            <Ionicons name="calendar-outline" size={64} color={theme.border} />
+                            <Text style={[styles.emptyText, { color: theme.textLight }]}>No activities scheduled</Text>
                         </View>
                     }
                 />
@@ -543,25 +563,25 @@ const styles = StyleSheet.create({
 
     list: { paddingHorizontal: 20, paddingBottom: 100 },
     card: {
-        flexDirection: "row", backgroundColor: "#fff", marginBottom: 16,
-        borderRadius: 24, overflow: "hidden", borderWidth: 1, borderColor: "#F1F5F9",
+        flexDirection: "row", backgroundColor: "#fff", marginBottom: 12,
+        borderRadius: 20, overflow: "hidden", borderWidth: 1, borderColor: "#F1F5F9",
         shadowColor: "#000", shadowOpacity: 0.03, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }
     },
     cardOverdue: { borderColor: "#FECACA", backgroundColor: "#FFF5F5" },
-    cardAccent: { width: 6 },
-    cardMain: { flex: 1, padding: 16 },
-    cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+    cardAccent: { width: 5 },
+    cardMain: { flex: 1, padding: 12 },
+    cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
 
-    typeBadge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, gap: 6 },
-    typeEmoji: { fontSize: 12 },
-    typeText: { fontSize: 10, fontWeight: "900" },
+    typeBadge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20, gap: 4 },
+    typeEmoji: { fontSize: 11 },
+    typeText: { fontSize: 9, fontWeight: "900" },
 
-    statusBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
-    statusBadgeText: { fontSize: 10, fontWeight: "800" },
+    statusBadge: { paddingHorizontal: 6, paddingVertical: 3, borderRadius: 6 },
+    statusBadgeText: { fontSize: 9, fontWeight: "800" },
 
-    subject: { fontSize: 16, fontWeight: "800", color: "#1E293B", lineHeight: 22, marginBottom: 8 },
-    clientRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 16 },
-    clientName: { fontSize: 13, color: "#64748B", fontWeight: "600" },
+    subject: { fontSize: 15, fontWeight: "800", color: "#1E293B", lineHeight: 20, marginBottom: 4 },
+    clientRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 },
+    clientName: { fontSize: 12, color: "#64748B", fontWeight: "600" },
 
     cardFooter: { flexDirection: 'row', alignItems: 'center', gap: 12 },
     metaGroup: { flexDirection: 'row', alignItems: 'center', gap: 4 },

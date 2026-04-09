@@ -11,6 +11,7 @@ import { useLookup } from "@/context/LookupContext";
 import { useUsers } from "@/context/UserContext";
 import { useProjects } from "@/context/ProjectContext";
 import api from "@/services/api";
+import { MultiSearchableDropdown } from "@/components/MultiSearchableDropdown";
 
 const DEAL_LOOKUP_TYPES = [
     "Property Type", "Unit Type", "Pricing Mode", "Transaction Type",
@@ -176,6 +177,7 @@ export default function AddDealScreen() {
             email: false,
             rcs: false
         },
+        teams: [],
         team: "",
         assignedTo: "",
         visibleTo: "Everyone",
@@ -189,7 +191,7 @@ export default function AddDealScreen() {
         lockInMonths: "",
     });
 
-    const [activeDropdown, setActiveDropdown] = useState<'project' | 'block' | 'unit' | 'status' | 'dealType' | 'transactionType' | 'source' | 'team' | 'agent' | 'visibility' | null>(null);
+    const [activeDropdown, setActiveDropdown] = useState<'project' | 'block' | 'unit' | 'status' | 'dealType' | 'transactionType' | 'source' | 'teams' | 'agent' | 'visibility' | null>(null);
 
     const [units, setUnits] = useState<any[]>([]);
     const [isLoadingUnits, setIsLoadingUnits] = useState(false);
@@ -446,7 +448,7 @@ export default function AddDealScreen() {
             }
 
             // Other populated drop downs
-            if (payload.team && typeof payload.team === 'object') payload.team = payload.team._id || payload.team.id;
+            payload.teams = formData.teams.length > 0 ? formData.teams : (formData.team ? [formData.team] : []);
             if (payload.assignedTo && typeof payload.assignedTo === 'object') payload.assignedTo = payload.assignedTo._id || payload.assignedTo.id;
 
             // Optional: If units is loaded, set inventoryId to sync inventory status
@@ -814,13 +816,21 @@ export default function AddDealScreen() {
                         </View>
 
                         <SectionTitle title="System & Assignment" icon="⚙️" />
-                        <FormLabel label="Team" />
-                        <TouchableOpacity style={styles.pickerContainer} onPress={() => setActiveDropdown('team')}>
-                            <Text style={[styles.nativeSelect, !formData.team && { color: '#94A3B8' }]}>
-                                {teams.find(t => (t._id || t.id) === formData.team)?.name || "Select Team"}
+                        <FormLabel label="Team(s)" />
+                        <TouchableOpacity style={styles.pickerContainer} onPress={() => setActiveDropdown('teams')}>
+                            <Text style={[styles.nativeSelect, (formData.teams || []).length === 0 && { color: '#94A3B8' }]}>
+                                {formData.teams && formData.teams.length > 0 ? `${formData.teams.length} Team(s) Selected` : "Select Teams"}
                             </Text>
-                            <Ionicons name="chevron-down" size={18} color="#64748B" style={{ position: 'absolute', right: 12 }} />
+                            <Ionicons name="people-outline" size={18} color="#64748B" style={{ position: 'absolute', right: 12 }} />
                         </TouchableOpacity>
+
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 8 }}>
+                            {formData.teams?.map((tid: string) => (
+                                <View key={tid} style={{ backgroundColor: '#1E3A8A15', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, marginRight: 6, marginBottom: 6 }}>
+                                    <Text style={{ fontSize: 10, fontWeight: '700', color: '#1E3A8A' }}>{teams.find(t => (t._id || t.id) === tid)?.name || tid}</Text>
+                                </View>
+                            ))}
+                        </View>
 
                         <FormLabel label="Assigned RM" />
                         <TouchableOpacity style={styles.pickerContainer} onPress={() => setActiveDropdown('agent')}>
@@ -861,23 +871,27 @@ export default function AddDealScreen() {
                 placeholder="Select Unit"
                 onSelect={handleUnitChange}
             />
-            <SearchableDropdown
-                visible={activeDropdown === 'team'}
+            <MultiSearchableDropdown
+                visible={activeDropdown === 'teams'}
                 onClose={() => setActiveDropdown(null)}
-                options={teams.map((t: any) => ({ label: t.name, value: t._id || t.id }))}
-                placeholder="Select Team"
-                onSelect={val => setFormData({ ...formData, team: val, assignedTo: "" })}
+                options={teams.map(t => ({ label: t.name, value: t._id || t.id }))}
+                selectedValues={formData.teams}
+                onToggle={(val: string) => {
+                    const current = formData.teams || [];
+                    const newList = current.includes(val) ? current.filter((i: string) => i !== val) : [...current, val];
+                    setFormData({ ...formData, teams: newList, assignedTo: "" });
+                }}
+                placeholder="Select Teams"
             />
             <SearchableDropdown
                 visible={activeDropdown === 'agent'}
                 onClose={() => setActiveDropdown(null)}
                 options={users
                     .filter((user: any) => {
-                        if (!formData.team) return true;
-                        const userTeamId = typeof user.team === 'object' ? user.team?._id : user.team;
-                        return userTeamId === formData.team;
+                        if (formData.teams?.length === 0) return true;
+                        return formData.teams?.some((tid: string) => (user.teams || []).includes(tid) || user.team === tid);
                     })
-                    .map((u: any) => ({ label: u.name || u.fullName, value: u._id || u.id }))}
+                    .map((u: any) => ({ label: u.fullName || u.name, value: u._id || u.id }))}
                 placeholder="Select Agent"
                 onSelect={val => setFormData({ ...formData, assignedTo: val })}
             />

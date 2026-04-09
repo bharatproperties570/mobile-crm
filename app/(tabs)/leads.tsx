@@ -22,34 +22,64 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get("window");
 
-const STATUS_COLORS: Record<string, string> = {
+const STATUS_COLORS_LIGHT: Record<string, string> = {
     active: "#10B981", new: "#64748B", contacted: "#8B5CF6",
     qualified: "#7C3AED", prospect: "#3B82F6", opportunity: "#F59E0B",
     negotiation: "#F97316", booked: "#10B981", won: "#059669", 
-    lost: "#EF4444", stalled: "#78716C", dormant: "#64748B",
+    lost: "#EF4444", stalled: "#78716C", dormant: "#94A3B8",
     hot: "#EF4444", warm: "#F59E0B", cold: "#3B82F6",
     urgent: "#E11D48"
 };
 
-const STAGE_CONFIG: Record<string, { color: string; icon: any }> = {
-    "New": { color: "#64748B", icon: "star" },
+const STATUS_COLORS_DARK: Record<string, string> = {
+    active: "#34D399", new: "#94A3B8", contacted: "#A78BFA",
+    qualified: "#8B5CF6", prospect: "#60A5FA", opportunity: "#FBBF24",
+    negotiation: "#FB923C", booked: "#34D399", won: "#10B981", 
+    lost: "#F87171", stalled: "#A8A29E", dormant: "#CBD5E1",
+    hot: "#F87171", warm: "#FBBF24", cold: "#60A5FA",
+    urgent: "#F43F5E"
+};
+
+const STAGE_CONFIG_LIGHT: Record<string, { color: string; icon: any }> = {
+    "New": { color: "#94A3B8", icon: "star" },
     "Prospect": { color: "#3B82F6", icon: "person" },
-    "Qualified": { color: "#7C3AED", icon: "checkmark-circle" },
+    "Qualified": { color: "#8B5CF6", icon: "checkmark-circle" },
     "Opportunity": { color: "#F59E0B", icon: "flame" },
     "Negotiation": { color: "#F97316", icon: "chatbubbles" },
     "Booked": { color: "#10B981", icon: "calendar" },
-    "Closed Won": { color: "#059669", icon: "trophy" },
+    "Closed Won": { color: "#10B981", icon: "trophy" },
     "Closed Lost": { color: "#EF4444", icon: "close-circle" },
-    "Stalled": { color: "#78716C", icon: "pause-circle" },
+    "Stalled": { color: "#64748B", icon: "pause-circle" },
     "Dormant": { color: "#64748B", icon: "moon" },
     "default": { color: "#94A3B8", icon: "help-circle" }
 };
 
-const REQ_CONFIG: Record<string, { icon: any; color: string; label: string }> = {
+const STAGE_CONFIG_DARK: Record<string, { color: string; icon: any }> = {
+    "New": { color: "#CBD5E1", icon: "star" },
+    "Prospect": { color: "#60A5FA", icon: "person" },
+    "Qualified": { color: "#A78BFA", icon: "checkmark-circle" },
+    "Opportunity": { color: "#FBBF24", icon: "flame" },
+    "Negotiation": { color: "#FB923C", icon: "chatbubbles" },
+    "Booked": { color: "#34D399", icon: "calendar" },
+    "Closed Won": { color: "#34D399", icon: "trophy" },
+    "Closed Lost": { color: "#F87171", icon: "close-circle" },
+    "Stalled": { color: "#94A3B8", icon: "pause-circle" },
+    "Dormant": { color: "#94A3B8", icon: "moon" },
+    "default": { color: "#CBD5E1", icon: "help-circle" }
+};
+
+const REQ_CONFIG_LIGHT: Record<string, { icon: any; color: string; label: string }> = {
     buy: { icon: "cart", color: "#6366F1", label: "BUY" },
     rent: { icon: "key", color: "#F59E0B", label: "RENT" },
     lease: { icon: "business", color: "#8B5CF6", label: "LEASE" },
     default: { icon: "home", color: "#94A3B8", label: "REQ" }
+};
+
+const REQ_CONFIG_DARK: Record<string, { icon: any; color: string; label: string }> = {
+    buy: { icon: "cart", color: "#818CF8", label: "BUY" },
+    rent: { icon: "key", color: "#FBBF24", label: "RENT" },
+    lease: { icon: "business", color: "#A78BFA", label: "LEASE" },
+    default: { icon: "home", color: "#CBD5E1", label: "REQ" }
 };
 
 function formatTimeAgo(dateString?: string) {
@@ -66,26 +96,27 @@ function formatTimeAgo(dateString?: string) {
     return `${diffDays}d ago`;
 }
 
-function getLeadScore(lead: Lead) {
+function getLeadScore(lead: Lead, isDark = false) {
+    const bgOpacity = isDark ? '20' : '10';
     // 1. Prefer Backend Enrichment Score if available (Lead Score 3.0)
     if (lead.intent_index !== undefined && lead.intent_index !== null) {
         const scoreVal = lead.intent_index || 0;
         let color = "#64748B"; // Cold
-        if (scoreVal >= 81) color = "#7C3AED"; // Super Hot
+        if (scoreVal >= 81) color = "#8B5CF6"; // Super Hot
         else if (scoreVal >= 61) color = "#EF4444"; // Hot
         else if (scoreVal >= 31) color = "#F59E0B"; // Warm
 
-        return { val: scoreVal, color, bg: color + '10' };
+        return { val: scoreVal, color, bg: color + bgOpacity };
     }
 
     // 2. Fallback to heuristic logic if not enriched
     const stage = lookupVal(lead.stage).toLowerCase();
-    if (stage === "hot") return { val: 98, color: "#EF4444", bg: "#FEF2F2" };
-    if (["new", "contacted"].includes(stage)) return { val: 65, color: "#3B82F6", bg: "#EFF6FF" };
-    if (["qualified", "active"].includes(stage)) return { val: 85, color: "#10B981", bg: "#F0FDF4" };
-    if (["won"].includes(stage)) return { val: 100, color: "#059669", bg: "#ECFDF5" };
-    if (stage === "dormant") return { val: 0, color: "#64748B", bg: "#F8FAFC" };
-    return { val: 30, color: "#64748B", bg: "#F8FAFC" };
+    if (stage === "hot") return { val: 98, color: "#EF4444", bg: "#EF4444" + bgOpacity };
+    if (["new", "contacted"].includes(stage)) return { val: 65, color: "#3B82F6", bg: "#3B82F6" + bgOpacity };
+    if (["qualified", "active"].includes(stage)) return { val: 85, color: "#10B981", bg: "#10B981" + bgOpacity };
+    if (["won"].includes(stage)) return { val: 100, color: "#10B981", bg: "#10B981" + bgOpacity };
+    if (stage === "dormant") return { val: 0, color: "#64748B", bg: "#64748B" + bgOpacity };
+    return { val: 30, color: "#64748B", bg: "#64748B" + bgOpacity };
 }
 
 function ActionSheet({ visible, onClose, lead, onUpdate, statuses, users }: {
@@ -97,6 +128,7 @@ function ActionSheet({ visible, onClose, lead, onUpdate, statuses, users }: {
     users: any[];
 }) {
     const router = useRouter();
+    const { theme } = useTheme();
     const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
     const [showStatusPicker, setShowStatusPicker] = useState(false);
     const [showReassign, setShowReassign] = useState(false);
@@ -229,8 +261,8 @@ function ActionSheet({ visible, onClose, lead, onUpdate, statuses, users }: {
                         contentContainerStyle={{ paddingBottom: 60 }}
                     >
                         <View style={styles.sheetHeader}>
-                            <Text style={styles.sheetTitle}>{leadName(lead)}</Text>
-                            <Text style={styles.sheetSub}>{lead.mobile}</Text>
+                            <Text style={[styles.sheetTitle, { color: theme.text }]}>{leadName(lead)}</Text>
+                            <Text style={[styles.sheetSub, { color: theme.textSecondary }]}>{lead.mobile}</Text>
                         </View>
 
                         <View style={styles.actionGrid}>
@@ -445,8 +477,9 @@ function FilterModal({ visible, onClose, filters, setFilters, statuses, users, s
     );
 }
 
-const LeadScoreRing = memo(({ score, color = "#2563EB", size = 44 }: { score: number; color?: string; size?: number }) => {
+const LeadScoreRing = memo(({ score, isDark, color = "#2563EB", size = 44 }: { score: number; isDark: boolean; color?: string; size?: number }) => {
     const strokeWidth = 3;
+    const { theme } = useTheme();
     const radius = (size - strokeWidth) / 2;
     const circumference = radius * 2 * Math.PI;
     const animatedValue = useRef(new Animated.Value(0)).current;
@@ -463,7 +496,7 @@ const LeadScoreRing = memo(({ score, color = "#2563EB", size = 44 }: { score: nu
         <View style={{ width: size, height: size, justifyContent: 'center', alignItems: 'center' }}>
             <View style={{
                 width: size, height: size, borderRadius: size / 2,
-                borderWidth: strokeWidth, borderColor: 'rgba(241, 245, 249, 1)',
+                borderWidth: strokeWidth, borderColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(241, 245, 249, 1)',
                 position: 'absolute'
             }} />
             <View style={{
@@ -476,7 +509,7 @@ const LeadScoreRing = memo(({ score, color = "#2563EB", size = 44 }: { score: nu
                 borderTopColor: color,
                 transform: [{ rotate: '-45deg' }]
             }} />
-            <Text style={{ fontSize: 9, fontWeight: '800', color: '#1E293B', position: 'absolute' }}>{score}</Text>
+            <Text style={{ fontSize: 9, fontWeight: '800', color: theme.text, position: 'absolute' }}>{score}</Text>
         </View>
     );
 });
@@ -516,9 +549,11 @@ const LeadCard = memo(({ lead, index, onPress, onMore, isSelected, onLongPress, 
     const { trackCall } = useCallTracking();
     const { getLookupValue } = useLookup();
     const name = leadName(lead);
+    const isDark = theme.background === '#0F172A';
+    const stageCfgMap = isDark ? STAGE_CONFIG_DARK : STAGE_CONFIG_LIGHT;
     const stageLabel = getLookupValue("Stage", lead.stage) || "New";
-    const stageCfg = STAGE_CONFIG[stageLabel] || STAGE_CONFIG.default;
-    const score = liveScore ? { val: liveScore.score, color: liveScore.color } : getLeadScore(lead);
+    const stageCfg = stageCfgMap[stageLabel] || stageCfgMap.default;
+    const score = liveScore ? { val: liveScore.score, color: liveScore.color } : getLeadScore(lead, isDark);
 
     const scaleValue = useRef(new Animated.Value(1)).current;
     const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -570,9 +605,9 @@ const LeadCard = memo(({ lead, index, onPress, onMore, isSelected, onLongPress, 
 
     const intent = getLookupValue("Requirement", lead.requirement).toLowerCase();
     const intentConfig: Record<string, { bg: string; text: string }> = {
-        buy: { bg: '#DCFCE7', text: '#15803D' },
-        rent: { bg: '#FFEDD5', text: '#C2410C' },
-        lease: { bg: '#E0F2FE', text: '#0369A1' }
+        buy: { bg: isDark ? 'rgba(34, 197, 94, 0.15)' : '#DCFCE7', text: isDark ? '#34D399' : '#15803D' },
+        rent: { bg: isDark ? 'rgba(245, 158, 11, 0.15)' : '#FFEDD5', text: isDark ? '#FBBF24' : '#C2410C' },
+        lease: { bg: isDark ? 'rgba(59, 130, 246, 0.15)' : '#E0F2FE', text: isDark ? '#60A5FA' : '#0369A1' }
     };
     const currentIntent = intentConfig[intent] || null;
 
@@ -588,14 +623,14 @@ const LeadCard = memo(({ lead, index, onPress, onMore, isSelected, onLongPress, 
                     style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border, position: 'relative' }, isSelected && styles.cardSelected]}
                 >
                     {currentIntent ? (
-                        <View style={[styles.intentRibbon, { backgroundColor: currentIntent.bg }]}>
-                            <Text style={[styles.intentRibbonText, { color: currentIntent.text }]}>{intent.toUpperCase()}</Text>
+                        <View style={[styles.intentRibbon, { backgroundColor: isDark ? currentIntent.text + '25' : currentIntent.bg }]}>
+                            <Text style={[styles.intentRibbonText, { color: isDark ? currentIntent.text : currentIntent.text }]}>{intent.toUpperCase()}</Text>
                         </View>
                     ) : null}
 
                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                         <View style={styles.leftScoreContainer}>
-                            <LeadScoreRing score={score.val} color={score.color} size={42} />
+                            <LeadScoreRing score={score.val} isDark={isDark} color={score.color} size={42} />
                         </View>
 
                         <View style={{ flex: 1 }}>
@@ -622,7 +657,7 @@ const LeadCard = memo(({ lead, index, onPress, onMore, isSelected, onLongPress, 
                                         <Text style={[styles.stageText, { color: stageCfg.color }]}>{stageLabel.toUpperCase()}</Text>
                                     </View>
                                     <TouchableOpacity onPress={onMore} style={styles.moreBtn}>
-                                        <Ionicons name="ellipsis-vertical" size={16} color="#CBD5E1" />
+                                        <Ionicons name="ellipsis-vertical" size={16} color={theme.textLight} />
                                     </TouchableOpacity>
                                 </View>
                             </View>

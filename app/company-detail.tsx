@@ -22,14 +22,22 @@ const getInitials = (name?: string) => {
     return name.split(" ").map((n) => n[0]).join("").substring(0, 2).toUpperCase();
 };
 
-function lv(field: unknown): string {
-    if (!field) return "—";
-    if (typeof field === "object" && field !== null) {
-        if ("lookup_value" in field) return (field as any).lookup_value ?? "—";
-        if ("fullName" in field) return (field as any).fullName ?? "—";
-        if ("name" in field) return (field as any).name ?? "—";
+function lv(field: unknown): any {
+    if (field === null || field === undefined || field === "" || field === "null" || field === "undefined") return "—";
+    
+    // Handle array of objects/strings (Multi-team support)
+    if (Array.isArray(field)) {
+        if (field.length === 0) return "—";
+        return field.map(item => lv(item)).filter(v => v !== "—");
     }
-    return String(field) || "—";
+
+    if (typeof field === "object" && field !== null) {
+        if ("lookup_value" in field && (field as any).lookup_value) return (field as any).lookup_value;
+        if ("fullName" in field && (field as any).fullName) return (field as any).fullName;
+        if ("name" in field && (field as any).name) return (field as any).name;
+    }
+    const str = String(field).trim();
+    return str || "—";
 }
 
 function InfoRow({ label, value, accent, icon }: { label: string; value: string; accent?: boolean; icon?: any }) {
@@ -153,6 +161,7 @@ export default function CompanyDetailScreen() {
     if (loading) return <View style={[styles.center, { backgroundColor: theme.background }]}><ActivityIndicator size="large" color={theme.primary} /></View>;
     if (!company) return <View style={[styles.center, { backgroundColor: theme.background }]}><Text style={[styles.noData, { color: theme.textLight }]}>Company not found</Text></View>;
 
+    const isDark = theme.background === '#0F172A';
     const primaryPhone = company.phones?.[0]?.phoneNumber || company.authorizedSignatory?.mobile;
     const primaryEmail = company.emails?.[0]?.address || company.authorizedSignatory?.email;
 
@@ -160,17 +169,17 @@ export default function CompanyDetailScreen() {
         <View style={[styles.container, { backgroundColor: theme.background }]}>
             <SafeAreaView style={[styles.headerCard, { backgroundColor: theme.card }]}>
                 <View style={styles.headerTop}>
-                    <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace("/(tabs)/companies")} style={styles.backBtnCircle}>
+                    <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace("/(tabs)/companies")} style={[styles.backBtnCircle, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }]}>
                         <Ionicons name="chevron-back" size={24} color={theme.text} />
                     </TouchableOpacity>
                     <View style={styles.headerTitleContainer}>
                         <Text style={[styles.headerNamePremium, { color: theme.text }]} numberOfLines={1}>{company.name}</Text>
                         <View style={styles.headerBadgeRow}>
-                            <View style={[styles.miniBadge, { backgroundColor: theme.primary + '15' }]}>
-                                <Text style={[styles.miniBadgeText, { color: theme.primary }]}>{lv(company.companyType).toUpperCase()}</Text>
+                            <View style={[styles.miniBadge, { backgroundColor: isDark ? 'rgba(99, 102, 241, 0.15)' : theme.primary + '15' }]}>
+                                <Text style={[styles.miniBadgeText, { color: isDark ? '#818CF8' : theme.primary }]}>{lv(company.companyType).toUpperCase()}</Text>
                             </View>
-                            <View style={[styles.miniBadge, { backgroundColor: theme.success + '15' }]}>
-                                <Text style={[styles.miniBadgeText, { color: theme.success }]}>{lv(company.industry).toUpperCase()}</Text>
+                            <View style={[styles.miniBadge, { backgroundColor: isDark ? 'rgba(16, 185, 129, 0.15)' : theme.success + '15' }]}>
+                                <Text style={[styles.miniBadgeText, { color: isDark ? '#34D399' : theme.success }]}>{lv(company.industry).toUpperCase()}</Text>
                             </View>
                         </View>
                     </View>
@@ -191,12 +200,26 @@ export default function CompanyDetailScreen() {
                     <View style={[styles.strategyDivider, { backgroundColor: theme.border }]} />
 
                     <View style={styles.strategyBlock}>
-                        <Text style={[styles.strategyLabel, { color: theme.textLight }]}>TEAM</Text>
-                        <View style={styles.strategyValueRow}>
-                            <Ionicons name="people-circle" size={14} color="#6366F1" />
-                            <Text style={[styles.strategyValue, { color: theme.text }]} numberOfLines={1}>
-                                {lv(company.team)}
-                            </Text>
+                        <Text style={[styles.strategyLabel, { color: theme.textLight }]}>TEAMS</Text>
+                        <View style={[styles.strategyValueRow, { flexWrap: 'wrap', gap: 4 }]}>
+                            {(() => {
+                                const teamData = lv(company.teams || company.team);
+                                if (Array.isArray(teamData)) {
+                                    return teamData.map((t, idx) => (
+                                        <View key={idx} style={[styles.teamMiniBadge, { backgroundColor: isDark ? 'rgba(99, 102, 241, 0.15)' : '#6366F1' + '10' }]}>
+                                            <Text style={[styles.teamMiniBadgeText, { color: isDark ? '#818CF8' : '#6366F1' }]}>{t}</Text>
+                                        </View>
+                                    ));
+                                }
+                                return (
+                                    <>
+                                        <Ionicons name="people-circle" size={14} color={isDark ? '#818CF8' : "#6366F1"} />
+                                        <Text style={[styles.strategyValue, { color: theme.text }]} numberOfLines={1}>
+                                            {teamData}
+                                        </Text>
+                                    </>
+                                );
+                            })()}
                         </View>
                     </View>
                 </View>
@@ -205,10 +228,10 @@ export default function CompanyDetailScreen() {
                 <View style={styles.modernActionHub}>
                     {[
                         { icon: 'call', color: theme.primary, onPress: () => primaryPhone ? Linking.openURL(`tel:${primaryPhone}`) : Alert.alert("No Phone", "No contact number available") },
-                        { icon: 'chatbox-ellipses', color: '#8B5CF6', onPress: () => primaryPhone ? Linking.openURL(`sms:${primaryPhone}`) : Alert.alert("No Phone", "No contact number available") },
-                        { icon: 'logo-whatsapp', color: '#10B981', onPress: () => primaryPhone ? Linking.openURL(`https://wa.me/${primaryPhone.replace(/\D/g, '')}`) : Alert.alert("No WhatsApp", "No mobile number available") },
-                        { icon: 'mail', color: '#F59E0B', onPress: () => primaryEmail ? Linking.openURL(`mailto:${primaryEmail}`) : Alert.alert("No Email", "No email address available") },
-                        { icon: 'calendar', color: '#EC4899', onPress: () => router.push(`/add-activity?id=${id}&type=Company`) },
+                        { icon: 'chatbox-ellipses', color: isDark ? '#A78BFA' : '#8B5CF6', onPress: () => primaryPhone ? Linking.openURL(`sms:${primaryPhone}`) : Alert.alert("No Phone", "No contact number available") },
+                        { icon: 'logo-whatsapp', color: isDark ? '#059669' : '#10B981', onPress: () => primaryPhone ? Linking.openURL(`https://wa.me/${primaryPhone.replace(/\D/g, '')}`) : Alert.alert("No WhatsApp", "No mobile number available") },
+                        { icon: 'mail', color: isDark ? '#FBBF24' : '#F59E0B', onPress: () => primaryEmail ? Linking.openURL(`mailto:${primaryEmail}`) : Alert.alert("No Email", "No email address available") },
+                        { icon: 'calendar', color: isDark ? '#F472B6' : '#EC4899', onPress: () => router.push(`/add-activity?id=${id}&type=Company`) },
                     ].map((action, i) => (
                         <TouchableOpacity key={i} style={[styles.modernHubBtn, { backgroundColor: action.color }]} onPress={action.onPress}>
                             <Ionicons name={action.icon as any} size={20} color={"#fff"} />
@@ -535,4 +558,17 @@ const styles = StyleSheet.create({
     timelineDate: { fontSize: 10, color: '#94a3b8', fontWeight: '600' },
     timelineSubject: { fontSize: 14, fontWeight: '700', marginBottom: 4 },
     timelineNote: { fontSize: 12, lineHeight: 18 },
+
+    teamMiniBadge: {
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 6,
+        borderWidth: 1,
+        borderColor: 'rgba(99, 102, 241, 0.2)',
+    },
+    teamMiniBadgeText: {
+        fontSize: 9,
+        fontWeight: '800',
+        textTransform: 'uppercase',
+    },
 });

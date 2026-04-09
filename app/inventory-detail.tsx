@@ -18,6 +18,9 @@ const TABS = ["Details", "Location", "Activities", "Owner", "Document", "History
 
 function lv(field: unknown): string {
     if (field === null || field === undefined || field === "" || field === "null" || field === "undefined") return "—";
+    if (Array.isArray(field)) {
+        return field.map(f => lv(f)).filter(v => v !== "—").join(", ") || "—";
+    }
     if (typeof field === "object" && field !== null) {
         const val = (field as any).lookup_value || (field as any).fullName || (field as any).name || (field as any).label || (field as any).value;
         if (val && typeof val !== 'object') return String(val).trim();
@@ -143,7 +146,8 @@ export default function InventoryDetailScreen() {
 
     const resolvedStatus = resolveStatus(inv.status);
     const stageLabel = INACTIVE_STATUSES.includes(resolvedStatus) ? 'InActive' : 'Active';
-    const stageColor = stageLabel === 'Active' ? '#10B981' : '#F59E0B';
+    const isDark = theme.background === '#0F172A';
+    const stageColor = stageLabel === 'Active' ? (isDark ? '#34D399' : '#10B981') : (isDark ? '#FBBF24' : '#F59E0B');
     const unitNo = lv(inv.unitNumber || inv.unitNo);
     const unitType = lv(inv.unitType);
     const projectName = lv(inv.projectName || "Unknown Project");
@@ -154,24 +158,24 @@ export default function InventoryDetailScreen() {
             {/* Premium SaaS Header */}
             <SafeAreaView style={[styles.headerCard, { backgroundColor: theme.card }]}>
                 <View style={styles.headerTop}>
-                    <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace("/(tabs)/inventory")} style={styles.backBtnCircle}>
+                    <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace("/(tabs)/inventory")} style={[styles.backBtnCircle, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }]}>
                         <Ionicons name="chevron-back" size={22} color={theme.text} />
                     </TouchableOpacity>
                     <View style={styles.headerTitleContainer}>
                         <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 6 }}>
                             <Text style={[styles.headerNamePremium, { color: theme.text }]} numberOfLines={1}>{unitNo}</Text>
                             {unitType !== "—" && (
-                                <Text style={{ fontSize: 13, fontWeight: '700', color: '#6366F1', marginBottom: 3 }}>
+                                <Text style={{ fontSize: 13, fontWeight: '700', color: isDark ? '#818CF8' : '#6366F1', marginBottom: 3 }}>
                                     {unitType}
                                 </Text>
                             )}
                         </View>
                         <View style={styles.headerBadgeRow}>
-                            <View style={[styles.miniBadge, { backgroundColor: theme.primary + '20' }]}>
-                                <Text style={[styles.miniBadgeText, { color: theme.primary }]}>{projectName}</Text>
+                            <View style={[styles.miniBadge, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : theme.primary + '20' }]}>
+                                <Text style={[styles.miniBadgeText, { color: isDark ? theme.textSecondary : theme.primary }]}>{projectName}</Text>
                             </View>
                             {block !== "—" && (
-                                <View style={[styles.miniBadge, { backgroundColor: theme.border + '40' }]}>
+                                <View style={[styles.miniBadge, { backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : theme.border + '40' }]}>
                                     <Text style={[styles.miniBadgeText, { color: theme.textLight }]}>Block {block}</Text>
                                 </View>
                             )}
@@ -207,12 +211,22 @@ export default function InventoryDetailScreen() {
                     <View style={[styles.strategyDivider, { backgroundColor: theme.border }]} />
 
                     <View style={styles.strategyBlock}>
-                        <Text style={[styles.strategyLabel, { color: theme.textLight }]}>TEAM</Text>
-                        <View style={styles.strategyValueRow}>
-                            <Ionicons name="people-outline" size={14} color="#6366F1" />
-                            <Text style={[styles.strategyValue, { color: theme.text }]} numberOfLines={1}>
-                                {lv(inv.team)}
-                            </Text>
+                        <Text style={[styles.strategyLabel, { color: theme.textLight }]}>TEAM(S)</Text>
+                        <View style={[styles.strategyValueRow, { flexWrap: 'wrap', gap: 4 }]}>
+                            {Array.isArray(inv.teams) && inv.teams.length > 0 ? (
+                                inv.teams.map((t: any, i: number) => (
+                                    <View key={i} style={{ backgroundColor: isDark ? 'rgba(129, 140, 248, 0.15)' : '#6366F110', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                                        <Text style={{ fontSize: 9, fontWeight: '800', color: isDark ? '#C7D2FE' : '#6366F1' }}>{lv(t).toUpperCase()}</Text>
+                                    </View>
+                                ))
+                            ) : (
+                                <>
+                                    <Ionicons name="people-outline" size={12} color={isDark ? '#818CF8' : "#6366F1"} />
+                                    <Text style={[styles.strategyValue, { color: theme.text }]} numberOfLines={1}>
+                                        {lv(inv.team)}
+                                    </Text>
+                                </>
+                            )}
                         </View>
                     </View>
                 </View>
@@ -227,9 +241,9 @@ export default function InventoryDetailScreen() {
                     </View>
 
                     {inv.intent && (
-                        <View style={[styles.marketingPill, { backgroundColor: '#7C3AED' + '10' }]}>
-                            <Ionicons name="flag" size={12} color="#7C3AED" />
-                            <Text style={[styles.marketingText, { color: '#7C3AED' }]}>
+                        <View style={[styles.marketingPill, { backgroundColor: isDark ? 'rgba(124, 58, 237, 0.15)' : '#7C3AED' + '10' }]}>
+                            <Ionicons name="flag" size={12} color={isDark ? '#A78BFA' : "#7C3AED"} />
+                            <Text style={[styles.marketingText, { color: isDark ? '#A78BFA' : '#7C3AED' }]}>
                                 {lv(inv.intent).toUpperCase()}
                             </Text>
                         </View>
@@ -247,10 +261,10 @@ export default function InventoryDetailScreen() {
 
                         return [
                             { icon: 'call', color: theme.primary, onPress: () => ownerPhone ? Linking.openURL(`tel:${cleanPhone}`) : Alert.alert("No Phone", "Owner contact number not available") },
-                            { icon: 'chatbubble-ellipses', color: '#3B82F6', onPress: () => ownerPhone ? Linking.openURL(`sms:${cleanPhone}`) : Alert.alert("No Phone", "Owner contact number not available") },
+                            { icon: 'chatbubble-ellipses', color: isDark ? '#3B82F6' : '#3B82F6', onPress: () => ownerPhone ? Linking.openURL(`sms:${cleanPhone}`) : Alert.alert("No Phone", "Owner contact number not available") },
                             { icon: 'logo-whatsapp', color: '#128C7E', onPress: () => ownerPhone ? Linking.openURL(`https://wa.me/${cleanPhone}`) : Alert.alert("No Phone", "Owner contact number not available") },
-                            { icon: 'mail', color: '#EA4335', onPress: () => ownerEmail ? Linking.openURL(`mailto:${ownerEmail}`) : Alert.alert("No Email", "Owner email address not available") },
-                            { icon: 'share-social', color: '#6366F1', onPress: () => Alert.alert("Share Wall", `Sharing details for Unit ${unitNo} at ${projectName}`) },
+                            { icon: 'mail', color: isDark ? '#F87171' : '#EA4335', onPress: () => ownerEmail ? Linking.openURL(`mailto:${ownerEmail}`) : Alert.alert("No Email", "Owner email address not available") },
+                            { icon: 'share-social', color: isDark ? '#818CF8' : '#6366F1', onPress: () => Alert.alert("Share Wall", `Sharing details for Unit ${unitNo} at ${projectName}`) },
                         ].map((action, i) => (
                             <TouchableOpacity key={i} style={[styles.modernHubBtn, { backgroundColor: action.color }]} onPress={action.onPress}>
                                 <Ionicons name={action.icon as any} size={20} color="#fff" />
@@ -446,8 +460,8 @@ export default function InventoryDetailScreen() {
                                                 <Text style={{ fontSize: 9, color: '#94A3B8', fontWeight: '600', marginTop: 2 }}>Legacy record</Text>
                                             )}
                                         </View>
-                                        <View style={[styles.relationBadge, { backgroundColor: '#10B981' + '10' }]}>
-                                            <Text style={{ fontSize: 10, color: '#10B981', fontWeight: '700' }}>OWNER</Text>
+                                        <View style={[styles.relationBadge, { backgroundColor: isDark ? 'rgba(16, 185, 129, 0.15)' : '#10B981' + '10' }]}>
+                                            <Text style={{ fontSize: 10, color: isDark ? '#34D399' : '#10B981', fontWeight: '700' }}>OWNER</Text>
                                         </View>
                                     </TouchableOpacity>
                                 ));
@@ -478,8 +492,8 @@ export default function InventoryDetailScreen() {
                                                 <Text style={{ fontSize: 10, color: '#F59E0B', fontWeight: '700', marginTop: 2 }}>{assoc.relationship}</Text>
                                             ) : null}
                                         </View>
-                                        <View style={[styles.relationBadge, { backgroundColor: theme.primary + '10' }]}>
-                                            <Text style={{ fontSize: 10, color: theme.primary, fontWeight: '700' }}>ASSOCIATE</Text>
+                                        <View style={[styles.relationBadge, { backgroundColor: isDark ? 'rgba(37, 99, 235, 0.15)' : theme.primary + '10' }]}>
+                                            <Text style={{ fontSize: 10, color: isDark ? '#60A5FA' : theme.primary, fontWeight: '700' }}>ASSOCIATE</Text>
                                         </View>
                                     </TouchableOpacity>
                                 ))}
@@ -503,8 +517,8 @@ export default function InventoryDetailScreen() {
                             ) : (
                                 inv.inventoryDocuments.map((doc: any, i: number) => (
                                     <View key={i} style={[styles.docItem, { borderBottomColor: theme.border }]}>
-                                        <View style={[styles.docIcon, { backgroundColor: theme.primary + '10' }]}>
-                                            <Ionicons name="document-text" size={20} color={theme.primary} />
+                                        <View style={[styles.docIcon, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : theme.primary + '10' }]}>
+                                            <Ionicons name="document-text" size={20} color={isDark ? theme.textSecondary : theme.primary} />
                                         </View>
                                         <View style={styles.docInfo}>
                                             <Text style={[styles.docName, { color: theme.text }]}>

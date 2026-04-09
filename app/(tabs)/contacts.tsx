@@ -14,6 +14,7 @@ import {
 import { safeApiCall } from "@/services/api.helpers";
 import { useCallTracking } from "@/context/CallTrackingContext";
 import { getOrCreateCallActivity } from "@/services/activities.service";
+import { useTheme } from "@/context/ThemeContext";
 import { useLookup } from "@/context/LookupContext";
 import FilterModal, { FilterField } from "@/components/FilterModal";
 
@@ -25,12 +26,20 @@ const CONTACT_FILTER_FIELDS: FilterField[] = [
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get("window");
 const AVATAR_COLORS = ["#6366F1", "#8B5CF6", "#EC4899", "#F59E0B", "#10B981", "#3B82F6"];
 
-const STAGE_COLORS: Record<string, string> = {
+const STAGE_COLORS_LIGHT: Record<string, string> = {
     new: "#6366F1",
     warm: "#F59E0B",
     hot: "#EF4444",
     cold: "#94A3B8",
     active: "#10B981",
+};
+
+const STAGE_COLORS_DARK: Record<string, string> = {
+    new: "#818CF8",
+    warm: "#FBBF24",
+    hot: "#F87171",
+    cold: "#CBD5E1",
+    active: "#34D399",
 };
 
 function getInitials(c: Contact): string {
@@ -46,14 +55,17 @@ function getInitials(c: Contact): string {
 }
 
 const ContactCard = memo(({ contact, idx, onPress, onMenuPress }: { contact: Contact; idx: number; onPress: () => void; onMenuPress: () => void }) => {
+    const { theme } = useTheme();
     const { trackCall } = useCallTracking();
     const { getLookupValue } = useLookup();
     const color = AVATAR_COLORS[idx % AVATAR_COLORS.length];
     const name = contactFullName(contact);
     const phone = contactPhone(contact);
     const email = contactEmail(contact);
+    const isDark = theme.background === '#0F172A';
     const stage = (contact.stage || "new").toLowerCase();
-    const stageColor = STAGE_COLORS[stage] ?? "#94A3B8";
+    const stageColorMap = isDark ? STAGE_COLORS_DARK : STAGE_COLORS_LIGHT;
+    const stageColor = stageColorMap[stage] ?? "#94A3B8";
     const fadeAnim = useRef(new Animated.Value(0)).current;
     const scaleValue = useRef(new Animated.Value(1)).current;
 
@@ -96,40 +108,40 @@ const ContactCard = memo(({ contact, idx, onPress, onMenuPress }: { contact: Con
     return (
         <Swipeable renderRightActions={renderRightActions} renderLeftActions={renderLeftActions}>
             <Animated.View style={{ opacity: fadeAnim, transform: [{ scale: scaleValue }, { translateY: fadeAnim.interpolate({ inputRange: [0, 1], outputRange: [20, 0] }) }] }}>
-                <TouchableOpacity activeOpacity={1} onPressIn={onPressIn} onPressOut={onPressOut} onPress={onPress} style={styles.card}>
-                    <View style={[styles.avatar, { backgroundColor: color + "15" }]}>
+                <TouchableOpacity activeOpacity={1} onPressIn={onPressIn} onPressOut={onPressOut} onPress={onPress} style={[styles.card, { backgroundColor: theme.card, borderBottomColor: theme.border }]}>
+                    <View style={[styles.avatar, { backgroundColor: color + (theme.background === '#0F172A' ? "25" : "15") }]}>
                         <Text style={[styles.avatarText, { color }]}>{getInitials(contact)}</Text>
                     </View>
                     <View style={styles.cardContent}>
                         <View style={styles.cardMain}>
-                            <Text style={styles.cardName} numberOfLines={1}>{name}</Text>
+                            <Text style={[styles.cardName, { color: theme.text }]} numberOfLines={1}>{name}</Text>
                             <View style={[styles.stageDot, { backgroundColor: stageColor }]} />
                         </View>
                         <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
                             {phone ? (
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                                    <Ionicons name="call-outline" size={12} color="#94A3B8" />
-                                    <Text style={{ fontSize: 12, color: "#64748B", fontWeight: "600" }}>{phone}</Text>
+                                    <Ionicons name="call-outline" size={12} color={theme.textMuted} />
+                                    <Text style={{ fontSize: 12, color: theme.textSecondary, fontWeight: "600" }}>{phone}</Text>
                                 </View>
                             ) : null}
                             {(phone && email) ? (
-                                <Text style={{ fontSize: 12, color: "#E2E8F0", marginHorizontal: 6 }}>•</Text>
+                                <Text style={{ fontSize: 12, color: theme.border, marginHorizontal: 6 }}>•</Text>
                             ) : null}
-                            {email ? (
+                             {email ? (
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flex: 1 }}>
-                                    <Ionicons name="mail-outline" size={12} color="#94A3B8" />
-                                    <Text style={{ fontSize: 12, color: "#64748B", fontWeight: "600" }} numberOfLines={1}>{email}</Text>
+                                    <Ionicons name="mail-outline" size={12} color={theme.textMuted} />
+                                    <Text style={{ fontSize: 12, color: theme.textSecondary, fontWeight: "600" }} numberOfLines={1}>{email}</Text>
                                 </View>
                             ) : null}
                         </View>
-                        <Text style={styles.cardSubtitle} numberOfLines={1}>
+                        <Text style={[styles.cardSubtitle, { color: theme.textMuted }]} numberOfLines={1}>
                             {(getLookupValue("ProfessionalDesignation", contact.designation) && getLookupValue("ProfessionalDesignation", contact.designation) !== "—")
                                 ? `${getLookupValue("ProfessionalDesignation", contact.designation)} • `
                                 : ""}{contact.company || "Individual"}
                         </Text>
                     </View>
                     <TouchableOpacity style={styles.menuTrigger} onPress={(e) => { e.stopPropagation(); onMenuPress(); }}>
-                        <Ionicons name="ellipsis-vertical" size={18} color="#94A3B8" />
+                        <Ionicons name="ellipsis-vertical" size={18} color={theme.textMuted} />
                     </TouchableOpacity>
                 </TouchableOpacity>
             </Animated.View>
@@ -138,6 +150,8 @@ const ContactCard = memo(({ contact, idx, onPress, onMenuPress }: { contact: Con
 });
 
 export default function ContactsScreen() {
+    const { theme } = useTheme();
+    const isDark = theme.background === '#0F172A';
     const { trackCall } = useCallTracking();
     const router = useRouter();
     const [contacts, setContacts] = useState<Contact[]>([]);
@@ -259,14 +273,14 @@ export default function ContactsScreen() {
     }, [contacts, search, activeFilter, filters]);
 
     const renderHeader = () => (
-        <View style={styles.header}>
+        <View style={[styles.header, { backgroundColor: theme.background }]}>
             <View style={styles.headerTop}>
                 <View>
-                    <Text style={styles.headerTitle}>Phonebook</Text>
-                    <Text style={styles.headerCount}>{contacts.length} CRM Relationships</Text>
+                    <Text style={[styles.headerTitle, { color: theme.text }]}>Phonebook</Text>
+                    <Text style={[styles.headerCount, { color: theme.textMuted }]}>{contacts.length} CRM Relationships</Text>
                 </View>
                 <TouchableOpacity
-                    style={[styles.headerActionBtn, { backgroundColor: "#2563EB" }]}
+                    style={[styles.headerActionBtn, { backgroundColor: theme.primary }]}
                     onPress={() => router.push("/add-contact")}
                 >
                     <Ionicons name="person-add" size={22} color="#fff" />
@@ -274,17 +288,17 @@ export default function ContactsScreen() {
             </View>
 
             <View style={styles.commandBar}>
-                <View style={styles.searchBox}>
-                    <Ionicons name="search" size={20} color="#94A3B8" />
+                <View style={[styles.searchBox, { backgroundColor: theme.border }]}>
+                    <Ionicons name="search" size={20} color={theme.textMuted} />
                     <TextInput
-                        style={styles.searchInput}
+                        style={[styles.searchInput, { color: theme.text }]}
                         placeholder="Search relationships..."
-                        placeholderTextColor="#94A3B8"
+                        placeholderTextColor={theme.textMuted}
                         value={search}
                         onChangeText={setSearch}
                     />
                     <TouchableOpacity onPress={() => setShowFilterModal(true)} style={styles.filterBtn}>
-                        <Ionicons name="filter" size={20} color={Object.keys(filters).length > 0 ? "#2563EB" : "#94A3B8"} />
+                        <Ionicons name="filter" size={20} color={Object.keys(filters).length > 0 ? theme.primary : theme.textLight} />
                     </TouchableOpacity>
                 </View>
             </View>
@@ -296,13 +310,13 @@ export default function ContactsScreen() {
                         return (
                             <TouchableOpacity
                                 key={filter}
-                                style={[styles.segmentItem, isActive && styles.segmentItemActive]}
+                                style={[styles.segmentItem, { backgroundColor: theme.card, borderColor: theme.border }, isActive && { backgroundColor: theme.primary, borderColor: theme.primary }]}
                                 onPress={() => {
                                     Vibration.vibrate(10);
                                     setActiveFilter(filter.toLowerCase());
                                 }}
                             >
-                                <Text style={[styles.segmentText, isActive && styles.segmentTextActive]}>{filter}</Text>
+                                <Text style={[styles.segmentText, { color: theme.textMuted }, isActive && { color: "#fff" }]}>{filter}</Text>
                             </TouchableOpacity>
                         );
                     })}
@@ -312,10 +326,10 @@ export default function ContactsScreen() {
     );
 
     return (
-        <View style={styles.container}>
-            <SafeAreaView style={styles.safeArea}>
+        <View style={[styles.container, { backgroundColor: theme.background }]}>
+            <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]}>
                 {loading && page === 1 ? (
-                    <ActivityIndicator color="#2563EB" size="large" style={{ marginTop: 100 }} />
+                    <ActivityIndicator color={theme.primary} size="large" style={{ marginTop: 100 }} />
                 ) : (
                     <SectionList
                         sections={sections}
@@ -330,8 +344,8 @@ export default function ContactsScreen() {
                             />
                         )}
                         renderSectionHeader={({ section: { title } }) => (
-                            <View style={styles.sectionHeader}>
-                                <Text style={styles.sectionTitle}>{title}</Text>
+                            <View style={[styles.sectionHeader, { backgroundColor: theme.card, borderBottomColor: theme.border }]}>
+                                <Text style={[styles.sectionTitle, { color: theme.primary }]}>{title}</Text>
                             </View>
                         )}
                         initialNumToRender={15}
@@ -341,8 +355,8 @@ export default function ContactsScreen() {
                         stickySectionHeadersEnabled={true}
                         onEndReached={loadMore}
                         onEndReachedThreshold={0.5}
-                        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#2563EB" />}
-                        ListFooterComponent={loading && page > 1 ? <ActivityIndicator color="#2563EB" style={{ marginVertical: 20 }} /> : null}
+                        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />}
+                        ListFooterComponent={loading && page > 1 ? <ActivityIndicator color={theme.primary} style={{ marginVertical: 20 }} /> : null}
                         ListEmptyComponent={
                             <View style={styles.empty}>
                                 <Ionicons name="people-outline" size={64} color="#CBD5E1" />
@@ -355,67 +369,67 @@ export default function ContactsScreen() {
 
             {/* Action Hub Modal */}
             <Modal transparent visible={hubVisible} animationType="none" onRequestClose={closeHub}>
-                <Pressable style={styles.modalOverlay} onPress={closeHub}>
-                    <Animated.View style={[styles.sheetContainer, { transform: [{ translateY: slideAnim }] }]}>
-                        <View style={styles.sheetHandle} />
+                <Pressable style={[styles.modalOverlay, { backgroundColor: theme.background + '80' }]} onPress={closeHub}>
+                    <Animated.View style={[styles.sheetContainer, { backgroundColor: theme.card, transform: [{ translateY: slideAnim }] }]}>
+                        <View style={[styles.sheetHandle, { backgroundColor: theme.borderStrong }]} />
                         <View style={styles.sheetHeader}>
-                            <Text style={styles.sheetTitle}>{selectedContact ? contactFullName(selectedContact) : "Contact Actions"}</Text>
-                            <Text style={styles.sheetSub}>{selectedContact?.company || "Professional Contact"}</Text>
+                            <Text style={[styles.sheetTitle, { color: theme.text }]}>{selectedContact ? contactFullName(selectedContact) : "Contact Actions"}</Text>
+                            <Text style={[styles.sheetSub, { color: theme.textSecondary }]}>{selectedContact?.company || "Professional Contact"}</Text>
                         </View>
 
                         <View style={styles.actionGrid}>
                             <TouchableOpacity style={styles.actionItem} onPress={() => {
                                 router.push(`/add-contact?id=${selectedContact?._id}`); closeHub();
                             }}>
-                                <View style={[styles.actionIcon, { backgroundColor: "#F1F5F9" }]}>
-                                    <Ionicons name="create" size={24} color="#64748B" />
+                                <View style={[styles.actionIcon, { backgroundColor: theme.border }]}>
+                                    <Ionicons name="create" size={24} color={theme.textMuted} />
                                 </View>
-                                <Text style={styles.actionLabel}>Edit</Text>
+                                <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Edit</Text>
                             </TouchableOpacity >
 
                             <TouchableOpacity style={styles.actionItem} onPress={() => {
                                 router.push(`/add-document?id=${selectedContact?._id}&type=Contact`); closeHub();
                             }}>
-                                <View style={[styles.actionIcon, { backgroundColor: "#F0F9FF" }]}>
-                                    <Ionicons name="document-attach" size={24} color="#0EA5E9" />
+                                <View style={[styles.actionIcon, { backgroundColor: isDark ? 'rgba(14, 165, 233, 0.15)' : "#F0F9FF" }]}>
+                                    <Ionicons name="document-attach" size={24} color={isDark ? '#38BDF8' : "#0EA5E9"} />
                                 </View>
-                                <Text style={styles.actionLabel}>Document</Text>
+                                <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Document</Text>
                             </TouchableOpacity>
 
                             <TouchableOpacity style={styles.actionItem} onPress={() => {
                                 router.push(`/sequences?id=${selectedContact?._id}`); closeHub();
                             }}>
-                                <View style={[styles.actionIcon, { backgroundColor: "#F5F3FF" }]}>
-                                    <Ionicons name="repeat" size={24} color="#8B5CF6" />
+                                <View style={[styles.actionIcon, { backgroundColor: isDark ? 'rgba(139, 92, 246, 0.15)' : "#F5F3FF" }]}>
+                                    <Ionicons name="repeat" size={24} color={isDark ? '#A78BFA' : "#8B5CF6"} />
                                 </View>
-                                <Text style={styles.actionLabel}>Sequence</Text>
+                                <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Sequence</Text>
                             </TouchableOpacity>
 
                             <TouchableOpacity style={styles.actionItem} onPress={() => {
                                 router.push(`/add-lead?refContact=${selectedContact?._id}`); closeHub();
                             }}>
-                                <View style={[styles.actionIcon, { backgroundColor: "#FDF2F8" }]}>
-                                    <Ionicons name="person-add" size={24} color="#DB2777" />
+                                <View style={[styles.actionIcon, { backgroundColor: isDark ? 'rgba(219, 39, 119, 0.15)' : "#FDF2F8" }]}>
+                                    <Ionicons name="person-add" size={24} color={isDark ? '#F472B6' : "#DB2777"} />
                                 </View>
-                                <Text style={styles.actionLabel}>Lead</Text>
+                                <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Lead</Text>
                             </TouchableOpacity>
 
                             <TouchableOpacity style={styles.actionItem} onPress={() => {
                                 router.push(`/add-activity?id=${selectedContact?._id}&type=Contact`); closeHub();
                             }}>
-                                <View style={[styles.actionIcon, { backgroundColor: "#F0F9FF" }]}>
-                                    <Ionicons name="add-circle" size={24} color="#0EA5E9" />
+                                <View style={[styles.actionIcon, { backgroundColor: isDark ? 'rgba(14, 165, 233, 0.15)' : "#F0F9FF" }]}>
+                                    <Ionicons name="add-circle" size={24} color={isDark ? '#38BDF8' : "#0EA5E9"} />
                                 </View>
-                                <Text style={styles.actionLabel}>Activity</Text>
+                                <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Activity</Text>
                             </TouchableOpacity>
 
-                            <TouchableOpacity style={styles.actionItem} onPress={() => {
+                             <TouchableOpacity style={styles.actionItem} onPress={() => {
                                 Alert.alert("Assign", "Assigning contact..."); closeHub();
                             }}>
-                                <View style={[styles.actionIcon, { backgroundColor: "#F5F3FF" }]}>
+                                <View style={[styles.actionIcon, { backgroundColor: '#F5F3FF' + (theme.background === '#0F172A' ? '20' : '') }]}>
                                     <Ionicons name="people" size={24} color="#7C3AED" />
                                 </View>
-                                <Text style={styles.actionLabel}>Assign</Text>
+                                <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Assign</Text>
                             </TouchableOpacity>
 
                             <TouchableOpacity style={styles.actionItem} onPress={async () => {
@@ -430,10 +444,10 @@ export default function ContactsScreen() {
                                     Alert.alert("Error", "Failed to prepare call outcome");
                                 }
                             }}>
-                                <View style={[styles.actionIcon, { backgroundColor: "#ECFDF5" }]}>
+                                <View style={[styles.actionIcon, { backgroundColor: "#ECFDF5" + (theme.background === '#0F172A' ? '20' : '') }]}>
                                     <Ionicons name="checkmark-done-circle" size={24} color="#10B981" />
                                 </View>
-                                <Text style={styles.actionLabel}>Outcome</Text>
+                                <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Outcome</Text>
                             </TouchableOpacity>
                         </View >
                     </Animated.View >

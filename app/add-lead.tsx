@@ -6,6 +6,7 @@ import {
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import api from "@/services/api";
 import GooglePlacesAutocomplete from "@/components/GooglePlacesAutocompleteFixed";
 import { getTeams, getTeamMembers } from "@/services/teams.service";
 import { getContactById } from "@/services/contacts.service";
@@ -14,6 +15,7 @@ import { useLookup } from "@/context/LookupContext";
 import { useUsers } from "@/context/UserContext";
 import { useProjects } from "@/context/ProjectContext";
 import { useTheme, SPACING } from "@/context/ThemeContext";
+import { MultiSearchableDropdown } from "@/components/MultiSearchableDropdown";
 
 const LEAD_LOOKUP_TYPES = [
     "Requirement", "Category", "SubCategory", "UnitType",
@@ -287,12 +289,12 @@ export default function AddLead() {
         projectName: [], projectTowers: [], propertyNo: "", propertyNoEnd: "", unitSelectionMode: "Single",
         sizeLabel: "", inventoryId: "",
         status: "", source: "", subSource: "", campaign: "", subCampaign: "",
-        owner: "", team: "", visibleTo: "Everyone", stage: "", description: "", tags: [],
+        owner: "", teams: [], team: "", visibleTo: "Everyone", stage: "", description: "", tags: [],
     });
 
     const [units, setUnits] = useState<any[]>([]);
     const [isLoadingUnits, setIsLoadingUnits] = useState(false);
-    const [activeDropdown, setActiveDropdown] = useState<'unit' | null>(null);
+    const [activeDropdown, setActiveDropdown] = useState<'unit' | 'teams' | null>(null);
 
     const allowedSubCategoryNames = useMemo(() => {
         if (!propertyConfig || formData.propertyType.length === 0) return [];
@@ -484,6 +486,7 @@ function SearchableDropdown({
                         campaign: l.campaign?.lookup_value || l.campaign || "",
                         subCampaign: l.subCampaign?.lookup_value || l.subCampaign || "",
                         owner: l.assignment?.assignedTo?._id || l.assignment?.assignedTo || "",
+                        teams: Array.isArray(l.assignment?.team) ? l.assignment.team : (l.assignment?.team ? [l.assignment.team] : []),
                         team: l.assignment?.team?.[0] || "",
                         visibleTo: l.assignment?.visibleTo || "Everyone",
                         stage: l.stage?.lookup_value || l.stage || "",
@@ -596,7 +599,7 @@ function SearchableDropdown({
                 areaMax: formData.areaMax ? Number(formData.areaMax) : undefined,
                 assignment: {
                     assignedTo: formData.owner || undefined,
-                    team: formData.team ? [formData.team] : [],
+                    team: formData.teams.length > 0 ? formData.teams : (formData.team ? [formData.team] : []),
                     visibleTo: formData.visibleTo || "Everyone"
                 }
             };
@@ -1033,11 +1036,39 @@ function SearchableDropdown({
                                 ) : (formData.source ? renderSingleSelect("SubSource", "subSource", formData.source) : null)}
                             </Field>
                             <Field label="Assignment">
-                                <Text style={[styles.subLabel, { color: theme.textSecondary }]}>Team</Text>
-                                <SelectButton value={formData.team} options={teams.map(t => ({ label: t.name, value: t._id }))} onSelect={(v) => setFormData({ ...formData, team: v, owner: "" })} />
+                                <Text style={[styles.subLabel, { color: theme.textSecondary }]}>Team(s)</Text>
+                                <TouchableOpacity 
+                                    activeOpacity={0.7} 
+                                    style={[styles.selector, { backgroundColor: theme.inputBg, borderColor: theme.border, marginTop: 8 }]} 
+                                    onPress={() => setActiveDropdown('teams')} 
+                                >
+                                    <Text style={[styles.selectorText, { color: theme.textPrimary }, formData.teams.length === 0 && { color: theme.textMuted }]}>
+                                        {formData.teams.length > 0 
+                                            ? `${formData.teams.length} Team(s) Selected` 
+                                            : "Select Teams"}
+                                    </Text>
+                                    <Ionicons name="people-outline" size={18} color={theme.textSecondary} />
+                                </TouchableOpacity>
+
+                                <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 8 }}>
+                                    {formData.teams.map((tid: string) => (
+                                        <View key={tid} style={{ backgroundColor: theme.primary + '15', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, marginRight: 6, marginBottom: 6 }}>
+                                            <Text style={{ fontSize: 10, fontWeight: '700', color: theme.primary }}>{teams.find(t => t._id === tid)?.name || tid}</Text>
+                                        </View>
+                                    ))}
+                                </View>
+                                
                                 <Text style={[styles.subLabel, { color: theme.textSecondary, marginTop: 16 }]}>User</Text>
-                                <SelectButton value={formData.owner} options={users.filter(u => !formData.team || u.team === formData.team).map(u => ({ label: u.fullName || u.name, value: u._id }))} onSelect={(v) => setFormData({ ...formData, owner: v })} />
-                                <Text style={[styles.subLabel, { color: theme.textSecondary, marginTop: 16 }]}>Visibility</Text>
+                                <SelectButton 
+                                    value={formData.owner} 
+                                    options={users.filter(u => 
+                                        formData.teams.length === 0 || 
+                                        formData.teams.some((tid: string) => (u.teams || []).includes(tid) || u.team === tid)
+                                    ).map(u => ({ label: u.fullName || u.name, value: u._id }))} 
+                                    onSelect={(v) => setFormData({ ...formData, owner: v })} 
+                                />
+                                
+                                <Text style={[styles.subLabel, { color: theme.textSecondary, marginTop: 16 }]}>Visibility Scope</Text>
                                 <SelectButton value={formData.visibleTo} options={[{ label: "Everyone", value: "Everyone" }, { label: "Team", value: "Team" }, { label: "Private", value: "Private" }]} onSelect={(v) => setFormData({ ...formData, visibleTo: v })} />
                             </Field>
                             <Input label="Internal Notes" multiline numberOfLines={4} value={formData.description} onChangeText={v => setFormData({ ...formData, description: v })} icon="create-outline" />
@@ -1079,6 +1110,19 @@ function SearchableDropdown({
                     {renderStepContent()}
                 </Animated.View>
             </ScrollView>
+
+            <MultiSearchableDropdown
+                visible={activeDropdown === 'teams'}
+                onClose={() => setActiveDropdown(null)}
+                options={teams.map(t => ({ label: t.name, value: t._id }))}
+                selectedValues={formData.teams}
+                onToggle={(tid) => {
+                    const current = formData.teams || [];
+                    const newList = current.includes(tid) ? current.filter((i: string) => i !== tid) : [...current, tid];
+                    setFormData({ ...formData, teams: newList, owner: "" });
+                }}
+                placeholder="Select Assigned Teams"
+            />
 
             <View style={[styles.footer, { backgroundColor: theme.cardBg, borderTopColor: theme.border }]}>
                 {step > 0 && <TouchableOpacity style={[styles.prevBtn, { backgroundColor: theme.inputBg }]} onPress={() => setStep(s => s - 1)}><Text style={[styles.prevBtnText, { color: theme.textSecondary }]}>Back</Text></TouchableOpacity>}
@@ -1161,4 +1205,6 @@ const styles = StyleSheet.create({
     tagLabel: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 },
     tagValue: { fontSize: 15, fontWeight: '800' },
     smallIcon: { width: 24, height: 24, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+    selector: { height: 50, borderRadius: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, borderWidth: 1.5 },
+    selectorText: { fontSize: 15, fontWeight: '600' },
 });

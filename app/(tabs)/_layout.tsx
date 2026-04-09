@@ -115,7 +115,7 @@ const AnimatedTabItem = ({ route, isFocused, activeColor, navigation, config }: 
 function CustomTabBar({ state, descriptors, navigation, activeColor }: any) {
     const { theme } = useTheme();
     return (
-        <View style={[styles.tabBarContainer, { backgroundColor: theme.card, borderTopColor: theme.border }]}>
+        <View style={[styles.tabBarContainer, { backgroundColor: theme.glassBg, borderColor: theme.glassBorder }]}>
             <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
@@ -188,7 +188,6 @@ const styles = StyleSheet.create({
         left: 15,
         right: 15,
         height: 88,
-        backgroundColor: "rgba(255, 255, 255, 0.85)", // Glass effect base
         borderRadius: 35,
         elevation: 25,
         shadowColor: "#000",
@@ -196,7 +195,6 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.2,
         shadowRadius: 25,
         borderWidth: 1.5,
-        borderColor: "rgba(255, 255, 255, 0.6)", // Glossy border
         overflow: 'hidden'
     },
     scrollContent: {

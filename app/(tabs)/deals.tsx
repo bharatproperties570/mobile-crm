@@ -31,7 +31,7 @@ const DEAL_FILTER_FIELDS: FilterField[] = [
     { key: "price", label: "Price Range", type: "range" },
 ];
 
-const STAGE_COLORS: Record<string, string> = {
+const STAGE_COLORS_LIGHT: Record<string, string> = {
     open: "#6366F1",
     quote: "#8B5CF6",
     negotiation: "#F59E0B",
@@ -40,6 +40,17 @@ const STAGE_COLORS: Record<string, string> = {
     "closed lost": "#EF4444",
     cancelled: "#64748B",
     dormant: "#64748B",
+};
+
+const STAGE_COLORS_DARK: Record<string, string> = {
+    open: "#818CF8",
+    quote: "#A78BFA",
+    negotiation: "#FBBF24",
+    booked: "#FB923C",
+    "closed won": "#34D399",
+    "closed lost": "#F87171",
+    cancelled: "#94A3B8",
+    dormant: "#94A3B8",
 };
 
 function resolveName(field: unknown, getLookupValue?: (type: string, val: any) => string, findUser?: (id: string) => any): string {
@@ -96,25 +107,17 @@ function getDealTitle(deal: Deal, getLookupValue?: (type: string, val: any) => s
 }
 
 const DealScoreRing = memo(({ score, color = "#2563EB", size = 44 }: { score: number; color?: string; size?: number }) => {
+    const { theme } = useTheme();
+    const isDark = theme.background === '#0F172A';
     const strokeWidth = 3;
     const radius = (size - strokeWidth) / 2;
-    const circumference = radius * 2 * Math.PI;
     const animatedValue = useRef(new Animated.Value(0)).current;
-
-    useEffect(() => {
-        const toVal = (Number(score) || 0) / 100;
-        Animated.timing(animatedValue, {
-            toValue: isFinite(toVal) ? toVal : 0,
-            duration: 1000,
-            useNativeDriver: true,
-        }).start();
-    }, [score]);
 
     return (
         <View style={{ width: size, height: size, justifyContent: 'center', alignItems: 'center' }}>
             <View style={{
                 width: size, height: size, borderRadius: size / 2,
-                borderWidth: strokeWidth, borderColor: 'rgba(241, 245, 249, 1)',
+                borderWidth: strokeWidth, borderColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(241, 245, 249, 1)',
                 position: 'absolute'
             }} />
             <View style={{
@@ -127,7 +130,7 @@ const DealScoreRing = memo(({ score, color = "#2563EB", size = 44 }: { score: nu
                 borderTopColor: color,
                 transform: [{ rotate: '-45deg' }]
             }} />
-            <Text style={{ fontSize: 9, fontWeight: '800', color: '#1E293B', position: 'absolute' }}>{score}</Text>
+            <Text style={{ fontSize: 9, fontWeight: '800', color: theme.text, position: 'absolute' }}>{score}</Text>
         </View>
     );
 });
@@ -161,7 +164,10 @@ const ChevronSegment = memo(({
     isLast?: boolean;
     onPress: () => void;
 }) => {
+    const { theme } = useTheme();
+    const isDark = theme.background === '#0F172A';
     const shortLabel = SHORT_NAMES[label.toLowerCase()] || label;
+    const bgOpacity = isDark ? '25' : '15';
 
     return (
         <TouchableOpacity
@@ -169,7 +175,7 @@ const ChevronSegment = memo(({
             onPress={onPress}
             style={[
                 styles.chevronSegment,
-                { backgroundColor: isSelected ? color : color + '15' },
+                { backgroundColor: isSelected ? color : color + bgOpacity },
                 isFirst && { borderTopLeftRadius: 8, borderBottomLeftRadius: 8 },
                 isLast && { borderTopRightRadius: 8, borderBottomRightRadius: 8 }
             ]}
@@ -182,7 +188,7 @@ const ChevronSegment = memo(({
                 </View>
             </View>
             {!isLast && (
-                <View style={[styles.chevronArrow, { borderLeftColor: isSelected ? color : color + '15' }]} />
+                <View style={[styles.chevronArrow, { borderLeftColor: isSelected ? color : color + bgOpacity }]} />
             )}
         </TouchableOpacity>
     );
@@ -197,6 +203,7 @@ const DealPipelineHorizontal = memo(({
     activeStage: string | null;
     onStagePress: (label: string | null) => void;
 }) => {
+    const { theme } = useTheme();
     const [isClosedExpanded, setIsClosedExpanded] = useState(false);
 
     const toggleClosed = () => {
@@ -212,7 +219,7 @@ const DealPipelineHorizontal = memo(({
     const closedPercent = Math.round((closedTotal / totalCount) * 100);
 
     return (
-        <View style={styles.horizontalPipelineWrapper}>
+        <View style={[styles.horizontalPipelineWrapper, { backgroundColor: theme.card, borderBottomColor: theme.border }]}>
             <View style={styles.chevronContainer}>
                 {primaryStages.map((s, idx) => (
                     <ChevronSegment
@@ -232,7 +239,7 @@ const DealPipelineHorizontal = memo(({
                     activeOpacity={0.9}
                     style={[
                         styles.chevronSegment,
-                        { backgroundColor: activeStage?.includes('closed') ? '#10B981' : '#10B98115' },
+                        { backgroundColor: activeStage?.includes('closed') ? '#10B981' : '#10B981' + (theme.background === '#0F172A' ? '25' : '15') },
                         { borderTopRightRadius: 8, borderBottomRightRadius: 8, borderLeftWidth: 0 }
                     ]}
                 >
@@ -260,7 +267,7 @@ const DealPipelineHorizontal = memo(({
                             onPress={() => onStagePress(s.label)}
                             style={[
                                 styles.subStageChip,
-                                { backgroundColor: activeStage === s.label ? s.color : s.color + '15' }
+                                { backgroundColor: activeStage === s.label ? s.color : s.color + (theme.background === '#0F172A' ? '25' : '10') }
                             ]}
                         >
                             <Text style={[styles.subStageText, { color: activeStage === s.label ? '#fff' : s.color }]}>
@@ -306,8 +313,10 @@ const DealCard = memo(({
     liveScore?: { score: number; color: string; label: string };
 }) => {
     const { theme } = useTheme();
+    const isDark = theme.background === '#0F172A';
     const stageStr = (resolveName(deal.stage, getLookupValue, findUser) || "open").toLowerCase();
-    const color = STAGE_COLORS[stageStr] ?? "#6366F1";
+    const stageColorMap = isDark ? STAGE_COLORS_DARK : STAGE_COLORS_LIGHT;
+    const color = stageColorMap[stageStr] ?? (isDark ? "#94A3B8" : "#6366F1");
     const amount = deal.price || deal.amount || 0;
 
     const renderRightActions = () => (
@@ -330,7 +339,7 @@ const DealCard = memo(({
                 <Text style={styles.swipeLabel}>WhatsApp</Text>
             </TouchableOpacity>
             <TouchableOpacity
-                style={[styles.swipeAction, { backgroundColor: '#6366F1' }]}
+                style={[styles.swipeAction, { backgroundColor: isDark ? '#818CF8' : '#6366F1' }]}
                 onPress={() => {
                     const contact = deal.associatedContact as any;
                     if (contact?.email) Linking.openURL(`mailto:${contact.email}`);
@@ -345,23 +354,23 @@ const DealCard = memo(({
     const dealTypeStr = resolveName(deal.intent || deal.dealType || deal.transactionType || "Sell", getLookupValue, findUser).toUpperCase();
     // Live backend score wins; fallback to deal.score (usually 0) if not yet loaded
     const rawScore = liveScore ? liveScore.score : (deal.score || (deal as any).dealScore || 0);
-    let typeColor = liveScore ? liveScore.color : "#64748B"; // cold
+    let typeColor = liveScore ? liveScore.color : "#64748B"; // default cold
     if (!liveScore) {
-        if (rawScore >= 81) typeColor = "#7C3AED";
+        if (rawScore >= 81) typeColor = "#8B5CF6";
         else if (rawScore >= 61) typeColor = "#EF4444";
         else if (rawScore >= 31) typeColor = "#F59E0B";
     }
 
     return (
         <Swipeable renderRightActions={renderRightActions} renderLeftActions={renderLeftActions} friction={2}>
-            <TouchableOpacity style={styles.card} onPress={onPress} onLongPress={onLongPress} activeOpacity={0.9}>
+            <TouchableOpacity style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]} onPress={onPress} onLongPress={onLongPress} activeOpacity={0.9}>
                 <View style={[styles.cardAccent, { backgroundColor: typeColor }]} />
                 <View style={styles.cardMain}>
                     <View style={styles.cardHeader}>
                         <View style={styles.cardIdentity}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                <Text style={styles.dealUnitNumber}>{deal.unitNo || deal.unitNumber || (typeof deal.inventoryId === 'object' ? (deal.inventoryId?.unitNo || deal.inventoryId?.unitNumber) : "") || "N/A"}</Text>
-                                <View style={[styles.typePill, { backgroundColor: color + '15' }]}>
+                                <Text style={[styles.dealUnitNumber, { color: theme.text }]}>{deal.unitNo || deal.unitNumber || (typeof deal.inventoryId === 'object' ? (deal.inventoryId?.unitNo || deal.inventoryId?.unitNumber) : "") || "N/A"}</Text>
+                                <View style={[styles.typePill, { backgroundColor: color + (isDark ? '25' : '15') }]}>
                                     <Text style={[styles.typePillText, { color: color }]}>
                                         {[
                                             getLookupValue("UnitType", deal.unitType || (typeof deal.inventoryId === 'object' ? deal.inventoryId?.unitType : "")),
@@ -372,8 +381,8 @@ const DealCard = memo(({
                             </View>
                             <View style={styles.dealProjectContainer}>
                                 <Text numberOfLines={1}>
-                                    <Text style={styles.dealProjectName}>{deal.projectName || (deal.projectId && typeof deal.projectId === 'object' ? (deal.projectId as any).name : "") || "Unnamed Project"}</Text>
-                                    <Text style={styles.dealBlockName}> • {deal.block || (typeof deal.inventoryId === 'object' ? deal.inventoryId?.block : "") || "No Block"}</Text>
+                                    <Text style={[styles.dealProjectName, { color: theme.textSecondary }]}>{deal.projectName || (deal.projectId && typeof deal.projectId === 'object' ? (deal.projectId as any).name : "") || "Unnamed Project"}</Text>
+                                    <Text style={[styles.dealBlockName, { color: theme.textLight }]}> • {deal.block || (typeof deal.inventoryId === 'object' ? deal.inventoryId?.block : "") || "No Block"}</Text>
                                 </Text>
                             </View>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
@@ -446,6 +455,8 @@ const DealCard = memo(({
 });
 
 export default function DealsScreen() {
+    const { theme } = useTheme();
+    const isDark = theme.background === '#0F172A';
     const { trackCall } = useCallTracking();
     const router = useRouter();
     const { getLookupValue } = useLookup();
@@ -480,6 +491,9 @@ export default function DealsScreen() {
 
     const pipelineStats = useMemo(() => {
         const stats: Record<string, number> = {};
+        const isDark = theme.background === '#0F172A';
+        const stageColorMap = isDark ? STAGE_COLORS_DARK : STAGE_COLORS_LIGHT;
+        
         deals.forEach(d => {
             let stage = (resolveName(d.stage, getLookupValue) || "open").toLowerCase();
             if (stage === 'closed' || stage === 'closed won') stage = 'closed won';
@@ -492,9 +506,9 @@ export default function DealsScreen() {
         return order.map(s => ({
             label: s,
             count: stats[s] || 0,
-            color: STAGE_COLORS[s] || "#64748B"
+            color: stageColorMap[s] || "#64748B"
         }));
-    }, [deals]);
+    }, [deals, theme.background]);
 
     const lastFetchTime = useRef<number>(0);
 
@@ -616,16 +630,16 @@ export default function DealsScreen() {
     };
 
     const renderHeader = () => (
-        <SafeAreaView style={styles.safeArea}>
-            <View style={styles.header}>
+        <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]}>
+            <View style={[styles.header, { backgroundColor: theme.background }]}>
                 <TouchableOpacity
                     activeOpacity={0.7}
                     onPress={() => setActivePipelineStage(null)}
                 >
-                    <Text style={styles.headerTitle}>Deals</Text>
-                    <Text style={styles.headerSubtitle}>{filteredDeals.length} active opportunities</Text>
+                    <Text style={[styles.headerTitle, { color: theme.text }]}>Deals</Text>
+                    <Text style={[styles.headerSubtitle, { color: theme.textLight }]}>{filteredDeals.length} active opportunities</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.addBtn} onPress={() => router.push("/add-deal")}>
+                <TouchableOpacity style={[styles.addBtn, { backgroundColor: theme.primary }]} onPress={() => router.push("/add-deal")}>
                     <Ionicons name="add" size={26} color="#fff" />
                 </TouchableOpacity>
             </View>
@@ -638,18 +652,18 @@ export default function DealsScreen() {
                 />
             )}
 
-            <View style={styles.commandBar}>
-                <Ionicons name="search" size={20} color="#94A3B8" />
+            <View style={[styles.commandBar, { backgroundColor: theme.border }]}>
+                <Ionicons name="search" size={20} color={theme.textMuted} />
                 <TextInput
-                    style={styles.commandInput}
+                    style={[styles.commandInput, { color: theme.text }]}
                     placeholder="Search Deals or Properties..."
-                    placeholderTextColor="#94A3B8"
+                    placeholderTextColor={theme.textMuted}
                     value={search}
                     onChangeText={handleSearch}
                 />
-                <TouchableOpacity onPress={() => setShowFilterModal(true)} style={[styles.filterBtn, filtersCount > 0 && { backgroundColor: '#2563EB15' }]}>
-                    <Ionicons name="filter" size={22} color={filtersCount > 0 ? "#2563EB" : "#94A3B8"} />
-                    {filtersCount > 0 && <View style={styles.filterBadge}><Text style={styles.filterBadgeText}>{filtersCount}</Text></View>}
+                <TouchableOpacity onPress={() => setShowFilterModal(true)} style={[styles.filterBtn, filtersCount > 0 && { backgroundColor: theme.primary + '15' }]}>
+                    <Ionicons name="filter" size={22} color={filtersCount > 0 ? theme.primary : theme.textLight} />
+                    {filtersCount > 0 && <View style={[styles.filterBadge, { backgroundColor: theme.primary }]}><Text style={styles.filterBadgeText}>{filtersCount}</Text></View>}
                 </TouchableOpacity>
             </View>
         </SafeAreaView>
@@ -1038,10 +1052,10 @@ export default function DealsScreen() {
                                 </TouchableOpacity>
 
                                 <TouchableOpacity style={styles.actionItem} onPress={() => { router.push(`/add-activity?id=${selectedDeal?._id}&type=Deal`); closeHub(); }}>
-                                    <View style={[styles.actionIcon, { backgroundColor: "#FFF7ED" }]}>
-                                        <Ionicons name="add-circle" size={24} color="#EA580C" />
+                                    <View style={[styles.actionIcon, { backgroundColor: isDark ? 'rgba(234, 88, 12, 0.15)' : "#FFF7ED" }]}>
+                                        <Ionicons name="add-circle" size={24} color={isDark ? '#FB923C' : "#EA580C"} />
                                     </View>
-                                    <Text style={styles.actionLabel}>Activity</Text>
+                                    <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Activity</Text>
                                 </TouchableOpacity>
 
                                 <TouchableOpacity style={styles.actionItem} onPress={() => { setShowStagePicker(!showStagePicker); setShowReassign(false); }}>
@@ -1052,24 +1066,24 @@ export default function DealsScreen() {
                                 </TouchableOpacity>
 
                                 <TouchableOpacity style={styles.actionItem} onPress={() => { setShowReassign(!showReassign); setShowStagePicker(false); }}>
-                                    <View style={[styles.actionIcon, { backgroundColor: "#F5F3FF" }]}>
-                                        <Ionicons name="person-add" size={24} color="#7C3AED" />
+                                    <View style={[styles.actionIcon, { backgroundColor: isDark ? 'rgba(139, 92, 246, 0.15)' : "#F5F3FF" }]}>
+                                        <Ionicons name="person-add" size={24} color={isDark ? '#A78BFA' : "#7C3AED"} />
                                     </View>
-                                    <Text style={styles.actionLabel}>Assign</Text>
+                                    <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Assign</Text>
                                 </TouchableOpacity>
 
                                 <TouchableOpacity style={styles.actionItem} onPress={() => { setShowTagEditor(!showTagEditor); setShowStagePicker(false); setShowReassign(false); }}>
-                                    <View style={[styles.actionIcon, { backgroundColor: "#EEF2FF" }]}>
-                                        <Ionicons name="pricetags" size={24} color="#4F46E5" />
+                                    <View style={[styles.actionIcon, { backgroundColor: isDark ? 'rgba(99, 102, 241, 0.15)' : "#EEF2FF" }]}>
+                                        <Ionicons name="pricetags" size={24} color={isDark ? '#818CF8' : "#4F46E5"} />
                                     </View>
-                                    <Text style={styles.actionLabel}>Tag</Text>
+                                    <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Tag</Text>
                                 </TouchableOpacity>
 
                                 <TouchableOpacity style={styles.actionItem} onPress={handleQuickDormant}>
-                                    <View style={[styles.actionIcon, { backgroundColor: "#F1F5F9" }]}>
-                                        <Ionicons name="moon" size={24} color="#94A3B8" />
+                                    <View style={[styles.actionIcon, { backgroundColor: isDark ? 'rgba(148, 163, 184, 0.15)' : "#F1F5F9" }]}>
+                                        <Ionicons name="moon" size={24} color={isDark ? '#94A3B8' : "#94A3B8"} />
                                     </View>
-                                    <Text style={styles.actionLabel}>Dormant</Text>
+                                    <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Dormant</Text>
                                 </TouchableOpacity>
 
                                 <TouchableOpacity 
@@ -1093,15 +1107,20 @@ export default function DealsScreen() {
                                 <View style={styles.pickerView}>
                                     <Text style={styles.sectionTitle}>Change Stage</Text>
                                     <View style={styles.chipList}>
-                                        {Object.keys(STAGE_COLORS).map((s) => (
-                                            <TouchableOpacity
-                                                key={s}
-                                                style={[styles.actionChip, { borderColor: STAGE_COLORS[s] }]}
-                                                onPress={() => handleStageUpdate(s)}
-                                            >
-                                                <Text style={[styles.actionChipText, { color: STAGE_COLORS[s] }]}>{s.toUpperCase()}</Text>
-                                            </TouchableOpacity>
-                                        ))}
+                                        {['open', 'quote', 'negotiation', 'booked', 'closed won', 'closed lost', 'cancelled', 'dormant'].map((s) => {
+                                            const isDark = theme.background === '#0F172A';
+                                            const stageColorMap = isDark ? STAGE_COLORS_DARK : STAGE_COLORS_LIGHT;
+                                            const color = stageColorMap[s] || "#64748B";
+                                            return (
+                                                <TouchableOpacity
+                                                    key={s}
+                                                    style={[styles.actionChip, { borderColor: color, backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#fff' }]}
+                                                    onPress={() => handleStageUpdate(s)}
+                                                >
+                                                    <Text style={[styles.actionChipText, { color: color }]}>{s.toUpperCase()}</Text>
+                                                </TouchableOpacity>
+                                            );
+                                        })}
                                     </View>
                                 </View>
                             )}

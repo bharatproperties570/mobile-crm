@@ -8,7 +8,8 @@ interface User {
     fullName: string;
     name: string;
     email: string;
-    team?: string;
+    teams?: string[];
+    team?: string; // Keep for backward compatibility
 }
 
 interface UserContextType {

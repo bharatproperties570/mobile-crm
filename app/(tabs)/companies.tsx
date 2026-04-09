@@ -20,7 +20,7 @@ const COMPANY_FILTER_FIELDS: FilterField[] = [
     { key: "source", label: "Source", type: "lookup", lookupType: "Source" },
 ];
 
-const RELATIONSHIP_COLORS: Record<string, string> = {
+const RELATIONSHIP_COLORS_LIGHT: Record<string, string> = {
     'Developer': '#3B82F6',
     'Channel Partner': '#10B981',
     'Vendor': '#F59E0B',
@@ -29,10 +29,20 @@ const RELATIONSHIP_COLORS: Record<string, string> = {
     'Other': '#64748B'
 };
 
+const RELATIONSHIP_COLORS_DARK: Record<string, string> = {
+    'Developer': '#60A5FA',
+    'Channel Partner': '#34D399',
+    'Vendor': '#FBBF24',
+    'Land Owner': '#A78BFA',
+    'Institutional Owner': '#818CF8',
+    'Other': '#94A3B8'
+};
+
 const CompanyCard = ({ company, onPress, onMenuPress, idx }: { company: Company, onPress: () => void, onMenuPress: () => void, idx: number }) => {
     const { theme } = useTheme();
+    const isDark = theme.background === '#0F172A';
     const { trackCall } = useCallTracking();
-    const color = RELATIONSHIP_COLORS[lookupVal(company.relationshipType)] || '#64748B';
+    const color = (isDark ? RELATIONSHIP_COLORS_DARK : RELATIONSHIP_COLORS_LIGHT)[lookupVal(company.relationshipType)] || '#64748B';
 
     const phone = company.phones?.[0]?.phoneNumber;
     const email = company.emails?.[0]?.address;
@@ -57,11 +67,11 @@ const CompanyCard = ({ company, onPress, onMenuPress, idx }: { company: Company,
 
     const renderRightActions = () => (
         <View style={styles.rightActions}>
-            <TouchableOpacity style={[styles.swipeAction, { backgroundColor: "#2563EB" }]} onPress={() => trackCall(phone || "", company._id, "Company", company.name)}>
+            <TouchableOpacity style={[styles.swipeAction, { backgroundColor: isDark ? '#1E40AF' : "#2563EB" }]} onPress={() => trackCall(phone || "", company._id, "Company", company.name)}>
                 <Ionicons name="call" size={20} color="#fff" />
                 <Text style={styles.swipeLabel}>Call</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.swipeAction, { backgroundColor: "#F59E0B" }]} onPress={() => phone && Linking.openURL(`sms:${phone}`)}>
+            <TouchableOpacity style={[styles.swipeAction, { backgroundColor: isDark ? '#92400E' : "#F59E0B" }]} onPress={() => phone && Linking.openURL(`sms:${phone}`)}>
                 <Ionicons name="chatbubble" size={20} color="#fff" />
                 <Text style={styles.swipeLabel}>SMS</Text>
             </TouchableOpacity>
@@ -70,11 +80,11 @@ const CompanyCard = ({ company, onPress, onMenuPress, idx }: { company: Company,
 
     const renderLeftActions = () => (
         <View style={styles.leftActions}>
-            <TouchableOpacity style={[styles.swipeAction, { backgroundColor: "#10B981" }]} onPress={openWhatsApp}>
+            <TouchableOpacity style={[styles.swipeAction, { backgroundColor: isDark ? '#065F46' : "#10B981" }]} onPress={openWhatsApp}>
                 <Ionicons name="logo-whatsapp" size={20} color="#fff" />
                 <Text style={styles.swipeLabel}>WhatsApp</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.swipeAction, { backgroundColor: "#6366F1" }]} onPress={() => email && Linking.openURL(`mailto:${email}`)}>
+            <TouchableOpacity style={[styles.swipeAction, { backgroundColor: isDark ? '#3730A3' : "#6366F1" }]} onPress={() => email && Linking.openURL(`mailto:${email}`)}>
                 <Ionicons name="mail" size={20} color="#fff" />
                 <Text style={styles.swipeLabel}>Email</Text>
             </TouchableOpacity>
@@ -129,8 +139,8 @@ const CompanyCard = ({ company, onPress, onMenuPress, idx }: { company: Company,
                                 const indName = lookupVal(company.industry);
                                 const isAgent = (typeName?.toLowerCase() === 'real estate agent' || indName?.toLowerCase() === 'real estate agent' || typeName?.toLowerCase() === 'channel partner');
 
-                                const textColor = isAgent ? '#EA580C' : theme.textLight;
-                                const bgColor = isAgent ? '#FFF7ED' : '#F1F5F9';
+                                const textColor = isAgent ? (isDark ? '#FB923C' : '#EA580C') : theme.textLight;
+                                const bgColor = isAgent ? (isDark ? 'rgba(234, 88, 12, 0.15)' : '#FFF7ED') : (isDark ? 'rgba(255, 255, 255, 0.05)' : '#F1F5F9');
 
                                 if (typeName || indName) {
                                     return (
@@ -154,6 +164,7 @@ const CompanyCard = ({ company, onPress, onMenuPress, idx }: { company: Company,
 
 export default function CompaniesScreen() {
     const { theme } = useTheme();
+    const isDark = theme.background === '#0F172A';
     const router = useRouter();
     const [companies, setCompanies] = useState<Company[]>([]);
     const [search, setSearch] = useState("");
@@ -312,58 +323,58 @@ export default function CompaniesScreen() {
 
             {/* Action Hub Modal */}
             <Modal transparent visible={hubVisible} animationType="none" onRequestClose={closeHub}>
-                <Pressable style={styles.modalOverlay} onPress={closeHub}>
-                    <Animated.View style={[styles.sheetContainer, { transform: [{ translateY: slideAnim }] }]}>
-                        <View style={styles.sheetHandle} />
+                <Pressable style={[styles.modalOverlay, { backgroundColor: isDark ? "rgba(0, 0, 0, 0.7)" : "rgba(15, 23, 42, 0.4)" }]} onPress={closeHub}>
+                    <Animated.View style={[styles.sheetContainer, { backgroundColor: theme.card, transform: [{ translateY: slideAnim }] }]}>
+                        <View style={[styles.sheetHandle, { backgroundColor: theme.border }]} />
                         <View style={styles.sheetHeader}>
-                            <Text style={styles.sheetTitle}>{selectedCompany ? selectedCompany.name : "Company Actions"}</Text>
-                            <Text style={styles.sheetSub}>{selectedCompany?.relationshipType || "Industry Partner"}</Text>
+                            <Text style={[styles.sheetTitle, { color: theme.text }]}>{selectedCompany ? selectedCompany.name : "Company Actions"}</Text>
+                            <Text style={[styles.sheetSub, { color: theme.textLight }]}>{selectedCompany?.relationshipType || "Industry Partner"}</Text>
                         </View>
 
                         <View style={styles.actionGrid}>
                             <TouchableOpacity style={styles.actionItem} onPress={() => {
                                 router.push(`/add-company?id=${selectedCompany?._id}`); closeHub();
                             }}>
-                                <View style={[styles.actionIcon, { backgroundColor: "#F1F5F9" }]}>
-                                    <Ionicons name="create" size={24} color="#64748B" />
+                                <View style={[styles.actionIcon, { backgroundColor: isDark ? 'rgba(255, 255, 255, 0.05)' : "#F1F5F9" }]}>
+                                    <Ionicons name="create" size={24} color={isDark ? theme.textLight : "#64748B"} />
                                 </View>
-                                <Text style={styles.actionLabel}>Edit</Text>
+                                <Text style={[styles.actionLabel, { color: theme.textLight }]}>Edit</Text>
                             </TouchableOpacity >
 
                             <TouchableOpacity style={styles.actionItem} onPress={() => {
                                 router.push(`/add-employee?companyId=${selectedCompany?._id}`); closeHub();
                             }}>
-                                <View style={[styles.actionIcon, { backgroundColor: "#F5F3FF" }]}>
-                                    <Ionicons name="person-add" size={24} color="#7C3AED" />
+                                <View style={[styles.actionIcon, { backgroundColor: isDark ? 'rgba(124, 58, 237, 0.15)' : "#F5F3FF" }]}>
+                                    <Ionicons name="person-add" size={24} color={isDark ? '#A78BFA' : "#7C3AED"} />
                                 </View>
-                                <Text style={styles.actionLabel}>Add Employee</Text>
+                                <Text style={[styles.actionLabel, { color: theme.textLight }]}>Add Employee</Text>
                             </TouchableOpacity>
 
                             <TouchableOpacity style={styles.actionItem} onPress={() => {
                                 Alert.alert("Assign", "Assigning company..."); closeHub();
                             }}>
-                                <View style={[styles.actionIcon, { backgroundColor: "#F5F3FF" }]}>
-                                    <Ionicons name="person-add" size={24} color="#7C3AED" />
+                                <View style={[styles.actionIcon, { backgroundColor: isDark ? 'rgba(124, 58, 237, 0.15)' : "#F5F3FF" }]}>
+                                    <Ionicons name="person-add" size={24} color={isDark ? '#A78BFA' : "#7C3AED"} />
                                 </View>
-                                <Text style={styles.actionLabel}>Assign</Text>
+                                <Text style={[styles.actionLabel, { color: theme.textLight }]}>Assign</Text>
                             </TouchableOpacity>
 
                             <TouchableOpacity style={styles.actionItem} onPress={() => {
                                 router.push(`/add-activity?id=${selectedCompany?._id}&type=Company`); closeHub();
                             }}>
-                                <View style={[styles.actionIcon, { backgroundColor: "#F0F9FF" }]}>
-                                    <Ionicons name="add-circle" size={24} color="#0EA5E9" />
+                                <View style={[styles.actionIcon, { backgroundColor: isDark ? 'rgba(14, 165, 233, 0.15)' : "#F0F9FF" }]}>
+                                    <Ionicons name="add-circle" size={24} color={isDark ? '#38BDF8' : "#0EA5E9"} />
                                 </View>
-                                <Text style={styles.actionLabel}>Activity</Text>
+                                <Text style={[styles.actionLabel, { color: theme.textLight }]}>Activity</Text>
                             </TouchableOpacity>
 
                             <TouchableOpacity style={styles.actionItem} onPress={() => {
                                 Alert.alert("Tag", "Managing tags..."); closeHub();
                             }}>
-                                <View style={[styles.actionIcon, { backgroundColor: "#FDF2F8" }]}>
-                                    <Ionicons name="pricetags" size={24} color="#DB2777" />
+                                <View style={[styles.actionIcon, { backgroundColor: isDark ? 'rgba(219, 39, 119, 0.15)' : "#FDF2F8" }]}>
+                                    <Ionicons name="pricetags" size={24} color={isDark ? '#F472B6' : "#DB2777"} />
                                 </View>
-                                <Text style={styles.actionLabel}>Tag</Text>
+                                <Text style={[styles.actionLabel, { color: theme.textLight }]}>Tag</Text>
                             </TouchableOpacity>
                         </View >
                     </Animated.View >

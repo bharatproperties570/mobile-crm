@@ -179,6 +179,9 @@ export default function MatchScreen() {
                                 if (tag.includes("Intent") || tag.includes("Type")) { tagBg = "#E0F2FE"; tagText = "#0369A1"; }
                                 if (tag.includes("Budget")) { tagBg = "#DCFCE7"; tagText = "#15803D"; }
                                 if (tag.includes("Orientation")) { tagBg = "#FEF3C7"; tagText = "#92400E"; }
+                                if (tag.includes("Location") || tag.includes("Project") || tag.includes("Sector") || tag.includes("City")) { 
+                                    tagBg = "#F3E8FF"; tagText = "#7E22CE"; // Purple for Location
+                                }
                                 
                                 return (
                                     <View key={idx} style={[styles.matchChip, { backgroundColor: tagBg }]}>

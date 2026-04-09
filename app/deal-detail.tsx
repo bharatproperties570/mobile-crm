@@ -79,7 +79,7 @@ function formatTimeAgo(dateString?: string) {
     return `${Math.floor(diffInSecs / 86400)}d ago`;
 }
 
-function getDealScore(deal: any) {
+function getDealScore(deal: any, isDark = false) {
     let score = deal.dealProbability || 50;
     const stage = lv(deal.stage).toLowerCase();
     if (stage === "negotiation") score += 10;
@@ -87,7 +87,8 @@ function getDealScore(deal: any) {
 
     score = Math.min(score, 100);
     const color = score > 80 ? "#10B981" : score > 50 ? "#F59E0B" : "#EF4444";
-    return { val: score, color };
+    const bgOpacity = isDark ? '20' : '15';
+    return { val: score, color, bg: color + bgOpacity };
 }
 
 function getDealInsight(deal: any, activities: any[]) {
@@ -112,7 +113,7 @@ function InfoRow({ label, value, accent, icon }: { label: string; value: string;
     );
 }
 
-const STAGE_COLORS: Record<string, string> = {
+const STAGE_COLORS_LIGHT: Record<string, string> = {
     open: "#3B82F6",
     quote: "#8B5CF6",
     negotiation: "#F59E0B",
@@ -120,6 +121,16 @@ const STAGE_COLORS: Record<string, string> = {
     closed: "#059669",
     cancelled: "#EF4444",
     dormant: "#64748B",
+};
+
+const STAGE_COLORS_DARK: Record<string, string> = {
+    open: "#60A5FA",
+    quote: "#A78BFA",
+    negotiation: "#FBBF24",
+    booked: "#34D399",
+    closed: "#10B981",
+    cancelled: "#F87171",
+    dormant: "#94A3B8",
 };
 
 export default function DealDetailScreen() {
@@ -221,9 +232,11 @@ export default function DealDetailScreen() {
     if (loading) return <View style={[styles.center, { backgroundColor: theme.background }]}><ActivityIndicator size="large" color={theme.primary} /></View>;
     if (!deal) return <View style={[styles.center, { backgroundColor: theme.background }]}><Text style={[styles.noData, { color: theme.textLight }]}>Deal not found</Text></View>;
 
+    const isDark = theme.background === '#0F172A';
     const stageLabel = deal.stage ?? "Open";
-    const stageColor = STAGE_COLORS[stageLabel.toLowerCase()] ?? theme.primary;
-    const score = getDealScore(deal); // Still uses local lv but it's fine for simple stage check
+    const stageColorMap = isDark ? STAGE_COLORS_DARK : STAGE_COLORS_LIGHT;
+    const stageColor = stageColorMap[stageLabel.toLowerCase()] ?? theme.primary;
+    const score = getDealScore(deal, isDark);
 
     // Header Data
     const projectName = lv(deal.projectName, getLookupValue, users) !== "—" ? lv(deal.projectName, getLookupValue, users) : lv(deal.projectId, getLookupValue, users);
@@ -241,10 +254,10 @@ export default function DealDetailScreen() {
         <View style={[styles.container, { backgroundColor: theme.background }]}>
             {/* Premium SaaS Header */}
             <SafeAreaView style={[styles.headerCard, { backgroundColor: theme.card }]} edges={['top', 'left', 'right']}>
-                <View style={styles.headerTop}>
+                <View style={[styles.headerTop, { backgroundColor: isDark ? theme.glassBg : theme.card }]}>
                     <TouchableOpacity
                         onPress={() => router.canGoBack() ? router.back() : router.push("/(tabs)/deals")}
-                        style={styles.backBtnCircle}
+                        style={[styles.backBtnCircle, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#f5f5f5' }]}
                         hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
                     >
                         <Ionicons name="chevron-back" size={22} color={theme.text} />
@@ -259,11 +272,11 @@ export default function DealDetailScreen() {
                             )}
                         </View>
                         <View style={styles.headerBadgeRow}>
-                            <View style={[styles.miniBadge, { backgroundColor: theme.primary + '20' }]}>
-                                <Text style={[styles.miniBadgeText, { color: theme.primary }]}>{projectName}</Text>
+                            <View style={[styles.miniBadge, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : theme.primary + '20' }]}>
+                                <Text style={[styles.miniBadgeText, { color: isDark ? theme.textSecondary : theme.primary }]}>{projectName}</Text>
                             </View>
                             {block !== "—" && (
-                                <View style={[styles.miniBadge, { backgroundColor: theme.border + '40' }]}>
+                                <View style={[styles.miniBadge, { backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : theme.border + '40' }]}>
                                     <Text style={[styles.miniBadgeText, { color: theme.textLight }]}>Block {block}</Text>
                                 </View>
                             )}
@@ -301,12 +314,22 @@ export default function DealDetailScreen() {
                     <View style={[styles.strategyDivider, { backgroundColor: theme.border }]} />
 
                     <View style={styles.strategyBlock}>
-                        <Text style={[styles.strategyLabel, { color: theme.textLight }]}>TEAM</Text>
-                        <View style={styles.strategyValueRow}>
-                            <Ionicons name="people-outline" size={14} color="#6366F1" />
-                            <Text style={[styles.strategyValue, { color: theme.text }]} numberOfLines={1}>
-                                {lv(deal.team, getLookupValue, users)}
-                            </Text>
+                        <Text style={[styles.strategyLabel, { color: theme.textLight }]}>TEAM(S)</Text>
+                        <View style={[styles.strategyValueRow, { flexWrap: 'wrap', gap: 4 }]}>
+                            {Array.isArray(deal.teams) && deal.teams.length > 0 ? (
+                                deal.teams.map((t: any, i: number) => (
+                                    <View key={i} style={{ backgroundColor: isDark ? 'rgba(129, 140, 248, 0.15)' : '#6366F110', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                                        <Text style={{ fontSize: 9, fontWeight: '800', color: isDark ? '#C7D2FE' : '#6366F1' }}>{lv(t, getLookupValue, users).toUpperCase()}</Text>
+                                    </View>
+                                ))
+                            ) : (
+                                <>
+                                    <Ionicons name="people-outline" size={12} color={isDark ? '#818CF8' : "#6366F1"} />
+                                    <Text style={[styles.strategyValue, { color: theme.text }]} numberOfLines={1}>
+                                        {lv(deal.team, getLookupValue, users)}
+                                    </Text>
+                                </>
+                            )}
                         </View>
                     </View>
                 </View>
@@ -336,9 +359,9 @@ export default function DealDetailScreen() {
                         { icon: 'call', color: theme.primary, onPress: () => buyerPhone ? trackCall(buyerPhone, id!, "Deal", buyer) : Alert.alert("No Phone", "Contact number not available") },
                         { icon: 'chatbubble-ellipses', color: '#3B82F6', onPress: () => buyerPhone ? Linking.openURL(`sms:${buyerPhone.replace(/\D/g, "")}`) : Alert.alert("No Phone", "Contact number not available") },
                         { icon: 'logo-whatsapp', color: '#128C7E', onPress: () => buyerPhone ? Linking.openURL(`https://wa.me/${buyerPhone.replace(/\D/g, "")}`) : Alert.alert("No Phone", "Contact number not available") },
-                        { icon: 'mail', color: '#EA4335', onPress: () => buyerEmail ? Linking.openURL(`mailto:${buyerEmail}`) : Alert.alert("No Email", "Email address not available") },
-                        { icon: 'people', color: '#6366F1', onPress: () => router.push(`/match-lead?dealId=${id}`) },
-                        { icon: 'share-social', color: '#94A3B8', onPress: () => Alert.alert("Share Wall", `Sharing details for Deal ${unitNo} at ${projectName}`) },
+                        { icon: 'mail', color: isDark ? '#F87171' : '#EA4335', onPress: () => buyerEmail ? Linking.openURL(`mailto:${buyerEmail}`) : Alert.alert("No Email", "Email address not available") },
+                        { icon: 'people', color: isDark ? '#818CF8' : '#6366F1', onPress: () => router.push(`/match-lead?dealId=${id}`) },
+                        { icon: 'share-social', color: isDark ? '#94A3B8' : '#94A3B8', onPress: () => Alert.alert("Share Wall", `Sharing details for Deal ${unitNo} at ${projectName}`) },
                     ].map((action, i) => (
                         <TouchableOpacity key={i} style={[styles.modernHubBtn, { backgroundColor: action.color }]} onPress={action.onPress}>
                             <Ionicons name={action.icon as any} size={20} color="#fff" />
@@ -407,7 +430,7 @@ export default function DealDetailScreen() {
                 <View style={styles.tabContent}>
                     <ScrollView contentContainerStyle={styles.innerScroll}>
                         {/* AI Insight Card */}
-                        <View style={[styles.insightCard, { backgroundColor: theme.primary + '08', borderColor: theme.primary + '20' }]}>
+                        <View style={[styles.insightCard, { backgroundColor: theme.primary + (isDark ? '15' : '08'), borderColor: theme.primary + '25' }]}>
                             <View style={[styles.insightIconBox, { backgroundColor: theme.primary + '20' }]}>
                                 <Ionicons name="sparkles-outline" size={16} color={theme.primary} />
                             </View>
@@ -510,6 +533,11 @@ export default function DealDetailScreen() {
                                             </View>
                                             <Text style={[styles.timelineSubject, { color: theme.text }]}>{act.subject}</Text>
                                             {(act.description || act.details?.note) && <Text style={[styles.timelineNote, { color: theme.textLight }]}>{act.description || act.details?.note}</Text>}
+                                            {(act.performedBy || act.assignedTo) && (
+                                                <Text style={{ fontSize: 9, color: theme.textLight, marginTop: 4, fontWeight: '600' }}>
+                                                    By {act.performedBy || (typeof act.assignedTo === 'object' ? act.assignedTo?.fullName : lv(act.assignedTo, getLookupValue, users))}
+                                                </Text>
+                                            )}
                                         </View>
                                     </View>
                                 ))
@@ -545,11 +573,14 @@ export default function DealDetailScreen() {
 
                                                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 8 }}>
                                                     {lead.matchDetails?.map((tag: string, idx: number) => {
-                                                        let tagBg = theme.primary + '08';
+                                                        let tagBg = isDark ? 'rgba(255,255,255,0.05)' : theme.primary + '08';
                                                         let tagColor = theme.primary;
-                                                        if (tag.includes("Budget")) { tagBg = '#DCFCE7'; tagColor = '#15803D'; }
-                                                        if (tag.includes("Orientation")) { tagBg = '#FEF3C7'; tagColor = '#92400E'; }
-                                                        if (tag.includes("Unit") || tag.includes("Category")) { tagBg = '#E0F2FE'; tagColor = '#0369A1'; }
+                                                        if (tag.includes("Budget")) { tagBg = isDark ? '#065F4630' : '#DCFCE7'; tagColor = isDark ? '#34D399' : '#15803D'; }
+                                                        if (tag.includes("Orientation")) { tagBg = isDark ? '#92400E30' : '#FEF3C7'; tagColor = isDark ? '#FBBF24' : '#92400E'; }
+                                                        if (tag.includes("Unit") || tag.includes("Category")) { tagBg = isDark ? '#0369A130' : '#E0F2FE'; tagColor = isDark ? '#38BDF8' : '#0369A1'; }
+                                                        if (tag.includes("Location") || tag.includes("Project") || tag.includes("Sector") || tag.includes("City")) { 
+                                                            tagBg = isDark ? '#7E22CE30' : "#F3E8FF"; tagColor = isDark ? '#C084FC' : "#7E22CE"; 
+                                                        }
                                                         
                                                         return (
                                                             <View key={idx} style={[styles.matchDetailTag, { backgroundColor: tagBg }]}>
@@ -641,7 +672,7 @@ export default function DealDetailScreen() {
 const styles = StyleSheet.create({
     container: { flex: 1 },
     center: { flex: 1, justifyContent: "center", alignItems: "center" },
-    noData: { fontSize: 16, fontWeight: "600" },
+    noData: { fontSize: 16, fontWeight: "700" },
 
     // Header Styles
     headerCard: { paddingBottom: 10, shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 10, elevation: 5, zIndex: 10 },

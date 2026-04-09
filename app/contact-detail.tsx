@@ -19,8 +19,15 @@ const CACHE_KEY_PREFIX = "@cache_contact_detail_";
 
 const TABS = ["Details", "Activities", "Inventory", "Documents"];
 
-function lv(field: unknown): string {
+function lv(field: unknown): any {
     if (field === null || field === undefined || field === "" || field === "null" || field === "undefined") return "—";
+    
+    // Handle array of objects/strings (Multi-team support)
+    if (Array.isArray(field)) {
+        if (field.length === 0) return "—";
+        return field.map(item => lv(item)).filter(v => v !== "—");
+    }
+
     if (typeof field === "object" && field !== null) {
         if ("lookup_value" in field && (field as any).lookup_value) return (field as any).lookup_value;
         if ("fullName" in field && (field as any).fullName) return (field as any).fullName;
@@ -41,7 +48,7 @@ function formatTimeAgo(dateString?: string) {
     return `${Math.floor(diffInSecs / 86400)}d ago`;
 }
 
-function getContactScore(contact: any, activities: any[]) {
+function getContactScore(contact: any, activities: any[], isDark = false) {
     let score = 50;
     if (activities.length > 5) score += 20;
     if (contact.phones?.length > 1) score += 10;
@@ -49,7 +56,8 @@ function getContactScore(contact: any, activities: any[]) {
 
     score = Math.min(score, 100);
     const color = score > 80 ? "#10B981" : score > 50 ? "#F59E0B" : "#EF4444";
-    return { val: score, color };
+    const bgOpacity = isDark ? '20' : '15';
+    return { val: score, color, bg: color + bgOpacity };
 }
 
 function getContactInsight(contact: any, activities: any[]) {
@@ -172,24 +180,25 @@ export default function ContactDetailScreen() {
     const initials = (firstName[0] ?? "") + (lastName[0] ?? firstName[1] ?? "");
     const phone = contact.phones?.[0]?.number ?? "";
     const email = contact.emails?.[0]?.address ?? "";
-    const score = getContactScore(contact, activities);
+    const isDark = theme.background === '#0F172A';
+    const score = getContactScore(contact, activities, isDark);
 
     return (
         <View style={[styles.container, { backgroundColor: theme.background }]}>
             {/* Premium SaaS Header */}
             <SafeAreaView style={[styles.headerCard, { backgroundColor: theme.card }]}>
-                <View style={styles.headerTop}>
-                    <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace("/(tabs)/contacts")} style={styles.backBtnCircle}>
+                <View style={[styles.headerTop, { backgroundColor: isDark ? theme.glassBg : theme.card }]}>
+                    <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace("/(tabs)/contacts")} style={[styles.backBtnCircle, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }]}>
                         <Ionicons name="chevron-back" size={22} color={theme.text} />
                     </TouchableOpacity>
                     <View style={styles.headerTitleContainer}>
                         <Text style={[styles.headerNamePremium, { color: theme.text }]} numberOfLines={1}>{fullName}</Text>
                         <View style={styles.headerBadgeRow}>
-                            <View style={[styles.miniBadge, { backgroundColor: theme.primary + '20' }]}>
-                                <Text style={[styles.miniBadgeText, { color: theme.primary }]}>{phone}</Text>
+                            <View style={[styles.miniBadge, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : theme.primary + '20' }]}>
+                                <Text style={[styles.miniBadgeText, { color: isDark ? theme.textSecondary : theme.primary }]}>{phone}</Text>
                             </View>
                             {email && (
-                                <View style={[styles.miniBadge, { backgroundColor: theme.border + '40' }]}>
+                                <View style={[styles.miniBadge, { backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : theme.border + '40' }]}>
                                     <Text style={[styles.miniBadgeText, { color: theme.textLight }]}>{email}</Text>
                                 </View>
                             )}
@@ -218,12 +227,26 @@ export default function ContactDetailScreen() {
                     <View style={[styles.strategyDivider, { backgroundColor: theme.border }]} />
 
                     <View style={styles.strategyBlock}>
-                        <Text style={[styles.strategyLabel, { color: theme.textLight }]}>TEAM</Text>
-                        <View style={styles.strategyValueRow}>
-                            <Ionicons name="people-outline" size={14} color="#6366F1" />
-                            <Text style={[styles.strategyValue, { color: theme.text }]} numberOfLines={1}>
-                                {lv(contact.team)}
-                            </Text>
+                        <Text style={[styles.strategyLabel, { color: theme.textLight }]}>TEAMS</Text>
+                        <View style={[styles.strategyValueRow, { flexWrap: 'wrap', gap: 4 }]}>
+                            {(() => {
+                                const teamData = lv(contact.teams || contact.team);
+                                if (Array.isArray(teamData)) {
+                                    return teamData.map((t, idx) => (
+                                        <View key={idx} style={[styles.teamMiniBadge, { backgroundColor: isDark ? 'rgba(99, 102, 241, 0.15)' : '#6366F1' + '10' }]}>
+                                            <Text style={[styles.teamMiniBadgeText, { color: isDark ? '#818CF8' : '#6366F1' }]}>{t}</Text>
+                                        </View>
+                                    ));
+                                }
+                                return (
+                                    <>
+                                        <Ionicons name="people-outline" size={12} color={isDark ? '#818CF8' : "#6366F1"} />
+                                        <Text style={[styles.strategyValue, { color: theme.text }]} numberOfLines={1}>
+                                            {teamData}
+                                        </Text>
+                                    </>
+                                );
+                            })()}
                         </View>
                     </View>
                 </View>
@@ -245,9 +268,9 @@ export default function ContactDetailScreen() {
                     </View>
 
                     {contact.tags && contact.tags.length > 0 && (
-                        <View style={[styles.marketingPill, { backgroundColor: '#7C3AED' + '10' }]}>
-                            <Ionicons name="pricetag" size={12} color="#7C3AED" />
-                            <Text style={[styles.marketingText, { color: '#7C3AED' }]}>
+                        <View style={[styles.marketingPill, { backgroundColor: isDark ? 'rgba(124, 58, 237, 0.15)' : '#7C3AED' + '10' }]}>
+                            <Ionicons name="pricetag" size={12} color={isDark ? '#A78BFA' : "#7C3AED"} />
+                            <Text style={[styles.marketingText, { color: isDark ? '#A78BFA' : '#7C3AED' }]}>
                                 {contact.tags[0]}
                             </Text>
                         </View>
@@ -258,10 +281,10 @@ export default function ContactDetailScreen() {
                 <View style={styles.modernActionHub}>
                     {[
                         { icon: 'call', color: theme.primary, onPress: () => trackCall(phone, id!, "Contact", fullName) },
-                        { icon: 'chatbubble-ellipses', color: '#3B82F6', onPress: () => Linking.openURL(`sms:${phone.replace(/\D/g, "")}`) },
+                        { icon: 'chatbubble-ellipses', color: isDark ? '#3B82F6' : '#3B82F6', onPress: () => Linking.openURL(`sms:${phone.replace(/\D/g, "")}`) },
                         { icon: 'logo-whatsapp', color: '#128C7E', onPress: () => Linking.openURL(`https://wa.me/${phone.replace(/\D/g, "")}`) },
-                        { icon: 'mail', color: '#EA4335', onPress: () => Linking.openURL(`mailto:${email}`) },
-                        { icon: 'calendar', color: '#6366F1', onPress: () => router.push(`/add-activity?id=${id}&type=Contact`) },
+                        { icon: 'mail', color: isDark ? '#F87171' : '#EA4335', onPress: () => Linking.openURL(`mailto:${email}`) },
+                        { icon: 'calendar', color: isDark ? '#818CF8' : '#6366F1', onPress: () => router.push(`/add-activity?id=${id}&type=Contact`) },
                     ].map((action, i) => (
                         <TouchableOpacity key={i} style={[styles.modernHubBtn, { backgroundColor: action.color }]} onPress={action.onPress}>
                             <Ionicons name={action.icon as any} size={20} color="#fff" />
@@ -303,7 +326,7 @@ export default function ContactDetailScreen() {
                 <View style={styles.tabContent}>
                     <ScrollView contentContainerStyle={styles.innerScroll}>
                         {/* AI Insight Card */}
-                        <View style={[styles.insightCard, { backgroundColor: theme.primary + '08', borderColor: theme.primary + '20' }]}>
+                        <View style={[styles.insightCard, { backgroundColor: theme.primary + (isDark ? '15' : '08'), borderColor: theme.primary + '25' }]}>
                             <View style={[styles.insightIconBox, { backgroundColor: theme.primary + '20' }]}>
                                 <Ionicons name="sparkles-outline" size={16} color={theme.primary} />
                             </View>
@@ -368,16 +391,16 @@ export default function ContactDetailScreen() {
 
                                     if (isAudit) {
                                         icon = "time-outline";
-                                        color = "#8B5CF6";
+                                        color = isDark ? "#A78BFA" : "#8B5CF6";
                                     } else if (act.type.toLowerCase().includes("call")) {
                                         icon = "call-outline";
-                                        color = "#3B82F6";
+                                        color = isDark ? "#60A5FA" : "#3B82F6";
                                     } else if (act.type.toLowerCase().includes("task")) {
                                         icon = "checkbox-outline";
-                                        color = "#F59E0B";
+                                        color = isDark ? "#FBBF24" : "#F59E0B";
                                     } else if (act.type.toLowerCase().includes("email")) {
                                         icon = "mail-outline";
-                                        color = "#EF4444";
+                                        color = isDark ? "#F87171" : "#EF4444";
                                     }
 
                                     return (
@@ -385,7 +408,7 @@ export default function ContactDetailScreen() {
                                             <View style={[styles.timelineDot, { backgroundColor: color }]}>
                                                 <Ionicons name={icon} size={8} color="#fff" />
                                             </View>
-                                            <View style={[styles.timelineBody, isAudit && { borderLeftWidth: 3, borderLeftColor: color }]}>
+                                            <View style={[styles.timelineBody, { backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)' }, isAudit && { borderLeftWidth: 3, borderLeftColor: color }]}>
                                                 <View style={styles.timelineHeader}>
                                                     <Text style={[styles.timelineType, { color: color }]}>
                                                         {isAudit ? "AUDIT LOG" : act.type.toUpperCase()}
@@ -453,8 +476,8 @@ export default function ContactDetailScreen() {
                                             <Text style={[styles.matchProject, { color: theme.textLight }]}>{inv.projectName} • {inv.block}</Text>
                                         </View>
                                         <View style={styles.matchRight}>
-                                            <View style={[styles.relationBadge, { backgroundColor: theme.primary + '10' }]}>
-                                                <Text style={{ fontSize: 10, color: theme.primary, fontWeight: '700' }}>OWNER</Text>
+                                            <View style={[styles.relationBadge, { backgroundColor: isDark ? 'rgba(37, 99, 235, 0.15)' : theme.primary + '10' }]}>
+                                                <Text style={{ fontSize: 10, color: isDark ? '#60A5FA' : theme.primary, fontWeight: '700' }}>OWNER</Text>
                                             </View>
                                         </View>
                                     </TouchableOpacity>
@@ -496,7 +519,7 @@ export default function ContactDetailScreen() {
 
                                 return allDocs.map((doc: any, i: number) => (
                                     <View key={i} style={[styles.docItem, { borderBottomColor: theme.border }]}>
-                                        <View style={[styles.docIcon, { backgroundColor: doc.isInventoryDoc ? theme.primary + '15' : theme.primary + '10' }]}>
+                                        <View style={[styles.docIcon, { backgroundColor: theme.primary + (isDark ? '25' : '10') }]}>
                                             <Ionicons name={doc.isInventoryDoc ? "business" : "document-text"} size={20} color={theme.primary} />
                                         </View>
                                         <View style={styles.docInfo}>
@@ -541,7 +564,7 @@ export default function ContactDetailScreen() {
 const styles = StyleSheet.create({
     container: { flex: 1 },
     center: { flex: 1, justifyContent: "center", alignItems: "center" },
-    noData: { fontSize: 16, color: "#94A3B8" },
+    noData: { fontSize: 16, fontWeight: '700' },
 
     headerCard: { borderBottomLeftRadius: 30, borderBottomRightRadius: 30, elevation: 12, shadowOpacity: 0.1, shadowRadius: 15, paddingBottom: 8 },
     headerTop: { flexDirection: 'row', alignItems: 'center', padding: 20, gap: 15 },
@@ -593,8 +616,8 @@ const styles = StyleSheet.create({
     emptyText: { textAlign: 'center', color: '#94A3B8', padding: 20, fontSize: 13 },
 
     timelineItem: { paddingLeft: 20, borderLeftWidth: 2, paddingBottom: 20 },
-    timelineDot: { width: 10, height: 10, borderRadius: 5, position: 'absolute', left: -6, top: 4 },
-    timelineBody: { backgroundColor: 'rgba(0,0,0,0.02)', padding: 12, borderRadius: 12 },
+    timelineDot: { width: 10, height: 10, borderRadius: 5, position: 'absolute', left: -6, top: 4, justifyContent: 'center', alignItems: 'center' },
+    timelineBody: { padding: 12, borderRadius: 12 },
     timelineHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
     timelineType: { fontSize: 10, fontWeight: '900' },
     timelineDate: { fontSize: 10, color: '#94A3B8' },
@@ -630,5 +653,17 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.4,
         shadowRadius: 12,
         shadowOffset: { width: 0, height: 6 },
+    },
+    teamMiniBadge: {
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 4,
+        borderWidth: 0.5,
+        borderColor: 'rgba(99, 102, 241, 0.3)',
+    },
+    teamMiniBadgeText: {
+        fontSize: 9,
+        fontWeight: '800',
+        textTransform: 'uppercase',
     },
 });
