@@ -340,7 +340,7 @@ export default function InventoryDetailScreen() {
                             <InfoRow label="Carpet Area" value={formatSize(inv.carpetArea, 'Sq.Ft.', getLookupValue)} icon="grid-outline" />
                         </View>
 
-                        {inv.amenities && (
+                        {inv.amenities && typeof inv.amenities === 'object' && Object.entries(inv.amenities).length > 0 && (
                             <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
                                 <Text style={[styles.cardTitle, { color: theme.text }]}>Amenities</Text>
                                 <View style={styles.chipRow}>
@@ -576,14 +576,14 @@ const styles = StyleSheet.create({
     center: { flex: 1, justifyContent: "center", alignItems: "center" },
     noData: { fontSize: 16, fontWeight: "600" },
 
-    headerCard: { paddingBottom: 10, shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 10, elevation: 5, zIndex: 10 },
+    headerCard: { paddingBottom: 10, shadowOpacity: 0.05, shadowRadius: 10, elevation: 5, zIndex: 10 },
     headerTop: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingTop: 12, paddingBottom: 16, gap: 15 },
-    backBtnCircle: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(0,0,0,0.05)', alignItems: 'center', justifyContent: 'center' },
+    backBtnCircle: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
     headerTitleContainer: { flex: 1 },
     headerNamePremium: { fontSize: 24, fontWeight: '900', letterSpacing: -0.5 },
     headerBadgeRow: { flexDirection: 'row', gap: 6, marginTop: 4 },
     miniBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
-    miniBadgeText: { fontSize: 10, fontWeight: '800' },
+    miniBadgeText: { fontSize: 13, fontWeight: '800' },
 
     statusContainer: { width: 70, alignItems: 'center', flexDirection: 'row', gap: 10, justifyContent: 'flex-end' },
     statusRing: { alignItems: 'center', justifyContent: 'center' },
@@ -610,7 +610,7 @@ const styles = StyleSheet.create({
 
     tabContent: { width: SCREEN_WIDTH },
     innerScroll: { padding: 20, paddingBottom: 100 },
-    card: { padding: 20, borderRadius: 24, borderWidth: 1, marginBottom: 16, shadowColor: "#000", shadowOpacity: 0.03, shadowRadius: 10, elevation: 2 },
+    card: { padding: 20, borderRadius: 24, borderWidth: 1, marginBottom: 16, shadowOpacity: 0.03, shadowRadius: 10, elevation: 2 },
     cardTitle: { fontSize: 15, fontWeight: '800', marginBottom: 16 },
     infoRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1 },
     infoLabel: { fontSize: 13, fontWeight: '600' },
@@ -627,7 +627,7 @@ const styles = StyleSheet.create({
     timelineBody: { marginTop: -4 },
     timelineHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
     timelineType: { fontSize: 10, fontWeight: '800' },
-    timelineDate: { fontSize: 10, color: '#94a3b8', fontWeight: '600' },
+    timelineDate: { fontSize: 10, fontWeight: '600' },
     timelineSubject: { fontSize: 14, fontWeight: '700', marginBottom: 4 },
 
     partyCard: { padding: 16, borderRadius: 18, flexDirection: 'row', alignItems: 'center', marginBottom: 12 },

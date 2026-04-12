@@ -117,7 +117,7 @@ export default function LeadDetailScreen() {
             const currentMatchingDeals = Array.isArray(matchRes?.data) ? matchRes.data : (Array.isArray(matchRes) ? matchRes : []);
             
             let currentOwnedInventory: any[] = [];
-            if (currentLead.contactDetails?._id) {
+            if (currentLead && currentLead.contactDetails?._id) {
                 const ownedRes = await getInventoryByContact(currentLead.contactDetails._id);
                 currentOwnedInventory = Array.isArray(ownedRes?.data) ? ownedRes.data : (Array.isArray(ownedRes) ? ownedRes : []);
             }
@@ -213,7 +213,7 @@ export default function LeadDetailScreen() {
                     <View style={styles.strategyBlock}>
                         <Text style={[styles.strategyLabel, { color: theme.textLight }]}>TEAM(S)</Text>
                         <View style={[styles.strategyValueRow, { flexWrap: 'wrap', gap: 4 }]}>
-                            {Array.isArray(lead.assignment?.teams) && lead.assignment.teams.length > 0 ? (
+                            {lead && Array.isArray(lead.assignment?.teams) && lead.assignment.teams.length > 0 ? (
                                 lead.assignment.teams.map((t: any, i: number) => (
                                     <View key={i} style={{ backgroundColor: isDark ? 'rgba(129, 140, 248, 0.15)' : '#6366F110', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
                                         <Text style={{ fontSize: 9, fontWeight: '800', color: isDark ? '#C7D2FE' : '#6366F1' }}>{lv(t).toUpperCase()}</Text>
@@ -223,7 +223,7 @@ export default function LeadDetailScreen() {
                                 <>
                                     <Ionicons name="people-outline" size={12} color={isDark ? '#818CF8' : "#6366F1"} />
                                     <Text style={[styles.strategyValue, { color: theme.text }]} numberOfLines={1}>
-                                        {lv(lead.assignment?.team) || "General"}
+                                        {lv(lead?.assignment?.team) || "General"}
                                     </Text>
                                 </>
                             )}
@@ -235,18 +235,28 @@ export default function LeadDetailScreen() {
                     {/* ── Stage Badge (from Stage Engine) ── */}
                     <View style={styles.strategyBlock}>
                         <Text style={[styles.strategyLabel, { color: theme.textLight }]}>STAGE</Text>
-                        {(() => {
-                            const stageStr = lv(lead.stage) !== '' ? lv(lead.stage) : 'New';
-                            const stageColor = STAGE_COLORS[stageStr] || theme.primary;
-                            return (
-                                <View style={[styles.strategyValueRow]}>
-                                    <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: stageColor, marginRight: 4 }} />
-                                    <Text style={[styles.strategyValue, { color: stageColor }]} numberOfLines={1}>
-                                        {stageStr}
-                                    </Text>
-                                </View>
-                            );
-                        })()}
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                            {(() => {
+                                const stageStr = lv(lead.stage) !== '' ? lv(lead.stage) : 'New';
+                                const stageColor = STAGE_COLORS[stageStr] || theme.primary;
+                                return (
+                                    <View style={[styles.strategyValueRow]}>
+                                        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: stageColor, marginRight: 4 }} />
+                                        <Text style={[styles.strategyValue, { color: stageColor }]} numberOfLines={1}>
+                                            {stageStr}
+                                        </Text>
+                                    </View>
+                                );
+                            })()}
+                            {(lv(lead.stage) === 'Dormant') && (
+                                <TouchableOpacity 
+                                    onPress={() => router.push(`/revive-lead?id=${id}`)}
+                                    style={{ backgroundColor: '#8B5CF6', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 }}
+                                >
+                                    <Text style={{ color: '#fff', fontSize: 10, fontWeight: '800' }}>REVIVE</Text>
+                                </TouchableOpacity>
+                            )}
+                        </View>
                     </View>
                 </View>
 
@@ -719,14 +729,14 @@ const styles = StyleSheet.create({
     infoValue: { fontSize: 13, fontWeight: "700" },
 
     fullAddressText: { fontSize: 12, fontStyle: 'italic', marginTop: 12, lineHeight: 18 },
-    emptyText: { textAlign: 'center', color: '#94A3B8', padding: 20, fontSize: 13 },
+    emptyText: { textAlign: 'center', padding: 20, fontSize: 13 },
 
     timelineItem: { paddingLeft: 20, borderLeftWidth: 2, paddingBottom: 20 },
     timelineDot: { width: 10, height: 10, borderRadius: 5, position: 'absolute', left: -6, top: 4, justifyContent: 'center', alignItems: 'center' },
     timelineBody: { padding: 12, borderRadius: 12 },
     timelineHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
     timelineType: { fontSize: 10, fontWeight: '900' },
-    timelineDate: { fontSize: 10, color: '#94A3B8' },
+    timelineDate: { fontSize: 10 },
     timelineSubject: { fontSize: 13, fontWeight: '700' },
     timelineNote: { fontSize: 11, marginTop: 4 },
 

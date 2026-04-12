@@ -119,7 +119,7 @@ const InventoryCard = memo(({ item, onPress, onCall, onWhatsApp, onSMS, onEmail,
         return {
             status,
             label: isActive ? "Active" : "InActive",
-            color: statusColors[status] || (isActive ? '#10B981' : '#F59E0B')
+            color: statusColors[status] || (isActive ? theme.success : theme.warning)
         };
     }, [item.status, getLookupValue, statusColors]);
 
@@ -165,9 +165,9 @@ const InventoryCard = memo(({ item, onPress, onCall, onWhatsApp, onSMS, onEmail,
                 <Ionicons name="logo-whatsapp" size={22} color="#fff" />
                 <Text style={styles.swipeLabel}>WhatsApp</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.swipeAction, { backgroundColor: isDark ? 'rgba(52, 211, 153, 0.15)' : '#BBF7D0' }]} onPress={onEmail}>
-                <Ionicons name="mail" size={22} color={isDark ? '#34D399' : '#166534'} />
-                <Text style={[styles.swipeLabel, { color: isDark ? '#34D399' : '#166534' }]}>Email</Text>
+            <TouchableOpacity style={[styles.swipeAction, { backgroundColor: isDark ? theme.success + '20' : '#BBF7D0' }]} onPress={onEmail}>
+                <Ionicons name="mail" size={22} color={isDark ? theme.success : '#166534'} />
+                <Text style={[styles.swipeLabel, { color: isDark ? theme.success : '#166534' }]}>Email</Text>
             </TouchableOpacity>
         </View>
     );
@@ -220,7 +220,7 @@ const InventoryCard = memo(({ item, onPress, onCall, onWhatsApp, onSMS, onEmail,
                             ) : null}
                         </View>
                         <View style={{ alignItems: 'flex-end' }}>
-                            <View style={[styles.statusPill, { backgroundColor: statusColor + "10", flexDirection: 'column', alignItems: 'flex-end', gap: 2, paddingVertical: 6 }]}>
+                            <View style={[styles.statusPill, { backgroundColor: statusColor + "15", flexDirection: 'column', alignItems: 'flex-end', gap: 2, paddingVertical: 6 }]}>
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                                     <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
                                     <Text style={[styles.statusPillText, { color: statusColor }]}>{statusLabel}</Text>
@@ -237,7 +237,7 @@ const InventoryCard = memo(({ item, onPress, onCall, onWhatsApp, onSMS, onEmail,
                         {/* Owner */}
                         {(item.owners?.[0]?.name || item.ownerName) ? (
                             <View style={styles.listMeta}>
-                                <Ionicons name="home-outline" size={13} color={isDark ? '#34D399' : "#10B981"} />
+                                <Ionicons name="home-outline" size={13} color={theme.success} />
                                 <Text style={[styles.listMetaText, { color: theme.text }]} numberOfLines={1}>
                                     {resolveNameFromObject(item.owners?.[0], item.ownerName, getLookupValue, findUser)}
                                 </Text>
@@ -251,7 +251,7 @@ const InventoryCard = memo(({ item, onPress, onCall, onWhatsApp, onSMS, onEmail,
                         {/* Associate */}
                         {(item.associates?.[0]?.name || item.associatedContact) ? (
                             <View style={styles.listMeta}>
-                                <Ionicons name="people-outline" size={13} color={isDark ? '#818CF8' : "#6366F1"} />
+                                <Ionicons name="people-outline" size={13} color={isDark ? '#818CF8' : theme.primary} />
                                 <Text style={[styles.listMetaText, { color: theme.text }]} numberOfLines={1}>
                                     {resolveNameFromObject(item.associates?.[0], item.associatedContact, getLookupValue, findUser)}
                                 </Text>
@@ -572,10 +572,11 @@ export default function InventoryScreen() {
         const total = activeCount + inactiveCount;
         const activePct = total > 0 ? Math.round((activeCount / total) * 100) : 0;
         const inactivePct = total > 0 ? Math.round((inactiveCount / total) * 100) : 0;
+        const filtersCount = Object.keys(filters).filter(k => filters[k]?.length > 0).length;
 
         return (
-            <View style={styles.headerContainer}>
-                <View style={styles.header}>
+            <View style={[styles.headerContainer, { backgroundColor: theme.background }]}>
+                <View style={[styles.header, { backgroundColor: theme.background }]}>
                     <View>
                         <Text style={[styles.headerTitle, { color: theme.text }]}>Inventory</Text>
                     </View>
@@ -591,64 +592,66 @@ export default function InventoryScreen() {
                     <TouchableOpacity 
                         style={[
                             styles.flowSegment, 
-                            { backgroundColor: isDark ? '#1E293B' : '#F1F5F9' },
+                            { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#F1F5F9' },
                             styles.inactiveSegment,
-                            activeQuickFilter === 'inactive' && { backgroundColor: isDark ? '#0F172A' : '#E2E8F0', borderColor: theme.primary }
+                            activeQuickFilter === 'inactive' && { backgroundColor: isDark ? 'rgba(245, 158, 11, 0.15)' : '#FEF3C7', borderColor: '#F59E0B' }
                         ]}
                         onPress={() => handleQuickFilter('inactive')}
                         activeOpacity={0.7}
                     >
-                        <View style={styles.flowInfo}>
-                            <Text style={[styles.flowLabel, { color: theme.textSecondary }]}>INACTIVE</Text>
-                            <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
-                                <Text style={[styles.flowValue, { color: theme.text }]}>{inactiveCount.toLocaleString()}</Text>
-                                <Text style={[styles.flowPercent, { color: theme.textLight }]}>{inactivePct}%</Text>
+                        <View style={styles.segmentContent}>
+                            <Text style={[styles.segmentLabel, { color: activeQuickFilter === 'inactive' ? '#D97706' : theme.textMuted }]}>INACTIVE</Text>
+                            <View style={styles.segmentStats}>
+                                <Text style={[styles.segmentCount, { color: activeQuickFilter === 'inactive' ? '#D97706' : theme.text }]}>{inactiveCount}</Text>
+                                <Text style={[styles.segmentPercent, { color: theme.textMuted }]}>{inactivePct}%</Text>
                             </View>
                         </View>
-                        <Ionicons name="archive-outline" size={24} color={isDark ? 'rgba(255,255,255,0.05)' : '#64748B20'} style={styles.flowIcon} />
-                        <View style={[styles.chevronPoint, { backgroundColor: isDark ? '#1E293B' : '#F1F5F9' }, activeQuickFilter === 'inactive' && { backgroundColor: isDark ? '#0F172A' : '#E2E8F0' }]} />
                     </TouchableOpacity>
 
-                    {/* Active Segment (Right) */}
+                    {/* Active Segment (Right) - Arrow Pointing Right */}
                     <TouchableOpacity 
                         style={[
                             styles.flowSegment, 
-                            { backgroundColor: isDark ? '#1E293B' : '#F0FDF4' },
+                            { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#F1F5F9' },
                             styles.activeSegment,
-                            activeQuickFilter === 'active' && { backgroundColor: isDark ? '#0F172A' : '#DCFCE7', borderColor: theme.primary }
+                            activeQuickFilter === 'active' && { backgroundColor: isDark ? 'rgba(16, 185, 129, 0.15)' : '#ECFDF5', borderColor: '#10B981' }
                         ]}
                         onPress={() => handleQuickFilter('active')}
                         activeOpacity={0.7}
                     >
-                        <View style={[styles.flowInfo, { paddingLeft: 24 }]}>
-                            <Text style={[styles.flowLabelActive, { color: isDark ? '#34D399' : '#16A34A' }]}>ACTIVE</Text>
-                            <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
-                                <Text style={[styles.flowValueActive, { color: isDark ? '#34D399' : '#16A34A' }]}>{activeCount.toLocaleString()}</Text>
-                                <Text style={[styles.flowPercentActive, { color: isDark ? '#34D399' : '#16A34A', opacity: 0.6 }]}>{activePct}%</Text>
+                        <View style={styles.activeContent}>
+                            <Text style={[styles.segmentLabel, { color: activeQuickFilter === 'active' ? '#059669' : theme.textMuted }]}>ACTIVE</Text>
+                            <View style={styles.segmentStats}>
+                                <Text style={[styles.segmentCount, { color: activeQuickFilter === 'active' ? '#059669' : theme.text }]}>{activeCount}</Text>
+                                <Text style={[styles.segmentPercent, { color: theme.textMuted }]}>{activePct}%</Text>
                             </View>
                         </View>
-                        <Ionicons name="trending-up" size={24} color={isDark ? 'rgba(52,211,153,0.1)' : '#16A34A20'} style={styles.flowIcon} />
+                        {/* The pointing overlap arrow */}
+                        <View style={[styles.flowArrow, { borderLeftColor: activeQuickFilter === 'inactive' ? (isDark ? 'rgba(245, 158, 11, 0.15)' : '#FEF3C7') : (isDark ? 'rgba(255,255,255,0.05)' : '#F1F5F9') }]} />
                     </TouchableOpacity>
                 </View>
 
-                <View style={[styles.commandBar, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                <View style={[styles.commandBar, { backgroundColor: theme.border }]}>
                     <Ionicons name="search" size={20} color={theme.textMuted} />
                     <TextInput
                         style={[styles.commandInput, { color: theme.text }]}
-                        placeholder="Search Project or Unit..."
+                        placeholder="Search project or unit..."
                         placeholderTextColor={theme.textMuted}
                         value={search}
                         onChangeText={setSearch}
                     />
-                    <TouchableOpacity onPress={() => setShowFilterModal(true)} style={styles.filterBtn}>
-                        <Ionicons name="filter" size={20} color={Object.keys(filters).length > 0 ? theme.primary : theme.textMuted} />
-                        {Object.keys(filters).length > 0 && <View style={[styles.filterBadge, { backgroundColor: theme.primary }]} />}
-                    </TouchableOpacity>
-                    {search.length > 0 && (
-                        <TouchableOpacity onPress={() => setSearch("")} style={{ marginLeft: 8 }}>
-                            <Ionicons name="close-circle" size={18} color={theme.textMuted} />
+                    <View style={styles.searchRight}>
+                        <TouchableOpacity style={[styles.viewModeBtn, { backgroundColor: theme.card }]} onPress={() => setViewMode(v => v === 'list' ? 'grid' : 'list')}>
+                            <Ionicons name={viewMode === 'list' ? "grid-outline" : "list-outline"} size={20} color={theme.text} />
                         </TouchableOpacity>
-                    )}
+                        <TouchableOpacity 
+                            style={[styles.filterBtn, { backgroundColor: theme.card }, filtersCount > 0 && { backgroundColor: theme.primary + '15' }]} 
+                            onPress={() => setShowFilterModal(true)}
+                        >
+                            <Ionicons name="filter" size={20} color={filtersCount > 0 ? theme.primary : theme.text} />
+                            {filtersCount > 0 && <View style={[styles.filterBadge, { backgroundColor: theme.primary }]}><Text style={styles.filterBadgeText}>{filtersCount}</Text></View>}
+                        </TouchableOpacity>
+                    </View>
                 </View>
             </View>
         );
@@ -657,7 +660,7 @@ export default function InventoryScreen() {
     return (
         <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]}>
             {loading ? (
-                <View style={styles.center}><ActivityIndicator size="large" color="#2563EB" /></View>
+                <View style={styles.center}><ActivityIndicator size="large" color={theme.primary} /></View>
             ) : (
                 <FlatList
                     data={filtered}
@@ -715,11 +718,11 @@ export default function InventoryScreen() {
                                     }}
                                 >
                                     <View style={styles.contactInfo}>
-                                        <View style={[styles.contactAvatar, { backgroundColor: contact.type === 'Owner' ? '#DB277720' : '#3B82F620' }]}>
+                                        <View style={[styles.contactAvatar, { backgroundColor: contact.type === 'Owner' ? theme.danger + '20' : theme.primary + '20' }]}>
                                             <Ionicons
                                                 name={contact.type === 'Owner' ? "person" : "people"}
                                                 size={18}
-                                                color={contact.type === 'Owner' ? "#DB2777" : "#3B82F6"}
+                                                color={contact.type === 'Owner' ? theme.danger : theme.primary}
                                             />
                                         </View>
                                         <View>
@@ -738,36 +741,26 @@ export default function InventoryScreen() {
             {/* Action Hub Modal */}
             <Modal transparent visible={hubVisible} animationType="none" onRequestClose={closeHub}>
                 <Pressable style={styles.modalOverlay} onPress={closeHub}>
-                    <Animated.View style={[styles.sheetContainer, { backgroundColor: theme.card, transform: [{ translateY: slideAnim }] }]}>
+                    <Animated.View style={[styles.sheetContainer, { backgroundColor: isDark ? '#000000' : '#FFFFFF', transform: [{ translateY: slideAnim }] }]}>
                         <View style={[styles.sheetHandle, { backgroundColor: theme.border }]} />
                         <ScrollView 
                             showsVerticalScrollIndicator={false}
                             contentContainerStyle={{ paddingBottom: 60 }}
                         >
                             <View style={styles.sheetHeader}>
-                                <Text style={[styles.sheetTitle, { color: theme.text }]}>{selectedInv ? `Unit ${selectedInv.unitNumber || selectedInv.unitNo}` : "Unit Actions"}</Text>
-                                <Text style={[styles.sheetSub, { color: theme.textLight }]}>{selectedInv?.projectName || "Quick Actions"}</Text>
+                                <Text style={[styles.sheetTitle, { color: theme.text }]}>{selectedInv?.projectName || "Inventory Actions"}</Text>
+                                <Text style={[styles.sheetSub, { color: theme.textSecondary }]}>{selectedInv?.unitNumber || selectedInv?.unitNo || "Details"}</Text>
                             </View>
 
                             <View style={styles.actionGrid}>
                                 <TouchableOpacity style={styles.actionItem} onPress={() => {
                                     router.push(`/add-inventory?id=${selectedInv?._id}`); closeHub();
                                 }}>
-                                    <View style={[styles.actionIcon, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : "#F1F5F9" }]}>
-                                        <Ionicons name="create" size={24} color={theme.textLight} />
+                                    <View style={[styles.actionIcon, { backgroundColor: isDark ? 'rgba(100, 116, 139, 0.1)' : "#F1F5F9" }]}>
+                                        <Ionicons name="create" size={24} color={isDark ? theme.textSecondary : "#64748B"} />
                                     </View>
-                                    <Text style={[styles.actionLabel, { color: theme.text }]}>Edit</Text>
+                                    <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Edit</Text>
                                 </TouchableOpacity >
-
-                                <TouchableOpacity style={styles.actionItem} onPress={() => {
-                                    if (selectedInv) router.push(`/add-activity?id=${selectedInv._id}&type=Inventory`);
-                                    closeHub();
-                                }}>
-                                    <View style={[styles.actionIcon, { backgroundColor: isDark ? '#0EA5E920' : "#E0F2FE" }]}>
-                                        <Ionicons name="calendar" size={24} color="#0EA5E9" />
-                                    </View>
-                                    <Text style={[styles.actionLabel, { color: theme.text }]}>Activities</Text>
-                                </TouchableOpacity>
 
                                 <TouchableOpacity style={styles.actionItem} onPress={() => {
                                     if (selectedInv) {
@@ -781,67 +774,74 @@ export default function InventoryScreen() {
                                     }
                                     closeHub();
                                 }}>
-                                    <View style={[styles.actionIcon, { backgroundColor: isDark ? '#22C55E20' : "#DCFCE7" }]}>
+                                    <View style={[styles.actionIcon, { backgroundColor: isDark ? 'rgba(34, 197, 94, 0.1)' : "#DCFCE7" }]}>
                                         <Ionicons name="briefcase" size={24} color="#22C55E" />
                                     </View>
-                                    <Text style={[styles.actionLabel, { color: theme.text }]}>Create Deal</Text>
+                                    <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Create Deal</Text>
                                 </TouchableOpacity>
 
                                 <TouchableOpacity style={styles.actionItem} onPress={() => {
                                     if (selectedInv) router.push(`/manage-owners?id=${selectedInv._id}`);
                                     closeHub();
                                 }}>
-                                    <View style={[styles.actionIcon, { backgroundColor: isDark ? '#A1620720' : "#FEF9C3" }]}>
-                                        <Ionicons name="person-add" size={24} color="#A16207" />
+                                    <View style={[styles.actionIcon, { backgroundColor: isDark ? 'rgba(234, 179, 8, 0.1)' : "#FEF9C3" }]}>
+                                        <Ionicons name="person-add" size={24} color="#EAB308" />
                                     </View>
-                                    <Text style={[styles.actionLabel, { color: theme.text }]}>Add Owner</Text>
+                                    <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Owners</Text>
                                 </TouchableOpacity>
 
                                 <TouchableOpacity style={styles.actionItem} onPress={() => {
                                     if (selectedInv) router.push(`/manage-tags?id=${selectedInv._id}`);
                                     closeHub();
                                 }}>
-                                    <View style={[styles.actionIcon, { backgroundColor: isDark ? '#9333EA20' : "#F3E8FF" }]}>
+                                    <View style={[styles.actionIcon, { backgroundColor: isDark ? 'rgba(147, 51, 234, 0.1)' : "#F3E8FF" }]}>
                                         <Ionicons name="pricetag" size={24} color="#9333EA" />
                                     </View>
-                                    <Text style={[styles.actionLabel, { color: theme.text }]}>Tag</Text>
+                                    <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Tags</Text>
                                 </TouchableOpacity>
 
                                 <TouchableOpacity style={styles.actionItem} onPress={() => {
                                     if (selectedInv) router.push(`/upload-media?id=${selectedInv._id}`);
                                     closeHub();
                                 }}>
-                                    <View style={[styles.actionIcon, { backgroundColor: isDark ? '#F9731620' : "#FFEDD5" }]}>
+                                    <View style={[styles.actionIcon, { backgroundColor: isDark ? 'rgba(249, 115, 22, 0.1)' : "#FFEDD5" }]}>
                                         <Ionicons name="images" size={24} color="#F97316" />
                                     </View>
-                                    <Text style={styles.actionLabel}>Upload</Text>
+                                    <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Media</Text>
+                                </TouchableOpacity>
+
+                                <TouchableOpacity style={styles.actionItem} onPress={() => handleCall(selectedInv!)}>
+                                    <View style={[styles.actionIcon, { backgroundColor: isDark ? 'rgba(16, 185, 129, 0.1)' : "#ECFDF5" }]}>
+                                        <Ionicons name="call" size={24} color="#10B981" />
+                                    </View>
+                                    <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Call</Text>
                                 </TouchableOpacity>
 
                                 <TouchableOpacity style={styles.actionItem} onPress={() => {
-                                    if (selectedInv) router.push(`/add-document?id=${selectedInv._id}&type=Inventory`);
+                                    if (selectedInv) router.push(`/inventory-detail?id=${selectedInv._id}`);
                                     closeHub();
                                 }}>
-                                    <View style={[styles.actionIcon, { backgroundColor: "#FFE4E6" }]}>
-                                        <Ionicons name="document-attach" size={24} color="#E11D48" />
+                                    <View style={[styles.actionIcon, { backgroundColor: isDark ? 'rgba(14, 165, 233, 0.1)' : "#F0F9FF" }]}>
+                                        <Ionicons name="information-circle" size={24} color="#0EA5E9" />
                                     </View>
-                                    <Text style={styles.actionLabel}>Document</Text>
+                                    <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Details</Text>
+                                </TouchableOpacity>
+
+                                <TouchableOpacity style={styles.actionItem} onPress={() => { Alert.alert("Share", "Sharing unit details..."); closeHub(); }}>
+                                    <View style={[styles.actionIcon, { backgroundColor: isDark ? 'rgba(100, 116, 139, 0.1)' : "#F1F5F9" }]}>
+                                        <Ionicons name="share-social" size={24} color={isDark ? theme.textSecondary : "#64748B"} />
+                                    </View>
+                                    <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Share</Text>
                                 </TouchableOpacity>
 
                                 <TouchableOpacity style={styles.actionItem} onPress={() => {
                                     if (selectedInv) router.push(`/inventory-feedback?id=${selectedInv._id}`);
                                     closeHub();
                                 }}>
-                                    <View style={[styles.actionIcon, { backgroundColor: "#F1F5F9" }]}>
-                                        <Ionicons name="chatbubble-ellipses" size={24} color="#64748B" />
+                                    <View style={[styles.actionIcon, { backgroundColor: isDark ? 'rgba(99, 102, 241, 0.1)' : "#EEF2FF" }]}>
+                                        <Ionicons name="chatbubble-ellipses" size={24} color={isDark ? '#818CF8' : "#4F46E5"} />
                                     </View>
-                                    <Text style={styles.actionLabel}>Feedback</Text>
-                                </TouchableOpacity>
-
-                                <TouchableOpacity style={styles.actionItem} onPress={() => { Alert.alert("Share", "Sharing unit details..."); closeHub(); }}>
-                                    <View style={[styles.actionIcon, { backgroundColor: "#F1F5F9" }]}>
-                                        <Ionicons name="share-social" size={24} color="#64748B" />
-                                    </View>
-                                    <Text style={styles.actionLabel}>Share</Text>
+                                    <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Feedback</Text>
                                 </TouchableOpacity>
                             </View >
                         </ScrollView>
@@ -861,186 +861,174 @@ export default function InventoryScreen() {
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: "#fff" },
-    safeArea: { flex: 1, backgroundColor: "#fff" },
-    headerContainer: { backgroundColor: "#F8FAFC", paddingBottom: 8 },
+    container: { flex: 1 },
+    safeArea: { flex: 1 },
     center: { flex: 1, justifyContent: "center", alignItems: "center" },
-    header: {
-        flexDirection: "row", justifyContent: "space-between", alignItems: "center",
-        paddingHorizontal: 20, paddingTop: 12, paddingBottom: 16
-    },
+    header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20, paddingTop: 12, paddingBottom: 16 },
     headerTitle: { fontSize: 28, fontWeight: "900", letterSpacing: -0.5 },
-    headerSubtitle: { fontSize: 13, color: "#64748B", fontWeight: "600", marginTop: 2 },
+    headerActions: { flexDirection: 'row', alignItems: 'center', gap: 12 },
     mainAddBtn: { width: 44, height: 44, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
-    metricsFlowContainer: {
-        flexDirection: 'row',
-        height: 85,
-        marginHorizontal: 20,
-        marginBottom: 20,
-        borderRadius: 20,
-        backgroundColor: '#fff',
-        overflow: 'hidden',
-        shadowColor: '#000',
-        shadowOpacity: 0.06,
-        shadowRadius: 12,
-        shadowOffset: { width: 0, height: 4 },
-        elevation: 3,
-    },
-    flowSegment: {
-        flex: 1,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingHorizontal: 20,
-        position: 'relative',
-    },
-    inactiveSegment: {
-        backgroundColor: '#F1F5F9', // Slate 100
-        zIndex: 2,
-    },
-    activeSegment: {
-        backgroundColor: '#DCFCE7', // Green 100
-        zIndex: 1,
-    },
-    chevronPoint: {
-        position: 'absolute',
-        right: -15, // Half of height/width to center the point
-        top: 27.5, // (85 - 30) / 2
-        width: 30,
-        height: 30,
-        backgroundColor: '#F1F5F9',
-        transform: [{ rotate: '45deg' }],
-        zIndex: 3,
-        borderRadius: 4,
-    },
-    flowInfo: {
-        justifyContent: 'center',
-    },
-    flowLabel: {
-        fontSize: 10,
-        fontWeight: '900',
-        color: '#64748B',
-        letterSpacing: 1,
-        marginBottom: 2,
-    },
-    flowLabelActive: {
-        fontSize: 10,
-        fontWeight: '900',
-        color: '#16A34A',
-        letterSpacing: 1,
-        marginBottom: 2,
-    },
-    flowValue: { fontSize: 22, fontWeight: "900", color: "#475569" },
-    flowPercent: { fontSize: 12, fontWeight: "700", color: "#94A3B8" },
-    flowValueActive: { fontSize: 22, fontWeight: "900", color: "#16A34A" },
-    flowPercentActive: { fontSize: 12, fontWeight: "700", color: "#16A34A80" },
-    flowIcon: {
-        opacity: 0.8,
-    },
-    headerActions: { flexDirection: 'row', gap: 8 },
-    actionBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: "#F1F5F9", justifyContent: 'center', alignItems: 'center' },
-    actionBtnPrimary: { backgroundColor: "#2563EB" },
-
-    commandBar: {
-        flexDirection: "row", alignItems: "center", marginHorizontal: 20, marginBottom: 16,
-        paddingHorizontal: 16, paddingVertical: 12, backgroundColor: "#F8FAFC",
-        borderRadius: 16, borderWidth: 1, borderColor: "#E2E8F0"
-    },
-    commandInput: { flex: 1, marginLeft: 12, fontSize: 15, color: "#1E293B", fontWeight: "600" },
-    filterBtn: { padding: 4, marginLeft: 8, position: 'relative' },
-    filterBadge: { position: 'absolute', top: 2, right: 2, width: 8, height: 8, borderRadius: 4, backgroundColor: '#2563EB', borderWidth: 1.5, borderColor: '#fff' },
-
-    list: { padding: 16, paddingBottom: 100 },
-    gridRow: { justifyContent: 'space-between' },
-
-    // List Card Styles
-    listCard: {
-        flexDirection: 'row', backgroundColor: "#fff",
-        borderRadius: 20, marginBottom: 12, borderWidth: 1, borderColor: "#F1F5F9",
-        overflow: 'hidden', shadowColor: "#000", shadowOpacity: 0.02, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }
-    },
-    cardAccent: { width: 4 },
-    listIconBox: { width: 48, height: 48, borderRadius: 16, justifyContent: 'center', alignItems: 'center' },
+    metricsFlowContainer: { flexDirection: 'row', height: 64, marginHorizontal: 20, marginBottom: 16, borderRadius: 14, overflow: 'hidden' },
+    flowSegment: { flex: 1, justifyContent: 'center', paddingHorizontal: 16, borderLeftWidth: 1, borderColor: 'transparent' },
+    segmentLabel: { fontSize: 10, fontWeight: "900", letterSpacing: 1, marginBottom: 4 },
+    segmentStats: { flexDirection: 'row', alignItems: 'baseline', gap: 4 },
+    segmentCount: { fontSize: 22, fontWeight: "900" },
+    segmentPercent: { fontSize: 11, fontWeight: "700" },
+    commandBar: { flexDirection: "row", alignItems: "center", marginHorizontal: 20, paddingHorizontal: 16, height: 50, borderRadius: 12, borderWidth: 1 },
+    commandInput: { flex: 1, marginLeft: 12, fontSize: 15, fontWeight: "600" },
+    searchRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    viewModeBtn: { width: 34, height: 34, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
+    filterBtn: { width: 34, height: 34, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
+    filterBadge: { position: 'absolute', top: -4, right: -4, width: 14, height: 14, borderRadius: 7, justifyContent: 'center', alignItems: 'center' },
+    filterBadgeText: { color: '#fff', fontSize: 8, fontWeight: '900' },
+    list: { paddingBottom: 100 },
+    listCard: { flexDirection: "row", marginHorizontal: 16, marginBottom: 12, borderRadius: 24, overflow: "hidden", borderWidth: 1, elevation: 1, shadowOpacity: 0.02, shadowRadius: 10, shadowOffset: { width: 0, height: 5 } },
     listMain: { flex: 1, padding: 12 },
-    listHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-    listProjectContainer: { marginTop: 2 },
-    listProjectName: { fontSize: 13, fontWeight: "700", color: "#64748B" },
-    listBlockName: { fontSize: 13, fontWeight: "600", color: "#94A3B8" },
-    listUnitNumber: { fontSize: 20, fontWeight: "900", color: "#0F172A" },
+    listHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 },
+    listProjectName: { fontSize: 13, fontWeight: "700" },
+    listBlockName: { fontSize: 13, fontWeight: "600" },
+    listUnitNumber: { fontSize: 20, fontWeight: "900" },
+    listUnit: { fontSize: 13, fontWeight: "600", marginBottom: 8 },
     typePill: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
     typePillText: { fontSize: 10, fontWeight: "800", textTransform: 'uppercase' },
     statusPill: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 20, gap: 6 },
     statusDot: { width: 6, height: 6, borderRadius: 3 },
     statusPillText: { fontSize: 10, fontWeight: "800", textTransform: 'uppercase' },
-    statusSubText: { fontSize: 6, fontWeight: "700", textTransform: 'uppercase', opacity: 0.8 },
-    listUnit: { fontSize: 13, color: "#64748B", fontWeight: "600", marginBottom: 8 },
-    listFooter: { flexDirection: 'row', gap: 12, marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#F8FAFC' },
+    listUnit: { fontSize: 13, fontWeight: "600", marginBottom: 8 },
+    listFooter: { flexDirection: 'row', gap: 12, marginTop: 12, paddingTop: 10, borderTopWidth: 1 },
     listMeta: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-    listPrice: { fontSize: 14, fontWeight: "800", color: "#0F172A" },
-    listMetaText: { fontSize: 12, color: "#475569", fontWeight: "700" },
+    listPrice: { fontSize: 14, fontWeight: "800" },
+    listMetaText: { fontSize: 12, fontWeight: "700" },
 
     // Grid Card Styles
     inactiveSelected: {
-        backgroundColor: '#E2E8F0', // Slate 200
         borderWidth: 2,
-        borderColor: '#94A3B8',
     },
     activeSelected: {
-        backgroundColor: '#BBF7D0', // Green 200
         borderWidth: 2,
         borderColor: '#22C55E',
     },
     gridCard: {
-        width: COLUMN_WIDTH, backgroundColor: "#fff", borderRadius: 24,
-        padding: 12, marginBottom: 16, borderWidth: 1, borderColor: "#F1F5F9",
-        shadowColor: "#000", shadowOpacity: 0.02, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }
+        width: COLUMN_WIDTH, borderRadius: 24,
+        padding: 12, marginBottom: 16, borderWidth: 1,
+        shadowOpacity: 0.02, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }
     },
     gridMediaSlot: { height: 100, borderRadius: 18, marginBottom: 12, justifyContent: 'center', alignItems: 'center', position: 'relative' },
-    gridStatusDot: { position: 'absolute', top: 10, right: 10, width: 8, height: 8, borderRadius: 4, borderWidth: 1.5, borderColor: '#fff' },
+    gridStatusDot: { position: 'absolute', top: 10, right: 10, width: 8, height: 8, borderRadius: 4, borderWidth: 1.5 },
     gridInfo: { paddingHorizontal: 4 },
-    gridProject: { fontSize: 15, fontWeight: "800", color: "#0F172A", marginBottom: 2 },
-    gridUnit: { fontSize: 10, color: "#CBD5E1", fontWeight: "500", marginBottom: 8 },
+    gridProject: { fontSize: 15, fontWeight: "800", marginBottom: 2 },
+    gridUnit: { fontSize: 10, fontWeight: "500", marginBottom: 8 },
     gridMenuTrigger: { position: 'absolute', top: 10, left: 10, padding: 4 },
     gridPrice: { fontSize: 14, fontWeight: "900", color: "#2563EB" },
 
     // Swipe Styles
     rightActions: { flexDirection: 'row', paddingLeft: 10 },
     leftActions: { flexDirection: 'row', paddingRight: 10 },
+    container: { flex: 1 },
+    headerContainer: { paddingBottom: 16 },
+    header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20, paddingTop: 12, paddingBottom: 16 },
+    headerTitle: { fontSize: 28, fontWeight: "900", letterSpacing: -0.5 },
+    headerActions: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+    mainAddBtn: { width: 44, height: 44, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
+
+    metricsFlowContainer: { flexDirection: 'row', height: 64, marginHorizontal: 20, marginBottom: 16, borderRadius: 14, overflow: 'hidden' },
+    flowSegment: { flex: 1, justifyContent: 'center', paddingHorizontal: 16, borderLeftWidth: 1, borderColor: 'transparent' },
+    inactiveSegment: { paddingRight: 32 },
+    activeSegment: { position: 'relative' },
+    segmentContent: { zIndex: 1 },
+    activeContent: { zIndex: 1, paddingLeft: 20 },
+    segmentLabel: { fontSize: 10, fontWeight: "900", letterSpacing: 1, marginBottom: 4 },
+    segmentStats: { flexDirection: 'row', alignItems: 'baseline', gap: 4 },
+    segmentCount: { fontSize: 22, fontWeight: "900" },
+    segmentPercent: { fontSize: 11, fontWeight: "700" },
+    flowArrow: {
+        position: 'absolute', left: -12, top: 0,
+        width: 0, height: 0,
+        borderTopWidth: 32, borderBottomWidth: 32,
+        borderLeftWidth: 16, borderTopColor: 'transparent',
+        borderBottomColor: 'transparent', zIndex: 0
+    },
+
+    commandBar: { 
+        flexDirection: "row", alignItems: "center", marginHorizontal: 20, 
+        paddingHorizontal: 16, height: 50, borderRadius: 12, borderWidth: 1
+    },
+    commandInput: { flex: 1, marginLeft: 12, fontSize: 15, fontWeight: "600" },
+    searchRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    viewModeBtn: { width: 34, height: 34, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
+    filterBtn: { width: 34, height: 34, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
+    filterBadge: { position: 'absolute', top: -4, right: -4, width: 14, height: 14, borderRadius: 7, justifyContent: 'center', alignItems: 'center' },
+    filterBadgeText: { color: '#fff', fontSize: 8, fontWeight: '900' },
+
+    list: { paddingBottom: 100 },
+    listCard: {
+        flexDirection: "row", marginHorizontal: 16, marginBottom: 12, borderRadius: 24,
+        overflow: "hidden", borderWidth: 1, elevation: 1, shadowOpacity: 0.02, shadowRadius: 10, shadowOffset: { width: 0, height: 5 }
+    },
+    cardAccent: { width: 5 },
+    listMain: { flex: 1, padding: 12 },
+    listHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 },
+    listUnitNumber: { fontSize: 17, fontWeight: "900" },
+    listProjectContainer: { marginTop: 1 },
+    listProjectName: { fontSize: 14, fontWeight: "800" },
+    listBlockName: { fontSize: 10, fontWeight: "500" },
+
+    statusPill: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
+    statusDot: { width: 6, height: 6, borderRadius: 3 },
+    statusPillText: { fontSize: 11, fontWeight: "800", textTransform: 'uppercase' },
+    typePill: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
+    typePillText: { fontSize: 9, fontWeight: "900", textTransform: 'uppercase' },
+
+    listFooter: { marginTop: 10, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(0,0,0,0.05)' },
+    listMeta: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    listMetaText: { fontSize: 12, fontWeight: "600" },
+
+    gridCard: {
+        width: COLUMN_WIDTH, marginHorizontal: 8, marginBottom: 16,
+        borderRadius: 20, overflow: "hidden", borderWidth: 1,
+        elevation: 1, shadowOpacity: 0.02, shadowRadius: 10, shadowOffset: { width: 0, height: 5 }
+    },
+    gridMediaSlot: { height: 100, justifyContent: 'center', alignItems: 'center', position: 'relative' },
+    gridStatusDot: { position: 'absolute', top: 12, left: 12, width: 8, height: 8, borderRadius: 4 },
+    gridMenuTrigger: { position: 'absolute', top: 8, right: 8, padding: 4 },
+    gridInfo: { padding: 12 },
+    gridProject: { fontSize: 14, fontWeight: "800", marginBottom: 2 },
+    gridUnit: { fontSize: 11, fontWeight: "600" },
+
+    rightActions: { flexDirection: 'row', paddingLeft: 10 },
+    leftActions: { flexDirection: 'row', paddingRight: 10 },
     swipeAction: { width: 70, justifyContent: 'center', alignItems: 'center', height: '100%' },
     swipeLabel: { color: '#fff', fontSize: 10, fontWeight: '800', marginTop: 4 },
 
     empty: { alignItems: "center", marginTop: 100 },
-    emptyText: { marginTop: 16, fontSize: 15, color: "#94A3B8", fontWeight: "600", textAlign: 'center' },
+    emptyText: { marginTop: 16, fontSize: 15, fontWeight: "600", textAlign: 'center' },
 
-    // Shared Menu Styles (Aligned with Deals)
     menuTrigger: { padding: 4, marginLeft: 8 },
     cardQuickActions: { flexDirection: 'row', gap: 6, alignItems: 'center' },
-    quickActionBtn: { width: 30, height: 30, borderRadius: 8, backgroundColor: "#F8FAFC", justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: "#F1F5F9" },
+    quickActionBtn: { width: 30, height: 30, borderRadius: 8, justifyContent: 'center', alignItems: 'center', borderWidth: 1 },
     listMetaContainer: { flex: 1 },
 
     modalOverlay: { flex: 1, backgroundColor: "rgba(15, 23, 42, 0.4)", justifyContent: "flex-end" },
     sheetContainer: { 
-        backgroundColor: "#fff", 
         borderTopLeftRadius: 32, 
         borderTopRightRadius: 32, 
         paddingHorizontal: 20, 
         maxHeight: '85%',
         minHeight: 350 
     },
-    sheetHandle: { width: 40, height: 4, backgroundColor: "#E2E8F0", borderRadius: 2, alignSelf: "center", marginTop: 12, marginBottom: 20 },
+    sheetHandle: { width: 40, height: 4, borderRadius: 2, alignSelf: "center", marginTop: 12, marginBottom: 20 },
     sheetHeader: { marginBottom: 24, alignItems: 'center' },
-    sheetTitle: { fontSize: 20, fontWeight: "900", color: "#0F172A" },
-    sheetSub: { fontSize: 12, color: "#64748B", fontWeight: "700", textTransform: 'uppercase', marginTop: 4 },
+    sheetTitle: { fontSize: 20, fontWeight: "900" },
+    sheetSub: { fontSize: 12, fontWeight: "700", textTransform: 'uppercase', marginTop: 4 },
     actionGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: 'center', gap: 12 },
     actionItem: { width: "22%", alignItems: "center", marginBottom: 16 },
-    actionIcon: { width: 56, height: 56, borderRadius: 20, justifyContent: "center", alignItems: "center", marginBottom: 8, shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 5, shadowOffset: { width: 0, height: 2 } },
-    actionLabel: { fontSize: 10, fontWeight: "800", color: "#475569", textAlign: "center" },
+    actionIcon: { width: 56, height: 56, borderRadius: 20, justifyContent: "center", alignItems: "center", marginBottom: 8, shadowOpacity: 0.05, shadowRadius: 5, shadowOffset: { width: 0, height: 2 } },
+    actionLabel: { fontSize: 10, fontWeight: "800", textAlign: "center" },
 
-    // Contact Picker
-    contactPickerSheet: { backgroundColor: "#fff", borderTopLeftRadius: 32, borderTopRightRadius: 32, paddingHorizontal: 20, paddingBottom: 60, width: '100%' },
-    contactItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#F8FAFC' },
+    contactPickerSheet: { borderTopLeftRadius: 32, borderTopRightRadius: 32, paddingHorizontal: 20, paddingBottom: 60, width: '100%' },
+    contactItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 14, borderBottomWidth: 1 },
     contactInfo: { flexDirection: 'row', alignItems: 'center', gap: 12 },
     contactAvatar: { width: 40, height: 40, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
-    contactName: { fontSize: 15, fontWeight: '800', color: '#0F172A' },
-    contactRole: { fontSize: 11, color: '#64748B', fontWeight: '600', marginTop: 2 },
+    contactName: { fontSize: 15, fontWeight: '800' },
+    contactRole: { fontSize: 11, fontWeight: '600', marginTop: 2 },
 });

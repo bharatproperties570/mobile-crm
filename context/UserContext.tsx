@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import api from "@/services/api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useAuth } from "./AuthContext";
 
 interface User {
     _id: string;
@@ -31,6 +32,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const [userIndex, setUserIndex] = useState<Map<string, User>>(new Map());
     const [teamIndex, setTeamIndex] = useState<Map<string, any>>(new Map());
     const [loading, setLoading] = useState(true);
+    const { isAuthenticated } = useAuth();
 
     const refreshUsers = useCallback(async () => {
         // 1. Try to load from cache first
@@ -67,6 +69,11 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         if (users.length === 0) setLoading(true);
         
+        if (!isAuthenticated) {
+            setLoading(false);
+            return;
+        }
+
         try {
             const [usersRes, teamsRes] = await Promise.all([
                 api.get('/users', { params: { limit: 1000 } }),
@@ -97,8 +104,12 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 });
                 setTeamIndex(newTIndex);
             }
-        } catch (error) {
-            console.error('[UserContext] Failed to fetch users/teams:', error);
+        } catch (error: any) {
+            if (error?.response?.status === 401) {
+                console.warn('[UserContext] Unauthorized fetch skipped (unauthenticated state)');
+            } else {
+                console.error('[UserContext] Failed to fetch users/teams:', error);
+            }
         } finally {
             setLoading(false);
         }

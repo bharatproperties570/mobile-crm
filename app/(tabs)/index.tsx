@@ -13,7 +13,10 @@ import { extractTotal, lookupVal, extractList } from "@/services/api.helpers";
 import { useTheme, Colors } from "@/context/ThemeContext";
 import { useLookup } from "@/context/LookupContext";
 import { useCallTracking } from "@/context/CallTrackingContext";
+import { useUsers } from "@/context/UserContext";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Modal } from "react-native";
+import { useAuth } from "@/context/AuthContext";
 
 const CACHE_KEY_DASHBOARD = "@cache_dashboard_stats";
 
@@ -75,7 +78,7 @@ const ChevronSegment = memo(({
                 </View>
             </View>
             {!isLast && (
-                <View style={[styles.dashChevronArrow, { borderLeftColor: isDark ? '#1E293B' : '#fff' }]} />
+                <View style={[styles.dashChevronArrow, { borderLeftColor: isDark ? theme.background : '#fff' }]} />
             )}
         </View>
     );
@@ -99,8 +102,9 @@ function Counter({ value, style, prefix = "", suffix = "" }: { value: number; st
     return <Text style={style}>{prefix}{displayValue}{suffix}</Text>;
 }
 
-function ProgressRing({ progress, size = 80, strokeWidth = 8, color = "#2563EB" }: { progress: number; size?: number; strokeWidth?: number; color?: string }) {
+function ProgressRing({ progress, size = 80, strokeWidth = 8, color }: { progress: number; size?: number; strokeWidth?: number; color?: string }) {
     const { theme } = useTheme();
+    const ringColor = color || theme.primary;
     return (
         <View style={{ width: size, height: size, justifyContent: 'center', alignItems: 'center' }}>
             <View style={{
@@ -117,7 +121,7 @@ function ProgressRing({ progress, size = 80, strokeWidth = 8, color = "#2563EB" 
                 borderRightColor: progress > 25 ? color : 'transparent',
                 borderTopColor: color,
                 transform: [{ rotate: '-45deg' }]
-            }} />
+            }}></View>
             <View style={[styles.ringInner, { backgroundColor: 'transparent' }]}>
                 <Text style={[styles.ringVal, { color: theme.text }]}>{Math.round(progress)}%</Text>
             </View>
@@ -197,8 +201,9 @@ const CommandLogItem = memo(({ act, idx, config, router }: any) => {
     );
 });
 
-const MiniDonut = memo(({ value, total, color = "#2563EB", size = 50 }: { value: number; total: number; color?: string; size?: number }) => {
+const MiniDonut = memo(({ value, total, color, size = 50 }: { value: number; total: number; color?: string; size?: number }) => {
     const { theme } = useTheme();
+    const ringColor = color || theme.primary;
     const progress = (value / (total || 1)) * 100;
     const strokeWidth = 5;
     return (
@@ -217,7 +222,7 @@ const MiniDonut = memo(({ value, total, color = "#2563EB", size = 50 }: { value:
                 borderRightColor: progress > 25 ? color : 'transparent',
                 borderTopColor: color,
                 transform: [{ rotate: '-45deg' }]
-            }} />
+            }}></View>
             <Text style={{ fontSize: 10, fontWeight: '800', color: theme.text, position: 'absolute' }}>{Math.round(progress)}%</Text>
         </View>
     );
@@ -245,6 +250,50 @@ function KPIItem({ label, value, icon, color, delay = 0, trend }: { label: strin
         </Animated.View>
     );
 }
+
+const IntelligenceTile = memo(({ count, label, icon, color, delay = 0 }: any) => {
+    const { theme } = useTheme();
+    const isDark = theme.background === '#0F172A';
+    const slideAnim = useRef(new Animated.Value(20)).current;
+    const opacityAnim = useRef(new Animated.Value(0)).current;
+
+    useEffect(() => {
+        Animated.parallel([
+            Animated.timing(slideAnim, { toValue: 0, duration: 600, delay, useNativeDriver: true }),
+            Animated.timing(opacityAnim, { toValue: 1, duration: 600, delay, useNativeDriver: true })
+        ]).start();
+    }, []);
+
+    return (
+        <Animated.View style={[styles.intelTile, { opacity: opacityAnim, transform: [{ translateY: slideAnim }], backgroundColor: theme.card, borderColor: isDark ? color + '40' : color + '20' }]}>
+            <View style={[styles.intelIconBox, { backgroundColor: color + '10' }]}>
+                <Ionicons name={icon} size={18} color={color} />
+            </View>
+            <View>
+                <Counter value={count} style={[styles.intelValue, { color: theme.text }]} />
+                <Text style={[styles.intelLabel, { color: theme.textMuted }]}>{label}</Text>
+            </View>
+        </Animated.View>
+    );
+});
+
+const IntelligencePulse = memo(({ revived, nfa }: { revived: number; nfa: number }) => {
+    const { theme } = useTheme();
+    return (
+        <View style={styles.intelContainer}>
+            <View style={styles.sectionHeaderRow}>
+                <Text style={[styles.sectionHeader, { color: theme.textMuted }]}>Intelligence Pulse</Text>
+                <View style={[styles.aiBadge, { backgroundColor: theme.primary }]}>
+                    <Text style={styles.aiBadgeText}>AI ENGINE</Text>
+                </View>
+            </View>
+            <View style={styles.intelGrid}>
+                <IntelligenceTile count={revived} label="Revived Leads" icon="refresh-circle" color="#10B981" delay={0} />
+                <IntelligenceTile count={nfa} label="NFA Alerts" icon="alert-circle" color="#EF4444" delay={100} />
+            </View>
+        </View>
+    );
+});
 
 const ActivityTypeGrid = memo(({ data, theme }: { data: any[]; theme: any }) => {
     if (!data || data.length === 0) return null;
@@ -287,13 +336,14 @@ const LeadSourceList = memo(({ data, theme }: { data: any[]; theme: any }) => {
 
 const AIRecommendationsList = memo(({ suggestions, theme }: { suggestions: any; theme: any }) => {
     const isDark = theme.background === '#0F172A';
-    const all = [
+    const suggestionsList = useMemo(() => [
         ...(suggestions?.leads || []),
         ...(suggestions?.performance || []),
         ...(suggestions?.pipeline || []),
         ...(suggestions?.strategy || [])
-    ];
-    if (all.length === 0) return (
+    ], [suggestions]);
+
+    if (suggestionsList.length === 0) return (
         <View style={[styles.insightCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
             <View style={styles.insightHeader}>
                 <View style={[styles.insightIconCircle, { backgroundColor: theme.primary + '15' }]}><Ionicons name="bulb" size={16} color={theme.primary} /></View>
@@ -306,7 +356,7 @@ const AIRecommendationsList = memo(({ suggestions, theme }: { suggestions: any; 
     return (
         <View style={[styles.recommendationsContainer, { backgroundColor: theme.card, borderColor: theme.border }]}>
             <Text style={[styles.sectionHeader, { color: theme.textMuted }]}>AI Recommendations</Text>
-            {all.slice(0, 3).map((s, i) => {
+            {suggestionsList.slice(0, 3).map((s: any, i: number) => {
                 const glyphs: any = { optimization: '⚡', training: '📚', growth: '🚀', strategy: '🎯' };
                 return (
                     <View key={i} style={[styles.recommendationItem, { backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : theme.background }]}>
@@ -353,18 +403,25 @@ export default function MissionControlScreen() {
     const isDark = theme.background === '#0F172A';
     const { getLookupValue } = useLookup();
     const { simulateIncomingCall } = useCallTracking();
+    const { isAuthenticated } = useAuth();
     const [dashboardData, setDashboardData] = useState<DashboardStats | null>(null);
     const [stats, setStats] = useState<any>({});
     const [activities, setActivities] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
-    // const [lookups, setLookups] = useState<any[]>([]);
+    const { users, teams, loading: usersLoading } = useUsers();
+    const [selectedFilter, setSelectedFilter] = useState('all');
+    const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
 
     const fadeAnim = useRef(new Animated.Value(0)).current;
 
     const rotateAnim = useRef(new Animated.Value(0)).current;
 
     const fetchData = useCallback(async () => {
+        if (!isAuthenticated) {
+            setLoading(false);
+            return;
+        }
         try {
             // 1. Try Cache First for Instant Load
             const cached = await AsyncStorage.getItem(CACHE_KEY_DASHBOARD);
@@ -383,10 +440,17 @@ export default function MissionControlScreen() {
                 Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }).start();
             }
 
+            const params: any = {};
+            if (selectedFilter !== 'all') {
+                const isTeam = teams?.some(t => t.id === selectedFilter || t._id === selectedFilter);
+                if (isTeam) params.teamId = selectedFilter;
+                else params.userId = selectedFilter;
+            }
+
             // 2. Parallel Fetching for Fresh Data
             const [actvRes, dsRes] = await Promise.all([
                 getActivities({ status: 'Pending', limit: 5 }).catch(() => null),
-                getDashboardStats().catch(() => null)
+                getDashboardStats(params).catch(() => null)
             ]);
 
             if (actvRes) {
@@ -394,12 +458,12 @@ export default function MissionControlScreen() {
                 setActivities(Array.isArray(actData) ? actData : []);
             }
 
-            if (dsRes && dsRes.data) {
+            if (dsRes && dsRes.data && (dsRes.data as any).success !== false) {
                 const data = dsRes.data;
                 setDashboardData(data);
 
                 // Update Cache
-                AsyncStorage.setItem(CACHE_KEY_DASHBOARD, JSON.stringify(data)).catch(() => {});
+                AsyncStorage.setItem(CACHE_KEY_DASHBOARD, JSON.stringify(data)).catch(() => { });
 
                 setStats({
                     leads: (data.leads || []).reduce((s: number, l: any) => s + l.count, 0),
@@ -409,6 +473,8 @@ export default function MissionControlScreen() {
                     rawProjects: [],
                     rawInventory: []
                 });
+            } else if (dsRes && (dsRes.data as any).success === false) {
+                console.warn("[Mission Control] Backend returned success:false", (dsRes.data as any).error);
             }
 
             Animated.timing(fadeAnim, {
@@ -427,11 +493,26 @@ export default function MissionControlScreen() {
     useFocusEffect(
         useCallback(() => {
             fetchData();
-        }, [fetchData])
+        }, [fetchData, selectedFilter, isAuthenticated])
     );
+
+    const getFilterLabel = () => {
+        if (selectedFilter === 'all') return "Enterprise Analytics";
+        const team = teams.find(t => t._id === selectedFilter || t.id === selectedFilter);
+        if (team) return `Team: ${team.name}`;
+        const user = users.find(u => u._id === selectedFilter || u.id === selectedFilter);
+        if (user) return `Me: ${user.fullName}`;
+        return "Custom Scope";
+    };
 
     const renderSalesDashboard = () => (
         <View>
+            {/* 0. Intelligence Pulse (AI Insights) */}
+            <IntelligencePulse 
+                revived={dashboardData?.reengagedCount || 0} 
+                nfa={dashboardData?.nfaCount || 0} 
+            />
+
             {/* 3. Activity Monitor (Urgency Based) */}
             <View style={styles.monitorContainer}>
                 <View style={styles.sectionHeaderRow}>
@@ -720,7 +801,7 @@ export default function MissionControlScreen() {
         >
             <Animated.View style={{ opacity: fadeAnim }}>
                 {/* 1. Header Section – Mission Control */}
-                <View style={[styles.header, { backgroundColor: theme.card }]}>
+                <View style={[styles.header, { backgroundColor: theme.glassBg, borderBottomColor: theme.glassBorder, borderBottomWidth: 1 }]}>
                     <View style={styles.headerTop}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                             <Image 
@@ -738,6 +819,14 @@ export default function MissionControlScreen() {
                                         <Text style={[styles.autoPilotText, { color: '#35B97A' }]}>⚡ AUTO-PILOT</Text>
                                     </View>
                                 </View>
+                                <TouchableOpacity 
+                                    style={[styles.filterSelector, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)' }]}
+                                    onPress={() => setIsFilterModalOpen(true)}
+                                >
+                                    <Ionicons name="filter" size={10} color={theme.primary} />
+                                    <Text style={[styles.filterLabelText, { color: theme.textSecondary }]}>{getFilterLabel()}</Text>
+                                    <Ionicons name="chevron-down" size={10} color={theme.textLight} />
+                                </TouchableOpacity>
                             </View>
                         </View>
                         <View style={{ flexDirection: 'row', gap: 10 }}>
@@ -870,47 +959,111 @@ export default function MissionControlScreen() {
                         </Text>
                     </View>
                 </View>
+                {/* Filter Selection Modal */}
+                <Modal
+                    visible={isFilterModalOpen}
+                    transparent
+                    animationType="fade"
+                    onRequestClose={() => setIsFilterModalOpen(false)}
+                >
+                    <TouchableOpacity 
+                        style={styles.modalOverlay} 
+                        activeOpacity={1} 
+                        onPress={() => setIsFilterModalOpen(false)}
+                    >
+                        <View style={[styles.filterModal, { backgroundColor: theme.glassBg, borderColor: theme.glassBorder, borderTopWidth: 1, borderLeftWidth: 1, borderRightWidth: 1 }]}>
+                            <View style={styles.modalHeader}>
+                                <Text style={[styles.modalTitle, { color: theme.text }]}>Visibility Center</Text>
+                                <TouchableOpacity onPress={() => setIsFilterModalOpen(false)}>
+                                    <Ionicons name="close" size={24} color={theme.textLight} />
+                                </TouchableOpacity>
+                            </View>
+
+                            <ScrollView style={{ maxHeight: SCREEN_WIDTH * 1.2 }}>
+                                <TouchableOpacity 
+                                    style={[styles.filterOption, selectedFilter === 'all' && { backgroundColor: theme.primary + '10' }]} 
+                                    onPress={() => { setSelectedFilter('all'); setIsFilterModalOpen(false); }}
+                                >
+                                    <Ionicons name="globe-outline" size={20} color={selectedFilter === 'all' ? theme.primary : theme.textLight} />
+                                    <Text style={[styles.filterOptionText, { color: selectedFilter === 'all' ? theme.primary : theme.text }]}>Enterprise (All)</Text>
+                                </TouchableOpacity>
+
+                                {teams.length > 0 && (
+                                    <>
+                                        <Text style={styles.modalSectionLabel}>TEAMS</Text>
+                                        {teams.map(t => (
+                                            <TouchableOpacity 
+                                                key={t._id} 
+                                                style={[styles.filterOption, selectedFilter === t._id && { backgroundColor: theme.primary + '10' }]}
+                                                onPress={() => { setSelectedFilter(t._id); setIsFilterModalOpen(false); }}
+                                            >
+                                                <Ionicons name="people-outline" size={20} color={selectedFilter === t._id ? theme.primary : theme.textLight} />
+                                                <Text style={[styles.filterOptionText, { color: selectedFilter === t._id ? theme.primary : theme.text }]}>{t.name}</Text>
+                                            </TouchableOpacity>
+                                        ))}
+                                    </>
+                                )}
+
+                                {users.length > 0 && (
+                                    <>
+                                        <Text style={styles.modalSectionLabel}>OPERATORS</Text>
+                                        {users.slice(0, 10).map(u => (
+                                            <TouchableOpacity 
+                                                key={u._id} 
+                                                style={[styles.filterOption, selectedFilter === (u._id || u.id) && { backgroundColor: theme.primary + '10' }]}
+                                                onPress={() => { setSelectedFilter(u._id || u.id); setIsFilterModalOpen(false); }}
+                                            >
+                                                <Ionicons name="person-outline" size={20} color={selectedFilter === (u._id || u.id) ? theme.primary : theme.textLight} />
+                                                <Text style={[styles.filterOptionText, { color: selectedFilter === (u._id || u.id) ? theme.primary : theme.text }]}>{u.fullName}</Text>
+                                            </TouchableOpacity>
+                                        ))}
+                                    </>
+                                )}
+                            </ScrollView>
+                        </View>
+                    </TouchableOpacity>
+                </Modal>
             </Animated.View>
         </ScrollView>
     );
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: "#F8FAFC" },
-    header: { padding: 20, paddingTop: 60, backgroundColor: "#fff", borderBottomLeftRadius: 30, borderBottomRightRadius: 30 },
+    container: { flex: 1 },
+    header: { padding: 20, paddingTop: 60, borderBottomLeftRadius: 30, borderBottomRightRadius: 30 },
     headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
     greetText: { fontSize: 20, fontWeight: "900", letterSpacing: -0.5 },
-    subGreet: { fontSize: 12, fontWeight: "600", color: "#94A3B8" },
+    subGreet: { fontSize: 12, fontWeight: "600" },
     versionBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
     versionText: { fontSize: 8, fontWeight: '800' },
     autoPilotBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
     autoPilotText: { fontSize: 8, fontWeight: '900' },
     headerLogo: { width: 44, height: 44, borderRadius: 10 },
-    notifBtn: { width: 44, height: 44, borderRadius: 14, backgroundColor: "#F8FAFC", justifyContent: 'center', alignItems: 'center' },
+    notifBtn: { width: 44, height: 44, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
 
     performanceCard: {
-        backgroundColor: "#fff", borderRadius: 24, padding: 20,
+        borderRadius: 24, padding: 20,
         flexDirection: 'row', alignItems: 'center',
-        elevation: 8, shadowColor: "#000", shadowOpacity: 0.06, shadowRadius: 16, shadowOffset: { width: 0, height: 8 },
-        borderWidth: 1, borderColor: "rgba(226, 232, 240, 0.4)"
+        elevation: 8, shadowOpacity: 0.06, shadowRadius: 16, borderLeftWidth: 4,
+        borderWidth: 1
     },
     perfInfo: { flex: 1 },
-    perfTitle: { fontSize: 14, fontWeight: "700", color: "#64748B", marginBottom: 12 },
+    perfTitle: { fontSize: 14, fontWeight: "700", marginBottom: 12 },
     targetRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
-    targetVal: { fontSize: 18, fontWeight: "800", color: "#1E293B" },
-    targetLabel: { fontSize: 11, color: "#94A3B8", fontWeight: "600", marginTop: 2 },
-    targetDivider: { width: 1, height: 24, backgroundColor: "#F1F5F9", marginHorizontal: 15 },
-    motiveText: { fontSize: 12, color: "#64748B", fontStyle: 'italic' },
+    targetVal: { fontSize: 18, fontWeight: "800" },
+    targetLabel: { fontSize: 11, fontWeight: "600", marginTop: 2 },
+    targetDivider: { width: 1, height: 24, marginHorizontal: 15 },
+    motiveText: { fontSize: 12, fontStyle: 'italic' },
 
     kpiContainer: { marginVertical: 24 },
     kpiScroll: { paddingHorizontal: 20, gap: 12 },
     kpiItem: {
-        backgroundColor: "#fff", padding: 16, borderRadius: 20, minWidth: 110,
-        alignItems: 'center', elevation: 4, shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }
+        padding: 16, borderRadius: 20, minWidth: 110,
+        alignItems: 'center', elevation: 4, shadowOpacity: 0.04, shadowRadius: 10
     },
     kpiCircle: { width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
-    kpiItemValue: { fontSize: 20, fontWeight: "800", color: "#1E293B" },
-    kpiItemLabel: { fontSize: 11, color: "#94A3B8", fontWeight: "700", marginTop: 4 },
+    kpiItemValue: { fontSize: 20, fontWeight: "800" },
+    kpiItemLabel: { fontSize: 11, fontWeight: "700", marginTop: 4 },
 
     content: { paddingHorizontal: 20 },
     grid: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginBottom: 24 },
@@ -921,137 +1074,132 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.1, shadowRadius: 10, shadowOffset: { width: 0, height: 10 }
     },
     actionBtnText: { color: "#fff", fontSize: 16, fontWeight: "800", letterSpacing: -0.5 },
-    activityBox: { backgroundColor: "#fff", borderRadius: 24, padding: 20, borderWidth: 1, borderColor: "#F1F5F9" },
-    sectionTitle: { fontSize: 13, fontWeight: "800", color: "#94A3B8", marginBottom: 16, textTransform: "uppercase" },
-    logRow: { flexDirection: "row", alignItems: "center", paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: "#F8FAFC", gap: 12 },
+    activityBox: { borderRadius: 24, padding: 20, borderWidth: 1 },
+    sectionTitle: { fontSize: 13, fontWeight: "800", marginBottom: 16, textTransform: "uppercase" },
+    logRow: { flexDirection: "row", alignItems: "center", paddingVertical: 12, borderBottomWidth: 1, gap: 12 },
     logIndicator: { width: 4, height: 20, borderRadius: 2 },
-    logSubject: { fontSize: 14, fontWeight: "700", color: "#334155" },
-    logTime: { fontSize: 11, color: "#94A3B8", fontWeight: "600", marginTop: 2 },
-    emptyText: { textAlign: "center", color: "#CBD5E1", fontSize: 13, marginVertical: 20 },
+    logSubject: { fontSize: 14, fontWeight: "700" },
+    logTime: { fontSize: 11, fontWeight: "600", marginTop: 2 },
+    emptyText: { textAlign: "center", fontSize: 13, marginVertical: 20 },
 
-    // Alert Hub
     alertHubContainer: { marginBottom: 24 },
     alertCard: {
         width: 200, padding: 12, borderRadius: 16, borderLeftWidth: 4,
-        backgroundColor: '#fff', flexDirection: 'row', alignItems: 'center', gap: 10,
-        elevation: 2, shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 8
+        flexDirection: 'row', alignItems: 'center', gap: 10,
+        elevation: 2, shadowOpacity: 0.03, shadowRadius: 8
     },
     alertIcon: { width: 32, height: 32, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
-    alertTitle: { fontSize: 12, fontWeight: '800', color: '#0F172A' },
-    alertMsg: { fontSize: 10, color: '#64748B', fontWeight: '600', marginTop: 2 },
+    alertTitle: { fontSize: 12, fontWeight: '800' },
+    alertMsg: { fontSize: 10, fontWeight: '600', marginTop: 2 },
 
-    // Agenda
     sectionHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
-    liveIndicator: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#FEE2E2', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
-    dot: { width: 4, height: 4, borderRadius: 2, backgroundColor: '#EF4444' },
-    liveText: { fontSize: 8, fontWeight: '900', color: '#EF4444' },
-    agendaItem: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#F8FAFC' },
+    liveIndicator: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+    dot: { width: 4, height: 4, borderRadius: 2 },
+    liveText: { fontSize: 8, fontWeight: '900' },
+    agendaItem: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, borderBottomWidth: 1 },
     agendaIcon: { width: 36, height: 36, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
     agendaTitle: { fontSize: 14, fontWeight: '700' },
-    agendaSub: { fontSize: 11, color: '#94A3B8', fontWeight: '600', marginTop: 2 },
+    agendaSub: { fontSize: 11, fontWeight: '600', marginTop: 2 },
     statusTag: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
     statusTagText: { fontSize: 8, fontWeight: '900' },
-    activeTag: { backgroundColor: '#F0FDF4', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
-    activeTagText: { fontSize: 8, fontWeight: '900', color: '#10B981' },
+    activeTag: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+    activeTagText: { fontSize: 8, fontWeight: '900' },
 
-    // New Dashboard 2.0 Styles
     monitorContainer: { marginBottom: 24 },
-    sectionHeader: { fontSize: 13, fontWeight: "800", color: "#94A3B8", marginBottom: 14, textTransform: "uppercase", letterSpacing: 1 },
+    sectionHeader: { fontSize: 13, fontWeight: "800", marginBottom: 14, textTransform: "uppercase", letterSpacing: 1 },
     monitorGrid: { flexDirection: "row", gap: 10 },
     monitorTile: {
-        flex: 1, backgroundColor: "#fff", padding: 16, borderRadius: 20, borderLeftWidth: 4,
-        elevation: 3, shadowColor: "#000", shadowOpacity: 0.03, shadowRadius: 8, shadowOffset: { width: 0, height: 4 },
+        flex: 1, padding: 16, borderRadius: 20, borderLeftWidth: 4,
+        elevation: 3, shadowOpacity: 0.03, shadowRadius: 8,
         flexDirection: 'row', alignItems: 'center'
     },
-    monitorValue: { fontSize: 24, fontWeight: "800", color: "#1E293B" },
-    monitorLabel: { fontSize: 11, fontWeight: "700", color: "#94A3B8", marginTop: 4 },
-    pipelineContainer: { marginBottom: 24, backgroundColor: "#fff", padding: 18, borderRadius: 24, borderWidth: 0, elevation: 2, shadowColor: "#000", shadowOpacity: 0.03, shadowRadius: 12, shadowOffset: { width: 0, height: 4 } },
+    monitorValue: { fontSize: 24, fontWeight: "800" },
+    monitorLabel: { fontSize: 11, fontWeight: "700", marginTop: 4 },
+    pipelineContainer: { marginBottom: 24, padding: 18, borderRadius: 24, borderWidth: 1, elevation: 2, shadowOpacity: 0.03, shadowRadius: 12 },
     pipeHeaderRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 },
-    pipeTotal: { fontSize: 12, fontWeight: "700", color: "#64748B" },
+    pipeTotal: { fontSize: 12, fontWeight: "700" },
     pipeScroll: { gap: 10, paddingRight: 10 },
     pipeStage: {
-        backgroundColor: "#F8FAFC", paddingHorizontal: 16, paddingVertical: 14, borderRadius: 16,
+        paddingHorizontal: 16, paddingVertical: 14, borderRadius: 16,
         minWidth: 100, alignItems: "center"
     },
-    pipeVal: { fontSize: 18, fontWeight: "800", color: "#2563EB" },
-    pipeLab: { fontSize: 11, fontWeight: "700", color: "#64748B", marginTop: 4 },
+    pipeVal: { fontSize: 18, fontWeight: "800" },
+    pipeLab: { fontSize: 11, fontWeight: "700", marginTop: 4 },
 
     monitorInner: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 },
     monitorIconBox: { width: 32, height: 32, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
-    pipeBadge: { backgroundColor: "#F1F5F9", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 },
-    pipeBadgeText: { fontSize: 12, fontWeight: "800", color: "#64748B" },
+    pipeBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 },
+    pipeBadgeText: { fontSize: 12, fontWeight: "800" },
     pipelineSteps: { gap: 16 },
     pipelineStep: { width: '100%' },
     stepInfo: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
-    stepLabel: { fontSize: 13, fontWeight: "700", color: "#1E293B" },
-    stepCount: { fontSize: 13, fontWeight: "800", color: "#2563EB" },
-    stepBarBase: { width: '100%', height: 6, backgroundColor: "#F1F5F9", borderRadius: 3, overflow: 'hidden' },
+    stepLabel: { fontSize: 13, fontWeight: "700" },
+    stepCount: { fontSize: 13, fontWeight: "800" },
+    stepBarBase: { width: '100%', height: 6, borderRadius: 3, overflow: 'hidden' },
     stepBarFill: { height: '100%', borderRadius: 3 },
 
     funnelStats: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10 },
     funnelItem: { flex: 1, alignItems: 'center' },
-    funnelVal: { fontSize: 22, fontWeight: "800", color: "#1E293B" },
-    funnelLab: { fontSize: 11, fontWeight: "700", color: "#94A3B8", marginTop: 4 },
-    funnelDivider: { width: 1, height: 30, backgroundColor: "#F1F5F9" },
-    funnelFooter: { flexDirection: 'row', justifyContent: 'center', gap: 24, marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: "#F1F5F9" },
+    funnelVal: { fontSize: 22, fontWeight: "800" },
+    funnelLab: { fontSize: 11, fontWeight: "700", marginTop: 4 },
+    funnelDivider: { width: 1, height: 30 },
+    funnelFooter: { flexDirection: 'row', justifyContent: 'center', gap: 24, marginTop: 16, paddingTop: 16, borderTopWidth: 1 },
     funnelSub: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-    funnelSubText: { fontSize: 12, fontWeight: "700", color: "#64748B" },
+    funnelSubText: { fontSize: 12, fontWeight: "700" },
 
     projGrid: { flexDirection: 'row', gap: 24, marginBottom: 20 },
     projStat: { flex: 1 },
-    projVal: { fontSize: 24, fontWeight: "800", color: "#1E293B" },
-    projLab: { fontSize: 12, fontWeight: "700", color: "#94A3B8", marginTop: 4 },
-    stackedBar: { height: 10, backgroundColor: "#F1F5F9", borderRadius: 5, flexDirection: 'row', overflow: 'hidden', marginVertical: 12 },
+    projVal: { fontSize: 24, fontWeight: '800' },
+    projLab: { fontSize: 12, fontWeight: '700', marginTop: 4 },
+    stackedBar: { height: 10, borderRadius: 5, flexDirection: 'row', overflow: 'hidden', marginVertical: 12 },
     stackFill: { height: '100%' },
     stackLabelRow: { flexDirection: 'row', justifyContent: 'space-between' },
-    stackLabText: { fontSize: 11, fontWeight: "700", color: "#94A3B8" },
+    stackLabText: { fontSize: 11, fontWeight: '700' },
 
     healthBars: { gap: 16 },
     healthItem: {},
     healthTextRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
-    healthLab: { fontSize: 13, fontWeight: "700", color: "#1E293B" },
-    healthCount: { fontSize: 13, fontWeight: "800", color: "#64748B" },
-    healthBarBase: { height: 6, backgroundColor: "#F1F5F9", borderRadius: 3, overflow: 'hidden' },
+    healthLab: { fontSize: 13, fontWeight: '700' },
+    healthCount: { fontSize: 13, fontWeight: '800' },
+    healthBarBase: { height: 6, borderRadius: 3, overflow: 'hidden' },
     healthBarFill: { height: '100%', borderRadius: 3 },
 
-    insightCard: { backgroundColor: "#EEF2FF", borderRadius: 24, padding: 20, marginBottom: 30, borderWidth: 1, borderColor: "rgba(79, 70, 229, 0.1)" },
+    insightCard: { borderRadius: 24, padding: 20, marginBottom: 30, borderWidth: 1 },
     insightHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
-    insightIconCircle: { width: 32, height: 32, borderRadius: 16, backgroundColor: "#fff", justifyContent: 'center', alignItems: 'center', elevation: 2 },
-    insightTitle: { fontSize: 14, fontWeight: "800", color: "#4F46E5" },
-    insightText: { fontSize: 13, color: "#4F46E5", fontWeight: "600", lineHeight: 20 },
+    insightIconCircle: { width: 32, height: 32, borderRadius: 16, justifyContent: 'center', alignItems: 'center', elevation: 2 },
+    insightTitle: { fontSize: 14, fontWeight: '800' },
+    insightText: { fontSize: 13, fontWeight: '600', lineHeight: 20 },
 
     timelineContainer: { marginTop: 10 },
-    timelineLine: { position: 'absolute', left: 18, top: 0, bottom: 0, width: 2, backgroundColor: "#F1F5F9", marginLeft: -1 },
-    timelineDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: "#fff" },
+    timelineLine: { position: 'absolute', left: 18, top: 0, bottom: 0, width: 2, marginLeft: -1 },
+    timelineDot: { width: 8, height: 8, borderRadius: 4 },
     timelineContent: { flex: 1, marginLeft: 10 },
 
-    // Dashboard 3.0 Refinement Styles
     ringInner: { position: 'absolute', alignItems: 'center', justifyContent: 'center' },
-    ringVal: { fontSize: 16, fontWeight: '800', color: '#1E293B' },
+    ringVal: { fontSize: 16, fontWeight: '800' },
     kpiLabelRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4, gap: 4 },
-    trendTag: { paddingHorizontal: 4, paddingVertical: 1, borderRadius: 4, backgroundColor: '#ECFDF5' },
+    trendTag: { paddingHorizontal: 4, paddingVertical: 1, borderRadius: 4 },
     monitorIconBoxCompact: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-    monitorValueSmall: { fontSize: 22, fontWeight: "800", color: "#1E293B" },
-    monitorLabelCompact: { fontSize: 11, fontWeight: "700", color: "#94A3B8", marginTop: 6 },
+    monitorValueSmall: { fontSize: 22, fontWeight: '800' },
+    monitorLabelCompact: { fontSize: 11, fontWeight: '700', marginTop: 6 },
     segmentedPipeline: { flexDirection: 'row', height: 40, alignItems: 'flex-end', gap: 4, marginVertical: 12 },
     segHeader: { alignItems: 'center', marginBottom: 4 },
-    segCount: { fontSize: 12, fontWeight: '800', color: '#1E293B' },
-    segLabel: { fontSize: 10, fontWeight: '700', color: '#94A3B8', textTransform: 'uppercase' },
+    segCount: { fontSize: 12, fontWeight: '800' },
+    segLabel: { fontSize: 10, fontWeight: '700', textTransform: 'uppercase' },
     segBar: { height: 8, borderRadius: 4 },
     segLabelsRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 },
-    segLabelMuted: { fontSize: 10, fontWeight: '600', color: '#CBD5E1' },
+    segLabelMuted: { fontSize: 10, fontWeight: '600' },
     funnelRow: { flexDirection: 'row', alignItems: 'center', gap: 20 },
     funnelChart: { width: 70, height: 70 },
     funnelData: { flex: 1 },
     perfHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-    trendIndicator: { flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: '#F0FDF4', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
-    trendText: { fontSize: 11, fontWeight: '700', color: '#10B981' },
+    trendIndicator: { flexDirection: 'row', alignItems: 'center', gap: 2, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
+    trendText: { fontSize: 11, fontWeight: '700' },
     targetGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
     targetCell: { minWidth: '45%', paddingVertical: 4 },
-    targetValSmall: { fontSize: 13, fontWeight: '800', color: '#1E293B' },
-    targetLabelSmall: { fontSize: 10, fontWeight: '700', color: '#94A3B8' },
+    targetValSmall: { fontSize: 13, fontWeight: '800' },
+    targetLabelSmall: { fontSize: 10, fontWeight: '700' },
 
-    // Dashboard Arrow Pipeline
     dashboardChevronContainer: { flexDirection: 'row', width: '100%', height: 54, marginBottom: 20 },
     dashChevronSegment: { flex: 1, height: '100%', justifyContent: 'center', alignItems: 'center', position: 'relative' },
     chevronContentCompact: { alignItems: 'center' },
@@ -1063,21 +1211,33 @@ const styles = StyleSheet.create({
         transform: [{ rotate: '45deg' }], zIndex: 10,
         borderTopWidth: 2, borderRightWidth: 2, borderRadius: 2
     },
-    funnelFooterRow: { flexDirection: 'row', alignItems: 'center', paddingTop: 16, borderTopWidth: 1, borderTopColor: '#F1F5F9' },
+    funnelFooterRow: { flexDirection: 'row', alignItems: 'center', paddingTop: 16, borderTopWidth: 1 },
     funnelStatItem: { flex: 1, alignItems: 'center' },
     funnelStatVal: { fontSize: 16, fontWeight: '800' },
-    funnelStatLab: { fontSize: 10, fontWeight: '700', color: '#94A3B8', marginTop: 2 },
-    funnelStatDivider: { width: 1, height: 20, backgroundColor: '#F1F5F9' },
-    systemNote: { marginTop: 20, padding: 15, backgroundColor: 'rgba(79, 70, 229, 0.05)', borderRadius: 16, borderWidth: 1, borderColor: 'rgba(79, 70, 229, 0.1)', marginBottom: 40 },
-    systemNoteText: { fontSize: 12, color: "#4F46E5", fontWeight: "600", textAlign: "center", lineHeight: 18 },
+    funnelStatLab: { fontSize: 10, fontWeight: '700', marginTop: 2 },
+    funnelStatDivider: { width: 1, height: 20 },
+    systemNote: { marginTop: 20, padding: 15, borderRadius: 16, borderWidth: 1, marginBottom: 40 },
+    systemNoteText: { fontSize: 12, fontWeight: "600", textAlign: "center", lineHeight: 18 },
 
-    // New Enhancement Styles
     sectionContainer: { marginBottom: 24 },
     activityBreakdownRow: { flexDirection: 'row', gap: 10, flexWrap: 'wrap' },
     activityTypeCard: { flex: 1, minWidth: '45%', padding: 12, borderRadius: 16, borderWidth: 1, alignItems: 'center' },
     activityTypeIcon: { width: 28, height: 28, borderRadius: 8, justifyContent: 'center', alignItems: 'center', marginBottom: 6 },
     activityTypeCount: { fontSize: 16, fontWeight: '800' },
     activityTypeLabel: { fontSize: 10, fontWeight: '700', marginTop: 2 },
+    
+    intelContainer: { marginBottom: 24 },
+    intelGrid: { flexDirection: 'row', gap: 12 },
+    intelTile: { 
+        flex: 1, padding: 16, borderRadius: 24, borderWidth: 1.5,
+        flexDirection: 'row', alignItems: 'center', gap: 12,
+        elevation: 4, shadowOpacity: 0.05, shadowRadius: 10
+    },
+    intelIconBox: { width: 44, height: 44, borderRadius: 16, justifyContent: 'center', alignItems: 'center' },
+    intelValue: { fontSize: 24, fontWeight: '900' },
+    intelLabel: { fontSize: 10, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 2 },
+    aiBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
+    aiBadgeText: { fontSize: 8, fontWeight: '900' },
 
     sourceList: { gap: 12 },
     sourceItem: {},
@@ -1087,17 +1247,28 @@ const styles = StyleSheet.create({
     sourceBarBase: { height: 6, borderRadius: 3, overflow: 'hidden' },
     sourceBarFill: { height: '100%', borderRadius: 3 },
 
-    recommendationsContainer: { marginBottom: 30, backgroundColor: "#fff", padding: 18, borderRadius: 24, borderWidth: 1 },
+    recommendationsContainer: { marginBottom: 30, padding: 18, borderRadius: 24, borderWidth: 1 },
     recommendationItem: { flexDirection: 'row', gap: 10, padding: 12, borderRadius: 12, marginBottom: 8, alignItems: 'center' },
     recommendationGlyph: { fontSize: 16 },
     recommendationText: { fontSize: 12, fontWeight: '700', flex: 1 },
 
     projectListContainer: { gap: 10 },
-    miniProjCard: { flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 16, borderLeftWidth: 3, borderLeftColor: '#4F46E5', gap: 12 },
+    miniProjCard: { flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 16, borderLeftWidth: 3, gap: 12 },
     miniProjInfo: { flex: 1 },
     miniProjName: { fontSize: 14, fontWeight: '800' },
     miniProjLoc: { fontSize: 11, fontWeight: '600', marginTop: 2 },
     miniProjStats: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-    miniProjBadge: { backgroundColor: '#EEF2FF', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
-    miniProjBadgeText: { fontSize: 10, fontWeight: '800', color: '#4F46E5' },
+    miniProjBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+    miniProjBadgeText: { fontSize: 10, fontWeight: '800' },
+
+    filterSelector: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, marginTop: 4 },
+    filterLabelText: { fontSize: 9, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.2 },
+
+    modalOverlay: { flex: 1, justifyContent: 'flex-end' },
+    filterModal: { borderTopLeftRadius: 32, borderTopRightRadius: 32, padding: 24, paddingBottom: 40, elevation: 5 },
+    modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
+    modalTitle: { fontSize: 18, fontWeight: '900' },
+    modalSectionLabel: { fontSize: 10, fontWeight: '800', letterSpacing: 1, marginTop: 20, marginBottom: 12 },
+    filterOption: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, paddingHorizontal: 16, borderRadius: 16, marginBottom: 6 },
+    filterOptionText: { fontSize: 14, fontWeight: '700' },
 });

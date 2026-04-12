@@ -15,6 +15,8 @@ export interface DashboardStats {
         revenue: number;
         trend: number;
     };
+    reengagedCount?: number;
+    nfaCount?: number;
     leads: {
         status: string;
         count: number;
@@ -52,6 +54,6 @@ export interface DashboardStats {
     recentDeals?: any[];
 }
 
-export async function getDashboardStats() {
-    return safeApiCallSingle<DashboardStats>(() => api.get("/dashboard/stats"));
+export async function getDashboardStats(params?: { userId?: string; teamId?: string }) {
+    return safeApiCallSingle<DashboardStats>(() => api.get("/dashboard/stats", { params }));
 }

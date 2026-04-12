@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import api from "@/services/api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useAuth } from "./AuthContext";
 
 interface Lookup {
     _id: string;
@@ -28,6 +29,7 @@ export const LookupProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const [idIndex, setIdIndex] = useState<Map<string, Lookup>>(new Map());
     const [typeIndex, setTypeIndex] = useState<Map<string, Lookup[]>>(new Map());
     const [loading, setLoading] = useState(true);
+    const { isAuthenticated } = useAuth();
 
     const refreshLookups = useCallback(async (retryCount = 2) => {
         // 1. Try to load from cache first for instant UI response
@@ -62,6 +64,10 @@ export const LookupProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         }
 
         if (lookups.length === 0) setLoading(true);
+        if (!isAuthenticated) {
+            setLoading(false);
+            return;
+        }
 
         try {
             const res = await api.get('/lookups', { params: { limit: 2500 } });
@@ -117,11 +123,16 @@ export const LookupProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 }
             } catch (err) { }
 
-            if (data.length === 0 && retryCount > 0) {
+            if (data.length === 0 && retryCount > 0 && isAuthenticated) {
                 setTimeout(() => refreshLookups(retryCount - 1), 1000);
             }
-        } catch (error) {
-            if (retryCount > 0) setTimeout(() => refreshLookups(retryCount - 1), 2000);
+        } catch (error: any) {
+            if (error?.response?.status === 401) {
+                // Do not retry on 401s
+                console.warn('[LookupContext] Unauthorized fetch skipped (unauthenticated state)');
+            } else if (retryCount > 0 && isAuthenticated) {
+                setTimeout(() => refreshLookups(retryCount - 1), 2000);
+            }
         } finally {
             setLoading(false);
         }

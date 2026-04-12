@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import api from "@/services/api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useAuth } from "./AuthContext";
 
 interface Project {
     _id: string;
@@ -26,6 +27,7 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const [projects, setProjects] = useState<Project[]>([]);
     const [projectIndex, setProjectIndex] = useState<Map<string, Project>>(new Map());
     const [loading, setLoading] = useState(true);
+    const { isAuthenticated } = useAuth();
 
     const refreshProjects = useCallback(async () => {
         // 1. Try cache first
@@ -37,6 +39,7 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
                     setProjects(parsed);
                     const index = new Map<string, Project>();
                     parsed.forEach((p: Project) => {
+                        if (!p) return;
                         if (p._id) index.set(p._id, p);
                         if (p.id) index.set(p.id, p);
                     });
@@ -47,6 +50,10 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }
 
         if (projects.length === 0) setLoading(true);
+        if (!isAuthenticated) {
+            setLoading(false);
+            return;
+        }
 
         try {
             const res = await api.get('/projects', { params: { limit: 1000 } });
@@ -58,13 +65,18 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 
                 const index = new Map<string, Project>();
                 data.forEach((p: Project) => {
+                    if (!p) return;
                     if (p._id) index.set(p._id, p);
                     if (p.id) index.set(p.id, p);
                 });
                 setProjectIndex(index);
             }
-        } catch (error) {
-            console.error('[ProjectContext] Failed to fetch projects:', error);
+        } catch (error: any) {
+            if (error?.response?.status === 401) {
+                console.warn('[ProjectContext] Unauthorized fetch skipped (unauthenticated state)');
+            } else {
+                console.error('[ProjectContext] Failed to fetch projects:', error);
+            }
         } finally {
             setLoading(false);
         }

@@ -321,17 +321,15 @@ export default function ActivitiesScreen() {
                                         </>
                                     ) : null}
 
-                                    {item.details?.audioUrl && (
-                                        <TouchableOpacity
-                                            style={[styles.playBadge, isPlaying && styles.playBadgeActive]}
-                                            onPress={() => onPlayAudio(item._id!, item.details.audioUrl)}
-                                        >
-                                            <Ionicons name={isPlaying ? "pause" : "play"} size={12} color={isPlaying ? "#fff" : "#2563EB"} />
-                                            <Text style={[styles.playBadgeText, isPlaying && { color: "#fff" }]}>
-                                                {isPlaying ? "PLAYING" : "VOICE"}
-                                            </Text>
-                                        </TouchableOpacity>
-                                    )}
+                                            <TouchableOpacity
+                                                style={[styles.playBadge, { backgroundColor: isPlaying ? theme.primary : theme.primary + '15' }]}
+                                                onPress={() => onPlayAudio(item._id!, item.details.audioUrl)}
+                                            >
+                                                <Ionicons name={isPlaying ? "pause" : "play"} size={12} color={isPlaying ? "#fff" : theme.primary} />
+                                                <Text style={[styles.playBadgeText, { color: isPlaying ? "#fff" : theme.primary }]}>
+                                                    {isPlaying ? "PLAYING" : "VOICE"}
+                                                </Text>
+                                            </TouchableOpacity>
                                 </View>
                             </View>
                         ) : null}
@@ -440,7 +438,7 @@ export default function ActivitiesScreen() {
             </View>
 
             {loading ? (
-                <View style={styles.center}><ActivityIndicator size="large" color="#2563EB" /></View>
+                <View style={styles.center}><ActivityIndicator size="large" color={theme.primary} /></View>
             ) : (
                 <FlatList
                     data={filteredActivities}
@@ -526,48 +524,46 @@ export default function ActivitiesScreen() {
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: "#fff" },
+    container: { flex: 1 },
     center: { flex: 1, justifyContent: "center", alignItems: "center" },
 
     header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20, paddingTop: 60, paddingBottom: 16 },
-    headerTitle: { fontSize: 32, fontWeight: "900", color: "#0F172A", letterSpacing: -1 },
-    headerSubtitle: { fontSize: 13, color: "#94A3B8", fontWeight: "600", marginTop: 2 },
-    addBtn: { width: 44, height: 44, borderRadius: 14, backgroundColor: "#2563EB", justifyContent: 'center', alignItems: 'center' },
+    headerTitle: { fontSize: 32, fontWeight: "900", letterSpacing: -1 },
+    headerSubtitle: { fontSize: 13, fontWeight: "600", marginTop: 2 },
+    addBtn: { width: 44, height: 44, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
 
     statsGrid: { flexDirection: 'row', paddingHorizontal: 20, gap: 12, marginBottom: 16 },
     statTile: { flex: 1, padding: 16, borderRadius: 20, justifyContent: 'center' },
     statValue: { fontSize: 24, fontWeight: "900" },
-    statLabel: { fontSize: 10, fontWeight: "800", color: "#64748B", marginTop: 2 },
+    statLabel: { fontSize: 10, fontWeight: "800", marginTop: 2 },
 
     commandBar: {
         flexDirection: "row", alignItems: "center", marginHorizontal: 20, marginBottom: 16,
-        paddingHorizontal: 16, paddingVertical: 12, backgroundColor: "#F8FAFC",
-        borderRadius: 16, borderWidth: 1, borderColor: "#E2E8F0"
+        paddingHorizontal: 16, paddingVertical: 12,
+        borderRadius: 16, borderWidth: 1
     },
-    commandInput: { flex: 1, marginLeft: 12, fontSize: 15, color: "#1E293B", fontWeight: "600" },
+    commandInput: { flex: 1, marginLeft: 12, fontSize: 15, fontWeight: "600" },
 
     filterTray: { marginBottom: 16 },
     filterScroll: { paddingHorizontal: 20, gap: 10 },
     filterChip: {
         flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 10,
-        borderRadius: 20, backgroundColor: "#fff", borderWidth: 1.5, borderColor: "#F1F5F9"
+        borderRadius: 20, borderWidth: 1.5
     },
     chipEmoji: { fontSize: 14, marginRight: 6 },
-    chipText: { fontSize: 13, fontWeight: "700", color: "#64748B" },
+    chipText: { fontSize: 13, fontWeight: "700" },
 
-    statusDock: { flexDirection: 'row', paddingHorizontal: 20, borderBottomWidth: 1, borderBottomColor: "#F1F5F9", marginBottom: 12 },
+    statusDock: { flexDirection: 'row', paddingHorizontal: 20, borderBottomWidth: 1, marginBottom: 12 },
     dockItem: { paddingVertical: 12, marginRight: 24, borderBottomWidth: 2, borderBottomColor: 'transparent' },
-    dockItemActive: { borderBottomColor: "#2563EB" },
-    dockText: { fontSize: 14, fontWeight: "700", color: "#94A3B8" },
-    dockTextActive: { color: "#2563EB" },
+    dockText: { fontSize: 14, fontWeight: "700" },
 
     list: { paddingHorizontal: 20, paddingBottom: 100 },
     card: {
-        flexDirection: "row", backgroundColor: "#fff", marginBottom: 12,
-        borderRadius: 20, overflow: "hidden", borderWidth: 1, borderColor: "#F1F5F9",
-        shadowColor: "#000", shadowOpacity: 0.03, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }
+        flexDirection: "row", marginBottom: 12,
+        borderRadius: 20, overflow: "hidden", borderWidth: 1,
+        elevation: 2, shadowColor: "#000", shadowOpacity: 0.03, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }
     },
-    cardOverdue: { borderColor: "#FECACA", backgroundColor: "#FFF5F5" },
+    cardOverdue: { borderColor: "#EF4444" },
     cardAccent: { width: 5 },
     cardMain: { flex: 1, padding: 12 },
     cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
@@ -579,21 +575,21 @@ const styles = StyleSheet.create({
     statusBadge: { paddingHorizontal: 6, paddingVertical: 3, borderRadius: 6 },
     statusBadgeText: { fontSize: 9, fontWeight: "800" },
 
-    subject: { fontSize: 15, fontWeight: "800", color: "#1E293B", lineHeight: 20, marginBottom: 4 },
+    subject: { fontSize: 15, fontWeight: "800", lineHeight: 20, marginBottom: 4 },
     clientRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 },
-    clientName: { fontSize: 12, color: "#64748B", fontWeight: "600" },
+    clientName: { fontSize: 12, fontWeight: "600" },
 
     cardFooter: { flexDirection: 'row', alignItems: 'center', gap: 12 },
     metaGroup: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-    metaText: { fontSize: 12, color: "#94A3B8", fontWeight: "600" },
+    metaText: { fontSize: 12, fontWeight: "600" },
     priorityEmoji: { fontSize: 12 },
 
     actionGroup: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-    actionBtn: { width: 32, height: 32, borderRadius: 10, backgroundColor: "#EEF2FF", justifyContent: 'center', alignItems: 'center' },
-    clientMobile: { fontSize: 11, color: "#94A3B8", fontWeight: "600", marginLeft: 20 },
+    actionBtn: { width: 32, height: 32, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
+    clientMobile: { fontSize: 11, fontWeight: "600", marginLeft: 20 },
 
     empty: { alignItems: "center", marginTop: 80, paddingHorizontal: 40 },
-    emptyText: { marginTop: 16, fontSize: 16, color: "#94A3B8", fontWeight: "700", textAlign: 'center' },
+    emptyText: { marginTop: 16, fontSize: 16, fontWeight: "700", textAlign: 'center' },
 
     leftActions: { flexDirection: 'row', marginBottom: 16 },
     rightActions: { flexDirection: 'row', marginBottom: 16 },
@@ -601,12 +597,12 @@ const styles = StyleSheet.create({
     swipeLabel: { color: '#fff', fontSize: 10, fontWeight: '800', marginTop: 4 },
 
     assigneeContainer: { flex: 1, flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center' },
-    assigneeTextContent: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8FAFC', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, borderWidth: 1, borderColor: '#F1F5F9', gap: 6 },
-    assigneeName: { fontSize: 11, fontWeight: '700', color: '#475569', maxWidth: 80 },
-    teamBadge: { backgroundColor: '#EEF2FF', paddingHorizontal: 4, paddingVertical: 2, borderRadius: 4, borderWidth: 1, borderColor: '#E0E7FF' },
-    teamBadgeText: { fontSize: 8, fontWeight: '800', color: '#4F46E5' },
+    assigneeTextContent: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, borderWidth: 1, gap: 6 },
+    assigneeName: { fontSize: 11, fontWeight: '700', maxWidth: 80 },
+    teamBadge: { paddingHorizontal: 4, paddingVertical: 2, borderRadius: 4, borderWidth: 1 },
+    teamBadgeText: { fontSize: 8, fontWeight: '800' },
 
-    playBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#DBEAFE', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+    playBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
     playBadgeActive: { backgroundColor: '#2563EB' },
     playBadgeText: { fontSize: 9, fontWeight: '900', color: '#2563EB' },
 });

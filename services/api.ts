@@ -10,7 +10,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 // On Native (Expo Go on phone): use the Mac's LAN IP
 // The env var EXPO_PUBLIC_API_BASE_URL can override this.
 // ============================================================
-const MACHINE_IP = "192.168.1.6";
+const MACHINE_IP = "192.168.29.233";
 const BACKEND_PORT = "4000";
 
 const WEB_URL = `http://localhost:${BACKEND_PORT}/api`;
@@ -120,10 +120,11 @@ api.interceptors.response.use(
 
     if (status === 401) {
       // Professional Hardening: Do not logout on public route failures
-      const isPublicRoute = url.includes('/public/') || url.includes('/health');
+      const isPublicRoute = url.includes('/public/') || url.includes('/health') || url.includes('/sms-gateway/status');
       if (!isPublicRoute) {
         await storage.deleteItem("authToken").catch(() => { });
         if (on401Callback) on401Callback();
+        console.log(`[API] 401 Unauthorized ${url} — session expired or missing token.`);
       } else {
         console.warn(`[API] 401 on public route ignored to prevent session termination: ${url}`);
       }

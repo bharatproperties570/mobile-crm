@@ -19,6 +19,7 @@ import { Colors } from "@/context/ThemeContext";
 import { useLookup } from "@/context/LookupContext";
 import { useUsers } from "@/context/UserContext";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useAuth } from "@/context/AuthContext";
 
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -97,26 +98,32 @@ function formatTimeAgo(dateString?: string) {
 }
 
 function getLeadScore(lead: Lead, isDark = false) {
-    const bgOpacity = isDark ? '20' : '10';
+    const bgOpacity = isDark ? '25' : '15';
+    const colors = isDark ? STATUS_COLORS_DARK : STATUS_COLORS_LIGHT;
+
     // 1. Prefer Backend Enrichment Score if available (Lead Score 3.0)
     if (lead.intent_index !== undefined && lead.intent_index !== null) {
         const scoreVal = lead.intent_index || 0;
-        let color = "#64748B"; // Cold
-        if (scoreVal >= 81) color = "#8B5CF6"; // Super Hot
-        else if (scoreVal >= 61) color = "#EF4444"; // Hot
-        else if (scoreVal >= 31) color = "#F59E0B"; // Warm
+        let color = colors.cold; 
+        if (scoreVal >= 81) color = colors.contacted; // Hot purple
+        else if (scoreVal >= 61) color = colors.hot; 
+        else if (scoreVal >= 31) color = colors.warm; 
 
         return { val: scoreVal, color, bg: color + bgOpacity };
     }
 
     // 2. Fallback to heuristic logic if not enriched
     const stage = lookupVal(lead.stage).toLowerCase();
-    if (stage === "hot") return { val: 98, color: "#EF4444", bg: "#EF4444" + bgOpacity };
-    if (["new", "contacted"].includes(stage)) return { val: 65, color: "#3B82F6", bg: "#3B82F6" + bgOpacity };
-    if (["qualified", "active"].includes(stage)) return { val: 85, color: "#10B981", bg: "#10B981" + bgOpacity };
-    if (["won"].includes(stage)) return { val: 100, color: "#10B981", bg: "#10B981" + bgOpacity };
-    if (stage === "dormant") return { val: 0, color: "#64748B", bg: "#64748B" + bgOpacity };
-    return { val: 30, color: "#64748B", bg: "#64748B" + bgOpacity };
+    const stageColor = colors[stage] || colors.cold;
+
+    let val = 30;
+    if (stage === "hot") val = 98;
+    else if (["new", "contacted"].includes(stage)) val = 65;
+    else if (["qualified", "active"].includes(stage)) val = 85;
+    else if (["won", "booked"].includes(stage)) val = 100;
+    else if (stage === "dormant" || stage === "lost") val = 10;
+
+    return { val, color: stageColor, bg: stageColor + bgOpacity };
 }
 
 function ActionSheet({ visible, onClose, lead, onUpdate, statuses, users }: {
@@ -129,6 +136,7 @@ function ActionSheet({ visible, onClose, lead, onUpdate, statuses, users }: {
 }) {
     const router = useRouter();
     const { theme } = useTheme();
+    const isDark = theme.background === '#0F172A';
     const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
     const [showStatusPicker, setShowStatusPicker] = useState(false);
     const [showReassign, setShowReassign] = useState(false);
@@ -252,7 +260,7 @@ function ActionSheet({ visible, onClose, lead, onUpdate, statuses, users }: {
                 <Animated.View
                     style={[
                         styles.sheetContainer,
-                        { transform: [{ translateY: slideAnim }] }
+                        { backgroundColor: isDark ? '#000000' : '#FFFFFF', transform: [{ translateY: slideAnim }] }
                     ]}
                 >
                     <View style={styles.sheetHandle} />
@@ -267,59 +275,59 @@ function ActionSheet({ visible, onClose, lead, onUpdate, statuses, users }: {
 
                         <View style={styles.actionGrid}>
                             <TouchableOpacity style={styles.actionItem} onPress={() => { router.push(`/add-lead?id=${lead._id}`); onClose(); }}>
-                                <View style={[styles.actionIcon, { backgroundColor: "#F1F5F9" }]}>
-                                    <Ionicons name="create" size={24} color="#64748B" />
+                                <View style={[styles.actionIcon, { backgroundColor: isDark ? 'rgba(100, 116, 139, 0.1)' : "#F1F5F9" }]}>
+                                    <Ionicons name="create" size={24} color={isDark ? theme.textSecondary : "#64748B"} />
                                 </View>
-                                <Text style={styles.actionLabel}>Edit</Text>
+                                <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Edit</Text>
                             </TouchableOpacity>
 
                             <TouchableOpacity style={styles.actionItem} onPress={() => { router.push(`/match-lead?id=${lead._id}`); onClose(); }}>
-                                <View style={[styles.actionIcon, { backgroundColor: "#FDF2F8" }]}>
+                                <View style={[styles.actionIcon, { backgroundColor: isDark ? 'rgba(219, 39, 119, 0.1)' : "#FDF2F8" }]}>
                                     <Ionicons name="git-compare" size={24} color="#DB2777" />
                                 </View>
-                                <Text style={styles.actionLabel}>Match</Text>
+                                <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Match</Text>
                             </TouchableOpacity>
 
                             <TouchableOpacity style={styles.actionItem} onPress={() => { router.push(`/add-document?id=${lead._id}&type=Lead`); onClose(); }}>
-                                <View style={[styles.actionIcon, { backgroundColor: "#F0F9FF" }]}>
+                                <View style={[styles.actionIcon, { backgroundColor: isDark ? 'rgba(14, 165, 233, 0.1)' : "#F0F9FF" }]}>
                                     <Ionicons name="document-attach" size={24} color="#0EA5E9" />
                                 </View>
-                                <Text style={styles.actionLabel}>Doc</Text>
+                                <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Doc</Text>
                             </TouchableOpacity>
 
                             <TouchableOpacity style={styles.actionItem} onPress={() => { router.push(`/sequences?id=${lead._id}`); onClose(); }}>
-                                <View style={[styles.actionIcon, { backgroundColor: "#F5F3FF" }]}>
+                                <View style={[styles.actionIcon, { backgroundColor: isDark ? 'rgba(139, 92, 246, 0.1)' : "#F5F3FF" }]}>
                                     <Ionicons name="repeat" size={24} color="#8B5CF6" />
                                 </View>
-                                <Text style={styles.actionLabel}>Seq</Text>
+                                <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Seq</Text>
                             </TouchableOpacity>
 
                             <TouchableOpacity style={styles.actionItem} onPress={() => { router.push(`/add-activity?id=${lead._id}`); onClose(); }}>
-                                <View style={[styles.actionIcon, { backgroundColor: "#FFF7ED" }]}>
+                                <View style={[styles.actionIcon, { backgroundColor: isDark ? 'rgba(234, 88, 12, 0.1)' : "#FFF7ED" }]}>
                                     <Ionicons name="add-circle" size={24} color="#EA580C" />
                                 </View>
-                                <Text style={styles.actionLabel}>Activity</Text>
+                                <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Activity</Text>
                             </TouchableOpacity>
 
                             <TouchableOpacity style={styles.actionItem} onPress={() => { setShowReassign(!showReassign); setShowStatusPicker(false); setShowTagEditor(false); }}>
-                                <View style={[styles.actionIcon, { backgroundColor: "#F5F3FF" }]}>
+                                <View style={[styles.actionIcon, { backgroundColor: isDark ? 'rgba(124, 58, 237, 0.1)' : "#F5F3FF" }]}>
                                     <Ionicons name="person-add" size={24} color="#7C3AED" />
                                 </View>
-                                <Text style={styles.actionLabel}>Assign</Text>
+                                <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Assign</Text>
                             </TouchableOpacity>
 
                             <TouchableOpacity style={styles.actionItem} onPress={() => { setShowTagEditor(!showTagEditor); setShowStatusPicker(false); setShowReassign(false); }}>
-                                <View style={[styles.actionIcon, { backgroundColor: "#EEF2FF" }]}>
+                                <View style={[styles.actionIcon, { backgroundColor: isDark ? 'rgba(79, 70, 229, 0.1)' : "#EEF2FF" }]}>
                                     <Ionicons name="pricetags" size={24} color="#4F46E5" />
                                 </View>
-                                <Text style={styles.actionLabel}>Tag</Text>
+                                <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Tag</Text>
                             </TouchableOpacity>
 
                             <TouchableOpacity style={styles.actionItem} onPress={handleQuickDormant}>
-                                <View style={[styles.actionIcon, { backgroundColor: "#F1F5F9" }]}>
+                                <View style={[styles.actionIcon, { backgroundColor: isDark ? 'rgba(148, 163, 184, 0.1)' : "#F1F5F9" }]}>
                                     <Ionicons name="moon" size={24} color="#94A3B8" />
                                 </View>
-                                <Text style={styles.actionLabel}>Dormant</Text>
+                                <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Dormant</Text>
                             </TouchableOpacity>
 
                             <TouchableOpacity style={styles.actionItem} onPress={async () => {
@@ -333,24 +341,24 @@ function ActionSheet({ visible, onClose, lead, onUpdate, statuses, users }: {
                                     Alert.alert("Error", "Failed to prepare call outcome");
                                 }
                             }}>
-                                <View style={[styles.actionIcon, { backgroundColor: "#ECFDF5" }]}>
+                                <View style={[styles.actionIcon, { backgroundColor: isDark ? 'rgba(16, 185, 129, 0.1)' : "#ECFDF5" }]}>
                                     <Ionicons name="checkmark-done-circle" size={24} color="#10B981" />
                                 </View>
-                                <Text style={styles.actionLabel}>Outcome</Text>
+                                <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Outcome</Text>
                             </TouchableOpacity>
                         </View>
 
                         {showReassign && (
                             <View style={styles.pickerView}>
-                                <Text style={styles.sectionTitle}>Reassign To</Text>
+                                <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Reassign To</Text>
                                 <View style={styles.chipList}>
                                     {users.map((u) => (
                                         <TouchableOpacity
                                             key={u._id}
-                                            style={styles.actionChip}
+                                            style={[styles.actionChip, { borderColor: theme.border, backgroundColor: theme.card }]}
                                             onPress={() => handleReassign(u._id)}
                                         >
-                                            <Text style={styles.actionChipText}>{u.fullName || u.name}</Text>
+                                            <Text style={[styles.actionChipText, { color: theme.text }]}>{u.fullName || u.name}</Text>
                                         </TouchableOpacity>
                                     ))}
                                 </View>
@@ -359,25 +367,26 @@ function ActionSheet({ visible, onClose, lead, onUpdate, statuses, users }: {
 
                         {showTagEditor && (
                             <View style={styles.pickerView}>
-                                <Text style={styles.sectionTitle}>Manage Tags</Text>
+                                <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Manage Tags</Text>
                                 <View style={styles.tagInputRow}>
                                     <TextInput
-                                        style={styles.tagInput}
+                                        style={[styles.tagInput, { backgroundColor: theme.card, color: theme.text, borderColor: theme.border }]}
                                         placeholder="Add new tag..."
+                                        placeholderTextColor={theme.textMuted}
                                         value={newTag}
                                         onChangeText={setNewTag}
                                         onSubmitEditing={handleAddTag}
                                     />
-                                    <TouchableOpacity style={styles.addTagBtn} onPress={handleAddTag}>
+                                    <TouchableOpacity style={[styles.addTagBtn, { backgroundColor: theme.primary }]} onPress={handleAddTag}>
                                         <Ionicons name="add" size={20} color="#fff" />
                                     </TouchableOpacity>
                                 </View>
                                 <View style={styles.chipList}>
                                     {(lead.tags || []).map((t: string, idx: number) => (
-                                        <View key={idx} style={styles.tagChip}>
-                                            <Text style={styles.tagChipText}>{t}</Text>
+                                        <View key={idx} style={[styles.tagChip, { backgroundColor: theme.primary + '15', borderColor: theme.primary + '30' }]}>
+                                            <Text style={[styles.tagChipText, { color: theme.primary }]}>{t}</Text>
                                             <TouchableOpacity onPress={() => handleRemoveTag(t)}>
-                                                <Ionicons name="close-circle" size={14} color="#94A3B8" />
+                                                <Ionicons name="close-circle" size={14} color={theme.primary} />
                                             </TouchableOpacity>
                                         </View>
                                     ))}
@@ -386,7 +395,7 @@ function ActionSheet({ visible, onClose, lead, onUpdate, statuses, users }: {
                         )}
 
                         <View style={styles.dangerZone}>
-                            <TouchableOpacity style={styles.dangerBtn} onPress={handleDelete}>
+                            <TouchableOpacity style={[styles.dangerBtn, { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.1)' : "#FEF2F2" }]} onPress={handleDelete}>
                                 <Ionicons name="trash-outline" size={20} color="#EF4444" />
                                 <Text style={styles.dangerBtnText}>Delete Lead</Text>
                             </TouchableOpacity>
@@ -407,6 +416,8 @@ function FilterModal({ visible, onClose, filters, setFilters, statuses, users, s
     users: any[];
     sources: Lookup[];
 }) {
+    const { theme } = useTheme();
+    const isDark = theme.background === '#0F172A';
     const toggleFilter = (key: string, val: string) => {
         const current = filters[key] || [];
         const next = current.includes(val) ? current.filter((v: string) => v !== val) : [...current, val];
@@ -416,23 +427,31 @@ function FilterModal({ visible, onClose, filters, setFilters, statuses, users, s
     return (
         <Modal visible={visible} animationType="slide" transparent>
             <View style={styles.filterModalContainer}>
-                <View style={styles.filterHeader}>
-                    <Text style={styles.filterHeaderTitle}>Advanced Filters</Text>
+                <View style={[styles.filterHeader, { backgroundColor: theme.card, borderBottomColor: theme.border }]}>
+                    <Text style={[styles.filterHeaderTitle, { color: theme.text }]}>Advanced Filters</Text>
                     <TouchableOpacity onPress={onClose}>
-                        <Ionicons name="close" size={24} color="#1E293B" />
+                        <Ionicons name="close" size={24} color={theme.text} />
                     </TouchableOpacity>
                 </View>
 
-                <ScrollView style={styles.filterContent}>
-                    <Text style={styles.filterSectionTitle}>By Stage</Text>
+                <ScrollView style={[styles.filterContent, { backgroundColor: theme.background }]}>
+                    <Text style={[styles.filterSectionTitle, { color: theme.textMuted }]}>By Stage</Text>
                     <View style={styles.filterChipList}>
                         {statuses.map(s => (
                             <TouchableOpacity
                                 key={s._id}
-                                style={[styles.filterChip, (filters.stages || []).includes(s._id) && styles.filterChipActive]}
+                                style={[
+                                    styles.filterChip, 
+                                    { borderColor: theme.border, backgroundColor: theme.card },
+                                    (filters.stages || []).includes(s._id) && { backgroundColor: theme.primary, borderColor: theme.primary }
+                                ]}
                                 onPress={() => toggleFilter("stages", s._id)}
                             >
-                                <Text style={[styles.filterChipText, (filters.stages || []).includes(s._id) && styles.filterChipTextActive]}>{s.lookup_value}</Text>
+                                <Text style={[
+                                    styles.filterChipText, 
+                                    { color: theme.textSecondary },
+                                    (filters.stages || []).includes(s._id) && { color: "#fff" }
+                                ]}>{s.lookup_value}</Text>
                             </TouchableOpacity>
                         ))}
                     </View>
@@ -464,11 +483,11 @@ function FilterModal({ visible, onClose, filters, setFilters, statuses, users, s
                     </View>
                 </ScrollView>
 
-                <View style={styles.filterFooter}>
-                    <TouchableOpacity style={styles.resetBtn} onPress={() => setFilters({ stages: [], sources: [], owners: [] })}>
-                        <Text style={styles.resetBtnText}>Reset All</Text>
+                <View style={[styles.filterFooter, { backgroundColor: theme.card, borderTopColor: theme.border }]}>
+                    <TouchableOpacity style={[styles.resetBtn, { backgroundColor: theme.border }]} onPress={() => setFilters({ stages: [], sources: [], owners: [] })}>
+                        <Text style={[styles.resetBtnText, { color: theme.textSecondary }]}>Reset All</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.applyBtn} onPress={onClose}>
+                    <TouchableOpacity style={[styles.applyBtn, { backgroundColor: theme.primary }]} onPress={onClose}>
                         <Text style={styles.applyBtnText}>Apply Filters</Text>
                     </TouchableOpacity>
                 </View>
@@ -508,7 +527,7 @@ const LeadScoreRing = memo(({ score, isDark, color = "#2563EB", size = 44 }: { s
                 borderRightColor: score > 25 ? color : 'transparent',
                 borderTopColor: color,
                 transform: [{ rotate: '-45deg' }]
-            }} />
+            }}></View>
             <Text style={{ fontSize: 9, fontWeight: '800', color: theme.text, position: 'absolute' }}>{score}</Text>
         </View>
     );
@@ -550,9 +569,11 @@ const LeadCard = memo(({ lead, index, onPress, onMore, isSelected, onLongPress, 
     const { getLookupValue } = useLookup();
     const name = leadName(lead);
     const isDark = theme.background === '#0F172A';
-    const stageCfgMap = isDark ? STAGE_CONFIG_DARK : STAGE_CONFIG_LIGHT;
+    const stageCfgMap = (typeof STAGE_CONFIG_DARK !== 'undefined' && typeof STAGE_CONFIG_LIGHT !== 'undefined') 
+        ? (isDark ? STAGE_CONFIG_DARK : STAGE_CONFIG_LIGHT) 
+        : { default: { color: '#94A3B8', icon: 'ellipse-outline' } };
     const stageLabel = getLookupValue("Stage", lead.stage) || "New";
-    const stageCfg = stageCfgMap[stageLabel] || stageCfgMap.default;
+    const stageCfg = (stageCfgMap as any)[stageLabel] || (stageCfgMap as any).default;
     const score = liveScore ? { val: liveScore.score, color: liveScore.color } : getLeadScore(lead, isDark);
 
     const scaleValue = useRef(new Animated.Value(1)).current;
@@ -576,11 +597,11 @@ const LeadCard = memo(({ lead, index, onPress, onMore, isSelected, onLongPress, 
 
     const renderRightActions = () => (
         <View style={styles.rightActions}>
-            <TouchableOpacity style={[styles.swipeAction, { backgroundColor: "#2563EB" }]} onPress={() => trackCall(lead.mobile || "", lead._id, "Lead", name)}>
+            <TouchableOpacity style={[styles.swipeAction, { backgroundColor: theme.primary }]} onPress={() => trackCall(lead.mobile || "", lead._id, "Lead", name)}>
                 <Ionicons name="call" size={20} color="#fff" />
                 <Text style={styles.swipeLabel}>Call</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.swipeAction, { backgroundColor: "#F59E0B" }]} onPress={() => Linking.openURL(`sms:${lead.mobile}`)}>
+            <TouchableOpacity style={[styles.swipeAction, { backgroundColor: theme.warning }]} onPress={() => Linking.openURL(`sms:${lead.mobile}`)}>
                 <Ionicons name="chatbubble" size={20} color="#fff" />
                 <Text style={styles.swipeLabel}>SMS</Text>
             </TouchableOpacity>
@@ -589,14 +610,14 @@ const LeadCard = memo(({ lead, index, onPress, onMore, isSelected, onLongPress, 
 
     const renderLeftActions = () => (
         <View style={styles.leftActions}>
-            <TouchableOpacity style={[styles.swipeAction, { backgroundColor: "#10B981" }]} onPress={() => {
+            <TouchableOpacity style={[styles.swipeAction, { backgroundColor: theme.success }]} onPress={() => {
                 const cleanPhone = (lead.mobile || "").replace(/[^0-9]/g, "");
                 Linking.openURL(`whatsapp://send?phone=${cleanPhone.length === 10 ? "91" + cleanPhone : cleanPhone}`);
             }}>
                 <Ionicons name="logo-whatsapp" size={20} color="#fff" />
                 <Text style={styles.swipeLabel}>WhatsApp</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.swipeAction, { backgroundColor: "#6366F1" }]} onPress={() => lead.email && Linking.openURL(`mailto:${lead.email}`)}>
+            <TouchableOpacity style={[styles.swipeAction, { backgroundColor: isDark ? '#818CF8' : "#6366F1" }]} onPress={() => lead.email && Linking.openURL(`mailto:${lead.email}`)}>
                 <Ionicons name="mail" size={20} color="#fff" />
                 <Text style={styles.swipeLabel}>Email</Text>
             </TouchableOpacity>
@@ -623,7 +644,7 @@ const LeadCard = memo(({ lead, index, onPress, onMore, isSelected, onLongPress, 
                     style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border, position: 'relative' }, isSelected && styles.cardSelected]}
                 >
                     {currentIntent ? (
-                        <View style={[styles.intentRibbon, { backgroundColor: isDark ? currentIntent.text + '25' : currentIntent.bg }]}>
+                        <View style={[styles.intentRibbon, { backgroundColor: isDark ? (currentIntent.text + '25') : currentIntent.bg }]}>
                             <Text style={[styles.intentRibbonText, { color: isDark ? currentIntent.text : currentIntent.text }]}>{intent.toUpperCase()}</Text>
                         </View>
                     ) : null}
@@ -692,8 +713,8 @@ const LeadCard = memo(({ lead, index, onPress, onMore, isSelected, onLongPress, 
                             <View style={styles.cardFooter}>
                                 <View style={styles.tagStrip}>
                                     {lead.tags?.slice(0, 3).map((tag, i) => (
-                                        <View key={i} style={[styles.miniTag, { backgroundColor: theme.border }]}>
-                                            <Text style={[styles.miniTagText, { color: theme.textMuted }]}>{tag}</Text>
+                                        <View key={i} style={[styles.miniTag, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : theme.border, borderColor: isDark ? 'rgba(255,255,255,0.1)' : theme.border }]}>
+                                            <Text style={[styles.miniTagText, { color: isDark ? '#94A3B8' : theme.textMuted }]}>{tag}</Text>
                                         </View>
                                     ))}
                                     {(lead.tags?.length || 0) > 3 && (
@@ -702,8 +723,8 @@ const LeadCard = memo(({ lead, index, onPress, onMore, isSelected, onLongPress, 
                                 </View>
                                 <View style={styles.footerRight}>
                                     {lead.source ? (
-                                        <View style={[styles.sourceBadge, { backgroundColor: theme.border }]}>
-                                            <Ionicons name="radio-outline" size={10} color="#94A3B8" />
+                                        <View style={[styles.sourceBadge, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : theme.border, borderColor: isDark ? 'rgba(255,255,255,0.1)' : theme.border }]}>
+                                            <Ionicons name="radio-outline" size={10} color={theme.textLight} />
                                             <Text style={[styles.sourceText, { color: theme.textLight }]}>{getLookupValue("Source", lead.source)}</Text>
                                         </View>
                                     ) : null}
@@ -721,6 +742,8 @@ const LeadCard = memo(({ lead, index, onPress, onMore, isSelected, onLongPress, 
 export default function LeadsScreen() {
     const router = useRouter();
     const { theme } = useTheme();
+    const { isAuthenticated } = useAuth();
+    const isDark = theme.background === '#0F172A';
     const { getLookupValue, getLookupsByType, refreshLookups } = useLookup();
     const { users, loading: loadingUsers, findUser } = useUsers();
     const { simulateIncomingCall } = useCallTracking();
@@ -748,6 +771,7 @@ export default function LeadsScreen() {
     // const [users, setUsers] = useState<any[]>([]);
 
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
+    const [showDormant, setShowDormant] = useState(false);
     const [bulkAssignVisible, setBulkAssignVisible] = useState(false);
     const [liveScores, setLiveScores] = useState<Record<string, { score: number; color: string; label: string }>>({});
 
@@ -769,6 +793,7 @@ export default function LeadsScreen() {
     const lastFetchTime = useRef<number>(0);
 
     const fetchLeads = useCallback(async (pageNum = 1, shouldAppend = false, qFilter?: string) => {
+        if (!isAuthenticated) return;
         // 1. Instant Cache Load (only on first page, non-append load)
         if (pageNum === 1 && !shouldAppend && leads.length === 0 && !qFilter) {
             try {
@@ -787,6 +812,7 @@ export default function LeadsScreen() {
         
         const params: any = { page: String(pageNum), limit: "50" };
         if (qFilter) params.status = qFilter;
+        if (showDormant) params.showDormant = "true";
 
         const result = await safeApiCall<Lead>(() => getLeads(params));
 
@@ -821,7 +847,7 @@ export default function LeadsScreen() {
         }
         setLoading(false);
         setRefreshing(false);
-    }, [leads.length]);
+    }, [leads.length, showDormant, isAuthenticated]);
 
     const handleQuickFilter = (type: string) => {
         if (activeQuickFilter === type) {
@@ -892,9 +918,9 @@ export default function LeadsScreen() {
             const now = Date.now();
             // Only re-fetch if cache is stale (> 2 mins) or empty
             if (leads.length === 0 || (now - lastFetchTime.current > 120000)) {
-                fetchLeads(1, false);
+                if (isAuthenticated) fetchLeads(1, false);
             }
-        }, [fetchLeads, leads.length])
+        }, [fetchLeads, leads.length, isAuthenticated])
     );
 
     const filtered = useMemo(() => {
@@ -965,7 +991,7 @@ export default function LeadsScreen() {
                     </View>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                         <TouchableOpacity style={styles.headerAddBtn} onPress={() => router.push("/add-lead")}>
-                            <Ionicons name="add-circle" size={28} color="#2563EB" />
+                            <Ionicons name="add-circle" size={28} color={theme.primary} />
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -1025,7 +1051,7 @@ export default function LeadsScreen() {
                                     <View style={[
                                         styles.arrowChevron, 
                                         { 
-                                            backgroundColor: isActive ? item.color : '#F8FAFC',
+                                            backgroundColor: isActive ? item.color : (isDark ? theme.card : '#F8FAFC'),
                                             borderColor: isActive ? '#fff' : `${item.color}30`,
                                             borderLeftWidth: 2,
                                             borderTopWidth: 2,
@@ -1045,12 +1071,12 @@ export default function LeadsScreen() {
                 </View>
 
                 <View style={styles.commandBar}>
-                    <View style={styles.searchContainer}>
-                        <Ionicons name="search" size={20} color="#94A3B8" style={styles.searchIcon} />
+                    <View style={[styles.searchContainer, { backgroundColor: theme.card, borderColor: theme.border, borderWidth: 1 }]}>
+                        <Ionicons name="search" size={20} color={theme.textMuted} style={styles.searchIcon} />
                         <TextInput
-                            style={styles.searchInput}
+                            style={[styles.searchInput, { color: theme.text }]}
                             placeholder="Search leads..."
-                            placeholderTextColor="#94A3B8"
+                            placeholderTextColor={theme.textMuted}
                             value={search}
                             onChangeText={setSearch}
                         />
@@ -1060,6 +1086,20 @@ export default function LeadsScreen() {
                             </TouchableOpacity>
                         )}
                     </View>
+                    <TouchableOpacity 
+                        style={[styles.filterToggleBtn, { marginRight: 8 }, showDormant && { backgroundColor: "#DBEAFE" }]} 
+                        onPress={() => {
+                            setShowDormant(!showDormant);
+                            setLeads([]);
+                            setPage(1);
+                        }}
+                    >
+                        <Ionicons 
+                            name={showDormant ? "sunny-outline" : "moon-outline"} 
+                            size={20} 
+                            color={showDormant ? "#2563EB" : "#475569"} 
+                        />
+                    </TouchableOpacity>
                     <TouchableOpacity style={styles.filterToggleBtn} onPress={() => setShowFilterModal(true)}>
                         <Ionicons name="options-outline" size={22} color={Object.values(filters).flat().length > 0 ? "#2563EB" : "#475569"} />
                         {Object.values(filters).flat().length > 0 && <View style={styles.filterDot} />}
@@ -1070,9 +1110,9 @@ export default function LeadsScreen() {
     };
 
     return (
-        <View style={styles.container}>
+        <View style={[styles.container, { backgroundColor: theme.background }]}>
             {loading && page === 1 ? (
-                <ActivityIndicator color="#2563EB" size="large" style={{ marginTop: 100 }} />
+                <ActivityIndicator color={theme.primary} size="large" style={{ marginTop: 100 }} />
             ) : (
                 <FlatList
                     data={filtered}
@@ -1100,20 +1140,20 @@ export default function LeadsScreen() {
                     )}
                     onEndReached={loadMore}
                     onEndReachedThreshold={0.5}
-                    refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#2563EB" />}
+                    refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />}
                     ListHeaderComponent={renderHeader()}
-                    ListFooterComponent={loading && page > 1 ? <ActivityIndicator color="#2563EB" style={{ marginVertical: 20 }} /> : null}
+                    ListFooterComponent={loading && page > 1 ? <ActivityIndicator color={theme.primary} style={{ marginVertical: 20 }} /> : null}
                     ListEmptyComponent={
                         <View style={styles.empty}>
-                            <Ionicons name="clipboard-outline" size={64} color="#CBD5E1" />
-                            <Text style={styles.emptyText}>{search ? "No leads matching your search" : "No leads found."}</Text>
+                            <Ionicons name="clipboard-outline" size={64} color={theme.border} />
+                            <Text style={[styles.emptyText, { color: theme.textLight }]}>{search ? "No leads matching your search" : "No leads found."}</Text>
                         </View>
                     }
                 />
             )}
 
             {selectedIds.length > 0 ? (
-                <View style={styles.bulkActionsBar}>
+                <View style={[styles.bulkActionsBar, { backgroundColor: isDark ? theme.card : theme.primary, borderColor: isDark ? theme.border : 'transparent', borderWidth: isDark ? 1 : 0 }]}>
                     <TouchableOpacity style={styles.bulkActionBtn} onPress={handleBulkDelete}>
                         <Ionicons name="trash-outline" size={20} color="#fff" />
                         <Text style={styles.bulkActionText}>Delete</Text>
@@ -1131,7 +1171,7 @@ export default function LeadsScreen() {
                 }}>
                     <TouchableOpacity
                         activeOpacity={1}
-                        style={styles.fab}
+                        style={[styles.fab, { backgroundColor: theme.primary, shadowColor: theme.primary }]}
                         onPressIn={() => { Vibration.vibrate(15); animateFab(0.92); }}
                         onPressOut={() => animateFab(1)}
                         onPress={() => router.push("/add-lead")}
@@ -1162,15 +1202,15 @@ export default function LeadsScreen() {
 
             <Modal visible={bulkAssignVisible} transparent animationType="fade">
                 <Pressable style={styles.modalOverlay} onPress={() => setBulkAssignVisible(false)}>
-                    <View style={styles.bulkModalContent}>
-                        <Text style={styles.bulkModalTitle}>Reassign {selectedIds.length} Leads To</Text>
+                    <View style={[styles.bulkModalContent, { backgroundColor: theme.card, borderColor: theme.border, borderWidth: 1 }]}>
+                        <Text style={[styles.bulkModalTitle, { color: theme.text }]}>Reassign {selectedIds.length} Leads To</Text>
                         <ScrollView style={{ maxHeight: SCREEN_HEIGHT * 0.4 }}>
                             {users.map(u => (
-                                <TouchableOpacity key={u._id} style={styles.bulkUserItem} onPress={() => handleBulkAssign(u._id)}>
-                                    <View style={styles.bulkUserAvatar}>
-                                        <Text style={styles.bulkUserInitial}>{(u.fullName || u.name || "?")[0].toUpperCase()}</Text>
+                                <TouchableOpacity key={u._id} style={[styles.bulkUserItem, { borderBottomColor: theme.border }]} onPress={() => handleBulkAssign(u._id)}>
+                                    <View style={[styles.bulkUserAvatar, { backgroundColor: theme.primary + '15' }]}>
+                                        <Text style={[styles.bulkUserInitial, { color: theme.primary }]}>{(u.fullName || u.name || "?")[0].toUpperCase()}</Text>
                                     </View>
-                                    <Text style={styles.bulkUserName}>{u.fullName || u.name}</Text>
+                                    <Text style={[styles.bulkUserName, { color: theme.text }]}>{u.fullName || u.name}</Text>
                                 </TouchableOpacity>
                             ))}
                         </ScrollView>
@@ -1185,26 +1225,27 @@ export default function LeadsScreen() {
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: "#F8FAFC" },
-    header: { paddingHorizontal: 12, paddingTop: 50, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+    container: { flex: 1 },
+    header: { paddingHorizontal: 12, paddingTop: 50, paddingBottom: 10, borderBottomWidth: 1 },
     headerTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
     screenTitle: { fontSize: 22, fontWeight: "900", letterSpacing: -0.5 },
     screenSub: { fontSize: 10, fontWeight: "800", marginTop: 2, letterSpacing: 0.5 },
     
     modernPipelineRoot: { marginTop: 12, marginBottom: 16 },
     pipelineTitleInnerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, marginBottom: 12 },
-    pipelineTitleText: { fontSize: 10, fontWeight: '900', color: '#94A3B8', letterSpacing: 1.2 },
+    pipelineTitleText: { fontSize: 10, fontWeight: '900', letterSpacing: 1.2 },
     pipelineActionHint: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-    pipelineActionText: { fontSize: 8, fontWeight: '800', color: '#CBD5E1' },
+    pipelineActionText: { fontSize: 8, fontWeight: '800' },
     modernPipelineScroll: { paddingLeft: 16, paddingRight: 40, paddingBottom: 16 },
     
     arrowStageSegment: { 
-        width: 130, 
+        width: 140, 
         height: 60, 
         justifyContent: 'center',
         paddingLeft: 20,
         paddingRight: 10,
-        position: 'relative'
+        position: 'relative',
+        borderRadius: 8
     },
     arrowContent: {
         zIndex: 5,
@@ -1236,33 +1277,33 @@ const styles = StyleSheet.create({
     versionText: { fontSize: 9, fontWeight: '800' },
     autoPilotBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
     autoPilotText: { fontSize: 9, fontWeight: '900' },
-    headerCount: { fontSize: 13, color: "#94A3B8", fontWeight: "600", marginTop: 2 },
-    headerActionBtn: { width: 38, height: 38, justifyContent: 'center', alignItems: 'center', borderRadius: 10, backgroundColor: "#F1F5F9" },
-    headerAddBtn: { width: 38, height: 38, justifyContent: 'center', alignItems: 'center', borderRadius: 10, backgroundColor: "#F1F5F9" },
+    headerCount: { fontSize: 13, fontWeight: "600", marginTop: 2 },
+    headerActionBtn: { width: 38, height: 38, justifyContent: 'center', alignItems: 'center', borderRadius: 10 },
+    headerAddBtn: { width: 38, height: 38, justifyContent: 'center', alignItems: 'center', borderRadius: 10 },
     commandBar: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 12, marginBottom: 8 },
-    searchContainer: { flex: 1, height: 42, backgroundColor: "#F1F5F9", borderRadius: 12, flexDirection: "row", alignItems: "center", paddingHorizontal: 12 },
+    searchContainer: { flex: 1, height: 42, borderRadius: 12, flexDirection: "row", alignItems: "center", paddingHorizontal: 12 },
     searchIcon: { marginRight: 8 },
-    searchInput: { flex: 1, fontSize: 14, color: "#1E293B", fontWeight: "600" },
+    searchInput: { flex: 1, fontSize: 14, fontWeight: "600" },
     clearBtn: { padding: 4 },
     quickAddBtn: { padding: 4, justifyContent: 'center', alignItems: 'center' },
-    filterToggleBtn: { width: 42, height: 42, backgroundColor: "#F1F5F9", borderRadius: 12, justifyContent: "center", alignItems: "center", position: "relative" },
-    filterDot: { position: "absolute", top: 10, right: 10, width: 7, height: 7, backgroundColor: "#EF4444", borderRadius: 3.5, borderWidth: 1.5, borderColor: "#F1F5F9" },
+    filterToggleBtn: { width: 42, height: 42, borderRadius: 12, justifyContent: "center", alignItems: "center", position: "relative" },
+    filterDot: { position: "absolute", top: 10, right: 10, width: 7, height: 7, borderRadius: 3.5, borderWidth: 1.5 },
 
     segmentContainer: { marginTop: 4 },
     segmentScroll: { gap: 8 },
-    segmentItem: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 10, backgroundColor: "#F8FAFC", borderWidth: 1, borderColor: "#F1F5F9" },
-    segmentItemActive: { backgroundColor: "#2563EB", borderColor: "#2563EB" },
-    segmentText: { fontSize: 13, fontWeight: "700", color: "#64748B" },
+    segmentItem: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 10, borderWidth: 1 },
+    segmentItemActive: {  },
+    segmentText: { fontSize: 13, fontWeight: "700" },
     segmentTextActive: { color: "#fff" },
 
 
-    card: { backgroundColor: "#fff", borderRadius: 16, paddingHorizontal: 3, paddingBottom: 3, paddingTop: 8, marginBottom: 6, borderWidth: 1, borderColor: "#F1F5F9", shadowColor: "#000", shadowOpacity: 0.03, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, overflow: 'hidden' },
-    cardSelected: { borderColor: "#2563EB", borderWidth: 2, backgroundColor: "#F8FAFF" },
+    card: { borderRadius: 16, paddingHorizontal: 3, paddingBottom: 3, paddingTop: 8, marginBottom: 6, borderWidth: 1, elevation: 2, shadowOpacity: 0.03, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, overflow: 'hidden' },
+    cardSelected: { borderWidth: 2 },
     cardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 2 },
     leadInfo: { flex: 1 },
-    leadName: { fontSize: 17, fontWeight: "700", color: "#0F172A", marginBottom: 1 },
+    leadName: { fontSize: 17, fontWeight: "700", marginBottom: 1 },
     mobileRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-    leadMobile: { fontSize: 13.5, color: "#64748B", fontWeight: "500" },
+    leadMobile: { fontSize: 13.5, fontWeight: "500" },
     qualityBox: { marginRight: 0 },
     leftScoreContainer: { width: 48, justifyContent: 'center', alignItems: 'center', marginRight: 10 },
     intentRibbon: { position: 'absolute', top: 5, left: -22, width: 80, height: 20, justifyContent: 'center', alignItems: 'center', transform: [{ rotate: '-45deg' }], zIndex: 10 },
@@ -1271,19 +1312,19 @@ const styles = StyleSheet.create({
 
     cardBody: { marginBottom: 0, gap: 1.5 },
     reqRow: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 20 },
-    reqText: { fontSize: 12.5, color: "#475569", fontWeight: "600" },
+    reqText: { fontSize: 12.5, fontWeight: "600" },
     locRow: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 20 },
-    locText: { fontSize: 11.5, color: "#94A3B8", fontWeight: "500" },
+    locText: { fontSize: 11.5, fontWeight: "500" },
 
-    cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1, borderTopColor: "#F8FAFC", paddingTop: 1 },
+    cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1, paddingTop: 1 },
     footerLeftTicker: { flex: 1, height: 24, marginRight: 8, justifyContent: 'center' },
     footerRight: { alignItems: 'flex-end', gap: 1 },
     badgeGroup: { flexDirection: 'row', gap: 6 },
     statusBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 },
     statusText: { fontSize: 10, fontWeight: "800", textTransform: 'uppercase' },
-    sourceBadge: { flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: "#F8FAFC", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, borderWidth: 1, borderColor: "#F1F5F9" },
-    sourceText: { fontSize: 9, color: "#94A3B8", fontWeight: "700", textTransform: 'uppercase' },
-    timeLabel: { fontSize: 11, color: "#CBD5E1", fontWeight: "500" },
+    sourceBadge: { flexDirection: 'row', alignItems: 'center', gap: 2, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, borderWidth: 1 },
+    sourceText: { fontSize: 9, fontWeight: "700", textTransform: 'uppercase' },
+    timeLabel: { fontSize: 11, fontWeight: "500" },
 
     rightActions: { flexDirection: 'row', gap: 8, paddingLeft: 10, marginBottom: 12 },
     leftActions: { flexDirection: 'row', gap: 8, paddingRight: 10, marginBottom: 12 },
@@ -1294,67 +1335,66 @@ const styles = StyleSheet.create({
     miniTag: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, borderWidth: 1 },
     miniTagText: { fontSize: 10, fontWeight: '700' },
 
-    fab: { width: 56, height: 56, borderRadius: 28, backgroundColor: "#2563EB", justifyContent: 'center', alignItems: 'center', elevation: 8, shadowColor: "#2563EB", shadowOpacity: 0.4, shadowRadius: 12, shadowOffset: { width: 0, height: 6 } },
+    fab: { width: 56, height: 56, borderRadius: 28, justifyContent: 'center', alignItems: 'center', elevation: 8, shadowOpacity: 0.4, shadowRadius: 12, shadowOffset: { width: 0, height: 6 } },
     empty: { alignItems: 'center', marginTop: 100, gap: 12 },
-    emptyText: { fontSize: 15, color: "#94A3B8", fontWeight: "600" },
+    emptyText: { fontSize: 15, fontWeight: "600" },
 
-    bulkActionsBar: { position: 'absolute', bottom: 34, alignSelf: 'center', flexDirection: 'row', backgroundColor: '#0F172A', borderRadius: 20, paddingHorizontal: 20, height: 56, alignItems: 'center', gap: 16, shadowColor: "#000", shadowOpacity: 0.3, shadowRadius: 15 },
+    bulkActionsBar: { position: 'absolute', bottom: 34, alignSelf: 'center', flexDirection: 'row', borderRadius: 20, paddingHorizontal: 20, height: 56, alignItems: 'center', gap: 16, shadowOpacity: 0.3, shadowRadius: 15 },
     bulkActionBtn: { flexDirection: 'row', alignItems: 'center', gap: 8 },
     bulkActionText: { color: "#fff", fontWeight: "700", fontSize: 13 },
     bulkDivider: { width: 1, height: 20, backgroundColor: "rgba(255,255,255,0.2)" },
 
     modalOverlay: { flex: 1, backgroundColor: "rgba(15, 23, 42, 0.4)", justifyContent: "flex-end", alignItems: 'center' },
-    bulkModalContent: { backgroundColor: "#fff", width: "90%", borderRadius: 24, padding: 24 },
-    bulkModalTitle: { fontSize: 18, fontWeight: "700", color: "#0F172A", marginBottom: 20, textAlign: 'center' },
-    bulkUserItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: "#F1F5F9" },
-    bulkUserAvatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: "#EEF2FF", justifyContent: 'center', alignItems: 'center', marginRight: 12 },
-    bulkUserInitial: { fontSize: 13, fontWeight: "700", color: "#6366F1" },
-    bulkUserName: { fontSize: 15, fontWeight: "600", color: "#1E293B" },
+    bulkModalContent: { width: "90%", borderRadius: 24, padding: 24 },
+    bulkModalTitle: { fontSize: 18, fontWeight: "700", marginBottom: 20, textAlign: 'center' },
+    bulkUserItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1 },
+    bulkUserAvatar: { width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
+    bulkUserInitial: { fontSize: 13, fontWeight: "700" },
+    bulkUserName: { fontSize: 15, fontWeight: "600" },
     bulkCancelBtn: { marginTop: 16, paddingVertical: 12, alignItems: 'center' },
     bulkCancelText: { fontSize: 14, fontWeight: "700", color: "#EF4444" },
 
-    filterModalContainer: { flex: 1, backgroundColor: "#fff" },
-    filterHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, paddingTop: 60, borderBottomWidth: 1, borderBottomColor: "#F1F5F9" },
-    filterHeaderTitle: { fontSize: 18, fontWeight: "800", color: "#0F172A" },
+    filterModalContainer: { flex: 1 },
+    filterHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, paddingTop: 60, borderBottomWidth: 1 },
+    filterHeaderTitle: { fontSize: 18, fontWeight: "800" },
     filterContent: { flex: 1, padding: 20 },
-    filterSectionTitle: { fontSize: 12, fontWeight: "800", color: "#94A3B8", textTransform: 'uppercase', marginBottom: 12, marginTop: 16 },
+    filterSectionTitle: { fontSize: 12, fontWeight: "800", textTransform: 'uppercase', marginBottom: 12, marginTop: 16 },
     filterChipList: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
-    filterChip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, backgroundColor: "#F8FAFC", borderWidth: 1, borderColor: "#F1F5F9" },
-    filterChipActive: { backgroundColor: "#EEF2FF", borderColor: "#6366F1" },
-    filterChipText: { fontSize: 13, fontWeight: "600", color: "#64748B" },
-    filterChipTextActive: { color: "#6366F1" },
-    filterFooter: { padding: 20, paddingBottom: 40, flexDirection: 'row', gap: 12, borderTopWidth: 1, borderTopColor: "#F1F5F9" },
-    resetBtn: { flex: 1, height: 48, borderRadius: 12, justifyContent: 'center', alignItems: 'center', backgroundColor: "#F1F5F9" },
-    resetBtnText: { fontSize: 14, fontWeight: "700", color: "#64748B" },
-    applyBtn: { flex: 2, height: 48, borderRadius: 12, justifyContent: 'center', alignItems: 'center', backgroundColor: "#2563EB" },
+    filterChip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: 1 },
+    filterChipActive: { },
+    filterChipText: { fontSize: 13, fontWeight: "600" },
+    filterChipTextActive: { },
+    filterFooter: { padding: 20, paddingBottom: 40, flexDirection: 'row', gap: 12, borderTopWidth: 1 },
+    resetBtn: { flex: 1, height: 48, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+    resetBtnText: { fontSize: 14, fontWeight: "700" },
+    applyBtn: { flex: 2, height: 48, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
     applyBtnText: { fontSize: 14, fontWeight: "700", color: "#fff" },
 
     sheetContainer: { 
-        backgroundColor: "#fff", 
         borderTopLeftRadius: 32, 
         borderTopRightRadius: 32, 
         paddingHorizontal: 24, 
         maxHeight: '85%' 
     },
-    sheetHandle: { width: 40, height: 4, backgroundColor: "#E2E8F0", borderRadius: 2, alignSelf: 'center', marginTop: 12, marginBottom: 24 },
+    sheetHandle: { width: 40, height: 4, borderRadius: 2, alignSelf: 'center', marginTop: 12, marginBottom: 24 },
     sheetHeader: { marginBottom: 28 },
-    sheetTitle: { fontSize: 20, fontWeight: "800", color: "#0F172A" },
-    sheetSub: { fontSize: 13, color: "#64748B", fontWeight: "600", marginTop: 4 },
+    sheetTitle: { fontSize: 20, fontWeight: "800" },
+    sheetSub: { fontSize: 13, fontWeight: "600", marginTop: 4 },
     actionGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
     actionItem: { width: '22%', alignItems: 'center', gap: 8 },
-    actionIcon: { width: 48, height: 48, borderRadius: 14, backgroundColor: "#F8FAFC", justifyContent: 'center', alignItems: 'center' },
-    actionLabel: { fontSize: 11, fontWeight: "700", color: "#475569" },
-    pickerView: { marginTop: 24 },
+    actionIcon: { width: 48, height: 48, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
+    actionLabel: { fontSize: 11, fontWeight: "700" },
+    pickerView: { marginTop: 24, borderRadius: 20 },
     tagInputRow: { flexDirection: 'row', gap: 12, marginBottom: 16 },
-    tagInput: { flex: 1, height: 44, backgroundColor: "#F8FAFC", borderRadius: 10, paddingHorizontal: 12, fontSize: 14 },
-    addTagBtn: { width: 44, height: 44, borderRadius: 10, backgroundColor: "#2563EB", justifyContent: 'center', alignItems: 'center' },
-    tagChip: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: "#F1F5F9", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
-    tagChipText: { fontSize: 12, fontWeight: "600", color: "#475569" },
-    dangerZone: { marginTop: 32, borderTopWidth: 1, borderTopColor: "#F1F5F9", paddingTop: 24 },
-    dangerBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 52, borderRadius: 14, backgroundColor: "#FEF2F2" },
+    tagInput: { flex: 1, height: 44, borderRadius: 10, paddingHorizontal: 12, fontSize: 14, borderWidth: 1 },
+    addTagBtn: { width: 44, height: 44, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
+    tagChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1 },
+    tagChipText: { fontSize: 12, fontWeight: "600" },
+    dangerZone: { marginTop: 32, borderTopWidth: 1, paddingTop: 24 },
+    dangerBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 52, borderRadius: 14 },
     dangerBtnText: { fontSize: 14, fontWeight: "700", color: "#EF4444" },
-    sectionTitle: { fontSize: 12, fontWeight: "800", color: "#94A3B8", textTransform: 'uppercase', marginBottom: 16 },
+    sectionTitle: { fontSize: 12, fontWeight: "800", textTransform: 'uppercase', marginBottom: 16 },
     chipList: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-    actionChip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, backgroundColor: "#F8FAFC", borderWidth: 1, borderColor: "#F1F5F9" },
-    actionChipText: { fontSize: 12, fontWeight: "700", color: "#64748B" },
+    actionChip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: 1 },
+    actionChipText: { fontSize: 12, fontWeight: "700" },
 });

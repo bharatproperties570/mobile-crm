@@ -15,6 +15,7 @@ import { useLookup } from "@/context/LookupContext";
 import { useUsers } from "@/context/UserContext";
 import { useTheme } from "@/context/ThemeContext";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useAuth } from "@/context/AuthContext";
 import FilterModal, { FilterField } from "@/components/FilterModal";
 import { getDealScores } from "@/services/stageEngine.service";
 import { formatSize, formatPrice, getSizeLabel } from "@/utils/format.utils";
@@ -204,6 +205,7 @@ const DealPipelineHorizontal = memo(({
     onStagePress: (label: string | null) => void;
 }) => {
     const { theme } = useTheme();
+    const isDark = theme.background === '#0F172A';
     const [isClosedExpanded, setIsClosedExpanded] = useState(false);
 
     const toggleClosed = () => {
@@ -239,19 +241,19 @@ const DealPipelineHorizontal = memo(({
                     activeOpacity={0.9}
                     style={[
                         styles.chevronSegment,
-                        { backgroundColor: activeStage?.includes('closed') ? '#10B981' : '#10B981' + (theme.background === '#0F172A' ? '25' : '15') },
+                        { backgroundColor: activeStage?.includes('closed') ? theme.success : theme.success + (isDark ? '25' : '15') },
                         { borderTopRightRadius: 8, borderBottomRightRadius: 8, borderLeftWidth: 0 }
                     ]}
                 >
                     <View style={styles.chevronContent}>
-                        <Text style={[styles.chevronLabel, { color: activeStage?.includes('closed') ? '#fff' : '#10B981' }]}>Closed</Text>
+                        <Text style={[styles.chevronLabel, { color: activeStage?.includes('closed') ? '#fff' : theme.success }]}>Closed</Text>
                         <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 2 }}>
-                            <Text style={[styles.chevronCount, { color: activeStage?.includes('closed') ? '#fff' : '#10B981' }]}>{closedTotal}</Text>
-                            <Text style={[styles.chevronPercent, { color: activeStage?.includes('closed') ? '#ffffff90' : '#10B98190' }]}>{closedPercent}%</Text>
+                            <Text style={[styles.chevronCount, { color: activeStage?.includes('closed') ? '#fff' : theme.success }]}>{closedTotal}</Text>
+                            <Text style={[styles.chevronPercent, { color: activeStage?.includes('closed') ? '#ffffff90' : theme.success + '90' }]}>{closedPercent}%</Text>
                             <Ionicons
                                 name={isClosedExpanded ? "chevron-up" : "chevron-down"}
                                 size={10}
-                                color={activeStage?.includes('closed') ? '#fff' : '#10B981'}
+                                color={activeStage?.includes('closed') ? '#fff' : theme.success}
                                 style={{ marginLeft: 2 }}
                             />
                         </View>
@@ -321,11 +323,11 @@ const DealCard = memo(({
 
     const renderRightActions = () => (
         <View style={styles.rightActions}>
-            <TouchableOpacity style={[styles.swipeAction, { backgroundColor: '#3B82F6' }]} onPress={onCall}>
+            <TouchableOpacity style={[styles.swipeAction, { backgroundColor: theme.primary }]} onPress={onCall}>
                 <Ionicons name="call" size={20} color="#fff" />
                 <Text style={styles.swipeLabel}>Call</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.swipeAction, { backgroundColor: '#64748B' }]} onPress={onSMS}>
+            <TouchableOpacity style={[styles.swipeAction, { backgroundColor: theme.textSecondary }]} onPress={onSMS}>
                 <Ionicons name="chatbubble" size={20} color="#fff" />
                 <Text style={styles.swipeLabel}>SMS</Text>
             </TouchableOpacity>
@@ -334,7 +336,7 @@ const DealCard = memo(({
 
     const renderLeftActions = () => (
         <View style={styles.leftActions}>
-            <TouchableOpacity style={[styles.swipeAction, { backgroundColor: '#25D366' }]} onPress={onWhatsApp}>
+            <TouchableOpacity style={[styles.swipeAction, { backgroundColor: theme.success }]} onPress={onWhatsApp}>
                 <Ionicons name="logo-whatsapp" size={22} color="#fff" />
                 <Text style={styles.swipeLabel}>WhatsApp</Text>
             </TouchableOpacity>
@@ -351,24 +353,14 @@ const DealCard = memo(({
         </View>
     );
 
-    const dealTypeStr = resolveName(deal.intent || deal.dealType || deal.transactionType || "Sell", getLookupValue, findUser).toUpperCase();
-    // Live backend score wins; fallback to deal.score (usually 0) if not yet loaded
-    const rawScore = liveScore ? liveScore.score : (deal.score || (deal as any).dealScore || 0);
-    let typeColor = liveScore ? liveScore.color : "#64748B"; // default cold
-    if (!liveScore) {
-        if (rawScore >= 81) typeColor = "#8B5CF6";
-        else if (rawScore >= 61) typeColor = "#EF4444";
-        else if (rawScore >= 31) typeColor = "#F59E0B";
-    }
-
     return (
         <Swipeable renderRightActions={renderRightActions} renderLeftActions={renderLeftActions} friction={2}>
             <TouchableOpacity style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]} onPress={onPress} onLongPress={onLongPress} activeOpacity={0.9}>
-                <View style={[styles.cardAccent, { backgroundColor: typeColor }]} />
+                <View style={[styles.cardAccent, { backgroundColor: color }]} />
                 <View style={styles.cardMain}>
                     <View style={styles.cardHeader}>
                         <View style={styles.cardIdentity}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 2 }}>
                                 <Text style={[styles.dealUnitNumber, { color: theme.text }]}>{deal.unitNo || deal.unitNumber || (typeof deal.inventoryId === 'object' ? (deal.inventoryId?.unitNo || deal.inventoryId?.unitNumber) : "") || "N/A"}</Text>
                                 <View style={[styles.typePill, { backgroundColor: color + (isDark ? '25' : '15') }]}>
                                     <Text style={[styles.typePillText, { color: color }]}>
@@ -385,17 +377,17 @@ const DealCard = memo(({
                                     <Text style={[styles.dealBlockName, { color: theme.textLight }]}> • {deal.block || (typeof deal.inventoryId === 'object' ? deal.inventoryId?.block : "") || "No Block"}</Text>
                                 </Text>
                             </View>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
                                 {deal.isPublished && (
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: '#10B98115', paddingHorizontal: 4, paddingVertical: 1, borderRadius: 4 }}>
-                                        <Ionicons name="globe" size={10} color="#10B981" />
-                                        <Text style={{ fontSize: 9, color: '#10B981', fontWeight: '800' }}>LIVE</Text>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: theme.success + '15', paddingHorizontal: 4, paddingVertical: 1, borderRadius: 4 }}>
+                                        <Ionicons name="globe" size={10} color={theme.success} />
+                                        <Text style={{ fontSize: 9, color: theme.success, fontWeight: '800' }}>LIVE</Text>
                                     </View>
                                 )}
                                 {getSizeLabel(deal, getLookupValue) && (
                                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                                        <Ionicons name="expand-outline" size={10} color={theme.textLight} />
-                                        <Text style={{ fontSize: 10, color: theme.textLight, fontWeight: '600' }}>
+                                        <Ionicons name="expand-outline" size={11} color={theme.textMuted} />
+                                        <Text style={{ fontSize: 11, color: theme.textMuted, fontWeight: '600' }}>
                                             {getSizeLabel(deal, getLookupValue)}
                                         </Text>
                                     </View>
@@ -403,46 +395,46 @@ const DealCard = memo(({
                             </View>
                         </View>
                         <View style={styles.headerRight}>
-                            <View style={styles.qualityBox}>
-                                <DealScoreRing score={rawScore} color={typeColor} size={32} />
-                            </View>
-                            <View style={{ alignItems: 'flex-end', gap: 2 }}>
-                                <Text style={[styles.dealAmount, { color: color, fontSize: 14 }]}>{formatAmount(amount)}</Text>
+                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                                <DealScoreRing score={liveScore ? liveScore.score : (deal.score || (deal as any).dealScore || 0)} color={liveScore?.color || color} size={32} />
+                                <View style={[styles.stagePill, { backgroundColor: color + "15" }]}>
+                                    <View style={[styles.stageDot, { backgroundColor: color }]} />
+                                    <Text style={[styles.stageText, { color }]}>{resolveName(deal.stage, getLookupValue, findUser)}</Text>
+                                </View>
                             </View>
                             <TouchableOpacity style={styles.menuTrigger} onPress={onMenuPress}>
-                                <Ionicons name="ellipsis-vertical" size={20} color={theme.textLight} />
+                                <Ionicons name="ellipsis-vertical" size={18} color={theme.textMuted} />
                             </TouchableOpacity>
                         </View>
                     </View>
 
                     <View style={styles.cardFooter}>
-                        {/* Owner/Associate Data (Marquee) */}
-                        <View style={{ flex: 1, overflow: 'hidden', marginRight: 12 }}>
-                            <ScrollView
-                                horizontal
-                                showsHorizontalScrollIndicator={false}
-                                contentContainerStyle={{ alignItems: 'center' }}
-                            >
-                                <Ionicons name="people-outline" size={12} color="#94A3B8" />
-                                <Text style={[styles.locationText, { marginLeft: 4 }]} numberOfLines={1}>
+                        {/* Owner/Associate Data - Row Based (Professional) */}
+                        <View style={{ flex: 1, gap: 6 }}>
+                             {/* Owner */}
+                             <View style={styles.listMeta}>
+                                <Ionicons name="home-outline" size={13} color={theme.success} />
+                                <Text style={[styles.listMetaText, { color: theme.text }]} numberOfLines={1}>
                                     {(() => {
                                         const owner = resolveName(deal.owner, getLookupValue, findUser);
-                                        const associate = resolveName(deal.associatedContact, getLookupValue, findUser);
-                                        const parts = [];
-                                        if (owner && owner !== "—") parts.push(`Owner: ${owner}`);
-                                        if (associate && associate !== "—") parts.push(`Associate: ${associate}`);
-                                        return parts.join(" | ") || "No Owner/Associate";
+                                        return owner && owner !== "—" ? `Owner: ${owner}` : "No Owner";
                                     })()}
                                 </Text>
-                            </ScrollView>
+                            </View>
+                            {/* Associate */}
+                            <View style={styles.listMeta}>
+                                <Ionicons name="people-outline" size={13} color={isDark ? '#818CF8' : theme.primary} />
+                                <Text style={[styles.listMetaText, { color: theme.text }]} numberOfLines={1}>
+                                    {(() => {
+                                        const associate = resolveName(deal.associatedContact, getLookupValue, findUser);
+                                        return associate && associate !== "—" ? `Associate: ${associate}` : "No Associate";
+                                    })()}
+                                </Text>
+                            </View>
                         </View>
 
-                        {/* Stage + Date Stack on the Right */}
                         <View style={{ alignItems: 'flex-end', gap: 4 }}>
-                            <View style={[styles.stagePill, { backgroundColor: color + "15", paddingVertical: 2, paddingHorizontal: 6 }]}>
-                                <View style={[styles.stageDot, { backgroundColor: color, width: 4, height: 4 }]} />
-                                <Text style={[styles.stageText, { color, fontSize: 9 }]}>{resolveName(deal.stage, getLookupValue, findUser)}</Text>
-                            </View>
+                            <Text style={[styles.dealAmount, { color: color }]}>{formatAmount(amount)}</Text>
                             {deal.createdAt && (
                                 <Text style={styles.dateText}>{new Date(deal.createdAt).toLocaleDateString("en-IN")}</Text>
                             )}
@@ -460,6 +452,7 @@ export default function DealsScreen() {
     const { trackCall } = useCallTracking();
     const router = useRouter();
     const { getLookupValue } = useLookup();
+    const { isAuthenticated } = useAuth();
     const { users, loading: loadingUsers, findUser } = useUsers();
     const [deals, setDeals] = useState<Deal[]>([]);
     const [search, setSearch] = useState("");
@@ -513,6 +506,7 @@ export default function DealsScreen() {
     const lastFetchTime = useRef<number>(0);
 
     const fetchDeals = useCallback(async (pageNum = 1, shouldAppend = false) => {
+        if (!isAuthenticated) return;
         // 1. Instant Cache Load (only on first page, non-append load)
         if (pageNum === 1 && !shouldAppend && deals.length === 0) {
             try {
@@ -568,7 +562,7 @@ export default function DealsScreen() {
         }
         setLoading(false);
         setRefreshing(false);
-    }, [deals.length]);
+    }, [deals.length, isAuthenticated]);
 
     const onRefresh = useCallback(() => {
         setRefreshing(true);
@@ -592,9 +586,9 @@ export default function DealsScreen() {
             const now = Date.now();
             // Only re-fetch if cache is stale (> 2 mins) or empty
             if (deals.length === 0 || (now - lastFetchTime.current > 120000)) {
-                fetchDeals(1, false);
+                if (isAuthenticated) fetchDeals(1, false);
             }
-        }, [fetchDeals, deals.length])
+        }, [fetchDeals, deals.length, isAuthenticated])
     );
 
     const filteredDeals = useMemo(() => {
@@ -1002,7 +996,7 @@ export default function DealsScreen() {
             {/* Action Hub Modal */}
             <Modal transparent visible={hubVisible} animationType="none" onRequestClose={closeHub}>
                 <Pressable style={styles.modalOverlay} onPress={closeHub}>
-                    <Animated.View style={[styles.sheetContainer, { transform: [{ translateY: slideAnim }] }]}>
+                    <Animated.View style={[styles.sheetContainer, { backgroundColor: isDark ? '#000000' : '#FFFFFF', transform: [{ translateY: slideAnim }] }]}>
                         <View style={styles.sheetHandle} />
                         <ScrollView 
                             showsVerticalScrollIndicator={false}
@@ -1017,38 +1011,38 @@ export default function DealsScreen() {
                                 <TouchableOpacity style={styles.actionItem} onPress={() => {
                                     router.push(`/add-deal?id=${selectedDeal?._id}`); closeHub();
                                 }}>
-                                    <View style={[styles.actionIcon, { backgroundColor: "#F1F5F9" }]}>
-                                        <Ionicons name="create" size={24} color="#64748B" />
+                                    <View style={[styles.actionIcon, { backgroundColor: isDark ? 'rgba(100, 116, 139, 0.1)' : "#F1F5F9" }]}>
+                                        <Ionicons name="create" size={24} color={isDark ? theme.textSecondary : "#64748B"} />
                                     </View>
-                                    <Text style={styles.actionLabel}>Edit</Text>
+                                    <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Edit</Text>
                                 </TouchableOpacity >
 
                                 <TouchableOpacity style={styles.actionItem} onPress={() => { router.push(`/match-lead?dealId=${selectedDeal?._id}`); closeHub(); }}>
-                                    <View style={[styles.actionIcon, { backgroundColor: "#FDF2F8" }]}>
+                                    <View style={[styles.actionIcon, { backgroundColor: isDark ? 'rgba(219, 39, 119, 0.1)' : "#FDF2F8" }]}>
                                         <Ionicons name="git-compare" size={24} color="#DB2777" />
                                     </View>
-                                    <Text style={styles.actionLabel}>Match</Text>
+                                    <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Match</Text>
                                 </TouchableOpacity>
 
                                 <TouchableOpacity style={styles.actionItem} onPress={() => { router.push(`/documents?dealId=${selectedDeal?._id}`); closeHub(); }}>
-                                    <View style={[styles.actionIcon, { backgroundColor: "#F0F9FF" }]}>
+                                    <View style={[styles.actionIcon, { backgroundColor: isDark ? 'rgba(14, 165, 233, 0.1)' : "#F0F9FF" }]}>
                                         <Ionicons name="document-attach" size={24} color="#0EA5E9" />
                                     </View>
-                                    <Text style={styles.actionLabel}>Doc</Text>
+                                    <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Doc</Text>
                                 </TouchableOpacity>
 
                                 <TouchableOpacity style={styles.actionItem} onPress={() => { router.push(`/add-booking?dealId=${selectedDeal?._id}`); closeHub(); }}>
-                                    <View style={[styles.actionIcon, { backgroundColor: "#FEF2F2" }]}>
+                                    <View style={[styles.actionIcon, { backgroundColor: isDark ? 'rgba(220, 38, 38, 0.1)' : "#FEF2F2" }]}>
                                         <Ionicons name="calendar" size={24} color="#DC2626" />
                                     </View>
-                                    <Text style={styles.actionLabel}>Book</Text>
+                                    <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Book</Text>
                                 </TouchableOpacity>
 
                                 <TouchableOpacity style={styles.actionItem} onPress={() => { Alert.alert("Upload", "Securely upload documents for this deal."); }}>
-                                    <View style={[styles.actionIcon, { backgroundColor: "#F0FDF4" }]}>
+                                    <View style={[styles.actionIcon, { backgroundColor: isDark ? 'rgba(22, 163, 74, 0.1)' : "#F0FDF4" }]}>
                                         <Ionicons name="cloud-upload" size={24} color="#16A34A" />
                                     </View>
-                                    <Text style={styles.actionLabel}>Upload</Text>
+                                    <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Upload</Text>
                                 </TouchableOpacity>
 
                                 <TouchableOpacity style={styles.actionItem} onPress={() => { router.push(`/add-activity?id=${selectedDeal?._id}&type=Deal`); closeHub(); }}>
@@ -1059,10 +1053,10 @@ export default function DealsScreen() {
                                 </TouchableOpacity>
 
                                 <TouchableOpacity style={styles.actionItem} onPress={() => { setShowStagePicker(!showStagePicker); setShowReassign(false); }}>
-                                    <View style={[styles.actionIcon, { backgroundColor: "#FDF2F8" }]}>
+                                    <View style={[styles.actionIcon, { backgroundColor: isDark ? 'rgba(219, 39, 119, 0.1)' : "#FDF2F8" }]}>
                                         <Ionicons name="git-network" size={24} color="#DB2777" />
                                     </View>
-                                    <Text style={styles.actionLabel}>Stage</Text>
+                                    <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Stage</Text>
                                 </TouchableOpacity>
 
                                 <TouchableOpacity style={styles.actionItem} onPress={() => { setShowReassign(!showReassign); setShowStagePicker(false); }}>
@@ -1091,30 +1085,28 @@ export default function DealsScreen() {
                                     onPress={handleTogglePublish}
                                     disabled={isPublishing}
                                 >
-                                    <View style={[styles.actionIcon, { backgroundColor: selectedDeal?.isPublished ? "#ECFDF5" : "#F0F9FF" }]}>
+                                    <View style={[styles.actionIcon, { backgroundColor: selectedDeal?.isPublished ? (isDark ? 'rgba(16, 185, 129, 0.1)' : "#ECFDF5") : (isDark ? 'rgba(14, 165, 233, 0.1)' : "#F0F9FF") }]}>
                                         {isPublishing ? (
                                             <ActivityIndicator size="small" color={selectedDeal?.isPublished ? "#10B981" : "#0EA5E9"} />
                                         ) : (
                                             <Ionicons name={selectedDeal?.isPublished ? "globe" : "globe-outline"} size={24} color={selectedDeal?.isPublished ? "#10B981" : "#0EA5E9"} />
                                         )}
                                     </View>
-                                    <Text style={styles.actionLabel}>{selectedDeal?.isPublished ? 'Unpub.' : 'Publish'}</Text>
+                                    <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>{selectedDeal?.isPublished ? 'Unpub.' : 'Publish'}</Text>
                                 </TouchableOpacity>
-
-                            </View >
+                            </View>
 
                             {showStagePicker && (
-                                <View style={styles.pickerView}>
-                                    <Text style={styles.sectionTitle}>Change Stage</Text>
+                                <View style={[styles.pickerView, { backgroundColor: isDark ? 'rgba(255,255,255,0.02)' : '#F8FAFC' }]}>
+                                    <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Change Stage</Text>
                                     <View style={styles.chipList}>
                                         {['open', 'quote', 'negotiation', 'booked', 'closed won', 'closed lost', 'cancelled', 'dormant'].map((s) => {
-                                            const isDark = theme.background === '#0F172A';
                                             const stageColorMap = isDark ? STAGE_COLORS_DARK : STAGE_COLORS_LIGHT;
                                             const color = stageColorMap[s] || "#64748B";
                                             return (
                                                 <TouchableOpacity
                                                     key={s}
-                                                    style={[styles.actionChip, { borderColor: color, backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#fff' }]}
+                                                    style={[styles.actionChip, { borderColor: isDark ? 'rgba(255,255,255,0.1)' : color, backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#fff' }]}
                                                     onPress={() => handleStageUpdate(s)}
                                                 >
                                                     <Text style={[styles.actionChipText, { color: color }]}>{s.toUpperCase()}</Text>
@@ -1125,57 +1117,55 @@ export default function DealsScreen() {
                                 </View>
                             )}
 
-                            {
-                                showReassign && (
-                                    <View style={styles.pickerView}>
-                                        <Text style={styles.sectionTitle}>Reassign Deal</Text>
-                                        <View style={styles.chipList}>
-                                            {users.map((u) => (
-                                                <TouchableOpacity
-                                                    key={u._id}
-                                                    style={styles.actionChip}
-                                                    onPress={() => handleReassign(u._id)}
-                                                >
-                                                    <Text style={styles.actionChipText}>{u.fullName || u.name}</Text>
-                                                </TouchableOpacity>
-                                            ))}
-                                        </View>
-                                    </View>
-                                )
-                            }
-                            {
-                                showTagEditor && (
-                                    <View style={styles.pickerView}>
-                                        <Text style={styles.sectionTitle}>Manage Tags</Text>
-                                        <View style={styles.tagInputRow}>
-                                            <TextInput
-                                                style={styles.tagInput}
-                                                placeholder="Add new tag..."
-                                                value={newTag}
-                                                onChangeText={setNewTag}
-                                                onSubmitEditing={handleAddTag}
-                                            />
-                                            <TouchableOpacity style={styles.addTagBtn} onPress={handleAddTag}>
-                                                <Ionicons name="add" size={20} color="#fff" />
+                            {showReassign && (
+                                <View style={[styles.pickerView, { backgroundColor: isDark ? 'rgba(255,255,255,0.02)' : '#F8FAFC' }]}>
+                                    <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Reassign Deal</Text>
+                                    <View style={styles.chipList}>
+                                        {users.map((u) => (
+                                            <TouchableOpacity
+                                                key={u._id}
+                                                style={[styles.actionChip, { borderColor: theme.border, backgroundColor: theme.card }]}
+                                                onPress={() => handleReassign(u._id)}
+                                            >
+                                                <Text style={[styles.actionChipText, { color: theme.text }]}>{u.fullName || u.name}</Text>
                                             </TouchableOpacity>
-                                        </View>
-                                        <View style={styles.chipList}>
-                                            {(selectedDeal?.tags || []).map((t: string, idx: number) => (
-                                                <View key={idx} style={styles.tagChip}>
-                                                    <Text style={styles.tagChipText}>{t}</Text>
-                                                    <TouchableOpacity onPress={() => handleRemoveTag(t)}>
-                                                        <Ionicons name="close-circle" size={14} color="#94A3B8" />
-                                                    </TouchableOpacity>
-                                                </View>
-                                            ))}
-                                        </View>
+                                        ))}
                                     </View>
-                                )
-                            }
+                                </View>
+                            )}
+
+                            {showTagEditor && (
+                                <View style={[styles.pickerView, { backgroundColor: isDark ? 'rgba(255,255,255,0.02)' : '#F8FAFC' }]}>
+                                    <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Manage Tags</Text>
+                                    <View style={styles.tagInputRow}>
+                                        <TextInput
+                                            style={[styles.tagInput, { backgroundColor: theme.card, color: theme.text, borderColor: theme.border }]}
+                                            placeholder="Add new tag..."
+                                            placeholderTextColor={theme.textMuted}
+                                            value={newTag}
+                                            onChangeText={setNewTag}
+                                            onSubmitEditing={handleAddTag}
+                                        />
+                                        <TouchableOpacity style={[styles.addTagBtn, { backgroundColor: theme.primary }]} onPress={handleAddTag}>
+                                            <Ionicons name="add" size={20} color="#fff" />
+                                        </TouchableOpacity>
+                                    </View>
+                                    <View style={styles.chipList}>
+                                        {(selectedDeal?.tags || []).map((t: string, idx: number) => (
+                                            <View key={idx} style={[styles.tagChip, { backgroundColor: theme.primary + '15', borderColor: theme.primary + '30' }]}>
+                                                <Text style={[styles.tagChipText, { color: theme.primary }]}>{t}</Text>
+                                                <TouchableOpacity onPress={() => handleRemoveTag(t)}>
+                                                    <Ionicons name="close-circle" size={14} color="#94A3B8" />
+                                                </TouchableOpacity>
+                                            </View>
+                                        ))}
+                                    </View>
+                                </View>
+                            )}
                         </ScrollView>
-                    </Animated.View >
-                </Pressable >
-            </Modal >
+                    </Animated.View>
+                </Pressable>
+            </Modal>
 
             <TouchableOpacity style={styles.fab} onPress={() => router.push("/add-deal")}>
                 <Ionicons name="add" size={32} color="#fff" />
@@ -1188,92 +1178,84 @@ export default function DealsScreen() {
                 initialFilters={filters}
                 fields={DEAL_FILTER_FIELDS}
             />
-        </GestureHandlerRootView >
+        </GestureHandlerRootView>
     );
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: "#F8FAFC" },
-    safeArea: { backgroundColor: "#fff" },
+    container: { flex: 1 },
+    safeArea: { backgroundColor: 'transparent' },
     center: { flex: 1, justifyContent: "center", alignItems: "center" },
 
     header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20, paddingTop: 12, paddingBottom: 16 },
-    headerTitle: { fontSize: 28, fontWeight: "900", color: "#0F172A", letterSpacing: -0.5 },
-    headerSubtitle: { fontSize: 13, color: "#64748B", fontWeight: "600", marginTop: 2 },
-    addBtn: { width: 44, height: 44, borderRadius: 14, backgroundColor: "#2563EB", justifyContent: 'center', alignItems: 'center' },
+    headerTitle: { fontSize: 28, fontWeight: "900", letterSpacing: -0.5 },
+    headerSubtitle: { fontSize: 13, fontWeight: "600", marginTop: 2 },
+    addBtn: { width: 44, height: 44, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
 
     headerCard: {
-        marginHorizontal: 20, marginBottom: 16, backgroundColor: "#0F172A", borderRadius: 24,
+        marginHorizontal: 20, marginBottom: 16, borderRadius: 24,
         padding: 20, flexDirection: 'row', alignItems: 'center',
-        shadowColor: "#2563EB", shadowOpacity: 0.2, shadowRadius: 15, shadowOffset: { width: 0, height: 10 }
+        shadowOpacity: 0.2, shadowRadius: 15, shadowOffset: { width: 0, height: 10 }
     },
-    summaryLabel: { color: "#94A3B8", fontSize: 10, fontWeight: "900", letterSpacing: 1, marginBottom: 4 },
+    summaryLabel: { fontSize: 10, fontWeight: "900", letterSpacing: 1, marginBottom: 4 },
     summaryValue: { color: "#fff", fontSize: 24, fontWeight: "900" },
     summaryDivider: { width: 1, height: 40, backgroundColor: "rgba(255,255,255,0.1)", marginHorizontal: 20 },
     summaryStats: { flex: 1 },
     statItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-    statLabel: { color: "#64748B", fontSize: 9, fontWeight: "900" },
-    statValue: { color: "#10B981", fontSize: 13, fontWeight: "800" },
+    statLabel: { fontSize: 9, fontWeight: "900" },
+    statValue: { fontSize: 13, fontWeight: "800" },
 
     commandBar: {
         flexDirection: "row", alignItems: "center", marginHorizontal: 20, marginBottom: 8,
-        paddingHorizontal: 16, height: 48, backgroundColor: "#F8FAFC",
-        borderRadius: 12, borderWidth: 1, borderColor: "#E2E8F0"
+        paddingHorizontal: 16, height: 48,
+        borderRadius: 12, borderWidth: 1
     },
-    commandInput: { flex: 1, marginLeft: 12, fontSize: 15, color: "#1E293B", fontWeight: "600" },
+    commandInput: { flex: 1, marginLeft: 12, fontSize: 15, fontWeight: "600" },
 
     list: { paddingBottom: 100 },
 
-    // Modern Deal Card
     card: {
-        flexDirection: "row", backgroundColor: "#fff", marginHorizontal: 16, marginBottom: 12,
-        borderRadius: 24, overflow: "hidden", borderWidth: 1, borderColor: "#F1F5F9",
-        shadowColor: "#000", shadowOpacity: 0.03, shadowRadius: 10, shadowOffset: { width: 0, height: 5 }
+        flexDirection: "row", marginHorizontal: 16, marginBottom: 12,
+        borderRadius: 16, overflow: "hidden", borderWidth: 1,
+        elevation: 1, shadowOpacity: 0.02, shadowRadius: 10, shadowOffset: { width: 0, height: 5 }
     },
-    cardAccent: { width: 6 },
-    cardMain: { flex: 1, padding: 8 },
-    cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 },
+    cardAccent: { width: 5 },
+    cardMain: { flex: 1, padding: 12 },
+    cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 },
     cardIdentity: { flex: 1 },
-    dealId: { fontSize: 10, fontWeight: "900", color: "#94A3B8", textTransform: "uppercase", marginBottom: 2 },
-    dealProjectContainer: { marginTop: 2 },
-    dealProjectName: { fontSize: 14, fontWeight: "800", color: "#0F172A" },
-    dealBlockName: { fontSize: 10, fontWeight: "500", color: "#CBD5E1" },
-    dealUnitNumber: { fontSize: 16, fontWeight: "900", color: "#0F172A" },
-    typePill: { paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4 },
-    typePillText: { fontSize: 9, fontWeight: "800" },
-    dealTitle: { fontSize: 16, fontWeight: "800", color: "#1E293B" },
-    dealAmount: { fontSize: 16, fontWeight: "900" },
+    dealUnitNumber: { fontSize: 18, fontWeight: "900" },
+    typePill: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
+    typePillText: { fontSize: 9, fontWeight: "900", textTransform: 'uppercase' },
+    dealProjectContainer: { marginTop: 1 },
+    dealProjectName: { fontSize: 14, fontWeight: "800" },
+    dealBlockName: { fontSize: 10, fontWeight: "500" },
+    dealAmount: { fontSize: 15, fontWeight: "900" },
 
-    cardBody: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
-    stagePill: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, gap: 6 },
+    stagePill: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, gap: 6 },
     stageDot: { width: 6, height: 6, borderRadius: 3 },
     stageText: { fontSize: 11, fontWeight: "800", textTransform: 'uppercase' },
-    clientRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1, marginLeft: 12 },
-    clientName: { fontSize: 13, color: "#64748B", fontWeight: "700" },
 
-    headerRight: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+    headerRight: { alignItems: 'flex-end', gap: 10 },
     menuTrigger: { padding: 4, marginRight: -4 },
-    qualityBox: { marginRight: 4 },
-    cardQuickActions: { flexDirection: 'row', gap: 8, alignItems: 'center' },
-    quickActionBtn: { width: 32, height: 32, borderRadius: 10, backgroundColor: "#F8FAFC", justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: "#F1F5F9" },
 
-    // Pipeline Styles
+    cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 12, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(0,0,0,0.05)' },
+    listMeta: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    listMetaText: { fontSize: 12, fontWeight: "600" },
+    dateText: { fontSize: 11, fontWeight: "700", opacity: 0.6 },
+
     pipelineWrapper: { marginBottom: 12 },
     pipelineScroll: { paddingHorizontal: 20, gap: 8 },
-    pipelineChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 14, backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0' },
-    pipelineChipActive: { backgroundColor: '#2563EB15', borderColor: '#2563EB' },
-    pipelineChipText: { fontSize: 11, fontWeight: '800', color: '#64748B' },
-    pipelineChipTextActive: { color: '#2563EB' },
-    // Compact Arrow Pipeline Styles
+    pipelineChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 14, borderWidth: 1 },
+    pipelineChipActive: { },
+    pipelineChipText: { fontSize: 11, fontWeight: '800' },
+    pipelineChipTextActive: { },
     horizontalPipelineWrapper: { marginHorizontal: 16, marginBottom: 12 },
     chevronContainer: {
         flexDirection: 'row',
         height: 64,
-        backgroundColor: '#fff',
         borderRadius: 8,
         overflow: 'hidden',
-        borderWidth: 1,
-        borderColor: '#F1F5F9'
+        borderWidth: 1
     },
     chevronSegment: {
         flex: 1,
@@ -1329,67 +1311,63 @@ const styles = StyleSheet.create({
         fontWeight: '800'
     },
 
-    cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 12, borderTopWidth: 1, borderTopColor: "#F8FAFC" },
+    cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 12, borderTopWidth: 1 },
     locationGroup: { flexDirection: 'row', alignItems: 'center', gap: 4, flex: 1 },
-    locationText: { fontSize: 12, color: "#94A3B8", fontWeight: "600" },
-    dateText: { fontSize: 11, color: "#94A3B8", fontWeight: "700" },
+    locationText: { fontSize: 12, fontWeight: "600" },
+    dateText: { fontSize: 11, fontWeight: "700" },
 
 
-    // Swipe Styles
     rightActions: { flexDirection: 'row', paddingLeft: 10 },
     leftActions: { flexDirection: 'row', paddingRight: 10 },
     swipeAction: { width: 70, justifyContent: 'center', alignItems: 'center', height: '100%' },
     swipeLabel: { color: '#fff', fontSize: 10, fontWeight: '800', marginTop: 4 },
 
-    // Sheet Styles
     modalOverlay: { flex: 1, backgroundColor: "rgba(15, 23, 42, 0.4)", justifyContent: "flex-end" },
     sheetContainer: { 
-        backgroundColor: "#fff", 
         borderTopLeftRadius: 32, 
         borderTopRightRadius: 32, 
         paddingHorizontal: 20, 
         maxHeight: '85%',
         minHeight: 400 
     },
-    sheetHandle: { width: 40, height: 4, backgroundColor: "#E2E8F0", borderRadius: 2, alignSelf: "center", marginTop: 12, marginBottom: 20 },
+    sheetHandle: { width: 40, height: 4, borderRadius: 2, alignSelf: "center", marginTop: 12, marginBottom: 20 },
     sheetHeader: { marginBottom: 24, alignItems: 'center' },
-    sheetTitle: { fontSize: 20, fontWeight: "900", color: "#0F172A" },
-    sheetSub: { fontSize: 12, color: "#64748B", fontWeight: "700", textTransform: 'uppercase', marginTop: 4 },
+    sheetTitle: { fontSize: 20, fontWeight: "900" },
+    sheetSub: { fontSize: 12, fontWeight: "700", textTransform: 'uppercase', marginTop: 4 },
 
     actionGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: 'center', gap: 12 },
     actionItem: { width: "22%", alignItems: "center", marginBottom: 16 },
-    actionIcon: { width: 56, height: 56, borderRadius: 20, justifyContent: "center", alignItems: "center", marginBottom: 8, shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 5, shadowOffset: { width: 0, height: 2 } },
-    actionLabel: { fontSize: 10, fontWeight: "800", color: "#475569", textAlign: "center" },
+    actionIcon: { width: 56, height: 56, borderRadius: 20, justifyContent: "center", alignItems: "center", marginBottom: 8, shadowOpacity: 0.05, shadowRadius: 5, shadowOffset: { width: 0, height: 2 } },
+    actionLabel: { fontSize: 10, fontWeight: "800", textAlign: "center" },
 
-    pickerView: { marginTop: 10, padding: 20, backgroundColor: "#F8FAFC", borderRadius: 20 },
-    sectionTitle: { fontSize: 12, fontWeight: "900", color: "#94A3B8", textTransform: "uppercase", marginBottom: 16 },
+    pickerView: { marginTop: 10, padding: 20, borderRadius: 20 },
+    sectionTitle: { fontSize: 12, fontWeight: "900", textTransform: "uppercase", marginBottom: 16 },
     chipList: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-    actionChip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, backgroundColor: "#fff", borderWidth: 1, borderColor: "#E2E8F0" },
-    actionChipText: { fontSize: 12, fontWeight: "800", color: "#475569" },
+    actionChip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, borderWidth: 1 },
+    actionChipText: { fontSize: 12, fontWeight: "800" },
 
     tagInputRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 16 },
-    tagInput: { flex: 1, backgroundColor: "#fff", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 12, padding: 12, fontSize: 14, fontWeight: "600" },
-    addTagBtn: { backgroundColor: "#2563EB", width: 40, height: 40, borderRadius: 12, justifyContent: "center", alignItems: "center" },
-    tagChip: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, backgroundColor: "#EFF6FF", borderWidth: 1, borderColor: "#DBEAFE" },
-    tagChipText: { fontSize: 12, fontWeight: "800", color: "#2563EB" },
+    tagInput: { flex: 1, borderWidth: 1, borderRadius: 12, padding: 12, fontSize: 14, fontWeight: "600" },
+    addTagBtn: { width: 40, height: 40, borderRadius: 12, justifyContent: "center", alignItems: "center" },
+    tagChip: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, borderWidth: 1 },
+    tagChipText: { fontSize: 12, fontWeight: "800" },
 
     empty: { alignItems: "center", marginTop: 100 },
-    emptyText: { marginTop: 16, fontSize: 15, color: "#94A3B8", fontWeight: "700" },
+    emptyText: { marginTop: 16, fontSize: 15, fontWeight: "700" },
     filterBtn: { padding: 8, marginLeft: 8 },
-    filterBadge: { position: 'absolute', top: 4, right: 4, backgroundColor: '#2563EB', width: 14, height: 14, borderRadius: 7, justifyContent: 'center', alignItems: 'center' },
+    filterBadge: { position: 'absolute', top: 4, right: 4, width: 14, height: 14, borderRadius: 7, justifyContent: 'center', alignItems: 'center' },
     filterBadgeText: { color: '#fff', fontSize: 8, fontWeight: '900' },
     fab: {
         position: "absolute", bottom: 30, right: 20, width: 56, height: 56,
-        borderRadius: 28, backgroundColor: "#2563EB", justifyContent: "center",
-        alignItems: "center", elevation: 4, shadowColor: "#000",
+        borderRadius: 28, justifyContent: "center",
+        alignItems: "center", elevation: 4,
         shadowOpacity: 0.2, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }
     },
 
-    // Contact Picker (Synced with Inventory)
-    contactPickerSheet: { backgroundColor: "#fff", borderTopLeftRadius: 32, borderTopRightRadius: 32, paddingHorizontal: 20, paddingBottom: 60, width: '100%' },
-    contactItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#F8FAFC' },
+    contactPickerSheet: { borderTopLeftRadius: 32, borderTopRightRadius: 32, paddingHorizontal: 20, paddingBottom: 60, width: '100%' },
+    contactItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 14, borderBottomWidth: 1 },
     contactInfo: { flexDirection: 'row', alignItems: 'center', gap: 12 },
     contactAvatar: { width: 40, height: 40, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
-    contactName: { fontSize: 15, fontWeight: '800', color: '#0F172A' },
-    contactRole: { fontSize: 11, color: '#64748B', fontWeight: '600', marginTop: 2 },
+    contactName: { fontSize: 15, fontWeight: '800' },
+    contactRole: { fontSize: 11, fontWeight: '600', marginTop: 2 },
 });

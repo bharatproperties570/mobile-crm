@@ -223,7 +223,6 @@ const styles = StyleSheet.create({
     },
     tabLabel: {
         fontSize: 10,
-        color: "#94A3B8",
         fontWeight: "700",
         letterSpacing: 0.3,
         marginTop: 2

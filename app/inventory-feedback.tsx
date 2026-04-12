@@ -174,7 +174,13 @@ export default function InventoryFeedbackScreen() {
                 action: scheduleFollowUp ? formData.nextActionType : 'Interaction',
                 result: formData.result,
                 reason: formData.reason,
-                note: newRemark
+                note: newRemark,
+                // Provide a 'details' field for the backend history schema
+                details: {
+                    action: scheduleFollowUp ? formData.nextActionType : 'Interaction',
+                    result: formData.result,
+                    reason: formData.reason
+                }
             };
 
             // Ensure status is just an ID string
@@ -216,8 +222,17 @@ export default function InventoryFeedbackScreen() {
             }
         } catch (error: any) {
             console.error("[DEBUG] Error saving feedback:", error);
-            const errorMsg = error.response?.data?.error || error.message || "Failed to save feedback.";
-            Alert.alert("Save Error", errorMsg);
+            
+            let message = "Failed to save feedback.";
+            if (error.message === "Network Error") {
+                message = "Network Error: Could not connect to server. Please check your internet or if the backend is running.";
+            } else if (error.response?.data?.error) {
+                message = error.response.data.error;
+            } else if (error.message) {
+                message = error.message;
+            }
+            
+            Alert.alert("Save Error", message);
         } finally {
             setSaving(false);
         }
