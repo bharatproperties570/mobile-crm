@@ -9,7 +9,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/context/ThemeContext";
 import { useCallTracking } from "@/context/CallTrackingContext";
 import api from "@/services/api";
-import { getActivities } from "@/services/activities.service";
+import { getUnifiedTimeline } from "@/services/activities.service";
 import { getMatchingLeads } from "@/services/leads.service";
 import { getDealById, type Deal } from "@/services/deals.service";
 import { useLookup } from "@/context/LookupContext";
@@ -166,28 +166,28 @@ export default function DealDetailScreen() {
 
         try {
             if (loading) {
-                const cachedData = await AsyncStorage.getItem(cacheKey);
-                if (cachedData) {
-                    const parsed = JSON.parse(cachedData);
-                    setDeal(parsed.deal);
-                    setActivities(parsed.activities);
-                    setMatchingLeads(parsed.matchingLeads);
-                    setDealHealth(parsed.dealHealth);
+                const cacheData = await AsyncStorage.getItem(cacheKey);
+                if (cacheData) {
+                    const parsed = JSON.parse(cacheData);
+                    if (parsed.deal) setDeal(parsed.deal);
+                    if (parsed.activities) setActivities(parsed.activities);
+                    if (parsed.matchingLeads) setMatchingLeads(parsed.matchingLeads);
+                    if (parsed.dealHealth) setDealHealth(parsed.dealHealth);
                     setLoading(false);
                     Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }).start();
                 }
             }
 
-            const [dealRes, actRes, matchRes, healthRes, valuationRes] = await Promise.all([
+            const [dealRes, timelineRes, matchRes, healthRes, valuationRes] = await Promise.all([
                 getDealById(id as string).catch(e => { console.warn("Deal Fetch Error:", e); return null; }),
-                getActivities({ entityId: id, limit: 20 }).catch(e => { console.warn("Activities Fetch Error:", e); return null; }),
+                getUnifiedTimeline("deal", id as string).catch(e => { console.warn("Timeline Fetch Error:", e); return null; }),
                 getMatchingLeads(id as string).catch(e => { console.warn("Match Fetch Error:", e); return null; }),
                 getDealHealth(id as string).catch(e => { console.warn("Health Fetch Error:", e); return null; }),
                 api.post('/valuation/calculate', { dealId: id, buyerGender: 'male' }).catch(e => { console.warn("Valuation Error:", e); return null; })
             ]);
 
             const currentDeal = dealRes?.data ?? dealRes?.deal ?? dealRes;
-            const currentActivities = Array.isArray(actRes?.data) ? actRes.data : (Array.isArray(actRes) ? actRes : []);
+            const currentActivities = Array.isArray(timelineRes?.data) ? timelineRes.data : (Array.isArray(timelineRes) ? timelineRes : []);
             const currentMatchingLeads = Array.isArray(matchRes?.data) ? matchRes.data : (Array.isArray(matchRes) ? matchRes : []);
             const currentHealth = healthRes?.score !== undefined ? healthRes : null;
             const currentValuation = valuationRes?.data?.data || null;
@@ -199,14 +199,16 @@ export default function DealDetailScreen() {
             setValuation(currentValuation);
             lastFetchRef.current = Date.now();
 
-            AsyncStorage.setItem(cacheKey, JSON.stringify({
-                deal: currentDeal,
-                activities: currentActivities,
-                matchingLeads: currentMatchingLeads,
-                dealHealth: currentHealth,
-                valuation: currentValuation,
-                timestamp: Date.now()
-            })).catch(e => console.warn("Cache save error:", e));
+            if (currentDeal) {
+                AsyncStorage.setItem(cacheKey, JSON.stringify({
+                    deal: currentDeal,
+                    activities: currentActivities,
+                    matchingLeads: currentMatchingLeads,
+                    dealHealth: currentHealth,
+                    valuation: currentValuation,
+                    timestamp: Date.now()
+                })).catch(e => console.warn("Cache save error:", e));
+            }
 
             if (loading) {
                 Animated.timing(fadeAnim, { toValue: 1, duration: 600, useNativeDriver: true }).start();
@@ -241,7 +243,7 @@ export default function DealDetailScreen() {
     if (!deal) return <View style={[styles.center, { backgroundColor: theme.background }]}><Text style={[styles.noData, { color: theme.textLight }]}>Deal not found</Text></View>;
 
     const isDark = theme.background === '#0F172A';
-    const stageLabel = deal.stage ?? "Open";
+    const stageLabel = lv(deal.stage, getLookupValue, users) || "Open"; // Safe string resolution
     const stageColorMap = isDark ? STAGE_COLORS_DARK : STAGE_COLORS_LIGHT;
     const stageColor = stageColorMap[stageLabel.toLowerCase()] ?? theme.primary;
     const score = getDealScore(deal, isDark);

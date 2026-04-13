@@ -10,7 +10,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 // On Native (Expo Go on phone): use the Mac's LAN IP
 // The env var EXPO_PUBLIC_API_BASE_URL can override this.
 // ============================================================
-const MACHINE_IP = "192.168.29.233";
+const MACHINE_IP = "192.168.1.6";
 const BACKEND_PORT = "4000";
 
 const WEB_URL = `http://localhost:${BACKEND_PORT}/api`;

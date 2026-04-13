@@ -107,9 +107,9 @@ export default function LeadDetailScreen() {
             }
 
             const [leadRes, timelineRes, matchRes] = await Promise.all([
-                getLeadById(id as string),
-                getUnifiedTimeline("lead", id as string),
-                getMatchingDeals(id as string)
+                getLeadById(id as string).catch(e => { console.warn("Lead Fetch Error:", e); return null; }),
+                getUnifiedTimeline("lead", id as string).catch(e => { console.warn("Timeline Fetch Error:", e); return null; }),
+                getMatchingDeals(id as string).catch(e => { console.warn("Match Fetch Error:", e); return null; })
             ]);
 
             const currentLead = leadRes?.data ?? leadRes;
@@ -118,7 +118,7 @@ export default function LeadDetailScreen() {
             
             let currentOwnedInventory: any[] = [];
             if (currentLead && currentLead.contactDetails?._id) {
-                const ownedRes = await getInventoryByContact(currentLead.contactDetails._id);
+                const ownedRes = await getInventoryByContact(currentLead.contactDetails._id).catch(e => { console.warn("Owned Inventory Fetch Error:", e); return null; });
                 currentOwnedInventory = Array.isArray(ownedRes?.data) ? ownedRes.data : (Array.isArray(ownedRes) ? ownedRes : []);
             }
 
