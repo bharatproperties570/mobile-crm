@@ -9,6 +9,7 @@ import { getBookingById, addBooking, updateBooking, type Booking } from "@/servi
 import { getLeads, leadName } from "@/services/leads.service";
 import { getDeals } from "@/services/deals.service";
 import { getProjects } from "@/services/projects.service";
+import { extractList } from "@/services/api.helpers";
 import api from "@/services/api";
 
 const FORM_STEPS = ["Client", "Property", "Financials", "Submit"];
@@ -53,8 +54,11 @@ export default function AddBookingScreen() {
                     id ? getBookingById(id) : Promise.resolve(null),
                 ]);
 
-                setLeads(results[0]?.data || results[0] || []);
-                setDeals(results[1]?.data || results[1] || []);
+                const fetchedLeads = extractList(results[0]);
+                const fetchedDeals = extractList(results[1]);
+
+                setLeads(fetchedLeads);
+                setDeals(fetchedDeals);
 
                 const existing = results[2];
                 if (existing) {
@@ -66,10 +70,11 @@ export default function AddBookingScreen() {
                         tokenAmount: String(b.tokenAmount || ""),
                     }));
                 } else if (dealId) {
-                    const d = results[1].find((x: any) => x._id === dealId);
+                    const d = fetchedDeals.find((x: any) => x._id === dealId);
                     if (d) {
                         setFormData((prev: any) => ({
                             ...prev,
+                            ...formData, // Preserve prefilled IDs
                             deal: d._id,
                             lead: d.lead?._id || d.lead || prev.lead,
                             totalDealAmount: String(d.price || d.amount || ""),
@@ -83,7 +88,7 @@ export default function AddBookingScreen() {
             }
         };
         loadInitialData();
-    }, [id]);
+    }, [id, dealId]);
 
     const handleSave = async () => {
         if (!formData.lead || !formData.tokenAmount) {

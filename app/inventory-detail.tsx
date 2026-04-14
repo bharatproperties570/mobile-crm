@@ -35,7 +35,7 @@ function lv(field: unknown): string {
 
 function InfoRow({ label, value, accent, icon }: { label: string; value: string; accent?: boolean; icon?: any }) {
     const { theme } = useTheme();
-    if (!value || value === "—") return null;
+    if (!value || value === "—" || value === "") return null;
     return (
         <View style={[styles.infoRow, { borderBottomColor: theme.border }]}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
@@ -46,6 +46,20 @@ function InfoRow({ label, value, accent, icon }: { label: string; value: string;
         </View>
     );
 }
+
+const RibbonButton = ({ icon, color, onPress }: { icon: any; color: string; onPress: () => void }) => {
+    const { theme } = useTheme();
+    const isDark = theme.background === '#0F172A';
+    return (
+        <TouchableOpacity 
+            style={[styles.ribbonBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#fff', borderColor: isDark ? 'rgba(255,255,255,0.1)' : theme.border, borderWidth: 1 }]} 
+            onPress={onPress}
+            activeOpacity={0.7}
+        >
+            <Ionicons name={icon} size={20} color={color} />
+        </TouchableOpacity>
+    );
+};
 
 const ACTIVE_STATUSES = ['Available', 'Interested / Medium', 'Interested / High', 'Request Call Back', 'Busy / Driving', 'Market Feedback', 'General Inquiry'];
 const INACTIVE_STATUSES = ['Sold Out', 'Rented Out', 'Not Interested', 'Inactive', 'Wrong Number / Invalid', 'Switch Off / Unreachable'];
@@ -250,27 +264,46 @@ export default function InventoryDetailScreen() {
                     )}
                 </View>
 
-                {/* Professional Action Hub */}
-                <View style={styles.modernActionHub}>
-                    {(() => {
-                        const primaryOwner = inv.owners?.[0];
-                        const ownerName = lv(primaryOwner);
-                        const ownerPhone = primaryOwner?.phones?.[0]?.number || "";
-                        const ownerEmail = primaryOwner?.emails?.[0]?.address || "";
-                        const cleanPhone = ownerPhone.replace(/\D/g, "");
+                {/* Senior Professional Action Ribbon - Icons Only */}
+                <View style={[styles.actionRibbonContainer, { backgroundColor: isDark ? 'rgba(255,255,255,0.02)' : '#f8fafc', borderColor: theme.border }]}>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.actionRibbonScroll}>
+                        {(() => {
+                            const primaryOwner = inv.owners?.[0];
+                            const ownerPhone = primaryOwner?.phones?.[0]?.number || "";
+                            const ownerEmail = primaryOwner?.emails?.[0]?.address || "";
+                            const cleanPhone = ownerPhone.replace(/\D/g, "");
 
-                        return [
-                            { icon: 'call', color: theme.primary, onPress: () => ownerPhone ? Linking.openURL(`tel:${cleanPhone}`) : Alert.alert("No Phone", "Owner contact number not available") },
-                            { icon: 'chatbubble-ellipses', color: isDark ? '#3B82F6' : '#3B82F6', onPress: () => ownerPhone ? Linking.openURL(`sms:${cleanPhone}`) : Alert.alert("No Phone", "Owner contact number not available") },
-                            { icon: 'logo-whatsapp', color: '#128C7E', onPress: () => ownerPhone ? Linking.openURL(`https://wa.me/${cleanPhone}`) : Alert.alert("No Phone", "Owner contact number not available") },
-                            { icon: 'mail', color: isDark ? '#F87171' : '#EA4335', onPress: () => ownerEmail ? Linking.openURL(`mailto:${ownerEmail}`) : Alert.alert("No Email", "Owner email address not available") },
-                            { icon: 'share-social', color: isDark ? '#818CF8' : '#6366F1', onPress: () => Alert.alert("Share Wall", `Sharing details for Unit ${unitNo} at ${projectName}`) },
-                        ].map((action, i) => (
-                            <TouchableOpacity key={i} style={[styles.modernHubBtn, { backgroundColor: action.color }]} onPress={action.onPress}>
-                                <Ionicons name={action.icon as any} size={20} color="#fff" />
-                            </TouchableOpacity>
-                        ));
-                    })()}
+                            return (
+                                <>
+                                    <RibbonButton 
+                                        icon="call" 
+                                        color={theme.primary} 
+                                        onPress={() => ownerPhone ? Linking.openURL(`tel:${cleanPhone}`) : Alert.alert("No Phone", "Owner contact number not available")} 
+                                    />
+                                    <RibbonButton 
+                                        icon="logo-whatsapp" 
+                                        color="#128C7E" 
+                                        onPress={() => ownerPhone ? Linking.openURL(`https://wa.me/${cleanPhone}`) : Alert.alert("No Phone", "Owner contact number not available")} 
+                                    />
+                                    <RibbonButton 
+                                        icon="chatbubble-ellipses" 
+                                        color="#3B82F6" 
+                                        onPress={() => ownerPhone ? Linking.openURL(`sms:${cleanPhone}`) : Alert.alert("No Phone", "Owner contact number not available")} 
+                                    />
+                                    <RibbonButton 
+                                        icon="mail" 
+                                        color="#F87171" 
+                                        onPress={() => ownerEmail ? Linking.openURL(`mailto:${ownerEmail}`) : Alert.alert("No Email", "Owner email address not available")} 
+                                    />
+                                    <RibbonButton 
+                                        icon="share-social" 
+                                        color="#64748B" 
+                                        onPress={() => Alert.alert("Share", `Sharing details for Unit ${unitNo} at ${projectName}`)} 
+                                    />
+                                </>
+                            );
+                        })()}
+                    </ScrollView>
                 </View>
 
                 {/* Swipeable Tabs Navigation */}
@@ -601,8 +634,32 @@ const styles = StyleSheet.create({
     marketingPill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
     marketingText: { fontSize: 11, fontWeight: '800' },
 
-    modernActionHub: { flexDirection: 'row', justifyContent: 'center', gap: 12, paddingVertical: 15 },
-    modernHubBtn: { width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center', elevation: 4, shadowOpacity: 0.2, shadowRadius: 5 },
+    actionRibbonContainer: { 
+        marginHorizontal: 20, 
+        marginTop: 15, 
+        borderRadius: 22, 
+        borderWidth: 1, 
+        overflow: 'hidden',
+        paddingVertical: 14,
+        paddingHorizontal: 10
+    },
+    actionRibbonScroll: { 
+        flexGrow: 1,
+        justifyContent: 'center', 
+        gap: 24, 
+        paddingHorizontal: 15 
+    },
+    ribbonBtn: { 
+        width: 44,
+        height: 44,
+        borderRadius: 14,
+        justifyContent: 'center',
+        alignItems: 'center',
+        elevation: 2,
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        shadowOffset: { width: 0, height: 2 }
+    },
 
     tabsScroll: { paddingHorizontal: 20, gap: 25 },
     tabItem: { paddingVertical: 12, borderBottomWidth: 3, borderBottomColor: 'transparent' },

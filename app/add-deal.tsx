@@ -10,6 +10,7 @@ import { useTheme, SPACING } from "@/context/ThemeContext";
 import { useLookup } from "@/context/LookupContext";
 import { useUsers } from "@/context/UserContext";
 import { useProjects } from "@/context/ProjectContext";
+import { extractList } from "@/services/api.helpers";
 import api from "@/services/api";
 import { MultiSearchableDropdown } from "@/components/MultiSearchableDropdown";
 
@@ -265,8 +266,8 @@ export default function AddDealScreen() {
                     params.append('location', formData.block);
                 }
                 const response = await api.get(`/inventory?${params.toString()}`);
-                if (response.data && response.data.success) {
-                    setUnits(response.data.records || response.data.data || []);
+                if (response.data && (response.data.success || response.status === 200)) {
+                    setUnits(extractList(response.data));
                 }
             } catch (error) {
                 console.error("Error fetching units:", error);

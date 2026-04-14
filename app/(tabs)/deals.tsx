@@ -1024,6 +1024,20 @@ export default function DealsScreen() {
                                     <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Match</Text>
                                 </TouchableOpacity>
 
+                                <TouchableOpacity style={styles.actionItem} onPress={() => { router.push(`/add-offer?dealId=${selectedDeal?._id}`); closeHub(); }}>
+                                    <View style={[styles.actionIcon, { backgroundColor: isDark ? 'rgba(245, 158, 11, 0.15)' : "#FEF3C7" }]}>
+                                        <Ionicons name="handshake" size={24} color="#F59E0B" />
+                                    </View>
+                                    <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Offer</Text>
+                                </TouchableOpacity>
+
+                                <TouchableOpacity style={styles.actionItem} onPress={() => { router.push(`/add-quote?dealId=${selectedDeal?._id}`); closeHub(); }}>
+                                    <View style={[styles.actionIcon, { backgroundColor: isDark ? 'rgba(16, 185, 129, 0.15)' : "#ECFDF5" }]}>
+                                        <Ionicons name="calculator" size={24} color="#10B981" />
+                                    </View>
+                                    <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Quote</Text>
+                                </TouchableOpacity>
+
                                 <TouchableOpacity style={styles.actionItem} onPress={() => { router.push(`/documents?dealId=${selectedDeal?._id}`); closeHub(); }}>
                                     <View style={[styles.actionIcon, { backgroundColor: isDark ? 'rgba(14, 165, 233, 0.1)' : "#F0F9FF" }]}>
                                         <Ionicons name="document-attach" size={24} color="#0EA5E9" />
@@ -1038,7 +1052,7 @@ export default function DealsScreen() {
                                     <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Book</Text>
                                 </TouchableOpacity>
 
-                                <TouchableOpacity style={styles.actionItem} onPress={() => { Alert.alert("Upload", "Securely upload documents for this deal."); }}>
+                                <TouchableOpacity style={styles.actionItem} onPress={() => { router.push(`/upload-media?id=${selectedDeal?.inventoryId?._id || selectedDeal?.inventoryId}`); closeHub(); }}>
                                     <View style={[styles.actionIcon, { backgroundColor: isDark ? 'rgba(22, 163, 74, 0.1)' : "#F0FDF4" }]}>
                                         <Ionicons name="cloud-upload" size={24} color="#16A34A" />
                                     </View>

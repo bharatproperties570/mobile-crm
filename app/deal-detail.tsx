@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, useRef } from "react";
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
-    ActivityIndicator, Alert, Animated, Linking, Dimensions
+    ActivityIndicator, Alert, Animated, Linking, Dimensions, Modal
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
@@ -21,7 +21,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const CACHE_KEY_PREFIX = "@cache_deal_detail_";
 
-const TABS = ["Analysis", "Financial", "Technical", "Geography", "Parties", "Matches", "Timeline", "Vault", "History"];
+const TABS = ["Analysis", "Financial", "Details", "Location", "Activities", "Match", "Owner", "History"];
 
 function fmt(amount?: number): string {
     if (!amount) return "—";
@@ -30,22 +30,18 @@ function fmt(amount?: number): string {
     return `₹${amount.toLocaleString("en-IN")}`;
 }
 
-function lv(field: unknown, getLookupValue?: (type: string, val: any) => string, users?: any[]): string {
+function lv(field: unknown, getLookupValue?: (type: string, val: any) => string, findUser?: (id: string) => any): string {
     if (field === null || field === undefined || field === "" || field === "null" || field === "undefined") return "—";
 
     // Handle Array
     if (Array.isArray(field)) {
-        return field.map(f => lv(f, getLookupValue, users)).filter(v => v && v !== "—").join(", ") || "—";
+        return field.map(f => lv(f, getLookupValue, findUser)).filter(v => v && v !== "—").join(", ") || "—";
     }
 
     if (typeof field === "object" && field !== null) {
-        if ("lookup_value" in field && field.lookup_value) return (field as any).lookup_value;
-        if ("fullName" in field && field.fullName) return (field as any).fullName;
-        if ("name" in field && field.name) return (field as any).name;
-        if ((field as any)._id && getLookupValue) {
-            const resolved = getLookupValue("Any", (field as any)._id);
-            if (resolved && resolved !== (field as any)._id) return resolved;
-        }
+        if ("lookup_value" in field && (field as any).lookup_value) return (field as any).lookup_value;
+        if ("fullName" in field && (field as any).fullName) return (field as any).fullName;
+        if ("name" in field && (field as any).name) return (field as any).name;
     }
 
     // Handle ID string
@@ -56,9 +52,9 @@ function lv(field: unknown, getLookupValue?: (type: string, val: any) => string,
             const resolved = getLookupValue("Any", str);
             if (resolved && resolved !== str && resolved !== "—") return resolved;
         }
-        // 2. Try Users
-        if (users) {
-            const user = users.find(u => u._id === str || u.id === str);
+        // 2. Try Users (if provider function is available)
+        if (typeof findUser === 'function') {
+            const user = findUser(str);
             if (user) return user.fullName || user.name || str;
         }
         // If still a hex ID and not resolved, return placeholder for professional look
@@ -66,6 +62,15 @@ function lv(field: unknown, getLookupValue?: (type: string, val: any) => string,
     }
 
     return str || "—";
+}
+
+function resolveNameFromObject(obj: any, fallback?: any, getLookupValue?: (type: string, val: any) => string, findUser?: (id: string) => any): string {
+    if (obj) {
+        if (obj.fullName) return obj.fullName;
+        if (obj.name) return obj.name;
+        if (obj.firstName) return [obj.firstName, obj.lastName].filter(Boolean).join(" ");
+    }
+    return lv(fallback, getLookupValue, findUser);
 }
 
 function formatTimeAgo(dateString?: string) {
@@ -79,7 +84,15 @@ function formatTimeAgo(dateString?: string) {
     return `${Math.floor(diffInSecs / 86400)}d ago`;
 }
 
-function getDealScore(deal: any, isDark = false) {
+function getDealScore(deal: any, health: any, isDark = false) {
+    // 1. Prioritize Real Backend Health Score (High Fidelity)
+    if (health && typeof health.score === 'number') {
+        const color = health.score > 80 ? "#10B981" : health.score > 50 ? "#F59E0B" : "#EF4444";
+        const bgOpacity = isDark ? '20' : '15';
+        return { val: health.score, color, bg: color + bgOpacity };
+    }
+
+    // 2. Fallback to Proprietary Probability Engine
     let score = deal.dealProbability || 50;
     const stage = lv(deal.stage).toLowerCase();
     if (stage === "negotiation") score += 10;
@@ -91,12 +104,30 @@ function getDealScore(deal: any, isDark = false) {
     return { val: score, color, bg: color + bgOpacity };
 }
 
-function getDealInsight(deal: any, activities: any[]) {
+function getDealInsight(deal: any, activities: any[], health: any) {
     const stage = lv(deal.stage).toLowerCase();
-    if (stage === "open") return "Quickly qualify the requirement to move to Quoting stage.";
-    if (stage === "negotiation") return "Critical negotiation phase. Check if inventory block time is expiring.";
-    if (deal.dealProbability > 70) return "High deal probability. Maintain frequent contact to close.";
-    return "Ensure all property details are shared with the buyer for consideration.";
+    
+    // Check for stagnation (Engagement Gap)
+    const lastActivity = activities?.[0];
+    if (lastActivity) {
+        const lastInMs = new Date(lastActivity.timestamp || lastActivity.createdAt).getTime();
+        const daysSince = Math.floor((Date.now() - lastInMs) / (1000 * 60 * 60 * 24));
+        if (daysSince > 7) return `Engagement Gap Detected (${daysSince} days). High risk of deal stagnation. Immediate follow-up required.`;
+    }
+
+    // Check for Stage Velocity
+    if (deal.stageChangedAt) {
+        const stageDays = Math.floor((Date.now() - new Date(deal.stageChangedAt).getTime()) / (1000 * 60 * 60 * 24));
+        if (stageDays > 14 && stage !== "booked") return `Pipeline Friction: Deal has been in '${stage.toUpperCase()}' for ${stageDays} days. Consider re-evaluating terms.`;
+    }
+
+    // Contextual Insights
+    if (health?.insights?.length > 0) return health.insights[0];
+    if (stage === "open") return "Intelligence suggests qualifying the requirement to accelerate to the Quoting phase.";
+    if (stage === "negotiation") return "Strategic negotiation phase. Monitor document flow and price caps closely.";
+    if (deal.dealProbability > 70) return "Executive Confidence is High. Ensure all compliance documents are staged for closing.";
+    
+    return "Intelligence is monitoring engagement. Ensure all property collateral has been dispatched.";
 }
 
 function InfoRow({ label, value, accent, icon }: { label: string; value: string; accent?: boolean; icon?: any }) {
@@ -133,6 +164,20 @@ const STAGE_COLORS_DARK: Record<string, string> = {
     dormant: "#94A3B8",
 };
 
+const RibbonButton = ({ icon, color, onPress }: { icon: any; color: string; onPress: () => void }) => {
+    const { theme } = useTheme();
+    const isDark = theme.background === '#0F172A';
+    return (
+        <TouchableOpacity 
+            style={[styles.ribbonBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#fff', borderColor: isDark ? 'rgba(255,255,255,0.1)' : theme.border, borderWidth: 1 }]} 
+            onPress={onPress}
+            activeOpacity={0.7}
+        >
+            <Ionicons name={icon} size={20} color={color} />
+        </TouchableOpacity>
+    );
+};
+
 export default function DealDetailScreen() {
     const insets = useSafeAreaInsets();
     const { id } = useLocalSearchParams<{ id: string }>();
@@ -144,6 +189,7 @@ export default function DealDetailScreen() {
     const [deal, setDeal] = useState<any>(null);
     const [activities, setActivities] = useState<any[]>([]);
     const [matchingLeads, setMatchingLeads] = useState<any[]>([]);
+    const isDark = theme.background === '#0F172A';
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState(0);
     const [isActionModalVisible, setIsActionModalVisible] = useState(false);
@@ -151,12 +197,14 @@ export default function DealDetailScreen() {
     const [dealHealth, setDealHealth] = useState<{ score: number; label: string; color: string } | null>(null);
     const [valuation, setValuation] = useState<any>(null);
     const [showCostSheet, setShowCostSheet] = useState(false);
+    const [isOwnerModalOpen, setIsOwnerModalOpen] = useState(false);
     const lastFetchRef = useRef<number>(0);
 
     const scrollX = useRef(new Animated.Value(0)).current;
     const tabScrollViewRef = useRef<ScrollView>(null);
     const contentScrollViewRef = useRef<ScrollView>(null);
     const fadeAnim = useRef(new Animated.Value(0)).current;
+    const [stageHistory, setStageHistory] = useState<any[]>([]);
 
     const fetchData = useCallback(async (isRefresh = false) => {
         if (!id) return;
@@ -178,12 +226,13 @@ export default function DealDetailScreen() {
                 }
             }
 
-            const [dealRes, timelineRes, matchRes, healthRes, valuationRes] = await Promise.all([
+            const [dealRes, timelineRes, matchRes, healthRes, valuationRes, historyRes] = await Promise.all([
                 getDealById(id as string).catch(e => { console.warn("Deal Fetch Error:", e); return null; }),
                 getUnifiedTimeline("deal", id as string).catch(e => { console.warn("Timeline Fetch Error:", e); return null; }),
                 getMatchingLeads(id as string).catch(e => { console.warn("Match Fetch Error:", e); return null; }),
                 getDealHealth(id as string).catch(e => { console.warn("Health Fetch Error:", e); return null; }),
-                api.post('/valuation/calculate', { dealId: id, buyerGender: 'male' }).catch(e => { console.warn("Valuation Error:", e); return null; })
+                api.post('/valuation/calculate', { dealId: id, buyerGender: 'male' }).catch(e => { console.warn("Valuation Error:", e); return null; }),
+                api.get(`/stage-engine/deals/${id}/history`).catch(e => { console.warn("History Fetch Error:", e); return null; })
             ]);
 
             const currentDeal = dealRes?.data ?? dealRes?.deal ?? dealRes;
@@ -191,12 +240,14 @@ export default function DealDetailScreen() {
             const currentMatchingLeads = Array.isArray(matchRes?.data) ? matchRes.data : (Array.isArray(matchRes) ? matchRes : []);
             const currentHealth = healthRes?.score !== undefined ? healthRes : null;
             const currentValuation = valuationRes?.data?.data || null;
+            const currentHistory = historyRes?.data?.stageHistory || [];
 
             setDeal(currentDeal);
             setActivities(currentActivities);
             setMatchingLeads(currentMatchingLeads);
             setDealHealth(currentHealth);
             setValuation(currentValuation);
+            setStageHistory(currentHistory);
             lastFetchRef.current = Date.now();
 
             if (currentDeal) {
@@ -206,6 +257,7 @@ export default function DealDetailScreen() {
                     matchingLeads: currentMatchingLeads,
                     dealHealth: currentHealth,
                     valuation: currentValuation,
+                    stageHistory: currentHistory,
                     timestamp: Date.now()
                 })).catch(e => console.warn("Cache save error:", e));
             }
@@ -242,11 +294,11 @@ export default function DealDetailScreen() {
     if (loading) return <View style={[styles.center, { backgroundColor: theme.background }]}><ActivityIndicator size="large" color={theme.primary} /></View>;
     if (!deal) return <View style={[styles.center, { backgroundColor: theme.background }]}><Text style={[styles.noData, { color: theme.textLight }]}>Deal not found</Text></View>;
 
-    const isDark = theme.background === '#0F172A';
     const stageLabel = lv(deal.stage, getLookupValue, users) || "Open"; // Safe string resolution
     const stageColorMap = isDark ? STAGE_COLORS_DARK : STAGE_COLORS_LIGHT;
     const stageColor = stageColorMap[stageLabel.toLowerCase()] ?? theme.primary;
-    const score = getDealScore(deal, isDark);
+    const score = getDealScore(deal, dealHealth, isDark);
+    const insight = getDealInsight(deal, activities, dealHealth);
 
     // Header Data
     const projectName = lv(deal.projectName, getLookupValue, users) !== "—" ? lv(deal.projectName, getLookupValue, users) : lv(deal.projectId, getLookupValue, users);
@@ -363,23 +415,40 @@ export default function DealDetailScreen() {
                     )}
                 </View>
 
-                {/* Professional Action Hub */}
-                <View style={styles.modernActionHub}>
-                    {[
-                        { icon: 'call', label: 'Call', color: theme.primary, onPress: () => buyerPhone ? trackCall(buyerPhone, id!, "Deal", buyer) : Alert.alert("No Phone", "Contact number not available") },
-                        { icon: 'logo-whatsapp', label: 'WhatsApp', color: '#128C7E', onPress: () => buyerPhone ? Linking.openURL(`https://wa.me/${buyerPhone.replace(/\D/g, "")}`) : Alert.alert("No Phone", "Contact number not available") },
-                        { icon: 'people', label: 'Matches', color: isDark ? '#818CF8' : '#6366F1', onPress: () => router.push(`/match-lead?dealId=${id}`) },
-                        { icon: 'handshake-outline', label: 'Offer', color: '#F59E0B', onPress: () => router.push(`/add-offer?dealId=${id}`) },
-                        { icon: 'calculator-outline', label: 'Quote', color: '#10B981', onPress: () => router.push(`/add-quote?dealId=${id}`) },
-                        { icon: 'share-social', label: 'Share', color: isDark ? '#94A3B8' : '#94A3B8', onPress: () => Alert.alert("Share Wall", `Sharing details for Deal ${unitNo} at ${projectName}`) },
-                    ].map((action, i) => (
-                        <View key={i} style={styles.modernHubItem}>
-                            <TouchableOpacity style={[styles.modernHubBtn, { backgroundColor: action.color }]} onPress={action.onPress}>
-                                <Ionicons name={action.icon as any} size={20} color="#fff" />
-                            </TouchableOpacity>
-                            <Text style={[styles.modernHubLabel, { color: theme.textSecondary }]}>{action.label}</Text>
-                        </View>
-                    ))}
+                {/* Senior Professional Action Ribbon - Icons Only */}
+                <View style={[styles.actionRibbonContainer, { backgroundColor: isDark ? 'rgba(255,255,255,0.02)' : '#f8fafc', borderColor: theme.border }]}>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.actionRibbonScroll}>
+                        <RibbonButton 
+                            icon="call" 
+                            color={theme.primary} 
+                            onPress={() => buyerPhone ? trackCall(buyerPhone, id!, "Deal", buyer) : Alert.alert("No Phone", "Contact number not available")} 
+                        />
+                        <RibbonButton 
+                            icon="logo-whatsapp" 
+                            color="#128C7E" 
+                            onPress={() => buyerPhone ? Linking.openURL(`https://wa.me/${buyerPhone.replace(/\D/g, "")}`) : Alert.alert("No Phone", "Contact number not available")} 
+                        />
+                        <RibbonButton 
+                            icon="chatbubble-ellipses" 
+                            color="#3B82F6" 
+                            onPress={() => buyerPhone ? Linking.openURL(`sms:${buyerPhone}`) : Alert.alert("No Phone", "Contact number not available")} 
+                        />
+                        <RibbonButton 
+                            icon="mail" 
+                            color="#8B5CF6" 
+                            onPress={() => buyerEmail ? Linking.openURL(`mailto:${buyerEmail}`) : Alert.alert("No Email", "Email address not available")} 
+                        />
+                        <RibbonButton 
+                            icon="people" 
+                            color={isDark ? '#818CF8' : '#6366F1'} 
+                            onPress={() => router.push(`/match-lead?dealId=${id}`)} 
+                        />
+                        <RibbonButton 
+                            icon="share-social" 
+                            color="#64748B" 
+                            onPress={() => Alert.alert("Share", `Sharing ${unitNo} details...`)} 
+                        />
+                    </ScrollView>
                 </View>
 
                 {/* Swipeable Tabs Navigation */}
@@ -413,25 +482,70 @@ export default function DealDetailScreen() {
                 style={{ flex: 1 }}
             >
                 {/* 1. Analysis */}
-                <View style={styles.tabContent}>
-                    <ScrollView contentContainerStyle={styles.innerScroll}>
-                        {/* Pipeline Visualization */}
+                <View style={[styles.tabContent, { width: SCREEN_WIDTH }]}>
+                    <ScrollView contentContainerStyle={{ padding: 20 }}>
+                        {/* Enterprise Lifecycle Visualizer */}
                         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-                            <Text style={[styles.cardTitle, { color: theme.text }]}>Deal Lifecycle</Text>
-                            <View style={styles.pipelineContainer}>
-                                {["Open", "Quote", "Negotiation", "Booked"].map((stage, idx) => {
-                                    const isActive = stageLabel.toLowerCase() === stage.toLowerCase();
-                                    const isDone = ["open", "quote", "negotiation", "booked", "closed"].indexOf(stageLabel.toLowerCase()) > idx;
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                                <Text style={[styles.cardTitle, { color: theme.text, marginBottom: 0 }]}>Deal Journey Intel</Text>
+                                <View style={{ backgroundColor: theme.primary + '15', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 }}>
+                                    <Text style={{ fontSize: 10, fontWeight: '800', color: theme.primary }}>ACTIVE JOURNEY</Text>
+                                </View>
+                            </View>
+                            
+                            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12 }}>
+                                {[
+                                    { id: 'open', label: 'Open', color: '#6366F1', icon: 'flag-outline' },
+                                    { id: 'quote', label: 'Quote', color: '#8B5CF6', icon: 'calculator-outline' },
+                                    { id: 'negotiation', label: 'Nego', color: '#F59E0B', icon: 'handshake-outline' },
+                                    { id: 'booked', label: 'Booked', color: '#F97316', icon: 'home-outline' },
+                                    { id: 'closed', label: 'Closed', color: '#10B981', icon: 'checkmark-circle-outline' }
+                                ].map((step) => {
+                                    const currentStage = (lv(deal?.stage) || 'open').toLowerCase();
+                                    const isCurrent = currentStage.includes(step.id);
+                                    
+                                    // Aggregate activity and duration
+                                    const stageActivities = Array.isArray(activities) ? activities.filter(a => {
+                                        const t = new Date(a.timestamp || a.createdAt);
+                                        const hist = Array.isArray(stageHistory) ? stageHistory.find(h => (h.stage || "").toLowerCase().includes(step.id)) : null;
+                                        if (!hist) return false;
+                                        return new Date(hist.enteredAt) <= t && (!hist.exitedAt || t <= new Date(hist.exitedAt));
+                                    }) : [];
+
+                                    const histItem = Array.isArray(stageHistory) ? stageHistory.find(h => (h.stage || "").toLowerCase().includes(step.id)) : null;
+                                    const days = histItem ? Math.ceil(Math.abs((histItem.exitedAt ? new Date(histItem.exitedAt).getTime() : Date.now()) - new Date(histItem.enteredAt).getTime()) / (1000 * 60 * 60 * 24)) : 0;
+                                    const isStuck = isCurrent && days > 14;
+
                                     return (
-                                        <View key={stage} style={styles.pipelineStep}>
-                                            <View style={[styles.pipelineCircle, (isActive || isDone) ? { backgroundColor: stageColor } : { backgroundColor: theme.border }]}>
-                                                {isDone ? <Ionicons name="checkmark" size={12} color="#fff" /> : <Text style={styles.pipelineNumber}>{idx + 1}</Text>}
+                                        <TouchableOpacity 
+                                            key={step.id} 
+                                            onPress={() => router.push(`/change-stage?dealId=${id}&currentStage=${(lv(deal?.stage) || "open").toLowerCase()}`)}
+                                            style={[
+                                                styles.enterpriseArrow, 
+                                                { backgroundColor: isCurrent ? step.color + '15' : 'transparent', borderColor: isCurrent ? step.color : theme.border },
+                                                isCurrent && { borderLeftWidth: 4, borderLeftColor: step.color },
+                                                isStuck && { borderColor: '#EF4444', backgroundColor: '#EF444410' }
+                                            ]}
+                                        >
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                                                <Text style={{ fontSize: 13, fontWeight: '900', color: isCurrent ? (isStuck ? '#EF4444' : step.color) : theme.text }}>{step.label.toUpperCase()}</Text>
+                                                <Ionicons name={step.icon as any} size={15} color={isCurrent ? step.color : theme.textLight} />
                                             </View>
-                                            <Text style={[styles.pipelineLabel, { color: isActive ? theme.text : theme.textLight }]}>{stage}</Text>
-                                        </View>
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                                    <Ionicons name="time-outline" size={11} color={theme.textLight} />
+                                                    <Text style={{ fontSize: 11, fontWeight: '700', color: theme.textLight }}>{days}d</Text>
+                                                </View>
+                                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                                    <Ionicons name="flash-outline" size={11} color={theme.textLight} />
+                                                    <Text style={{ fontSize: 11, fontWeight: '700', color: theme.textLight }}>{stageActivities.length}</Text>
+                                                </View>
+                                            </View>
+                                            {isCurrent && <View style={[styles.pulseDot, { backgroundColor: isStuck ? '#EF4444' : step.color }]} />}
+                                        </TouchableOpacity>
                                     );
                                 })}
-                            </View>
+                            </ScrollView>
                         </View>
 
                         {/* Deal Intelligence */}
@@ -441,7 +555,7 @@ export default function DealDetailScreen() {
                             </View>
                             <View style={{ flex: 1 }}>
                                 <Text style={[styles.insightTitle, { color: score.color }]}>{score.val}% Confidence Score</Text>
-                                <Text style={[styles.insightText, { color: theme.text }]}>{getDealInsight(deal, activities)}</Text>
+                                <Text style={[styles.insightText, { color: theme.text }]}>{insight}</Text>
                             </View>
                         </View>
 
@@ -459,17 +573,6 @@ export default function DealDetailScreen() {
                 {/* 2. Financial */}
                 <View style={styles.tabContent}>
                     <ScrollView contentContainerStyle={styles.innerScroll}>
-                        {/* Financial Fast-Actions */}
-                        <View style={styles.fastActionRow}>
-                            <TouchableOpacity style={[styles.fastActionBtn, { borderColor: '#F59E0B' }]} onPress={() => router.push(`/add-offer?dealId=${id}`)}>
-                                <Ionicons name="handshake-outline" size={18} color="#F59E0B" />
-                                <Text style={[styles.fastActionText, { color: '#F59E0B' }]}>Record Offer</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity style={[styles.fastActionBtn, { borderColor: '#10B981' }]} onPress={() => router.push(`/add-quote?dealId=${id}`)}>
-                                <Ionicons name="calculator-outline" size={18} color="#10B981" />
-                                <Text style={[styles.fastActionText, { color: '#10B981' }]}>Create Quotation</Text>
-                            </TouchableOpacity>
-                        </View>
 
                         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
                             <Text style={[styles.cardTitle, { color: theme.text }]}>Pricing Architecture</Text>
@@ -479,7 +582,6 @@ export default function DealDetailScreen() {
                             <InfoRow label="Flexible Portion" value={deal.flexiblePercentage ? `${deal.flexiblePercentage}%` : "—"} icon="pie-chart-outline" />
                         </View>
 
-                        {/* Collapsible Net Landed Cost Sheet */}
                         <TouchableOpacity 
                             style={[styles.costSheetHeader, { backgroundColor: theme.card, borderColor: theme.border }]}
                             onPress={() => setShowCostSheet(!showCostSheet)}
@@ -501,32 +603,10 @@ export default function DealDetailScreen() {
                                 <InfoRow label="NET LANDED COST" value={fmt(valuation?.grandTotal || (deal.price + (valuation?.totalGovtCharges || 0)))} accent />
                             </View>
                         )}
+                    </ScrollView>
+                </View>
 
-                        {/* Recent Negotiation Rounds */}
-                        {Array.isArray(deal.negotiationRounds) && deal.negotiationRounds.length > 0 && (
-                            <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border, marginTop: 16 }]}>
-                                <Text style={[styles.cardTitle, { color: theme.text }]}>Negotiation Timeline</Text>
-                                {deal.negotiationRounds.map((round: any, idx: number) => (
-                                    <View key={idx} style={styles.offerRound}>
-                                        <View style={styles.offerHeader}>
-                                            <Text style={[styles.offerRoundLabel, { color: theme.primary }]}>ROUND {round.round}</Text>
-                                            <Text style={styles.offerDate}>{new Date(round.date).toLocaleDateString()}</Text>
-                                        </View>
-                                        <View style={styles.offerDataRow}>
-                                            <View>
-                                                <Text style={styles.offerLabel}>Buyer Offer</Text>
-                                                <Text style={[styles.offerValue, { color: theme.text }]}>{fmt(round.buyerOffer)}</Text>
-                                            </View>
-                                            <View style={{ alignItems: 'flex-end' }}>
-                                                <Text style={styles.offerLabel}>Counter</Text>
-                                                <Text style={[styles.offerValue, { color: theme.text }]}>{fmt(round.ownerCounter)}</Text>
-                                            </View>
-                                        </View>
-                                    </View>
-                                ))}
-                            </View>
-                        )}
-                    {/* 3. Technical */}
+                {/* 3. Details */}
                 <View style={styles.tabContent}>
                     <ScrollView contentContainerStyle={styles.innerScroll}>
                         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
@@ -534,9 +614,6 @@ export default function DealDetailScreen() {
                             <InfoRow label="Category" value={lv(deal.category || deal.inventoryId?.category, getLookupValue, users)} icon="list-outline" />
                             <InfoRow label="Sub-Category" value={lv(deal.subCategory || deal.inventoryId?.subCategory, getLookupValue, users)} icon="layers-outline" />
                             <InfoRow label="Direction" value={lv(deal.direction || deal.inventoryId?.direction, getLookupValue, users)} icon="compass-outline" />
-                            <InfoRow label="Facing" value={lv(deal.facing || deal.inventoryId?.facing, getLookupValue, users)} icon="navigate-outline" />
-                            <InfoRow label="Road Width" value={lv(deal.roadWidth || deal.inventoryId?.roadWidth, getLookupValue, users)} icon="trail-sign-outline" />
-                            <InfoRow label="Ownership" value={lv(deal.ownership || deal.inventoryId?.ownership, getLookupValue, users)} icon="document-text-outline" />
                         </View>
 
                         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
@@ -544,52 +621,28 @@ export default function DealDetailScreen() {
                             <InfoRow label="Total Area" value={getSizeLabel(deal, getLookupValue) || "—"} icon="cube-outline" accent />
                             <InfoRow label="Dimensions" value={deal.inventoryId?.dimensions || `${lv(deal.width)} x ${lv(deal.length)}`} icon="resize-outline" />
                         </View>
-
-                        {(deal.inventoryId?.builtupDetails || []).length > 0 && (
-                            <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-                                <Text style={[styles.cardTitle, { color: theme.text }]}>Built-up Hierarchy</Text>
-                                {deal.inventoryId.builtupDetails.map((item: any, idx: number) => (
-                                    <View key={idx} style={[styles.infoRow, { borderBottomColor: theme.border }]}>
-                                        <View>
-                                            <Text style={{ fontSize: 13, fontWeight: '700', color: theme.text }}>{item.floor || `Floor ${idx}`}</Text>
-                                            <Text style={{ fontSize: 11, color: theme.textLight }}>{item.width} x {item.length}</Text>
-                                        </View>
-                                        <Text style={{ fontSize: 14, fontWeight: '800', color: theme.primary }}>{item.totalArea} {deal.inventoryId?.sizeUnit || 'SqFt'}</Text>
-                                    </View>
-                                ))}
-                            </View>
-                        )}
-
-                        <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-                            <Text style={[styles.cardTitle, { color: theme.text }]}>Furnishing & Status</Text>
-                            <InfoRow label="Furnish Type" value={lv(deal.furnishType || deal.inventoryId?.furnishType, getLookupValue, users)} icon="bed-outline" />
-                            <InfoRow label="Possession" value={lv(deal.possessionStatus || deal.inventoryId?.possessionStatus, getLookupValue, users)} icon="key-outline" />
-                        </View>
                     </ScrollView>
                 </View>
 
-                {/* 4. Geography */}
+                {/* 4. Location */}
                 <View style={styles.tabContent}>
                     <ScrollView contentContainerStyle={styles.innerScroll}>
                         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
                             <Text style={[styles.cardTitle, { color: theme.text }]}>Regional Geography</Text>
                             <InfoRow label="City" value={lv(deal.city || deal.inventoryId?.city, getLookupValue, users)} icon="business-outline" />
                             <InfoRow label="Sector/Locality" value={lv(deal.sector || deal.inventoryId?.sector, getLookupValue, users)} icon="map-outline" />
-                            <InfoRow label="Tehsil" value={lv(deal.inventoryId?.address?.tehsil, getLookupValue, users)} icon="navigate-circle-outline" />
-                            <InfoRow label="ZIP Code" value={lv(deal.inventoryId?.address?.pinCode, getLookupValue, users)} icon="mail-unread-outline" />
                         </View>
 
                         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
                             <Text style={[styles.cardTitle, { color: theme.text }]}>Digital Signature (GPS)</Text>
                             <InfoRow label="Lat/Long" value={`${deal.inventoryId?.address?.lat || '—'} , ${deal.inventoryId?.address?.lng || '—'}`} icon="location-outline" />
-                            
                             <TouchableOpacity
                                 style={[styles.googleMapsBtn, { backgroundColor: theme.primary }]}
                                 onPress={() => {
                                     const lat = deal.inventoryId?.address?.lat;
                                     const lng = deal.inventoryId?.address?.lng;
-                                    if (!lat || !lng) return Alert.alert("No Location", "GPS coordinates are not available for this deal.");
-                                    const url = `geo:${lat},${lng}?q=${lat},${lng}(${unitNo})`;
+                                    if (!lat || !lng) return Alert.alert("No Location", "GPS coordinates are not available.");
+                                    const url = `geo:${lat},${lng}?q=${lat},${lng}`;
                                     Linking.openURL(url);
                                 }}
                             >
@@ -600,96 +653,7 @@ export default function DealDetailScreen() {
                     </ScrollView>
                 </View>
 
-                {/* 5. Parties */}
-                <View style={styles.tabContent}>
-                    <ScrollView contentContainerStyle={styles.innerScroll}>
-                        <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-                            <View style={styles.sectionHeader}>
-                                <Text style={[styles.cardTitle, { color: theme.text, marginBottom: 0 }]}>Ownership Group</Text>
-                                <TouchableOpacity onPress={() => setIsOwnerModalOpen(true)}>
-                                    <Text style={{ color: theme.primary, fontWeight: '700' }}>Manage</Text>
-                                </TouchableOpacity>
-                            </View>
-                            {(!deal.inventoryId?.owners || deal.inventoryId.owners.length === 0) ? (
-                                <Text style={styles.emptyText}>No owners linked to this property.</Text>
-                            ) : (
-                                deal.inventoryId.owners.map((owner: any, idx: number) => (
-                                    <TouchableOpacity
-                                        key={idx}
-                                        style={[styles.partyCard, { backgroundColor: theme.background, marginBottom: 10 }]}
-                                        onPress={() => owner._id && router.push(`/contact-detail?id=${owner._id}`)}
-                                    >
-                                        <View style={styles.matchLeft}>
-                                            <Text style={[styles.matchUnit, { color: theme.text }]}>{lv(owner, getLookupValue, users)}</Text>
-                                            <Text style={[styles.matchProject, { color: theme.textLight }]}>{owner.mobile || "N/A"}</Text>
-                                        </View>
-                                        <View style={[styles.relationBadge, { backgroundColor: '#10B981' + '10' }]}>
-                                            <Text style={{ fontSize: 9, color: '#10B981', fontWeight: '800' }}>OWNER</Text>
-                                        </View>
-                                    </TouchableOpacity>
-                                ))
-                            )}
-                        </View>
-
-                        <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-                            <Text style={[styles.cardTitle, { color: theme.text }]}>Associates & Partners</Text>
-                            {(!deal.inventoryId?.associates || deal.inventoryId.associates.length === 0) ? (
-                                <Text style={styles.emptyText}>No associates linked.</Text>
-                            ) : (
-                                deal.inventoryId.associates.map((assoc: any, idx: number) => (
-                                    <TouchableOpacity
-                                        key={idx}
-                                        style={[styles.partyCard, { backgroundColor: theme.background, marginBottom: 10 }]}
-                                        onPress={() => assoc.contact?._id && router.push(`/contact-detail?id=${assoc.contact._id}`)}
-                                    >
-                                        <View style={styles.matchLeft}>
-                                            <Text style={[styles.matchUnit, { color: theme.text }]}>{lv(assoc.contact || assoc, getLookupValue, users)}</Text>
-                                            <Text style={[styles.matchProject, { color: theme.textLight }]}>{assoc.relationship || "Associate"}</Text>
-                                        </View>
-                                        <View style={[styles.relationBadge, { backgroundColor: theme.primary + '10' }]}>
-                                            <Text style={{ fontSize: 9, color: theme.primary, fontWeight: '800' }}>PARTNER</Text>
-                                        </View>
-                                    </TouchableOpacity>
-                                ))
-                            )}
-                        </View>
-                    </ScrollView>
-                </View>
-
-                {/* 6. Matches */}
-                <View style={styles.tabContent}>
-                    <ScrollView contentContainerStyle={styles.innerScroll}>
-                        <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-                            <Text style={[styles.cardTitle, { color: theme.text }]}>Precision Matching Leads</Text>
-                            {matchingLeads.length === 0 ? (
-                                <Text style={styles.emptyText}>No matching leads found for this configuration.</Text>
-                            ) : (
-                                matchingLeads.map((lead: any, i: number) => {
-                                    const score = lead.score || 0;
-                                    const scoreColor = score > 80 ? "#10B981" : score > 50 ? "#F59E0B" : "#EF4444";
-                                    return (
-                                        <TouchableOpacity key={i} style={[styles.matchItem, { borderBottomColor: theme.border }]} onPress={() => router.push(`/lead-detail?id=${lead._id || lead._}`)}>
-                                            <View style={styles.matchLeft}>
-                                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                                                    <View style={[styles.scorePill, { backgroundColor: scoreColor + '15', borderColor: scoreColor + '30' }]}>
-                                                        <Text style={[styles.scorePillText, { color: scoreColor }]}>{score}% Match</Text>
-                                                    </View>
-                                                    <Text style={[styles.matchUnit, { color: theme.text }]}>{lead.firstName} {lead.lastName || ""}</Text>
-                                                </View>
-                                                <Text style={[styles.matchProject, { color: theme.textLight }]}>
-                                                    {lv(lead.requirement, getLookupValue, users)} • Budget: {lv(lead.budget, getLookupValue, users)}
-                                                </Text>
-                                            </View>
-                                            <Ionicons name="chevron-forward" size={16} color={theme.textLight} />
-                                        </TouchableOpacity>
-                                    );
-                                })
-                            )}
-                        </View>
-                    </ScrollView>
-                </View>
-
-                {/* 7. Timeline */}
+                {/* 5. Activities */}
                 <View style={styles.tabContent}>
                     <ScrollView contentContainerStyle={styles.innerScroll}>
                         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
@@ -700,22 +664,17 @@ export default function DealDetailScreen() {
                                 </TouchableOpacity>
                             </View>
                             {activities.length === 0 ? (
-                                <Text style={styles.emptyText}>No activities recorded yet.</Text>
+                                <Text style={styles.emptyText}>No activities recorded.</Text>
                             ) : (
                                 activities.map((act, i) => (
                                     <View key={i} style={[styles.timelineItem, { borderLeftColor: theme.border }]}>
                                         <View style={[styles.timelineDot, { backgroundColor: theme.primary }]} />
                                         <View style={styles.timelineBody}>
                                             <View style={styles.timelineHeader}>
-                                                <Text style={[styles.timelineType, { color: theme.primary }]}>{act.type?.toUpperCase() || "ACTIVITY"}</Text>
+                                                <Text style={[styles.timelineType, { color: theme.primary }]}>{act.type?.toUpperCase()}</Text>
                                                 <Text style={styles.timelineDate}>{new Date(act.createdAt).toLocaleDateString()}</Text>
                                             </View>
                                             <Text style={[styles.timelineSubject, { color: theme.text }]}>{act.subject}</Text>
-                                            {(act.performedBy || act.assignedTo) && (
-                                                <Text style={{ fontSize: 9, color: theme.textLight, marginTop: 4, fontWeight: '600' }}>
-                                                    By {act.performedBy || lv(act.assignedTo, getLookupValue, users)}
-                                                </Text>
-                                            )}
                                         </View>
                                     </View>
                                 ))
@@ -724,40 +683,35 @@ export default function DealDetailScreen() {
                     </ScrollView>
                 </View>
 
-                {/* 8. Vault */}
+                {/* 6. Match */}
                 <View style={styles.tabContent}>
                     <ScrollView contentContainerStyle={styles.innerScroll}>
                         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-                            <View style={styles.sectionHeader}>
-                                <Text style={[styles.cardTitle, { color: theme.text, marginBottom: 0 }]}>Media Vault</Text>
-                                <TouchableOpacity onPress={() => router.push(`/upload-media?entityId=${deal.inventoryId?._id}&entityType=Inventory`)}>
-                                    <Ionicons name="cloud-upload-outline" size={20} color={theme.primary} />
-                                </TouchableOpacity>
-                            </View>
-                            {(deal.inventoryId?.media?.length || 0) === 0 ? (
-                                <Text style={styles.emptyText}>No media files in vault.</Text>
+                            <Text style={[styles.cardTitle, { color: theme.text }]}>Matched Leads</Text>
+                            {matchingLeads.length === 0 ? (
+                                <Text style={styles.emptyText}>No matches found.</Text>
                             ) : (
-                                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
-                                    {deal.inventoryId.media.map((m: any, idx: number) => (
-                                        <TouchableOpacity key={idx} style={styles.vaultItem}>
-                                            <View style={{ width: (SCREEN_WIDTH - 80) / 3, height: 80, backgroundColor: theme.background, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }}>
-                                                <Ionicons name="image-outline" size={32} color={theme.textLight} />
-                                            </View>
-                                        </TouchableOpacity>
-                                    ))}
-                                </View>
+                                matchingLeads.map((lead: any, i: number) => (
+                                    <TouchableOpacity key={i} style={[styles.matchItem, { borderBottomColor: theme.border }]} onPress={() => router.push(`/lead-detail?id=${lead._id}`)}>
+                                        <Text style={[styles.matchUnit, { color: theme.text }]}>{lead.firstName} {lead.lastName}</Text>
+                                    </TouchableOpacity>
+                                ))
                             )}
                         </View>
+                    </ScrollView>
+                </View>
 
+                {/* 7. Owner */}
+                <View style={styles.tabContent}>
+                    <ScrollView contentContainerStyle={styles.innerScroll}>
                         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-                            <Text style={[styles.cardTitle, { color: theme.text }]}>Documents</Text>
-                            {(deal.inventoryId?.documents?.length || 0) === 0 ? (
-                                <Text style={styles.emptyText}>No documents uploaded.</Text>
+                            <Text style={[styles.cardTitle, { color: theme.text }]}>Ownership Group</Text>
+                            {(!deal.inventoryId?.owners || deal.inventoryId.owners.length === 0) ? (
+                                <Text style={styles.emptyText}>No owners linked.</Text>
                             ) : (
-                                deal.inventoryId.documents.map((doc: any, idx: number) => (
-                                    <View key={idx} style={styles.docRow}>
-                                        <Ionicons name="document-text" size={20} color={theme.primary} />
-                                        <Text style={[styles.docName, { color: theme.text }]}>{doc.name || "Untitled Document"}</Text>
+                                deal.inventoryId.owners.map((owner: any, idx: number) => (
+                                    <View key={idx} style={[styles.partyCard, { backgroundColor: theme.background, marginBottom: 10 }]}>
+                                        <Text style={[styles.matchUnit, { color: theme.text }]}>{lv(owner, getLookupValue, users)}</Text>
                                     </View>
                                 ))
                             )}
@@ -765,16 +719,15 @@ export default function DealDetailScreen() {
                     </ScrollView>
                 </View>
 
-                {/* 9. History */}
+                {/* 8. History */}
                 <View style={styles.tabContent}>
                     <ScrollView contentContainerStyle={styles.innerScroll}>
-                        {/* Chain of Title */}
                         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-                            <Text style={[styles.cardTitle, { color: theme.text }]}>Chain of Title History</Text>
+                            <Text style={[styles.cardTitle, { color: theme.text }]}>Title History</Text>
                             {(!deal.inventoryId?.ownerHistory || deal.inventoryId.ownerHistory.length === 0) ? (
-                                <Text style={styles.emptyText}>No title history recorded.</Text>
+                                <Text style={styles.emptyText}>No history recorded.</Text>
                             ) : (
-                                deal.inventoryId.ownerHistory.reverse().map((h: any, idx: number) => (
+                                deal.inventoryId.ownerHistory.map((h: any, idx: number) => (
                                     <View key={idx} style={[styles.timelineItem, { borderLeftColor: theme.border }]}>
                                         <View style={[styles.timelineDot, { backgroundColor: '#10b981' }]} />
                                         <View style={styles.timelineBody}>
@@ -785,24 +738,7 @@ export default function DealDetailScreen() {
                                 ))
                             )}
                         </View>
-
-                        {/* Lifecycle Metrics */}
-                        <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-                            <Text style={[styles.cardTitle, { color: theme.text }]}>Inventory Lifecycle</Text>
-                            <View style={{ flexDirection: 'row', gap: 10 }}>
-                                <View style={[styles.lifecycleBox, { backgroundColor: theme.background }]}>
-                                    <Text style={styles.lifecycleLabel}>Created</Text>
-                                    <Text style={[styles.lifecycleValue, { color: theme.text }]}>{deal.inventoryId?.createdAt ? new Date(deal.inventoryId.createdAt).toLocaleDateString() : '—'}</Text>
-                                </View>
-                                <View style={[styles.lifecycleBox, { backgroundColor: theme.background }]}>
-                                    <Text style={styles.lifecycleLabel}>Last Updated</Text>
-                                    <Text style={[styles.lifecycleValue, { color: theme.text }]}>{deal.inventoryId?.updatedAt ? new Date(deal.inventoryId.updatedAt).toLocaleDateString() : '—'}</Text>
-                                </View>
-                            </View>
-                        </View>
                     </ScrollView>
-                </View>
-    </ScrollView>
                 </View>
             </ScrollView>
 
@@ -826,22 +762,10 @@ export default function DealDetailScreen() {
 
                         <View style={styles.actionGrid}>
                             <ActionItem 
-                                icon="handshake-outline" 
-                                label="Record Offer" 
-                                color="#F59E0B" 
-                                onPress={() => { setIsActionModalVisible(false); router.push(`/add-offer?dealId=${id}`); }} 
-                            />
-                            <ActionItem 
-                                icon="calculator-outline" 
-                                label="Quotation" 
-                                color="#10B981" 
-                                onPress={() => { setIsActionModalVisible(false); router.push(`/add-quote?dealId=${id}`); }} 
-                            />
-                            <ActionItem 
                                 icon="cloud-upload-outline" 
                                 label="Media Vault" 
                                 color="#3B82F6" 
-                                onPress={() => { setIsActionModalVisible(false); router.push(`/upload-media?dealId=${id}`); }} 
+                                onPress={() => { setIsActionModalVisible(false); router.push(`/upload-media?id=${deal?.inventoryId?._id || deal?.inventoryId}`); }} 
                             />
                             <ActionItem 
                                 icon="person-add-outline" 
@@ -849,20 +773,11 @@ export default function DealDetailScreen() {
                                 color="#8B5CF6" 
                                 onPress={() => { setIsActionModalVisible(false); router.push(`/add-contact?dealId=${id}`); }} 
                             />
-                            <ActionItem 
+                             <ActionItem 
                                 icon="navigate-outline" 
                                 label="Location" 
                                 color="#EF4444" 
-                                onPress={() => {
-                                    setIsActionModalVisible(false);
-                                    if (deal?.location?.coordinates) {
-                                        const [lat, lng] = deal.location.coordinates || [];
-                                        const url = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
-                                        Linking.openURL(url);
-                                    } else {
-                                        Alert.alert("No Location", "This deal does not have coordinates mapped yet.");
-                                    }
-                                }} 
+                                onPress={() => { setIsActionModalVisible(false); router.push(`/geography?dealId=${id}`); }} 
                             />
                             <ActionItem 
                                 icon="create-outline" 
@@ -892,6 +807,7 @@ export default function DealDetailScreen() {
         </View>
     );
 }
+
 
 const ActionItem = ({ icon, label, color, onPress }: any) => {
     const { theme } = useTheme();
@@ -940,11 +856,51 @@ const styles = StyleSheet.create({
     marketingPill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
     marketingText: { fontSize: 11, fontWeight: '800' },
 
-    // Modern Action Hub
-    modernActionHub: { flexDirection: 'row', justifyContent: 'center', gap: 15, paddingVertical: 18, flexWrap: 'wrap', paddingHorizontal: 15 },
-    modernHubItem: { alignItems: 'center', gap: 6, width: (SCREEN_WIDTH - 80) / 3 },
-    modernHubBtn: { width: 48, height: 48, borderRadius: 24, justifyContent: 'center', alignItems: 'center', elevation: 4, shadowOpacity: 0.2, shadowRadius: 5 },
-    modernHubLabel: { fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.4, textAlign: 'center' },
+    // Action Ribbon
+    actionRibbonContainer: { 
+        marginHorizontal: 20, 
+        marginTop: 15, 
+        borderRadius: 22, 
+        borderWidth: 1, 
+        overflow: 'hidden',
+        paddingVertical: 14,
+        paddingHorizontal: 10
+    },
+    enterpriseArrow: { 
+        width: 135, 
+        padding: 14, 
+        borderRadius: 18, 
+        borderWidth: 1, 
+        position: 'relative',
+        overflow: 'hidden'
+    },
+    pulseDot: { 
+        position: 'absolute', 
+        top: 8, 
+        right: 8, 
+        width: 6, 
+        height: 6, 
+        borderRadius: 3, 
+        opacity: 0.8
+    },
+    actionRibbonScroll: { 
+        flexGrow: 1,
+        justifyContent: 'center', 
+        gap: 24, 
+        paddingHorizontal: 15 
+    },
+    ribbonBtn: { 
+        width: 44,
+        height: 44,
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        borderRadius: 22,
+        elevation: 3,
+        shadowOpacity: 0.15,
+        shadowRadius: 5,
+        shadowOffset: { width: 0, height: 2 }
+    },
+    ribbonLabel: { display: 'none' },
 
     fastActionRow: { flexDirection: 'row', gap: 12, marginBottom: 20 },
     fastActionBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 12, borderRadius: 14, borderWidth: 1.5, borderStyle: 'dashed' },
@@ -981,12 +937,34 @@ const styles = StyleSheet.create({
     timelineSubject: { fontSize: 14, fontWeight: '700', marginBottom: 4 },
     timelineNote: { fontSize: 12, lineHeight: 18 },
 
-    // Pipeline
-    pipelineContainer: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 10 },
-    pipelineStep: { alignItems: 'center', gap: 8, flex: 1 },
-    pipelineCircle: { width: 32, height: 32, borderRadius: 16, justifyContent: 'center', alignItems: 'center' },
-    pipelineNumber: { color: '#fff', fontSize: 12, fontWeight: '800' },
-    pipelineLabel: { fontSize: 9, fontWeight: '700' },
+    // Arrow Pipeline
+    arrowPipelineScroll: { gap: 12, paddingVertical: 10 },
+    arrowStep: { 
+        flexDirection: 'row', 
+        alignItems: 'center', 
+        paddingHorizontal: 12, 
+        paddingVertical: 10, 
+        borderRadius: 14, 
+        borderWidth: 1.5,
+        backgroundColor: 'rgba(0,0,0,0.02)'
+    },
+    arrowStepActive: {
+        backgroundColor: 'rgba(59, 130, 246, 0.05)',
+        shadowOpacity: 0.05,
+        shadowRadius: 10
+    },
+    arrowIconBox: { width: 26, height: 26, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
+    arrowLabel: { fontSize: 10, fontWeight: '900', marginLeft: 8, letterSpacing: 0.5 },
+    livePulse: {
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+        position: 'absolute',
+        top: -4,
+        right: -4,
+        borderWidth: 2,
+        borderColor: '#fff'
+    },
 
     // Insight
     insightTitle: { fontSize: 14, fontWeight: '800', marginBottom: 2 },
@@ -1052,13 +1030,46 @@ const styles = StyleSheet.create({
     actionLabel: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.3 },
     closeActionBtn: { marginTop: 10, paddingVertical: 14, borderRadius: 16, alignItems: 'center' },
     closeActionText: { fontSize: 14, fontWeight: '800' },
-});
-
-function resolveNameFromObject(obj: any, fallback?: any, getLookupValue?: (type: string, val: any) => string, users?: any[]): string {
-    if (obj) {
-        if (obj.fullName) return obj.fullName;
-        if (obj.name) return obj.name;
-        if (obj.firstName) return [obj.firstName, obj.lastName].filter(Boolean).join(" ");
+    actionRibbonContainer: { 
+        marginHorizontal: 15, 
+        marginTop: 15, 
+        borderRadius: 22, 
+        borderWidth: 1, 
+        overflow: 'hidden',
+        paddingVertical: 14,
+        paddingHorizontal: 10
+    },
+    actionRibbonScroll: { 
+        flexGrow: 1,
+        justifyContent: 'center', 
+        gap: 20, 
+        paddingHorizontal: 15 
+    },
+    ribbonBtn: { 
+        width: 44,
+        height: 44,
+        borderRadius: 14,
+        justifyContent: 'center',
+        alignItems: 'center',
+        elevation: 2,
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        shadowOffset: { width: 0, height: 2 }
+    },
+    enterpriseArrow: {
+        padding: 15,
+        borderRadius: 18,
+        borderWidth: 1,
+        width: 130,
+        position: 'relative',
+        overflow: 'hidden'
+    },
+    pulseDot: {
+        width: 6,
+        height: 6,
+        borderRadius: 3,
+        position: 'absolute',
+        top: 10,
+        right: 10,
     }
-    return lv(fallback, getLookupValue, users);
-}
+});

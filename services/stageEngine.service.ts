@@ -92,6 +92,36 @@ export const updateLeadStage = async (
 };
 
 /**
+ * Update deal stage — persists stageHistory in MongoDB.
+ */
+export const updateDealStage = async (
+    dealId: string,
+    stage: string,
+    opts: {
+        activityType?: string;
+        outcome?: string;
+        activityId?: string;
+        reason?: string;
+        triggeredBy?: string;
+    } = {}
+) => {
+    try {
+        const res = await api.put(`/stage-engine/deals/${dealId}/stage`, {
+            stage,
+            triggeredBy: opts.triggeredBy || "manual",
+            activityType: opts.activityType,
+            outcome: opts.outcome,
+            activityId: opts.activityId,
+            reason: opts.reason,
+        });
+        return res.data;
+    } catch (e: any) {
+        console.warn("[StageEngine] updateDealStage failed:", e?.message);
+        return { success: false, error: e?.message };
+    }
+};
+
+/**
  * Sync deal stage from its linked lead stages.
  */
 export const syncDealStage = async (

@@ -15,6 +15,7 @@ import { useCallTracking } from "@/context/CallTrackingContext";
 import { useTheme } from "@/context/ThemeContext";
 import { useLookup } from "@/context/LookupContext";
 import { STAGE_COLORS } from "@/services/stageEngine.service";
+import api from "@/services/api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -64,12 +65,27 @@ function InfoRow({ label, value, accent, icon }: { label: string; value: string;
     );
 }
 
+const RibbonButton = ({ icon, color, onPress }: { icon: any; color: string; onPress: () => void }) => {
+    const { theme } = useTheme();
+    const isDark = theme.background === '#0F172A';
+    return (
+        <TouchableOpacity 
+            style={[styles.ribbonBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#fff', borderColor: isDark ? 'rgba(255,255,255,0.1)' : theme.border, borderWidth: 1 }]} 
+            onPress={onPress}
+            activeOpacity={0.7}
+        >
+            <Ionicons name={icon} size={20} color={color} />
+        </TouchableOpacity>
+    );
+};
+
 export default function LeadDetailScreen() {
     const insets = useSafeAreaInsets();
     const { trackCall } = useCallTracking();
     const { id } = useLocalSearchParams<{ id: string }>();
     const router = useRouter();
     const { theme } = useTheme();
+    const isDark = theme.background === '#0F172A';
     const { getLookupValue } = useLookup();
 
 
@@ -85,6 +101,8 @@ export default function LeadDetailScreen() {
     const tabScrollViewRef = useRef<ScrollView>(null);
     const contentScrollViewRef = useRef<ScrollView>(null);
     const fadeAnim = useRef(new Animated.Value(0)).current;
+
+    const [stageHistory, setStageHistory] = useState<any[]>([]);
 
     const fetchData = useCallback(async (isRefresh = false) => {
         if (!id) return;
@@ -106,15 +124,17 @@ export default function LeadDetailScreen() {
                 }
             }
 
-            const [leadRes, timelineRes, matchRes] = await Promise.all([
+            const [leadRes, timelineRes, matchRes, historyRes] = await Promise.all([
                 getLeadById(id as string).catch(e => { console.warn("Lead Fetch Error:", e); return null; }),
                 getUnifiedTimeline("lead", id as string).catch(e => { console.warn("Timeline Fetch Error:", e); return null; }),
-                getMatchingDeals(id as string).catch(e => { console.warn("Match Fetch Error:", e); return null; })
+                getMatchingDeals(id as string).catch(e => { console.warn("Match Fetch Error:", e); return null; }),
+                api.get(`/stage-engine/leads/${id}/history`).catch(e => { console.warn("History Fetch Error:", e); return null; })
             ]);
 
             const currentLead = leadRes?.data ?? leadRes;
             const currentActivities = Array.isArray(timelineRes?.data) ? timelineRes.data : (Array.isArray(timelineRes) ? timelineRes : []);
             const currentMatchingDeals = Array.isArray(matchRes?.data) ? matchRes.data : (Array.isArray(matchRes) ? matchRes : []);
+            const currentHistory = historyRes?.data?.stageHistory || [];
             
             let currentOwnedInventory: any[] = [];
             if (currentLead && currentLead.contactDetails?._id) {
@@ -126,6 +146,7 @@ export default function LeadDetailScreen() {
             setActivities(currentActivities);
             setMatchingDeals(currentMatchingDeals);
             setOwnedInventory(currentOwnedInventory);
+            setStageHistory(currentHistory);
             lastFetchRef.current = Date.now();
 
             AsyncStorage.setItem(cacheKey, JSON.stringify({
@@ -133,6 +154,7 @@ export default function LeadDetailScreen() {
                 activities: currentActivities,
                 matchingDeals: currentMatchingDeals,
                 ownedInventory: currentOwnedInventory,
+                stageHistory: currentHistory,
                 timestamp: Date.now()
             })).catch(e => console.warn("Cache save error:", e));
 
@@ -164,7 +186,6 @@ export default function LeadDetailScreen() {
     if (loading) return <View style={styles.center}><ActivityIndicator size="large" color={theme.primary} /></View>;
     if (!lead) return <View style={styles.center}><Text style={styles.noData}>Lead not found</Text></View>;
 
-    const isDark = theme.background === '#0F172A';
     const score = getLeadScore(lead, isDark);
     const name = leadName(lead);
 
@@ -176,9 +197,7 @@ export default function LeadDetailScreen() {
                     <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace("/(tabs)/leads")} style={[styles.backBtnCircle, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }]}>
                         <Ionicons name="chevron-back" size={22} color={theme.text} />
                     </TouchableOpacity>
-                    <View style={styles.headerTitleContainer}>
-                        <Text style={[styles.headerNamePremium, { color: theme.text }]} numberOfLines={1}>{name}</Text>
-                        <View style={styles.headerBadgeRow}>
+                    <View style={styles.headerTitleContainer}><Text style={[styles.headerNamePremium, { color: theme.text }]} numberOfLines={1}>{name}</Text><View style={styles.headerBadgeRow}>
                             <View style={[styles.miniBadge, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : theme.primary + '20' }]}>
                                 <Text style={[styles.miniBadgeText, { color: isDark ? theme.textSecondary : theme.primary }]}>{lead.mobile}</Text>
                             </View>
@@ -259,20 +278,13 @@ export default function LeadDetailScreen() {
                         </View>
                     </View>
                 </View>
-
-                {/* Marketing & Acquisition Row */}
-                <View style={styles.marketingRow}>
+                <View style={[styles.marketingRow, { borderBottomWidth: 1, borderBottomColor: theme.border, paddingBottom: 15 }]}>
                     <View style={[styles.marketingPill, { backgroundColor: theme.primary + '10' }]}>
                         <Ionicons name="megaphone" size={12} color={theme.primary} />
                         <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
                             <Text style={[styles.marketingText, { color: theme.primary }]}>
                                 {lv(lead.source) || lv(lead.contactDetails?.source) || "Direct"}
                             </Text>
-                            {(lv(lead.subSource) || lv(lead.contactDetails?.subSource)) && (
-                                <Text style={[styles.marketingSubText, { color: theme.primary + '80' }]}>
-                                    {` • ${lv(lead.subSource) || lv(lead.contactDetails?.subSource)}`}
-                                </Text>
-                            )}
                         </View>
                     </View>
 
@@ -286,22 +298,98 @@ export default function LeadDetailScreen() {
                     )}
                 </View>
 
+                <View style={{ marginTop: 15 }}>
+                    <Text style={{ fontSize: 10, fontWeight: '900', color: theme.textLight, paddingHorizontal: 20, marginBottom: 8, letterSpacing: 1 }}>JOURNEY INTEL</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, gap: 10 }}>
+                        {[
+                            { id: 'incoming', label: 'Incoming', subStages: ['New'], icon: "information-circle-outline", color: '#6366f1' },
+                            { id: 'prospect', label: 'Prospect', subStages: ['Prospect', 'Qualified'], icon: "people-outline", color: '#8b5cf6' },
+                            { id: 'opportunity', label: 'Opportunity', subStages: ['Opportunity'], icon: "trending-up-outline", color: '#f59e0b' },
+                            { id: 'negotiations', label: 'Negotiations', subStages: ['Negotiation', 'Booking', 'Booked'], icon: "home-outline", color: '#f97316' },
+                            { id: 'closed', label: 'Closed', subStages: ['Closed Won', 'Won', 'Closed Lost', 'Lost', 'Unqualified', 'Stalled'], icon: "checkmark-circle-outline", color: '#10b981' }
+                        ].map((ms, idx) => {
+                            const currentStageLabel = (lv(lead?.stage) || 'new').toLowerCase();
+                            const isCurrent = ms.subStages.some(ss => ss.toLowerCase() === currentStageLabel);
+                            
+                            // Calculate metrics
+                            const stageActivities = Array.isArray(activities) ? activities.filter(a => {
+                                const t = new Date(a.timestamp || a.createdAt);
+                                const hist = Array.isArray(stageHistory) ? stageHistory.find(h => ms.subStages.some(ss => ss.toLowerCase() === (h.stage || "").toLowerCase())) : null;
+                                if (!hist) return false;
+                                return new Date(hist.enteredAt) <= t && (!hist.exitedAt || t <= new Date(hist.exitedAt));
+                            }) : [];
+
+                            const histItem = Array.isArray(stageHistory) ? stageHistory.find(h => ms.subStages.some(ss => ss.toLowerCase() === (h.stage || "").toLowerCase())) : null;
+                            const days = histItem ? Math.ceil(Math.abs((histItem.exitedAt ? new Date(histItem.exitedAt).getTime() : Date.now()) - new Date(histItem.enteredAt).getTime()) / (1000 * 60 * 60 * 24)) : 0;
+
+                            return (
+                                <TouchableOpacity 
+                                    key={ms.id} 
+                                    onPress={() => router.push(`/change-stage?leadId=${id}&currentStage=${(lv(lead?.stage) || "new").toLowerCase()}`)}
+                                    style={[
+                                        styles.enterpriseArrow, 
+                                        { backgroundColor: isCurrent ? ms.color + '15' : 'transparent', borderColor: isCurrent ? ms.color : theme.border },
+                                        isCurrent && { borderLeftWidth: 4, borderLeftColor: ms.color }
+                                    ]}
+                                >
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                                        <Text style={{ fontSize: 12, fontWeight: '900', color: isCurrent ? ms.color : theme.text }}>{ms.label.toUpperCase()}</Text>
+                                        <Ionicons name={ms.icon as any} size={14} color={isCurrent ? ms.color : theme.textLight} />
+                                    </View>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                            <Ionicons name="time-outline" size={10} color={theme.textLight} />
+                                            <Text style={{ fontSize: 10, fontWeight: '700', color: theme.textLight }}>{days}d</Text>
+                                        </View>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                            <Ionicons name="flash-outline" size={10} color={theme.textLight} />
+                                            <Text style={{ fontSize: 10, fontWeight: '700', color: theme.textLight }}>{stageActivities.length} acts</Text>
+                                        </View>
+                                    </View>
+                                    {isCurrent && <View style={[styles.pulseDot, { backgroundColor: ms.color }]} />}
+                                </TouchableOpacity>
+                            );
+                        })}
+                    </ScrollView>
+                </View>
 
 
 
-                {/* Professional Action Hub */}
-                <View style={styles.modernActionHub}>
-                    {[
-                        { icon: 'call', color: theme.primary, onPress: () => lead?.mobile && trackCall(lead.mobile, id!, "Lead", name) },
-                        { icon: 'chatbubble-ellipses', color: isDark ? '#3B82F6' : '#3B82F6', onPress: () => lead?.mobile && Linking.openURL(`sms:${lead.mobile.replace(/\D/g, "")}`) },
-                        { icon: 'logo-whatsapp', color: '#128C7E', onPress: () => lead?.mobile && Linking.openURL(`https://wa.me/${lead.mobile.replace(/\D/g, "")}`) },
-                        { icon: 'mail', color: isDark ? '#F87171' : '#EA4335', onPress: () => lead?.email && Linking.openURL(`mailto:${lead.email}`) },
-                        { icon: 'calendar', color: isDark ? '#818CF8' : '#6366F1', onPress: () => router.push(`/add-activity?id=${id}&type=Lead`) },
-                    ].map((action, i) => (
-                        <TouchableOpacity key={i} style={[styles.modernHubBtn, { backgroundColor: action.color }]} onPress={action.onPress}>
-                            <Ionicons name={action.icon as any} size={20} color="#fff" />
-                        </TouchableOpacity>
-                    ))}
+
+                {/* Senior Professional Action Ribbon - Icons Only */}
+                <View style={[styles.actionRibbonContainer, { backgroundColor: isDark ? 'rgba(255,255,255,0.02)' : '#f8fafc', borderColor: theme.border }]}>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.actionRibbonScroll}>
+                        <RibbonButton 
+                            icon="call" 
+                            color={theme.primary} 
+                            onPress={() => lead.mobile ? trackCall(lead.mobile, id!, "Lead", name) : Alert.alert("No Phone", "Contact number not available")} 
+                        />
+                        <RibbonButton 
+                            icon="logo-whatsapp" 
+                            color="#128C7E" 
+                            onPress={() => lead.mobile ? Linking.openURL(`https://wa.me/${lead.mobile.replace(/\D/g, "")}`) : Alert.alert("No Phone", "Contact number not available")} 
+                        />
+                        <RibbonButton 
+                            icon="chatbubble-ellipses" 
+                            color="#3B82F6" 
+                            onPress={() => lead.mobile ? Linking.openURL(`sms:${lead.mobile}`) : Alert.alert("No Phone", "Contact number not available")} 
+                        />
+                        <RibbonButton 
+                            icon="mail" 
+                            color="#8B5CF6" 
+                            onPress={() => lead.email ? Linking.openURL(`mailto:${lead.email}`) : Alert.alert("No Email", "Email address not available")} 
+                        />
+                        <RibbonButton 
+                            icon="people" 
+                            color={isDark ? '#818CF8' : '#6366F1'} 
+                            onPress={() => onTabPress(3)} 
+                        />
+                        <RibbonButton 
+                            icon="share-social" 
+                            color="#64748B" 
+                            onPress={() => Alert.alert("Share", `Sharing ${name}'s requirements...`)} 
+                        />
+                    </ScrollView>
                 </View>
 
                 {/* Swipeable Tabs Navigation */}
@@ -711,8 +799,49 @@ const styles = StyleSheet.create({
     marketingText: { fontSize: 11, fontWeight: '800' },
     marketingSubText: { fontSize: 9, fontWeight: '600', marginLeft: 4 },
 
-    modernActionHub: { flexDirection: 'row', justifyContent: 'center', gap: 20, paddingVertical: 15 },
-    modernHubBtn: { width: 50, height: 50, borderRadius: 25, justifyContent: 'center', alignItems: 'center', elevation: 8, shadowOpacity: 0.3, shadowRadius: 10 },
+    enterpriseArrow: { 
+        width: 130, 
+        padding: 12, 
+        borderRadius: 16, 
+        borderWidth: 1, 
+        position: 'relative',
+        overflow: 'hidden'
+    },
+    pulseDot: { 
+        position: 'absolute', 
+        top: 8, 
+        right: 8, 
+        width: 6, 
+        height: 6, 
+        borderRadius: 3, 
+        opacity: 0.6 
+    },
+    actionRibbonContainer: { 
+        marginHorizontal: 20, 
+        marginTop: 15, 
+        borderRadius: 22, 
+        borderWidth: 1, 
+        overflow: 'hidden',
+        paddingVertical: 14,
+        paddingHorizontal: 10
+    },
+    actionRibbonScroll: { 
+        flexGrow: 1,
+        justifyContent: 'center', 
+        gap: 24, 
+        paddingHorizontal: 15 
+    },
+    ribbonBtn: { 
+        width: 44,
+        height: 44,
+        borderRadius: 14,
+        justifyContent: 'center',
+        alignItems: 'center',
+        elevation: 2,
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        shadowOffset: { width: 0, height: 2 }
+    },
 
     tabsScroll: { paddingHorizontal: 16 },
     tabItem: { paddingVertical: 12, marginRight: 24, borderBottomWidth: 2, borderBottomColor: 'transparent' },

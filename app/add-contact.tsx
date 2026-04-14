@@ -401,6 +401,21 @@ export default function AddContactScreen() {
             const res = id ? await api.put(`/contacts/${id}`, payload) : await api.post("/contacts", payload);
 
             if (res.data?.success || res.status === 201 || res.status === 200) {
+                // Link to deal if dealId is provided
+                if (dealId && !id) {
+                    const contactId = res.data?.data?._id;
+                    if (contactId) {
+                        try {
+                            await api.put(`/deals/${dealId}`, {
+                                associatedContact: contactId,
+                                isAssociateSelected: true
+                            });
+                        } catch (linkErr) {
+                            console.error("[ContactUI] Linking to deal failed", linkErr);
+                        }
+                    }
+                }
+
                 Alert.alert("✅ Success", "Contact saved successfully!", [
                     { text: "OK", onPress: () => router.canGoBack() ? router.back() : router.replace("/(tabs)/contacts") },
                 ]);
