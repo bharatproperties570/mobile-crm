@@ -7,17 +7,19 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/context/ThemeContext";
+import { useLookup } from "@/context/LookupContext";
 import { getLeadById, updateLead } from "@/services/leads.service";
 import { addActivity } from "@/services/activities.service";
 import { updateLeadStage } from "@/services/stageEngine.service";
-
-const PROPERTY_TYPES = ["Residential", "Commercial", "Industrial", "Agricultural"];
 
 export default function ReviveLeadScreen() {
     const insets = useSafeAreaInsets();
     const router = useRouter();
     const { id } = useLocalSearchParams<{ id: string }>();
     const { theme } = useTheme();
+    const { propertyConfig } = useLookup();
+
+    const PROPERTY_TYPES = (propertyConfig?.categories || []).map((cat: any) => cat.label);
 
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);

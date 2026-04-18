@@ -64,11 +64,19 @@ export default function UploadMediaScreen() {
             const uploadedUrls = [];
             for (const asset of assets) {
                 const formData = new FormData();
-                formData.append("file", {
-                    uri: asset.uri,
-                    name: asset.name || `upload_${Date.now()}`,
-                    type: asset.mimeType || "image/jpeg"
-                } as any);
+                
+                if (Platform.OS === 'web') {
+                    const response = await fetch(asset.uri);
+                    const blob = await response.blob();
+                    formData.append('file', blob, asset.name || asset.fileName || `upload_${Date.now()}`);
+                } else {
+                    const fileUri = Platform.OS === "android" ? asset.uri : asset.uri.replace("file://", "");
+                    formData.append("file", {
+                        uri: fileUri,
+                        name: asset.name || asset.fileName || `upload_${Date.now()}`,
+                        type: asset.mimeType || "image/jpeg"
+                    } as any);
+                }
 
                 // Add GDrive metadata
                 formData.append("entityType", "Inventory");
@@ -76,26 +84,33 @@ export default function UploadMediaScreen() {
                 formData.append("docCategory", "Media");
                 formData.append("docType", asset.mimeType?.startsWith('video') ? "Video" : "Image");
 
+                console.log("[DEBUG] Uploading file:", asset.name, "Type:", asset.mimeType);
+
                 const res = await api.post("/upload", formData, {
                     headers: { "Content-Type": "multipart/form-data" }
                 });
 
-                if (res.data.success) {
+                console.log("[DEBUG] Upload Response:", res.status, res.data?.success);
+
+                if (res.data?.success) {
                     uploadedUrls.push({
                         url: res.data.url,
                         type: asset.mimeType?.startsWith('video') ? 'video' : 'image',
                         thumbnail: res.data.thumbnail || res.data.url
                     });
+                } else {
+                    console.warn("[WARN] File upload failed:", res.data?.error || "Unknown error");
                 }
             }
 
             const updatedMedia = [...media, ...uploadedUrls];
             setMedia(updatedMedia);
             await updateInventory(id!, { media: updatedMedia });
-            Alert.alert("Success", "Media uploaded successfully");
-        } catch (error) {
-            console.error("Upload error:", error);
-            Alert.alert("Error", "Failed to upload one or more files");
+            Alert.alert("Success", `${uploadedUrls.length} file(s) uploaded successfully`);
+        } catch (error: any) {
+            console.error("[CRITICAL] Upload error:", error.response?.data || error.message);
+            const serverError = error.response?.data?.error || error.response?.data?.message || error.message;
+            Alert.alert("Upload Failed", serverError);
         } finally {
             setUploading(false);
         }

@@ -145,7 +145,10 @@ export function CallTrackingProvider({ children }: { children: React.ReactNode }
     };
 
     const trackCall = (mobile: string, entityId: string, entityType: string, entityName: string) => {
-        // Prepare for outcome prompt
+        // Show banner for outgoing call as well
+        handleIncomingCall(mobile);
+
+        // Prepare for outcome prompt on return
         setLastCall({
             mobile,
             entityId,

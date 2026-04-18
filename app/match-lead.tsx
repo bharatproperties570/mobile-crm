@@ -173,19 +173,20 @@ export default function MatchScreen() {
                     <View>
                         <Text style={styles.price}>{isLeadMatch ? `Budget: ₹${(Number(item.budgetMax || 0) / 100000).toFixed(0)}L` : `₹${(Number(item.price || item.amount || 0) / 100000).toFixed(2)} L`}</Text>
                         <View style={styles.matchDetailContainer}>
-                            {item.matchDetails?.slice(0, 3).map((tag: string, idx: number) => {
-                                let tagBg = "#F1F5F9";
-                                let tagText = "#64748B";
-                                if (tag.includes("Intent") || tag.includes("Type")) { tagBg = "#E0F2FE"; tagText = "#0369A1"; }
-                                if (tag.includes("Budget")) { tagBg = "#DCFCE7"; tagText = "#15803D"; }
-                                if (tag.includes("Orientation")) { tagBg = "#FEF3C7"; tagText = "#92400E"; }
-                                if (tag.includes("Location") || tag.includes("Project") || tag.includes("Sector") || tag.includes("City")) { 
-                                    tagBg = "#F3E8FF"; tagText = "#7E22CE"; // Purple for Location
+                            {(item.matchDetails || []).slice(0, 3).map((tag: string, idx: number) => {
+                                let tagStyle = { bg: "#F1F5F9", text: "#64748B" };
+                                
+                                const t = tag.toLowerCase();
+                                if (t.includes("intent") || t.includes("type")) tagStyle = { bg: "#E0F2FE", text: "#0369A1" };
+                                else if (t.includes("budget") || t.includes("price")) tagStyle = { bg: "#DCFCE7", text: "#15803D" };
+                                else if (t.includes("orientation") || t.includes("facing")) tagStyle = { bg: "#FEF3C7", text: "#92400E" };
+                                else if (t.includes("location") || t.includes("project") || t.includes("sector") || t.includes("city") || t.includes("block")) {
+                                    tagStyle = { bg: "#F3E8FF", text: "#7E22CE" };
                                 }
                                 
                                 return (
-                                    <View key={idx} style={[styles.matchChip, { backgroundColor: tagBg }]}>
-                                        <Text style={[styles.matchChipText, { color: tagText }]}>{tag}</Text>
+                                    <View key={idx} style={[styles.matchChip, { backgroundColor: tagStyle.bg }]}>
+                                        <Text style={[styles.matchChipText, { color: tagStyle.text }]}>{tag}</Text>
                                     </View>
                                 );
                             })}

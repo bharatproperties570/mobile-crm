@@ -30,26 +30,25 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const { isAuthenticated } = useAuth();
 
     const refreshProjects = useCallback(async () => {
+        console.log(`[ProjectContext] refreshProjects called (isAuthenticated=${isAuthenticated})`);
         // 1. Try cache first
-        if (projects.length === 0) {
-            try {
-                const cached = await AsyncStorage.getItem("@cache_projects");
-                if (cached) {
-                    const parsed = JSON.parse(cached);
+        try {
+            const cached = await AsyncStorage.getItem("@cache_projects");
+            if (cached) {
+                const parsed = JSON.parse(cached);
+                if (Array.isArray(parsed)) {
                     setProjects(parsed);
                     const index = new Map<string, Project>();
                     parsed.forEach((p: Project) => {
-                        if (!p) return;
-                        if (p._id) index.set(p._id, p);
-                        if (p.id) index.set(p.id, p);
+                        if (p && p._id) index.set(p._id, p);
+                        if (p && p.id) index.set(p.id, p);
                     });
                     setProjectIndex(index);
-                    setLoading(false); // Quick UI response
+                    setLoading(false);
                 }
-            } catch (e) { console.warn("[ProjectContext] Cache read failed", e); }
-        }
+            }
+        } catch (e) { console.warn("[ProjectContext] Cache read failed", e); }
 
-        if (projects.length === 0) setLoading(true);
         if (!isAuthenticated) {
             setLoading(false);
             return;
@@ -59,28 +58,23 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
             const res = await api.get('/projects', { params: { limit: 1000 } });
             const data = res.data?.records || res.data?.data || (Array.isArray(res.data) ? res.data : []);
 
-            if (Array.isArray(data) && data.length > 0) {
+            if (Array.isArray(data)) {
                 setProjects(data);
                 AsyncStorage.setItem("@cache_projects", JSON.stringify(data)).catch(() => {});
                 
                 const index = new Map<string, Project>();
                 data.forEach((p: Project) => {
-                    if (!p) return;
-                    if (p._id) index.set(p._id, p);
-                    if (p.id) index.set(p.id, p);
+                    if (p && p._id) index.set(p._id, p);
+                    if (p && p.id) index.set(p.id, p);
                 });
                 setProjectIndex(index);
             }
         } catch (error: any) {
-            if (error?.response?.status === 401) {
-                console.warn('[ProjectContext] Unauthorized fetch skipped (unauthenticated state)');
-            } else {
-                console.error('[ProjectContext] Failed to fetch projects:', error);
-            }
+            console.error('[ProjectContext] Failed to fetch projects:', error);
         } finally {
             setLoading(false);
         }
-    }, [projects.length]);
+    }, [isAuthenticated]);
 
     useEffect(() => {
         refreshProjects();

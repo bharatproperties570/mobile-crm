@@ -10,6 +10,8 @@ import api from "@/services/api";
 import { useTheme, SPACING } from "@/context/ThemeContext";
 import { MultiSearchableDropdown } from "@/components/MultiSearchableDropdown";
 import { getTeams } from "@/services/teams.service";
+import { safeApiCall } from "@/services/api.helpers";
+import { useUsers } from "@/context/UserContext";
 
 // ─── Reusable Components ──────────────────────────────────────────────────────
 
@@ -270,14 +272,15 @@ export default function AddContactScreen() {
     const { id, companyId } = useLocalSearchParams<{ id?: string, companyId?: string }>();
     const router = useRouter();
     const { theme } = useTheme();
-    const { getLookupsByType, loading: loadingLookups } = useLookup();
+    const { getLookupsByType, leadMasterFields, refreshLookups, loading: loadingLookups } = useLookup();
+    const { users, refreshUsers, loading: loadingUsers } = useUsers();
     
     const [saving, setSaving] = useState(false);
     const [loadingContact, setLoadingContact] = useState(false);
     const [form, setForm] = useState<ContactForm>(INITIAL);
-    const [teams, setTeams] = useState<any[]>([]);
-    const [users, setUsers] = useState<any[]>([]);
     const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
+    const [localTeams, setLocalTeams] = useState<any[]>([]); // Renamed to avoid confusion if needed, or just use context
+    const [localUsers, setLocalUsers] = useState<any[]>([]);
 
     useEffect(() => {
         if (id) {
@@ -291,8 +294,8 @@ export default function AddContactScreen() {
                     ]);
                     
                     const c = res.data?.data || res.data;
-                    setTeams(teamsRes.data || []);
-                    setUsers(usersRes.data?.data || []);
+                    setLocalTeams(teamsRes.data || []);
+                    setLocalUsers(usersRes.data?.data || []);
 
                     if (c) {
                         setForm({
@@ -337,12 +340,16 @@ export default function AddContactScreen() {
     useEffect(() => {
         if (!id) {
             const loadLookups = async () => {
+                // Force Refresh
+                refreshLookups();
+                refreshUsers();
+
                 const [teamsRes, usersRes] = await Promise.all([
                     getTeams(),
                     api.get("/users?limit=1000")
                 ]);
-                setTeams(teamsRes.data || []);
-                setUsers(usersRes.data?.data || []);
+                setLocalTeams(teamsRes.data || []);
+                setLocalUsers(usersRes.data?.data || []);
             };
             loadLookups();
         }
@@ -398,21 +405,21 @@ export default function AddContactScreen() {
                 anniversaryDate: form.anniversaryDate || undefined,
             };
 
-            const res = id ? await api.put(`/contacts/${id}`, payload) : await api.post("/contacts", payload);
+            console.log('[DEBUG-CONTACT] Submitting Payload:', JSON.stringify(payload, null, 2));
 
-            if (res.data?.success || res.status === 201 || res.status === 200) {
+            const res = id 
+                ? await safeApiCall(() => api.put(`/contacts/${id}`, payload)) 
+                : await safeApiCall(() => api.post("/contacts", payload));
+
+            if (!res.error) {
                 // Link to deal if dealId is provided
                 if (dealId && !id) {
-                    const contactId = res.data?.data?._id;
+                    const contactId = (res.data as any)?.[0]?._id || (res.data as any)?._id; 
                     if (contactId) {
-                        try {
-                            await api.put(`/deals/${dealId}`, {
-                                associatedContact: contactId,
-                                isAssociateSelected: true
-                            });
-                        } catch (linkErr) {
-                            console.error("[ContactUI] Linking to deal failed", linkErr);
-                        }
+                        await safeApiCall(() => api.put(`/deals/${dealId}`, {
+                            associatedContact: contactId,
+                            isAssociateSelected: true
+                        }));
                     }
                 }
 
@@ -568,10 +575,10 @@ export default function AddContactScreen() {
                     <SectionHeader title="Personal & System" icon="🛡️" subtitle="Internal system details" />
                     <View style={[styles.card, { backgroundColor: theme.cardBg, borderColor: theme.border }]}>
                         <Field label="Gender">
-                            <SelectButton value={form.gender} options={[{ label: "Male", value: "Male" }, { label: "Female", value: "Female" }, { label: "Other", value: "Other" }]} onSelect={set("gender")} />
+                            <SelectButton value={form.gender} options={(leadMasterFields?.genders || ["Male", "Female", "Other"]).map((v: string) => ({ label: v, value: v }))} onSelect={set("gender")} />
                         </Field>
                         <Field label="Marital Status">
-                            <SelectButton value={form.maritalStatus} options={[{ label: "Single", value: "Single" }, { label: "Married", value: "Married" }]} onSelect={set("maritalStatus")} />
+                            <SelectButton value={form.maritalStatus} options={(leadMasterFields?.maritalStatuses || ["Single", "Married"]).map((v: string) => ({ label: v, value: v }))} onSelect={set("maritalStatus")} />
                         </Field>
                         <View style={styles.row}>
                             <View style={{ flex: 1 }}><Input label="DOB" value={form.birthDate} onChangeText={set("birthDate")} placeholder="YYYY-MM-DD" /></View>
@@ -597,13 +604,13 @@ export default function AddContactScreen() {
                             <ModernPicker
                                 label="Primary Owner"
                                 value={form.owner}
-                                options={users.filter(u => !form.teams.length || form.teams.includes(u.team?._id || u.team)).map(u => ({ label: u.fullName || u.name, value: u._id }))}
+                                options={localUsers.filter(u => !form.teams.length || form.teams.includes(u.team?._id || u.team)).map(u => ({ label: u.fullName || u.name, value: u._id }))}
                                 onSelect={set("owner")}
                             />
                         </Field>
 
                         <Field label="Visibility">
-                            <SelectButton value={form.visibleTo} options={[{ label: "Everyone", value: "Everyone" }, { label: "Team", value: "Team" }, { label: "Owner Only", value: "Owner Only" }]} onSelect={set("visibleTo")} />
+                            <SelectButton value={form.visibleTo} options={[{ label: "Everyone", value: "Everyone" }, { label: "Team", value: "Team" }, { label: "Private", value: "Private" }]} onSelect={set("visibleTo")} />
                         </Field>
                         
                         <Field label="Priority Tags">
@@ -633,7 +640,7 @@ export default function AddContactScreen() {
                 <MultiSearchableDropdown
                     visible={activeDropdown === 'teams'}
                     onClose={() => setActiveDropdown(null)}
-                    options={teams.map(t => ({ label: t.name, value: t._id }))}
+                    options={localTeams.map(t => ({ label: t.name, value: t._id }))}
                     selectedValues={form.teams}
                     onToggle={(tid) => {
                         const current = form.teams || [];

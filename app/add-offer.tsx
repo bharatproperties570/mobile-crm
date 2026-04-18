@@ -6,18 +6,14 @@ import {
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import api from "@/services/api";
-import { useTheme, SPACING, Colors } from "@/context/ThemeContext";
-import { useLookup } from "@/context/LookupContext";
-import { useUsers } from "@/context/UserContext";
+import { useTheme } from "@/context/ThemeContext";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 export default function AddOffer() {
-    const { theme, isDark } = useTheme();
+    const { theme, isDarkMode: isDark } = useTheme();
     const router = useRouter();
     const { dealId } = useLocalSearchParams<{ dealId: string }>();
-    const { getLookupValue } = useLookup();
-    const { users } = useUsers();
 
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -33,9 +29,16 @@ export default function AddOffer() {
         conditions: ""
     });
 
+    const [searchText, setSearchText] = useState("");
+    const [allLeads, setAllLeads] = useState<any[]>([]);
+    const [showAll, setShowAll] = useState(false);
+
     useEffect(() => {
         const fetchData = async () => {
-            if (!dealId) return;
+            if (!dealId) {
+                setLoading(false);
+                return;
+            }
             try {
                 const [dealRes, matchRes] = await Promise.all([
                     api.get(`/deals/${dealId}`),
@@ -45,21 +48,24 @@ export default function AddOffer() {
                 if (dealRes.data) {
                     const d = dealRes.data.data || dealRes.data;
                     setDeal(d);
-                    // Pre-select if there is an associated contact
-                    if (d.associatedContact) {
+                    
+                    // Pre-select Associated Contact
+                    const contact = d.associatedContact || d.partyStructure?.buyer;
+                    if (contact) {
                         setFormData(prev => ({ 
                             ...prev, 
-                            leadId: d.associatedContact._id || d.associatedContact.id,
-                            leadName: d.associatedContact.fullName || d.associatedContact.name
+                            leadId: contact._id || contact.id,
+                            leadName: contact.fullName || contact.name || "Associated Party"
                         }));
                     }
                 }
+                
                 if (matchRes.data && matchRes.data.success) {
                     setMatchingLeads(matchRes.data.data || []);
                 }
             } catch (error) {
                 console.error("Error fetching offer context:", error);
-                Alert.alert("Error", "Failed to load deal or matching leads");
+                // Silence alert to avoid blocking splash screen if this is called early
             } finally {
                 setLoading(false);
             }
@@ -67,42 +73,69 @@ export default function AddOffer() {
         fetchData();
     }, [dealId]);
 
+    const handleSearchLeads = async () => {
+        if (searchText.length < 3) {
+            Alert.alert("Input Needed", "Please enter at least 3 characters to search.");
+            return;
+        }
+        setLoading(true);
+        try {
+            const res = await api.get("/leads", { params: { search: searchText, limit: 10 } });
+            const data = res.data.records || res.data.data?.records || res.data.data || [];
+            setAllLeads(Array.isArray(data) ? data : []);
+            setShowAll(true);
+        } catch (e) {
+            Alert.alert("Search Error", "Could not fetch leads list.");
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const handleSave = async () => {
         if (!formData.leadId || !formData.amount) {
-            Alert.alert("Required", "Please select a lead and enter an offer amount.");
+            Alert.alert("Required", "Please select a prospect and enter an offer amount.");
+            return;
+        }
+
+        if (!deal) {
+            Alert.alert("Error", "Deal data not fully loaded yet.");
             return;
         }
 
         setSaving(true);
         try {
+            const offerBy = formData.leadName || "Prospect";
             const offerData = {
                 round: (deal.negotiationRounds || []).length + 1,
                 date: new Date().toISOString(),
-                offerBy: formData.leadName,
+                offerBy,
                 buyerOffer: Number(formData.amount),
                 ownerCounter: formData.counterAmount ? Number(formData.counterAmount) : 0,
                 status: formData.status,
                 notes: formData.conditions
             };
 
-            const payload = {
+            const payload: any = {
                 negotiationRounds: [
                     ...(deal.negotiationRounds || []),
                     offerData
                 ],
-                // Update stage to Negotiation if it's not already
+                associatedContact: formData.leadId,
                 stage: deal.stage === 'Closed' || deal.stage === 'Lost' ? deal.stage : 'Negotiation'
             };
 
             const res = await api.patch(`/deals/${dealId}`, payload);
+            
             if (res.data && (res.data.success || res.status === 200)) {
-                Alert.alert("Success", "Offer recorded successfully");
+                Alert.alert("Success", "Offer recorded and deal updated.");
                 router.back();
             } else {
-                throw new Error(res.data?.message || "Failed to save offer");
+                throw new Error(res.data?.error || "Failed to save");
             }
         } catch (error: any) {
-            Alert.alert("Error", error.message || "Failed to save offer");
+            console.error("[CRITICAL] Offer Save Error:", error.response?.data || error.message);
+            const serverError = error.response?.data?.error || error.response?.data?.message || error.message;
+            Alert.alert("Save Failed", serverError);
         } finally {
             setSaving(false);
         }
@@ -115,6 +148,8 @@ export default function AddOffer() {
             </View>
         );
     }
+
+    const displayLeads = showAll ? allLeads : matchingLeads;
 
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
@@ -142,18 +177,35 @@ export default function AddOffer() {
 
                 {/* Lead Selection */}
                 <View style={styles.sectionHeader}>
-                    <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>SELECT PROSPECT</Text>
-                    <Ionicons name="people-outline" size={14} color={theme.textSecondary} />
+                    <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>{showAll ? "SEARCH RESULTS" : "BEST MATCHES"}</Text>
+                    {!!(!showAll && matchingLeads.length > 0) && <Ionicons name="sparkles" size={14} color="#FBBF24" />}
+                </View>
+
+                {/* Unified Search Bar */}
+                <View style={[styles.searchBox, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                    <TextInput
+                        placeholder="Search another prospect..."
+                        placeholderTextColor={theme.textLight}
+                        style={[styles.searchInput, { color: theme.text }]}
+                        value={searchText}
+                        onChangeText={setSearchText}
+                        onSubmitEditing={handleSearchLeads}
+                    />
+                    <TouchableOpacity onPress={handleSearchLeads}>
+                        <Ionicons name="search" size={20} color={theme.primary} />
+                    </TouchableOpacity>
                 </View>
 
                 <View style={styles.leadsGrid}>
-                    {matchingLeads.length === 0 && !formData.leadId ? (
+                    {displayLeads.length === 0 && !formData.leadId ? (
                         <View style={[styles.emptyBox, { borderColor: theme.border, borderStyle: 'dotted' }]}>
-                            <Text style={{ color: theme.textSecondary, textAlign: 'center' }}>No matched leads found. Please attach a lead to this deal first.</Text>
+                            <Text style={{ color: theme.textSecondary, textAlign: 'center' }}>
+                                {showAll ? "No results found for search." : "No automatic matches found. Use search to find a prospect."}
+                            </Text>
                         </View>
-                    ) : matchingLeads.length > 0 ? (
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12 }}>
-                            {matchingLeads.map((m: any) => (
+                    ) : (
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingVertical: 10 }}>
+                            {displayLeads.map((m: any) => (
                                 <TouchableOpacity
                                     key={m._id}
                                     style={[
@@ -161,26 +213,33 @@ export default function AddOffer() {
                                         { backgroundColor: theme.card, borderColor: theme.border },
                                         formData.leadId === m._id && { borderColor: theme.primary, backgroundColor: theme.primary + '05' }
                                     ]}
-                                    onPress={() => setFormData({ ...formData, leadId: m._id, leadName: m.fullName || m.name || `${m.firstName} ${m.lastName || ""}` })}
+                                    onPress={() => setFormData({ 
+                                        ...formData, 
+                                        leadId: m._id, 
+                                        leadName: m.fullName || m.name || `${m.firstName || m.name} ${m.lastName || ""}` 
+                                    })}
                                 >
                                     <View style={[styles.avatar, { backgroundColor: theme.primary + '20' }]}>
-                                        <Text style={[styles.avatarText, { color: theme.primary }]}>{(m.firstName?.[0] || m.fullName?.[0] || 'U').toUpperCase()}</Text>
+                                        <Text style={[styles.avatarText, { color: theme.primary }]}>{(m.firstName?.[0] || m.fullName?.[0] || m.name?.[0] || 'U').toUpperCase()}</Text>
                                     </View>
-                                    <Text style={[styles.leadLabel, { color: theme.text }]} numberOfLines={1}>{m.firstName || m.fullName}</Text>
+                                    <Text style={[styles.leadLabel, { color: theme.text }]} numberOfLines={1}>
+                                         {m.fullName || `${m.firstName || ""} ${m.lastName || ""}`.trim() || m.name || "Lead"}
+                                    </Text>
                                     <View style={[styles.scoreTag, { backgroundColor: m.score > 80 ? '#def7ec' : '#fef3c7' }]}>
-                                        <Text style={[styles.scoreText, { color: m.score > 80 ? '#03543f' : '#92400e' }]}>{m.score}%</Text>
+                                        <Text style={[styles.scoreText, { color: m.score > 80 ? '#03543f' : '#92400e' }]}>{m.score || 0}%</Text>
                                     </View>
                                 </TouchableOpacity>
                             ))}
                         </ScrollView>
-                    ) : (
-                        formData.leadId && (
-                            <View style={[styles.selectedLeadBar, { backgroundColor: theme.card, borderColor: theme.primary }]}>
-                                <Ionicons name="person-circle" size={24} color={theme.primary} />
-                                <Text style={[styles.selectedLeadName, { color: theme.text }]}>{formData.leadName}</Text>
-                                <Ionicons name="checkmark-circle" size={20} color={theme.primary} />
-                            </View>
-                        )
+                    )}
+                    
+                    {!!formData.leadId && (
+                         <View style={[styles.selectedIndicator, { backgroundColor: theme.primary }]}>
+                             <Text style={styles.selectedIndicatorText}>Selected: {formData.leadName}</Text>
+                             <TouchableOpacity onPress={() => setFormData({...formData, leadId: "", leadName: ""})}>
+                                 <Ionicons name="close-circle" size={18} color="#fff" />
+                             </TouchableOpacity>
+                         </View>
                     )}
                 </View>
 
@@ -249,13 +308,13 @@ export default function AddOffer() {
                     placeholderTextColor={theme.textLight}
                 />
 
-                <View style={{ height: 100 }} />
+                <View style={{ height: 120 }} />
             </ScrollView>
 
             <TouchableOpacity 
                 style={[styles.footerBtn, { backgroundColor: theme.primary }]} 
                 onPress={handleSave}
-                disabled={saving}
+                disabled={saving || !formData.leadId}
             >
                 {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.footerBtnText}>Confirm Negotiated Offer</Text>}
             </TouchableOpacity>
@@ -277,8 +336,11 @@ const styles = StyleSheet.create({
     dealName: { fontSize: 16, fontWeight: '800' },
     dealBudget: { fontSize: 12, fontWeight: '600', marginTop: 2 },
 
-    sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12, marginTop: 10 },
+    sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12, marginTop: 15 },
     sectionTitle: { fontSize: 10, fontWeight: '800', letterSpacing: 1 },
+
+    searchBox: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15, height: 48, borderRadius: 14, borderWidth: 1, marginBottom: 15 },
+    searchInput: { flex: 1, fontSize: 14, fontWeight: '600' },
 
     leadsGrid: { marginBottom: 24 },
     leadCard: { width: 100, padding: 12, borderRadius: 20, borderWidth: 1, alignItems: 'center', gap: 6 },
@@ -286,10 +348,11 @@ const styles = StyleSheet.create({
     avatarText: { fontSize: 16, fontWeight: '900' },
     leadLabel: { fontSize: 12, fontWeight: '800', textAlign: 'center' },
     scoreTag: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
-    scoreText: { fontSize: 8, fontWeight: '900' },
+    scoreText: { fontSize: 10, fontWeight: '900' },
     emptyBox: { padding: 20, borderRadius: 20, borderWidth: 1 },
-    selectedLeadBar: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 15, borderRadius: 16, borderWidth: 1 },
-    selectedLeadName: { flex: 1, fontSize: 14, fontWeight: '700' },
+    
+    selectedIndicator: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 10, borderRadius: 12, marginTop: 10 },
+    selectedIndicatorText: { color: '#fff', fontSize: 12, fontWeight: '700' },
 
     inputContainer: { gap: 15, marginBottom: 24 },
     inputBox: { gap: 6 },

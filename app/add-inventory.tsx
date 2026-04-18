@@ -13,6 +13,7 @@ import { useLookup } from "@/context/LookupContext";
 import { useUsers } from "@/context/UserContext";
 import { useProjects } from "@/context/ProjectContext";
 import { MultiSearchableDropdown } from "@/components/MultiSearchableDropdown";
+import { safeApiCall } from "@/services/api.helpers";
 
 const FORM_STEPS = ["Basic Info", "Builtup & Furnishing", "Location", "Owner & Assignment"];
 
@@ -143,7 +144,7 @@ function FadeInView({ children, delay = 0 }: { children: React.ReactNode; delay?
 function PressableChip({
     label, isSelected, onSelect, icon
 }: {
-    label: string, isSelected: boolean, onSelect: () => void, icon?: string
+    label: any, isSelected: boolean, onSelect: () => void, icon?: string
 }) {
     const { theme } = useTheme();
     const scale = useRef(new Animated.Value(1)).current;
@@ -164,7 +165,9 @@ function PressableChip({
                 { transform: [{ scale }] }
             ]}>
                 {icon && <Ionicons name={icon as any} size={16} color={isSelected ? theme.primary : theme.textSecondary} style={{ marginRight: 6 }} />}
-                <Text style={[styles.selectableChipText, { color: theme.textSecondary }, isSelected && { color: theme.primary }]}>{label}</Text>
+                <Text style={[styles.selectableChipText, { color: theme.textSecondary }, isSelected && { color: theme.primary }]}>
+                    {typeof label === 'string' ? label : (label?.lookup_value || label?.name || label?.label || String(label || ""))}
+                </Text>
                 {isSelected && <Ionicons name="checkmark-circle" size={16} color={theme.primary} style={{ marginLeft: 6 }} />}
             </Animated.View>
         </Pressable>
@@ -184,8 +187,8 @@ function SelectButton({
             {options.map((opt, idx) => (
                 <PressableChip
                     key={`${opt.value || idx}-${idx}`}
-                    label={opt.label}
-                    isSelected={value === opt.value}
+                    label={opt.label || ""}
+                    isSelected={String(value) === String(opt.value)}
                     onSelect={() => onSelect(opt.value === value ? "" : opt.value)}
                 />
             ))}
@@ -335,6 +338,7 @@ interface InventoryForm {
     occupationDate: string; ageOfConstruction: string; possessionStatus: string; furnishType: string; furnishedItems: string; locationSearch: string;
     address: { country: string; state: string; city: string; location: string; tehsil: string; postOffice: string; pinCode: string; hNo: string; street: string; area: string; };
     owners: OwnerLink[]; userId?: string; assignment?: string; assignedTo: string; team: string; teams: string[]; status: string; intent: string; visibleTo: string;
+    sizeLabel?: string;
 }
 
 const INITIAL: InventoryForm = {
@@ -348,6 +352,7 @@ const INITIAL: InventoryForm = {
     address: { country: "", state: "", city: "", location: "", tehsil: "", postOffice: "", pinCode: "", hNo: "", street: "", area: "" },
     owners: [],
     assignedTo: "", team: "", teams: [], status: "Available", intent: "Sell", visibleTo: "Everyone",
+    sizeLabel: "",
 };
 
 export default function AddInventoryScreen() {
@@ -378,7 +383,7 @@ export default function AddInventoryScreen() {
 
     const [masterFields, setMasterFields] = useState<any>({});
     const [teams, setTeams] = useState<any[]>([]);
-    const [propertySizes, setPropertySizes] = useState<any[]>([]);
+    const propertySizes = useMemo(() => getLookupsByType('Size'), [getLookupsByType]);
     const [isContactModalOpen, setIsContactModalOpen] = useState(false);
     const [selectedOwner, setSelectedOwner] = useState<any>(null);
     const [linkData, setLinkData] = useState({ role: "Property Owner", relationship: "" });
@@ -386,7 +391,7 @@ export default function AddInventoryScreen() {
 
     const set = (key: keyof InventoryForm) => (val: any) => setForm((f) => ({ ...f, [key]: val }));
     const handleSizeChange = (sizeId: string) => {
-        const sizeConfig = propertySizes.find(s => s.id === sizeId || s._id === sizeId);
+        const sizeConfig = propertySizes.find(s => (s.id || s._id) === sizeId);
         if (!sizeConfig) {
             setSelectedSizeId("");
             return;
@@ -395,12 +400,12 @@ export default function AddInventoryScreen() {
         setSelectedSizeId(sizeId);
         setForm(f => ({
             ...f,
-            category: sizeConfig.category || f.category,
-            subCategory: sizeConfig.subCategory || f.subCategory,
-            unitConfig: sizeConfig.unitType || sizeConfig.unitConfig || sizeConfig.type || f.unitConfig, // Configuration (e.g. 3 BHK / 10 Marla)
-            size: sizeConfig.area || sizeConfig.saleableArea || sizeConfig.totalArea || f.size,
-            sizeLabel: sizeConfig.name || sizeConfig.lookup_value || "",
-            builtupType: "" // Reset builtupType to force refresh based on new hierarchy
+            category: sizeConfig.metadata?.category || f.category,
+            subCategory: sizeConfig.metadata?.subCategory || f.subCategory,
+            unitConfig: sizeConfig.metadata?.unitType || sizeConfig.metadata?.unitConfig || sizeConfig.metadata?.type || f.unitConfig, 
+            size: sizeConfig.metadata?.area || sizeConfig.metadata?.saleableArea || sizeConfig.metadata?.totalArea || f.size,
+            sizeLabel: sizeConfig.lookup_value || "",
+            builtupType: "" 
         }));
     };
     const setAddress = (key: keyof InventoryForm['address']) => (val: string) => {
@@ -531,47 +536,90 @@ export default function AddInventoryScreen() {
     };
 
     const handleSave = async () => {
-        if (!form.projectName || !form.unitNo || !form.address.city || !form.address.location) { Alert.alert("Incomplete Form", "Base details (Project, Unit No) and Location (City, Location) are required."); return; }
+        // Validation with specific feedback
+        if (!form.projectName) { Alert.alert("Missing Field", "Please select a Project."); return; }
+        if (!form.unitNo) { Alert.alert("Missing Field", "Please enter a Unit Number."); return; }
+        if (!form.address.city) { Alert.alert("Missing Field", "Please select a City on the last page."); return; }
+        if (!form.address.location) { Alert.alert("Missing Field", "Please select a Location on the last page."); return; }
+
         setSaving(true);
+        console.log('[DEBUG-INVENTORY] Starting Save process...');
+
         try {
             const resolveId = (type: string, value: string) => {
                 if (!value) return null;
-                // Direct lookup via context (O(1) in new LookupContext)
                 const lookupsForType = getLookupsByType(type);
-                const match = lookupsForType.find(l => l.lookup_value?.toLowerCase() === value.toLowerCase() || l._id === value);
+                const match = lookupsForType.find(l => 
+                    l._id === value || 
+                    (typeof value === 'string' && l.lookup_value?.toLowerCase() === value.toLowerCase())
+                );
                 return match ? match._id : value;
             };
+
             const payload = {
-                ...form, 
-                unitNumber: form.unitNo, 
-                unitNo: form.unitNo, 
-                category: resolveId('Category', form.category), 
-                subCategory: resolveId('SubCategory', form.subCategory), 
-                status: resolveId('Status', form.status), 
-                intent: resolveId('Intent', form.intent), 
+                ...form,
+                unitNumber: form.unitNo,
+                unitNo: form.unitNo,
+                category: resolveId('Category', form.category),
+                subCategory: resolveId('SubCategory', form.subCategory),
+                unitType: resolveId('UnitType', form.unitType),
+                status: resolveId('Status', form.status),
+                intent: [resolveId('Intent', form.intent || "Sell")], // Wrap in array for backend Intent field
                 facing: resolveId('Facing', form.facing),
-                projectId: form.projectId, 
-                projectName: form.projectName, 
-                builtupDetails: form.builtupDetails.map(d => ({ ...d, floor: d.floor, length: Number(d.length) || 0, width: Number(d.width) || 0, totalArea: Number(d.totalArea) || 0 })),
-                address: { ...form.address, city: form.address.city, location: form.address.location, area: form.address.area },
-                owners: form.owners.filter(o => o.role === 'Property Owner').map(o => o.id), 
+                direction: resolveId('Direction', form.direction),
+                roadWidth: resolveId('RoadWidth', form.roadWidth),
+                builtupType: resolveId('BuiltupType', form.builtupType),
+                
+                // Structured size object for backend model compatibility
+                size: {
+                    value: parseFloat(String(form.size).replace(/[^0-9.]/g, '')) || 0,
+                    unit: 'Sq.Ft.'
+                },
+                
+                builtupDetails: form.builtupDetails.map(d => ({
+                    ...d,
+                    length: Number(d.length) || 0,
+                    width: Number(d.width) || 0,
+                    totalArea: Number(d.totalArea) || 0
+                })),
+                
+                address: {
+                    ...form.address,
+                    city: form.address.city,
+                    location: form.address.location,
+                    area: form.address.area || form.address.location, // Fallback area to location if empty
+                    india: "India"
+                },
+                
+                owners: form.owners.filter(o => o.role === 'Property Owner').map(o => o.id),
                 associates: form.owners.filter(o => o.role === 'Associate').map(o => ({ contact: o.id, relationship: o.relationship })),
                 teams: form.teams.length > 0 ? form.teams : (form.team ? [form.team] : [])
             };
-            const finalPayload: any = { ...payload }; 
-            delete finalPayload.locationSearch;
-            const res = id ? await api.put(`/inventory/${id}`, finalPayload) : await api.post("/inventory", finalPayload);
-            if (res.data?.success || res.status === 201 || res.status === 200) {
+
+            console.log('[DEBUG-INVENTORY] Submitting Payload:', JSON.stringify(payload, null, 2));
+
+            const res = id 
+                ? await safeApiCall(() => api.put(`/inventory/${id}`, payload)) 
+                : await safeApiCall(() => api.post("/inventory", payload));
+
+            if (!res.error) {
+                console.log('[DEBUG-INVENTORY] Save Successful');
                 Alert.alert(
                     "Success 🎉",
                     "Inventory has been saved successfully.",
                     [{ text: "OK", onPress: () => router.replace("/(tabs)/inventory") }],
                     { cancelable: false }
                 );
+            } else {
+                console.error('[DEBUG-INVENTORY] Save Error Response:', res.error);
+                throw new Error(res.error || "Failed to save inventory.");
             }
-            else { throw new Error(res.data?.error || "Failed to save inventory."); }
-        } catch (e: any) { Alert.alert("Save Failed", e.response?.data?.error || e.message || "Failed to save. Check your connection."); }
-        finally { setSaving(false); }
+        } catch (e: any) {
+            console.error('[DEBUG-INVENTORY] Save Exception:', e);
+            Alert.alert("Save Failed", e.message || "Failed to save. Check your connection.");
+        } finally {
+            setSaving(false);
+        }
     };
 
     const renderStepContent = () => {
@@ -581,14 +629,14 @@ export default function AddInventoryScreen() {
                     <SectionHeader title="Basic Unit Details" icon="🏢" subtitle="Category and reference info" />
                     <View style={[styles.card, { backgroundColor: theme.cardBg, borderColor: theme.border }]}>
                         <Field label="Category" required><SelectButton value={form.category} options={['Residential', 'Commercial', 'Industrial', 'Agricultural', 'Institutional'].map(c => ({ label: c, value: c }))} onSelect={(val) => setForm(f => ({ ...f, category: val, subCategory: "", unitType: "", builtupDetail: "", builtupType: "" }))} /></Field>
-                        <Field label="Sub Category" required><SelectButton value={form.subCategory} options={(propertyConfig[form.category]?.subCategories || []).map((sc: any) => ({ label: sc.name, value: sc.name }))} onSelect={(val) => setForm(f => ({ ...f, subCategory: val, unitType: "", builtupDetail: "", builtupType: "" }))} /></Field>
+                        <Field label="Sub Category" required><SelectButton value={form.subCategory} options={(propertyConfig?.[form.category]?.subCategories || []).map((sc: any) => { const n = typeof sc === 'string' ? sc : (sc.name || sc.lookup_value || String(sc)); return { label: n, value: n }; })} onSelect={(val) => setForm(f => ({ ...f, subCategory: val, unitType: "", builtupDetail: "", builtupType: "" }))} /></Field>
                         <Field label="Project Name" required>
                             <TouchableOpacity activeOpacity={0.7} style={[styles.selector, { backgroundColor: theme.inputBg, borderColor: theme.border }]} onPress={() => setProjectModalVisible(true)}>
                                 <Text style={[styles.selectorText, { color: theme.textPrimary }, !form.projectName && { color: theme.textMuted }]}>{form.projectName || "Select Project"}</Text>
                                 <Ionicons name="chevron-down" size={18} color={theme.textSecondary} />
                             </TouchableOpacity>
                         </Field>
-                        <Field label="Block"><SelectButton value={form.block} options={(projects.find(p => p.name === form.projectName)?.blocks || []).map((b: any) => ({ label: b.name, value: b.name }))} onSelect={(val) => setForm(f => ({ ...f, block: val, unitType: "", builtupType: "" }))} /></Field>
+                        <Field label="Block"><SelectButton value={form.block} options={(projects.find(p => p.name === form.projectName)?.blocks || []).map((b: any) => { const n = typeof b === 'string' ? b : (b.name || b.lookup_value || String(b)); return { label: n, value: n }; })} onSelect={(val) => setForm(f => ({ ...f, block: val, unitType: "", builtupType: "" }))} /></Field>
                         <Field label="Unit Number" required>
                             <Input
                                 label="Unit No"
@@ -598,37 +646,29 @@ export default function AddInventoryScreen() {
                                 icon="business-outline"
                             />
                         </Field>
-                        <Field label="Configuration (Size)" required>
+                        <Field label="Size Label" required>
                             <SelectButton
                                 value={selectedSizeId}
                                 options={propertySizes
                                     .filter(s => {
-                                        const projMatch = s.project?.trim().toLowerCase() === form.projectName?.trim().toLowerCase();
-                                        const blockMatch = !form.block || s.block?.trim().toLowerCase() === form.block?.trim().toLowerCase();
+                                        const metaPrj = s.metadata?.project || s.project;
+                                        const metaBlk = s.metadata?.block || s.block;
+                                        const projMatch = String(metaPrj || "").trim().toLowerCase() === form.projectName?.trim().toLowerCase();
+                                        const blockMatch = !form.block || String(metaBlk || "").trim().toLowerCase() === form.block?.trim().toLowerCase();
                                         return projMatch && blockMatch;
                                     })
                                     .map(s => ({
-                                        label: `${s.name} (${s.area || s.saleableArea || s.totalArea} ${s.areaMetrics || 'SqFt'})`,
+                                        label: `${s.lookup_value} (${(s.metadata?.area || s.metadata?.saleableArea || s.metadata?.totalArea) || ''} ${(s.metadata?.areaMetrics || s.areaMetrics || 'SqFt')})`,
                                         value: s.id || s._id
                                     }))
                                 }
                                 onSelect={handleSizeChange}
                             />
                         </Field>
-                        <Field label="Unit Type (Orientation)" required>
+                        <Field label="Unit Type" required>
                             <SelectButton
                                 value={form.unitType}
-                                options={(() => {
-                                    if (!propertyConfig || !form.category || !form.subCategory) return [];
-                                    const subCat = (propertyConfig[form.category]?.subCategories || [])
-                                        .find((sc: any) => sc.name === form.subCategory);
-                                    if (!subCat || !subCat.types) return [];
-                                    
-                                    const allowedNames = subCat.types.map((t: any) => t.name);
-                                    return getLookupsByType('UnitType')
-                                        .filter(l => allowedNames.includes(l.lookup_value))
-                                        .map(l => ({ label: l.lookup_value, value: l.lookup_value }));
-                                })()}
+                                options={getLookupsByType('UnitType').map(l => ({ label: l.lookup_value, value: l.lookup_value }))}
                                 onSelect={(val) => setForm(f => ({ ...f, unitType: val }))}
                             />
                         </Field>
@@ -670,21 +710,17 @@ export default function AddInventoryScreen() {
                             <SelectButton
                                 value={form.builtupType}
                                 options={(() => {
-                                    if (!form.category || !form.subCategory) return [];
+                                    if (!form.category || !form.subCategory || !propertyConfig || !form.unitConfig) return [];
                                     const catConfig = propertyConfig[form.category];
                                     if (!catConfig) return [];
                                     const subCat = (catConfig.subCategories || []).find((s: any) => s.name === form.subCategory);
                                     if (!subCat) return [];
 
-                                    // Aggregate all unique builtupTypes from all types in this subcategory
-                                    const allTypes = subCat.types || [];
-                                    const aggregateTypes = new Set<string>();
-                                    allTypes.forEach((t: any) => {
-                                        if (Array.isArray(t.builtupTypes)) {
-                                            t.builtupTypes.forEach((bt: string) => aggregateTypes.add(bt));
-                                        }
-                                    });
-                                    return Array.from(aggregateTypes).map(bt => ({ label: bt, value: bt }));
+                                    // Find the specific 'Type' (Configuration/Size Type) that was selected on Page 1
+                                    const selectedType = (subCat.types || []).find((t: any) => t.name === form.unitConfig);
+                                    if (!selectedType || !Array.isArray(selectedType.builtupTypes)) return [];
+
+                                    return selectedType.builtupTypes.map((bt: string) => ({ label: bt, value: bt }));
                                 })()}
                                 onSelect={set("builtupType")}
                             />

@@ -26,7 +26,18 @@ export default function ManageTagsScreen() {
         try {
             const body = await getInventoryById(id!);
             const data = body.data || body;
-            setTags(data.tags || []);
+            
+            // Normalize tags: backend stores them as a comma-separated string
+            let rawTags = data.tags || [];
+            let processedTags: string[] = [];
+            
+            if (Array.isArray(rawTags)) {
+                processedTags = rawTags;
+            } else if (typeof rawTags === 'string') {
+                processedTags = rawTags.split(',').map(t => t.trim()).filter(Boolean);
+            }
+            
+            setTags(processedTags);
         } catch (error) {
             console.error("Fetch error:", error);
             Alert.alert("Error", "Failed to load tags");
@@ -53,7 +64,9 @@ export default function ManageTagsScreen() {
     const handleSave = async () => {
         setSaving(true);
         try {
-            await updateInventory(id!, { tags });
+            // Save as a comma-separated string to match Web CRM expectations
+            const tagsString = tags.join(', ');
+            await updateInventory(id!, { tags: tagsString });
             Alert.alert("Success", "Tags updated successfully", [
                 { text: "OK", onPress: () => router.back() }
             ]);
@@ -103,7 +116,7 @@ export default function ManageTagsScreen() {
                 <View style={styles.tagsContainer}>
                     <Text style={[styles.sectionLabel, { color: theme.textLight }]}>ACTIVE TAGS</Text>
                     <ScrollView contentContainerStyle={styles.tagsInner}>
-                        {tags.length === 0 ? (
+                        {(!tags || !Array.isArray(tags) || tags.length === 0) ? (
                             <Text style={[styles.emptyText, { color: theme.textLight }]}>No tags added yet.</Text>
                         ) : (
                             tags.map(tag => (

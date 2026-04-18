@@ -9,6 +9,7 @@ import api from "@/services/api";
 import { getActivities } from "@/services/activities.service";
 import { useLookup } from "@/context/LookupContext";
 import { getSizeLabel, formatSize } from "@/utils/format.utils";
+import { useCallTracking } from "@/context/CallTrackingContext";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -68,6 +69,7 @@ export default function InventoryDetailScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
     const router = useRouter();
     const { theme } = useTheme();
+    const { trackCall } = useCallTracking();
     const { getLookupValue, lookups } = useLookup();
     const [inv, setInv] = useState<any>(null);
     const [activities, setActivities] = useState<any[]>([]);
@@ -199,11 +201,11 @@ export default function InventoryDetailScreen() {
                         <View style={[styles.statusRing, { borderColor: stageColor + '40', flexDirection: 'column', gap: 2 }]}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
                                 <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: stageColor }} />
-                                <Text style={[styles.statusLabel, { color: stageColor }]}>{stageLabel.toUpperCase()}</Text>
+                                <Text style={[styles.statusLabel, { color: stageColor }]}>{String(stageLabel || "").toUpperCase()}</Text>
                             </View>
                             {resolvedStatus && resolvedStatus !== stageLabel && (
                                 <Text style={{ fontSize: 8, fontWeight: '700', color: stageColor, opacity: 0.8, textAlign: 'center' }}>
-                                    {resolvedStatus.toUpperCase()}
+                                    {String(resolvedStatus || "").toUpperCase()}
                                 </Text>
                             )}
                         </View>
@@ -230,7 +232,7 @@ export default function InventoryDetailScreen() {
                             {Array.isArray(inv.teams) && inv.teams.length > 0 ? (
                                 inv.teams.map((t: any, i: number) => (
                                     <View key={i} style={{ backgroundColor: isDark ? 'rgba(129, 140, 248, 0.15)' : '#6366F110', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
-                                        <Text style={{ fontSize: 9, fontWeight: '800', color: isDark ? '#C7D2FE' : '#6366F1' }}>{lv(t).toUpperCase()}</Text>
+                                        <Text style={{ fontSize: 9, fontWeight: '800', color: isDark ? '#C7D2FE' : '#6366F1' }}>{String(lv(t) || "").toUpperCase()}</Text>
                                     </View>
                                 ))
                             ) : (
@@ -250,7 +252,7 @@ export default function InventoryDetailScreen() {
                     <View style={[styles.marketingPill, { backgroundColor: stageColor + '10' }]}>
                         <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: stageColor }} />
                         <Text style={[styles.marketingText, { color: stageColor }]}>
-                            {stageLabel.toUpperCase()}{resolvedStatus && resolvedStatus !== stageLabel ? ` · ${resolvedStatus}` : ''}
+                            {String(stageLabel || "").toUpperCase()}{resolvedStatus && resolvedStatus !== stageLabel ? ` · ${resolvedStatus}` : ''}
                         </Text>
                     </View>
 
@@ -258,7 +260,7 @@ export default function InventoryDetailScreen() {
                         <View style={[styles.marketingPill, { backgroundColor: isDark ? 'rgba(124, 58, 237, 0.15)' : '#7C3AED' + '10' }]}>
                             <Ionicons name="flag" size={12} color={isDark ? '#A78BFA' : "#7C3AED"} />
                             <Text style={[styles.marketingText, { color: isDark ? '#A78BFA' : '#7C3AED' }]}>
-                                {lv(inv.intent).toUpperCase()}
+                                {String(lv(inv.intent) || "").toUpperCase()}
                             </Text>
                         </View>
                     )}
@@ -278,7 +280,7 @@ export default function InventoryDetailScreen() {
                                     <RibbonButton 
                                         icon="call" 
                                         color={theme.primary} 
-                                        onPress={() => ownerPhone ? Linking.openURL(`tel:${cleanPhone}`) : Alert.alert("No Phone", "Owner contact number not available")} 
+                                        onPress={() => ownerPhone ? trackCall(cleanPhone, id as string, "Inventory", primaryOwner?.name || "Inventory Owner") : Alert.alert("No Phone", "Owner contact number not available")} 
                                     />
                                     <RibbonButton 
                                         icon="logo-whatsapp" 
@@ -436,7 +438,7 @@ export default function InventoryDetailScreen() {
                                         <View style={[styles.timelineDot, { backgroundColor: theme.primary }]} />
                                         <View style={styles.timelineBody}>
                                             <View style={styles.timelineHeader}>
-                                                <Text style={[styles.timelineType, { color: theme.primary }]}>{act.type?.toUpperCase() || "ACTIVITY"}</Text>
+                                                <Text style={[styles.timelineType, { color: theme.primary }]}>{String(act.type || "ACTIVITY").toUpperCase()}</Text>
                                                 <Text style={styles.timelineDate}>{new Date(act.createdAt).toLocaleDateString()}</Text>
                                             </View>
                                             <Text style={[styles.timelineSubject, { color: theme.text }]}>{act.subject}</Text>
@@ -541,7 +543,7 @@ export default function InventoryDetailScreen() {
                         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
                             <View style={styles.sectionHeader}>
                                 <Text style={[styles.cardTitle, { color: theme.text, marginBottom: 0 }]}>Inventory Documents</Text>
-                                <TouchableOpacity onPress={() => router.push(`/add-document?id=${id}&type=Inventory`)}>
+                                <TouchableOpacity onPress={() => router.push(`/add-document?id=${id}&type=Inventory&mode=document`)}>
                                     <Text style={{ color: theme.primary, fontWeight: '700' }}>+ Add</Text>
                                 </TouchableOpacity>
                             </View>
@@ -557,21 +559,12 @@ export default function InventoryDetailScreen() {
                                             <Text style={[styles.docName, { color: theme.text }]}>
                                                 {doc.documentType || doc.documentName || "Document"}
                                             </Text>
-                                            {(() => {
-                                                const linkedId = doc.linkedContactId;
-                                                const contact = [...(inv.owners || []), ...(inv.associates || [])].find(c => (c._id || c) === linkedId);
-                                                const contactName = typeof contact === 'object' ? contact.name : null;
-
-                                                return (
-                                                    <Text style={[styles.docMeta, { color: theme.textLight }]}>
-                                                        {doc.documentNo ? `No: ${doc.documentNo}` : ""}
-                                                        {contactName ? ` • Linked: ${contactName}` : (doc.linkedContactMobile ? ` • Ref: ${doc.linkedContactMobile}` : "")}
-                                                    </Text>
-                                                );
-                                            })()}
+                                            <Text style={[styles.docMeta, { color: theme.textLight }]}>
+                                                {doc.documentNo ? `No: ${doc.documentNo}` : ""}
+                                            </Text>
                                         </View>
-                                        {doc.file && (
-                                            <TouchableOpacity onPress={() => Linking.openURL(doc.file)}>
+                                        {doc.url && (
+                                            <TouchableOpacity onPress={() => Linking.openURL(doc.url)}>
                                                 <Ionicons name="eye-outline" size={20} color={theme.primary} />
                                             </TouchableOpacity>
                                         )}
@@ -582,7 +575,36 @@ export default function InventoryDetailScreen() {
                     </ScrollView>
                 </View>
 
-                {/* 6. History */}
+                {/* 6. Media */}
+                <View style={styles.tabContent}>
+                    <ScrollView contentContainerStyle={styles.innerScroll}>
+                        <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                            <View style={styles.sectionHeader}>
+                                <Text style={[styles.cardTitle, { color: theme.text, marginBottom: 0 }]}>Property Media</Text>
+                                <TouchableOpacity onPress={() => router.push(`/add-document?id=${id}&type=Inventory&mode=upload`)}>
+                                    <Text style={{ color: theme.primary, fontWeight: '700' }}>+ Upload</Text>
+                                </TouchableOpacity>
+                            </View>
+                            
+                            <View style={styles.mediaGrid}>
+                                {[...(inv.inventoryImages || []), ...(inv.inventoryVideos || [])].length === 0 ? (
+                                    <Text style={styles.emptyText}>No media uploaded yet.</Text>
+                                ) : (
+                                    [...(inv.inventoryImages || []), ...(inv.inventoryVideos || [])].map((item: any, i: number) => (
+                                        <TouchableOpacity key={i} style={styles.mediaItem} onPress={() => item.url && Linking.openURL(item.url)}>
+                                            <View style={[styles.mediaPlaceholder, { backgroundColor: theme.background, borderColor: theme.border }]}>
+                                                <Ionicons name={item.url?.includes('.mp4') || item.type === 'video' ? "play-circle" : "image"} size={32} color={theme.primary} />
+                                            </View>
+                                            <Text style={[styles.mediaTitle, { color: theme.text }]} numberOfLines={1}>{item.title || "Media"}</Text>
+                                        </TouchableOpacity>
+                                    ))
+                                )}
+                            </View>
+                        </View>
+                    </ScrollView>
+                </View>
+
+                {/* 7. History */}
                 <View style={styles.tabContent}>
                     <ScrollView contentContainerStyle={styles.innerScroll}>
                         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
@@ -702,6 +724,10 @@ const styles = StyleSheet.create({
     googleMapsBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 12, borderRadius: 14, marginTop: 10 },
     googleMapsBtnText: { color: '#fff', fontSize: 14, fontWeight: '800' },
     timelineNote: { fontSize: 12, lineHeight: 18 },
+    mediaGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+    mediaItem: { width: (SCREEN_WIDTH - 80) / 2, marginBottom: 15 },
+    mediaPlaceholder: { width: '100%', height: 100, borderRadius: 12, borderWidth: 1, justifyContent: 'center', alignItems: 'center' },
+    mediaTitle: { fontSize: 12, fontWeight: '700', marginTop: 5, textAlign: 'center' },
     fab: {
         position: 'absolute',
         bottom: 30,

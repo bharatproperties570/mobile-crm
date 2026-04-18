@@ -17,6 +17,8 @@ import { useUsers } from "@/context/UserContext";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Modal } from "react-native";
 import { useAuth } from "@/context/AuthContext";
+import { useNotifications } from "@/context/NotificationContext";
+import { NotificationListModal } from "@/components/NotificationListModal";
 
 const CACHE_KEY_DASHBOARD = "@cache_dashboard_stats";
 
@@ -269,9 +271,9 @@ const IntelligenceTile = memo(({ count, label, icon, color, delay = 0 }: any) =>
             <View style={[styles.intelIconBox, { backgroundColor: color + '10' }]}>
                 <Ionicons name={icon} size={18} color={color} />
             </View>
-            <View>
+            <View style={{ flex: 1 }}>
                 <Counter value={count} style={[styles.intelValue, { color: theme.text }]} />
-                <Text style={[styles.intelLabel, { color: theme.textMuted }]}>{label}</Text>
+                <Text style={[styles.intelLabel, { color: theme.textMuted }]} numberOfLines={2}>{label}</Text>
             </View>
         </Animated.View>
     );
@@ -288,8 +290,8 @@ const IntelligencePulse = memo(({ revived, nfa }: { revived: number; nfa: number
                 </View>
             </View>
             <View style={styles.intelGrid}>
-                <IntelligenceTile count={revived} label="Revived Leads" icon="refresh-circle" color="#10B981" delay={0} />
-                <IntelligenceTile count={nfa} label="NFA Alerts" icon="alert-circle" color="#EF4444" delay={100} />
+                <IntelligenceTile count={revived} label="Leads Re-engaged" icon="refresh-circle" color="#10B981" delay={0} />
+                <IntelligenceTile count={nfa} label="No Future Actions" icon="alert-circle" color="#EF4444" delay={100} />
             </View>
         </View>
     );
@@ -396,6 +398,7 @@ const ProjectQuickList = memo(({ data, theme, router }: { data: any[]; theme: an
     );
 });
 
+
 export default function MissionControlScreen() {
     const { currentDept, config } = useDepartment();
     const router = useRouter();
@@ -404,6 +407,7 @@ export default function MissionControlScreen() {
     const { getLookupValue } = useLookup();
     const { simulateIncomingCall } = useCallTracking();
     const { isAuthenticated } = useAuth();
+    const { unreadCount } = useNotifications();
     const [dashboardData, setDashboardData] = useState<DashboardStats | null>(null);
     const [stats, setStats] = useState<any>({});
     const [activities, setActivities] = useState<any[]>([]);
@@ -412,6 +416,7 @@ export default function MissionControlScreen() {
     const { users, teams, loading: usersLoading } = useUsers();
     const [selectedFilter, setSelectedFilter] = useState('all');
     const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
+    const [isNotificationModalOpen, setIsNotificationModalOpen] = useState(false);
 
     const fadeAnim = useRef(new Animated.Value(0)).current;
 
@@ -488,12 +493,12 @@ export default function MissionControlScreen() {
             setLoading(false);
             setRefreshing(false);
         }
-    }, [fadeAnim]);
+    }, [fadeAnim, selectedFilter, isAuthenticated]);
 
     useFocusEffect(
         useCallback(() => {
             fetchData();
-        }, [fetchData, selectedFilter, isAuthenticated])
+        }, [fetchData])
     );
 
     const getFilterLabel = () => {
@@ -833,8 +838,13 @@ export default function MissionControlScreen() {
                             <TouchableOpacity style={[styles.notifBtn, { backgroundColor: theme.background }]} onPress={() => router.push("/search")}>
                                 <Ionicons name="search-outline" size={22} color={theme.textMuted} />
                             </TouchableOpacity>
-                            <TouchableOpacity style={[styles.notifBtn, { backgroundColor: theme.background }]}>
+                            <TouchableOpacity style={[styles.notifBtn, { backgroundColor: theme.background }]} onPress={() => setIsNotificationModalOpen(true)}>
                                 <Ionicons name="notifications-outline" size={22} color={theme.textMuted} />
+                                {unreadCount > 0 && (
+                                    <View style={[styles.unreadBadge, { backgroundColor: theme.primary, borderColor: theme.background }]}>
+                                        <Text style={styles.unreadBadgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
+                                    </View>
+                                )}
                             </TouchableOpacity>
                             <TouchableOpacity
                                 style={[styles.notifBtn, { backgroundColor: theme.background }]}
@@ -867,10 +877,17 @@ export default function MissionControlScreen() {
                             >
                                 <Ionicons name="flask" size={22} color={theme.primary} />
                             </TouchableOpacity>
-                        </View>
-                    </View>
+                </View>
+            </View>
+        </View>
 
-                    <View style={[styles.performanceCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                    <NotificationListModal 
+                        visible={isNotificationModalOpen} 
+                        onClose={() => setIsNotificationModalOpen(false)} 
+                    />
+                    
+                    {/* Performance Index Header Component */}
+                    <View style={[styles.performanceRow, { backgroundColor: theme.card, borderColor: theme.border }]}>
                         <View style={styles.perfInfo}>
                             <View style={styles.perfHeaderRow}>
                                 <Text style={[styles.perfTitle, { color: theme.textMuted }]}>Performance Index</Text>
@@ -898,18 +915,17 @@ export default function MissionControlScreen() {
                                 </View>
                             </View>
                         </View>
-                        <ProgressRing progress={dashboardData?.performance?.conversion || 0} size={84} strokeWidth={9} color={theme.primary} />
+                        <ProgressRing progress={dashboardData?.performance?.conversion || 0} size={72} strokeWidth={7} color={theme.primary} />
                     </View>
-                </View>
 
                 {/* 2. Smart KPI Horizontal Scroll Row */}
                 <View style={styles.kpiContainer}>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.kpiScroll}>
                         <KPIItem label="Total Leads" value={stats.leads || 0} icon="people" color="#3B82F6" delay={0} />
                         <KPIItem label="Active Deals" value={stats.deals || 0} icon="briefcase" color="#F59E0B" delay={100} />
-                        <KPIItem label="Revenue" value={Math.round((dashboardData?.performance?.revenue || 0) / 1000)} icon="wallet" color="#10B981" delay={200} trend="up" />
-                        <KPIItem label="Inventory" value={stats.inventory || 0} icon="cube" color="#8B5CF6" delay={300} />
-                        <KPIItem label="Projects" value={dashboardData?.projects || 0} icon="business" color="#4F46E5" delay={400} />
+                        <KPIItem label="Inventory" value={stats.inventory || 0} icon="cube" color="#8B5CF6" delay={200} />
+                        <KPIItem label="Projects" value={dashboardData?.projects || 0} icon="business" color="#4F46E5" delay={300} />
+                        <KPIItem label="Revenue" value={Math.round((dashboardData?.performance?.revenue || 0) / 1000)} icon="wallet" color="#10B981" delay={400} trend="up" />
                     </ScrollView>
                 </View>
 
@@ -1039,7 +1055,25 @@ const styles = StyleSheet.create({
     autoPilotBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
     autoPilotText: { fontSize: 8, fontWeight: '900' },
     headerLogo: { width: 44, height: 44, borderRadius: 10 },
-    notifBtn: { width: 44, height: 44, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
+    notifBtn: { width: 44, height: 44, borderRadius: 14, justifyContent: 'center', alignItems: 'center', position: 'relative' },
+    unreadBadge: {
+        position: 'absolute',
+        top: 2,
+        right: 2,
+        borderRadius: 9,
+        minWidth: 18,
+        height: 18,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingHorizontal: 4,
+        zIndex: 10,
+        borderWidth: 2,
+    },
+    unreadBadgeText: {
+        color: '#fff',
+        fontSize: 8,
+        fontWeight: '900',
+    },
 
     performanceCard: {
         borderRadius: 24, padding: 20,
@@ -1047,15 +1081,26 @@ const styles = StyleSheet.create({
         elevation: 8, shadowOpacity: 0.06, shadowRadius: 16, borderLeftWidth: 4,
         borderWidth: 1
     },
+    performanceRow: {
+        marginHorizontal: 20,
+        padding: 16,
+        borderRadius: 24,
+        borderWidth: 1,
+        marginBottom: 12,
+        overflow: 'hidden',
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12
+    },
     perfInfo: { flex: 1 },
-    perfTitle: { fontSize: 14, fontWeight: "700", marginBottom: 12 },
-    targetRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
+    perfTitle: { fontSize: 13, fontWeight: "700", marginBottom: 8 },
+    targetRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
     targetVal: { fontSize: 18, fontWeight: "800" },
     targetLabel: { fontSize: 11, fontWeight: "600", marginTop: 2 },
     targetDivider: { width: 1, height: 24, marginHorizontal: 15 },
     motiveText: { fontSize: 12, fontStyle: 'italic' },
 
-    kpiContainer: { marginVertical: 24 },
+    kpiContainer: { marginVertical: 12 },
     kpiScroll: { paddingHorizontal: 20, gap: 12 },
     kpiItem: {
         padding: 16, borderRadius: 20, minWidth: 110,
@@ -1196,7 +1241,7 @@ const styles = StyleSheet.create({
     trendIndicator: { flexDirection: 'row', alignItems: 'center', gap: 2, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
     trendText: { fontSize: 11, fontWeight: '700' },
     targetGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-    targetCell: { minWidth: '45%', paddingVertical: 4 },
+    targetCell: { minWidth: '45%', paddingVertical: 2 },
     targetValSmall: { fontSize: 13, fontWeight: '800' },
     targetLabelSmall: { fontSize: 10, fontWeight: '700' },
 

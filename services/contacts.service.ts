@@ -78,17 +78,22 @@ export const deleteContact = async (id: string) => {
 
 export interface CallerInfo {
     name: string;
-    type: 'Lead' | 'Deal' | 'Inventory' | 'Contact';
+    mobile: string;
+    type: 'Lead' | 'Deal' | 'Inventory' | 'Contact' | 'Anonymous';
+    entityId: string;
+    intent?: string;
+    subCategory?: string;
     projectName?: string;
     unitNumber?: string;
-    activity?: string;
-    entityId: string;
-    mobile?: string;
-    // Enhanced Fields for Professional Caller ID
-    intent?: string;           // Buy / Rent / Sell
-    subCategory?: string;      // 3BHK, Commercial Plot, etc.
-    budget?: string;           // Max Budget or Budget Range
-    status?: string;           // High-level status (Qualified, Warm, etc.)
+    budget?: string;
+    status?: string;
+    contexts: {
+        Lead?: any;
+        Deal?: any;
+        Inventory?: any;
+        Contact?: any;
+        Activity?: any;
+    };
 }
 
 export const lookupCallerInfo = async (phoneNumber: string): Promise<CallerInfo | null> => {
@@ -104,86 +109,110 @@ export const lookupCallerInfo = async (phoneNumber: string): Promise<CallerInfo 
         };
 
         // Performance: Concurrent parallel lookups for zero-latency identification
-        const [leadsRes, dealsRes, invRes, contactsRes] = await Promise.allSettled([
-            getLeads({ mobile: cleanedPhone }),
-            api.get("/deals", { params: { contactPhone: cleanedPhone } }),
+        const [leadsRes, dealsRes, invRes, contactsRes, actsRes] = await Promise.allSettled([
+            api.get("/leads", { params: { mobile: cleanedPhone } }),
+            api.get("/deals", { params: { "partyStructure.buyer.phone": cleanedPhone } }),
             api.get("/inventory", { params: { ownerPhone: cleanedPhone } }),
-            getContacts({ phone: cleanedPhone })
+            getContacts({ phone: cleanedPhone }),
+            api.get("/activities", { params: { "relatedTo.mobile": cleanedPhone, limit: "1" } })
         ]);
 
-        // 1. Leads Primary
+        const contexts: any = {};
+        let primaryInfo: any = null;
+
+        // 1. Leads
         if (leadsRes.status === 'fulfilled') {
             const leads = extractList(leadsRes.value.data);
             if (leads.length > 0) {
                 const lead = leads[0];
-                return {
+                contexts.Lead = {
                     name: [lead.firstName, lead.lastName].filter(Boolean).join(" ") || "Lead",
-                    type: 'Lead',
                     projectName: lead.projectName?.[0] || lead.project?.name,
                     entityId: lead._id,
-                    mobile: phoneNumber,
                     intent: getVal(lead.requirement),
                     subCategory: getVal(lead.subType?.[0]) || getVal(lead.subRequirement),
                     budget: lead.budgetMax ? `₹${(lead.budgetMax / 10000000).toFixed(2)}Cr` : getVal(lead.budget),
                     status: getVal(lead.stage)
                 };
+                if (!primaryInfo) primaryInfo = { ...contexts.Lead, type: 'Lead' };
             }
         }
 
-        // 2. Deals High Priority
+        // 2. Deals
         if (dealsRes.status === 'fulfilled') {
             const deals = extractList(dealsRes.value.data);
             if (deals.length > 0) {
                 const deal = deals[0];
-                return {
+                contexts.Deal = {
                     name: deal.partyStructure?.buyer?.name || deal.projectName || "Deal",
-                    type: 'Deal',
                     projectName: deal.projectName,
                     unitNumber: deal.unitNumber || deal.unitNo || deal.dealId,
                     entityId: deal._id,
-                    mobile: phoneNumber,
                     intent: deal.intent || deal.dealType,
                     subCategory: getVal(deal.subCategory) || deal.unitType,
                     budget: deal.price ? `₹${(deal.price / 10000000).toFixed(2)}Cr` : undefined,
                     status: deal.stage
                 };
+                if (!primaryInfo || primaryInfo.type === 'Lead') primaryInfo = { ...contexts.Deal, type: 'Deal' };
             }
         }
 
-        // 3. Inventory Owner Context
+        // 3. Inventory
         if (invRes.status === 'fulfilled') {
             const inventories = extractList(invRes.value.data);
             if (inventories.length > 0) {
                 const inv = inventories[0];
-                return {
+                contexts.Inventory = {
                     name: inv.ownerName || inv.projectName || "Inventory",
-                    type: 'Inventory',
                     projectName: inv.projectName,
                     unitNumber: inv.unitNumber || inv.unitNo,
                     entityId: inv._id,
-                    mobile: phoneNumber,
                     intent: inv.intent || 'Sell',
                     subCategory: inv.subCategory || inv.unitType,
                     budget: inv.price ? `₹${(inv.price / 10000000).toFixed(2)}Cr` : undefined,
                     status: inv.status
                 };
+                if (!primaryInfo) primaryInfo = { ...contexts.Inventory, type: 'Inventory' };
             }
         }
 
-        // 4. Contacts General
+        // 4. Activity (Most Recent)
+        if (actsRes.status === 'fulfilled') {
+            const activities = extractList(actsRes.value.data);
+            if (activities.length > 0) {
+                const act = activities[0];
+                contexts.Activity = {
+                    name: act.subject || "Recent Activity",
+                    entityId: act._id,
+                    intent: act.type,
+                    status: act.status,
+                    subCategory: act.dueDate ? new Date(act.dueDate).toLocaleDateString() : undefined,
+                    projectName: act.description
+                };
+            }
+        }
+
+        // 5. Contacts
         if (contactsRes.status === 'fulfilled') {
             const contacts = extractList(contactsRes.value.data);
             if (contacts.length > 0) {
                 const contact = contacts[0];
-                return {
+                contexts.Contact = {
                     name: [contact.name, contact.surname].filter(Boolean).join(" ") || "Contact",
-                    type: 'Contact',
                     entityId: contact._id,
-                    mobile: phoneNumber,
                     intent: getVal(contact.professionCategory),
                     status: getVal(contact.stage)
                 };
+                if (!primaryInfo) primaryInfo = { ...contexts.Contact, type: 'Contact' };
             }
+        }
+
+        if (primaryInfo) {
+            return {
+                ...primaryInfo,
+                mobile: phoneNumber,
+                contexts
+            };
         }
 
         return null;

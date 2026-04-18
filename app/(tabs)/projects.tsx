@@ -234,6 +234,9 @@ export default function ProjectsScreen() {
             
             setHasMore(newRecords.length === 50);
             setPage(pageNum);
+        } else if (result.error) {
+            console.error("[Projects] Fetch error:", result.error);
+            Alert.alert("Sync Error", result.error);
         }
         setLoading(false);
         setRefreshing(false);

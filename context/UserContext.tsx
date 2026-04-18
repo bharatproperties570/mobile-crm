@@ -35,40 +35,41 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const { isAuthenticated } = useAuth();
 
     const refreshUsers = useCallback(async () => {
+        console.log(`[UserContext] refreshUsers called (isAuthenticated=${isAuthenticated})`);
         // 1. Try to load from cache first
-        if (users.length === 0) {
-            try {
-                const [cachedUsers, cachedTeams] = await Promise.all([
-                    AsyncStorage.getItem("@cache_users"),
-                    AsyncStorage.getItem("@cache_teams")
-                ]);
+        try {
+            const [cachedUsers, cachedTeams] = await Promise.all([
+                AsyncStorage.getItem("@cache_users"),
+                AsyncStorage.getItem("@cache_teams")
+            ]);
 
-                if (cachedUsers) {
-                    const parsedUsers = JSON.parse(cachedUsers);
+            if (cachedUsers) {
+                const parsedUsers = JSON.parse(cachedUsers);
+                if (Array.isArray(parsedUsers)) {
                     setUsers(parsedUsers);
                     const newUIndex = new Map<string, User>();
                     parsedUsers.forEach((u: User) => {
-                        if (u._id) newUIndex.set(u._id, u);
-                        if (u.id) newUIndex.set(u.id, u);
+                        if (u && u._id) newUIndex.set(u._id, u);
+                        if (u && u.id) newUIndex.set(u.id, u);
                     });
                     setUserIndex(newUIndex);
-                    setLoading(false); // Stop block spinner early
+                    setLoading(false);
                 }
-                if (cachedTeams) {
-                    const parsedTeams = JSON.parse(cachedTeams);
+            }
+            if (cachedTeams) {
+                const parsedTeams = JSON.parse(cachedTeams);
+                if (Array.isArray(parsedTeams)) {
                     setTeams(parsedTeams);
                     const newTIndex = new Map<string, any>();
                     parsedTeams.forEach((t: any) => {
-                        if (t._id) newTIndex.set(t._id, t);
-                        if (t.id) newTIndex.set(t.id, t);
+                        if (t && t._id) newTIndex.set(t._id, t);
+                        if (t && t.id) newTIndex.set(t.id, t);
                     });
                     setTeamIndex(newTIndex);
                 }
-            } catch (e) { console.warn("[UserContext] Cache read failed", e); }
-        }
+            }
+        } catch (e) { console.warn("[UserContext] Cache read failed", e); }
 
-        if (users.length === 0) setLoading(true);
-        
         if (!isAuthenticated) {
             setLoading(false);
             return;
@@ -76,44 +77,43 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         try {
             const [usersRes, teamsRes] = await Promise.all([
-                api.get('/users', { params: { limit: 1000 } }),
-                api.get('/teams', { params: { limit: 100 } })
+                api.get('/users', { params: { limit: 1000 } }).catch(() => null),
+                api.get('/teams', { params: { limit: 100 } }).catch(() => null)
             ]);
 
-            const userData = usersRes.data?.records || usersRes.data?.data || (Array.isArray(usersRes.data) ? usersRes.data : []);
-            const teamData = teamsRes.data?.records || teamsRes.data?.data || (Array.isArray(teamsRes.data) ? teamsRes.data : []);
-            
-            if (Array.isArray(userData) && userData.length > 0) {
-                setUsers(userData);
-                AsyncStorage.setItem("@cache_users", JSON.stringify(userData)).catch(() => {});
-                const newUIndex = new Map<string, User>();
-                userData.forEach(u => {
-                    if (u._id) newUIndex.set(u._id, u);
-                    if (u.id) newUIndex.set(u.id, u);
-                });
-                setUserIndex(newUIndex);
+            if (usersRes?.data) {
+                const userData = usersRes.data?.records || usersRes.data?.data || (Array.isArray(usersRes.data) ? usersRes.data : []);
+                if (Array.isArray(userData)) {
+                    setUsers(userData);
+                    AsyncStorage.setItem("@cache_users", JSON.stringify(userData)).catch(() => {});
+                    const newUIndex = new Map<string, User>();
+                    userData.forEach(u => {
+                        if (u && u._id) newUIndex.set(u._id, u);
+                        if (u && u.id) newUIndex.set(u.id, u);
+                    });
+                    setUserIndex(newUIndex);
+                }
             }
 
-            if (Array.isArray(teamData) && teamData.length > 0) {
-                setTeams(teamData);
-                AsyncStorage.setItem("@cache_teams", JSON.stringify(teamData)).catch(() => {});
-                const newTIndex = new Map<string, any>();
-                teamData.forEach(t => {
-                    if (t._id) newTIndex.set(t._id, t);
-                    if (t.id) newTIndex.set(t.id, t);
-                });
-                setTeamIndex(newTIndex);
+            if (teamsRes?.data) {
+                const teamData = teamsRes.data?.records || teamsRes.data?.data || (Array.isArray(teamsRes.data) ? teamsRes.data : []);
+                if (Array.isArray(teamData)) {
+                    setTeams(teamData);
+                    AsyncStorage.setItem("@cache_teams", JSON.stringify(teamData)).catch(() => {});
+                    const newTIndex = new Map<string, any>();
+                    teamData.forEach(t => {
+                        if (t && t._id) newTIndex.set(t._id, t);
+                        if (t && t.id) newTIndex.set(t.id, t);
+                    });
+                    setTeamIndex(newTIndex);
+                }
             }
         } catch (error: any) {
-            if (error?.response?.status === 401) {
-                console.warn('[UserContext] Unauthorized fetch skipped (unauthenticated state)');
-            } else {
-                console.error('[UserContext] Failed to fetch users/teams:', error);
-            }
+            console.error('[UserContext] Failed to fetch users/teams:', error);
         } finally {
             setLoading(false);
         }
-    }, [users.length]);
+    }, [isAuthenticated]);
 
     useEffect(() => {
         refreshUsers();

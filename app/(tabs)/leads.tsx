@@ -138,6 +138,7 @@ function ActionSheet({ visible, onClose, lead, onUpdate, statuses, users }: {
     const { theme } = useTheme();
     const isDark = theme.background === '#0F172A';
     const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
+    const [shouldRender, setShouldRender] = useState(false);
     const [showStatusPicker, setShowStatusPicker] = useState(false);
     const [showReassign, setShowReassign] = useState(false);
     const [showTagEditor, setShowTagEditor] = useState(false);
@@ -145,18 +146,20 @@ function ActionSheet({ visible, onClose, lead, onUpdate, statuses, users }: {
 
     useEffect(() => {
         if (visible) {
-            Animated.spring(slideAnim, {
+            setShouldRender(true);
+            Animated.timing(slideAnim, {
                 toValue: 0,
+                duration: 250,
                 useNativeDriver: true,
-                tension: 50,
-                friction: 10
             }).start();
         } else {
             Animated.timing(slideAnim, {
                 toValue: SCREEN_HEIGHT,
-                duration: 250,
+                duration: 200,
                 useNativeDriver: true
-            }).start();
+            }).start(({ finished }) => {
+                if (finished) setShouldRender(false);
+            });
         }
     }, [visible]);
 
@@ -212,20 +215,39 @@ function ActionSheet({ visible, onClose, lead, onUpdate, statuses, users }: {
     };
 
     const handleDelete = () => {
+        if (!lead || !lead._id) {
+            console.error("[ACTION-DELETE] Aborted: No valid lead selected");
+            Alert.alert("Error", "No lead selected for deletion.");
+            return;
+        }
+
+        Vibration.vibrate([0, 50, 20, 50]); 
+        
         Alert.alert(
-            "Delete Lead",
-            "Are you sure you want to delete this lead?",
+            "Delete Lead Permanently?",
+            `Are you sure you want to delete ${leadName(lead)}? This action is irreversible.`,
             [
                 { text: "Cancel", style: "cancel" },
                 {
-                    text: "Delete",
+                    text: "Delete Now",
                     style: "destructive",
                     onPress: async () => {
-                        if (!lead) return;
-                        const res = await safeApiCall(() => deleteLead(lead._id));
-                        if (!res.error) {
-                            onUpdate();
-                            onClose();
+                        try {
+                            console.log(`[ACTION-DELETE] Initiating service call for ID: ${lead._id}`);
+                            // Using the centralized service function for consistency
+                            const res = await deleteLead(lead._id);
+                            
+                            // res from service is res.data
+                            console.log('[ACTION-DELETE] Server responded:', res);
+                            Vibration.vibrate(100);
+                            
+                            onUpdate(); // Refresh the list
+                            onClose(); // Close the sheet
+                            Alert.alert("Deleted", "Lead has been removed successfully.");
+                        } catch (err: any) {
+                            console.error("[ACTION-DELETE] Call failed:", err);
+                            const msg = err.response?.data?.message || err.message || "Failed to delete lead from server.";
+                            Alert.alert("Deletion Failed", msg);
                         }
                     }
                 }
@@ -252,7 +274,7 @@ function ActionSheet({ visible, onClose, lead, onUpdate, statuses, users }: {
         Linking.openURL(`whatsapp://send?phone=${cleanPhone.length === 10 ? "91" + cleanPhone : cleanPhone}`);
     };
 
-    if (!lead) return null;
+    if (!lead || (!visible && !shouldRender)) return null;
 
     return (
         <Modal transparent visible={visible} animationType="none" onRequestClose={onClose}>
@@ -263,8 +285,9 @@ function ActionSheet({ visible, onClose, lead, onUpdate, statuses, users }: {
                         { backgroundColor: isDark ? '#000000' : '#FFFFFF', transform: [{ translateY: slideAnim }] }
                     ]}
                 >
-                    <View style={styles.sheetHandle} />
-                    <ScrollView 
+                    <Pressable onPress={(e) => e.stopPropagation()} style={{ flex: 1 }}>
+                        <View style={styles.sheetHandle} />
+                        <ScrollView 
                         showsVerticalScrollIndicator={false}
                         contentContainerStyle={{ paddingBottom: 60 }}
                     >
@@ -349,16 +372,41 @@ function ActionSheet({ visible, onClose, lead, onUpdate, statuses, users }: {
                         </View>
 
                         {showReassign && (
-                            <View style={styles.pickerView}>
-                                <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Reassign To</Text>
+                            <View style={[styles.pickerView, { backgroundColor: isDark ? 'rgba(255,255,255,0.02)' : '#F8FAFC' }]}>
+                                <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Direct Assignment</Text>
+                                
+                                <TextInput
+                                    style={[styles.tagInput, { backgroundColor: theme.card, color: theme.text, borderColor: theme.border, marginBottom: 16, height: 80, textAlignVertical: 'top' }]}
+                                    placeholder="Add assignment internal note..."
+                                    placeholderTextColor={theme.textMuted}
+                                    multiline
+                                    value={newTag} // Re-using newTag for note or adding a new state
+                                    onChangeText={setNewTag}
+                                />
+
                                 <View style={styles.chipList}>
                                     {users.map((u) => (
                                         <TouchableOpacity
                                             key={u._id}
                                             style={[styles.actionChip, { borderColor: theme.border, backgroundColor: theme.card }]}
-                                            onPress={() => handleReassign(u._id)}
+                                            onPress={async () => {
+                                                const res = await safeApiCall(() => updateLead(lead._id, { 
+                                                    owner: u._id, 
+                                                    assignmentNote: newTag.trim() || 'Manual reassignment' 
+                                                }));
+                                                if (!res.error) {
+                                                    setNewTag("");
+                                                    onUpdate();
+                                                    onClose();
+                                                }
+                                            }}
                                         >
-                                            <Text style={[styles.actionChipText, { color: theme.text }]}>{u.fullName || u.name}</Text>
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                                <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: theme.primary + '15', justifyContent: 'center', alignItems: 'center' }}>
+                                                    <Text style={{ fontSize: 10, fontWeight: '800', color: theme.primary }}>{(u.fullName || u.name || "?")[0].toUpperCase()}</Text>
+                                                </View>
+                                                <Text style={[styles.actionChipText, { color: theme.text }]}>{u.fullName || u.name}</Text>
+                                            </View>
                                         </TouchableOpacity>
                                     ))}
                                 </View>
@@ -366,12 +414,12 @@ function ActionSheet({ visible, onClose, lead, onUpdate, statuses, users }: {
                         )}
 
                         {showTagEditor && (
-                            <View style={styles.pickerView}>
-                                <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Manage Tags</Text>
+                            <View style={[styles.pickerView, { backgroundColor: isDark ? 'rgba(255,255,255,0.02)' : '#F8FAFC' }]}>
+                                <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Enterprise Tagging</Text>
                                 <View style={styles.tagInputRow}>
                                     <TextInput
                                         style={[styles.tagInput, { backgroundColor: theme.card, color: theme.text, borderColor: theme.border }]}
-                                        placeholder="Add new tag..."
+                                        placeholder="Add descriptive tag..."
                                         placeholderTextColor={theme.textMuted}
                                         value={newTag}
                                         onChangeText={setNewTag}
@@ -383,10 +431,10 @@ function ActionSheet({ visible, onClose, lead, onUpdate, statuses, users }: {
                                 </View>
                                 <View style={styles.chipList}>
                                     {(lead.tags || []).map((t: string, idx: number) => (
-                                        <View key={idx} style={[styles.tagChip, { backgroundColor: theme.primary + '15', borderColor: theme.primary + '30' }]}>
+                                        <View key={idx} style={[styles.tagChip, { backgroundColor: theme.primary + '10', borderColor: theme.primary + '20' }]}>
                                             <Text style={[styles.tagChipText, { color: theme.primary }]}>{t}</Text>
-                                            <TouchableOpacity onPress={() => handleRemoveTag(t)}>
-                                                <Ionicons name="close-circle" size={14} color={theme.primary} />
+                                            <TouchableOpacity onPress={() => handleRemoveTag(t)} style={{ marginLeft: 4 }}>
+                                                <Ionicons name="close-circle" size={16} color={theme.primary + '80'} />
                                             </TouchableOpacity>
                                         </View>
                                     ))}
@@ -394,13 +442,18 @@ function ActionSheet({ visible, onClose, lead, onUpdate, statuses, users }: {
                             </View>
                         )}
 
-                        <View style={styles.dangerZone}>
-                            <TouchableOpacity style={[styles.dangerBtn, { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.1)' : "#FEF2F2" }]} onPress={handleDelete}>
-                                <Ionicons name="trash-outline" size={20} color="#EF4444" />
-                                <Text style={styles.dangerBtnText}>Delete Lead</Text>
-                            </TouchableOpacity>
-                        </View>
-                    </ScrollView>
+                            <View style={styles.dangerZone}>
+                                <TouchableOpacity 
+                                    activeOpacity={0.7}
+                                    style={[styles.dangerBtn, { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.1)' : "#FEF2F2", width: '100%' }]} 
+                                    onPress={handleDelete}
+                                >
+                                    <Ionicons name="trash-outline" size={20} color="#EF4444" />
+                                    <Text style={styles.dangerBtnText}>Delete Lead Permanently</Text>
+                                </TouchableOpacity>
+                            </View>
+                        </ScrollView>
+                    </Pressable>
                 </Animated.View>
             </Pressable>
         </Modal>
@@ -539,8 +592,8 @@ const StaggeredLeadItem = memo(({ item, index, renderItem }: any) => {
     useEffect(() => {
         Animated.timing(fadeAnim, {
             toValue: 1,
-            duration: 400,
-            delay: index * 50,
+            duration: 200, // Faster, snappy entry
+            delay: Math.min(index * 20, 300), // Cap delay so large lists don't feel slow
             useNativeDriver: true,
         }).start();
     }, []);
@@ -582,8 +635,8 @@ const LeadCard = memo(({ lead, index, onPress, onMore, isSelected, onLongPress, 
     useEffect(() => {
         Animated.timing(fadeAnim, {
             toValue: 1,
-            duration: 400,
-            delay: index * 50,
+            duration: 200,
+            delay: Math.min(index * 20, 300),
             useNativeDriver: true,
         }).start();
     }, [index]);
@@ -672,13 +725,21 @@ const LeadCard = memo(({ lead, index, onPress, onMore, isSelected, onLongPress, 
                                         ) : null}
                                     </View>
                                 </View>
-                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                    <View style={[styles.stageBadge, { backgroundColor: stageCfg.color + '15', borderColor: stageCfg.color + '30' }]}>
-                                        <Ionicons name={stageCfg.icon} size={10} color={stageCfg.color} />
-                                        <Text style={[styles.stageText, { color: stageCfg.color }]}>{stageLabel.toUpperCase()}</Text>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                    <View style={{ alignItems: 'flex-end', gap: 3 }}>
+                                        <View style={[styles.stageBadge, { backgroundColor: stageCfg.color + '15', borderColor: stageCfg.color + '30' }]}>
+                                            <Ionicons name={stageCfg.icon} size={10} color={stageCfg.color} />
+                                            <Text style={[styles.stageText, { color: stageCfg.color }]}>{stageLabel.toUpperCase()}</Text>
+                                        </View>
+                                        {lead.source ? (
+                                            <View style={[styles.sourceBadge, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : theme.border, borderColor: isDark ? 'rgba(255,255,255,0.1)' : theme.border, paddingVertical: 1, paddingHorizontal: 5 }]}>
+                                                <Ionicons name="radio-outline" size={9} color={theme.textLight} />
+                                                <Text style={[styles.sourceText, { color: theme.textLight, fontSize: 8.5 }]}>{getLookupValue("Source", lead.source)}</Text>
+                                            </View>
+                                        ) : null}
                                     </View>
                                     <TouchableOpacity onPress={onMore} style={styles.moreBtn}>
-                                        <Ionicons name="ellipsis-vertical" size={16} color={theme.textLight} />
+                                        <Ionicons name="ellipsis-vertical" size={18} color={theme.textLight} />
                                     </TouchableOpacity>
                                 </View>
                             </View>
@@ -710,7 +771,7 @@ const LeadCard = memo(({ lead, index, onPress, onMore, isSelected, onLongPress, 
                                 ) : null}
                             </View>
 
-                            <View style={styles.cardFooter}>
+                            <View style={[styles.cardFooter, { borderTopColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.03)' }]}>
                                 <View style={styles.tagStrip}>
                                     {lead.tags?.slice(0, 3).map((tag, i) => (
                                         <View key={i} style={[styles.miniTag, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : theme.border, borderColor: isDark ? 'rgba(255,255,255,0.1)' : theme.border }]}>
@@ -722,12 +783,6 @@ const LeadCard = memo(({ lead, index, onPress, onMore, isSelected, onLongPress, 
                                     )}
                                 </View>
                                 <View style={styles.footerRight}>
-                                    {lead.source ? (
-                                        <View style={[styles.sourceBadge, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : theme.border, borderColor: isDark ? 'rgba(255,255,255,0.1)' : theme.border }]}>
-                                            <Ionicons name="radio-outline" size={10} color={theme.textLight} />
-                                            <Text style={[styles.sourceText, { color: theme.textLight }]}>{getLookupValue("Source", lead.source)}</Text>
-                                        </View>
-                                    ) : null}
                                     <Text style={[styles.timeLabel, { color: theme.textLight }]}>{formatTimeAgo(lead.createdAt)}</Text>
                                 </View>
                             </View>
@@ -753,6 +808,7 @@ export default function LeadsScreen() {
     const [page, setPage] = useState(1);
     const [hasMore, setHasMore] = useState(true);
     const [search, setSearch] = useState("");
+    const [debouncedSearch, setDebouncedSearch] = useState("");
     const [leadsStats, setLeadsStats] = useState({ 
         total: 0, 
         today: 0, 
@@ -766,9 +822,14 @@ export default function LeadsScreen() {
     const [activeFilter, setActiveFilter] = useState<string>("all");
     const [showFilterModal, setShowFilterModal] = useState(false);
     const [filters, setFilters] = useState<{ stages: string[], sources: string[], owners: string[] }>({ stages: [], sources: [], owners: [] });
-    // const [statuses, setStatuses] = useState<Lookup[]>([]);
-    // const [sources, setSources] = useState<Lookup[]>([]);
-    // const [users, setUsers] = useState<any[]>([]);
+
+    // SENIOR OPTIMIZATION: Debounce search to prevent UI stutters on keystrokes
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setDebouncedSearch(search);
+        }, 300);
+        return () => clearTimeout(timer);
+    }, [search]);
 
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
     const [showDormant, setShowDormant] = useState(false);
@@ -923,50 +984,45 @@ export default function LeadsScreen() {
         }, [fetchLeads, leads.length, isAuthenticated])
     );
 
-    const filtered = useMemo(() => {
-        let list = leads;
+    // SENIOR OPTIMIZATION: Unified Filtering & Stats pass (Single loop O(N))
+    const { filtered, localStats } = useMemo(() => {
+        const q = debouncedSearch.toLowerCase();
+        let hotCount = 0;
+        let todayCount = 0;
+        const todayStr = new Date().toDateString();
 
-        // Advanced Filters
-        if (filters.stages.length > 0) {
-            list = list.filter(l => filters.stages.includes(typeof l.stage === 'string' ? l.stage : (l.stage as any)?._id));
-        }
-        if (filters.sources.length > 0) {
-            list = list.filter(l => filters.sources.includes(typeof l.source === 'string' ? l.source : (l.source as any)?._id));
-        }
-        if (filters.owners.length > 0) {
-            list = list.filter(l => filters.owners.includes(typeof l.owner === 'string' ? l.owner : (l.owner as any)?._id));
-        }
+        const list = leads.filter(l => {
+            // Count for local stats
+            const sVal = lookupVal(l.stage).toLowerCase();
+            if (sVal === "hot") hotCount++;
+            if (l.createdAt && new Date(l.createdAt).toDateString() === todayStr) todayCount++;
 
-        // Quick Stats Filters
-        if (activeFilter === "hot") {
-            list = list.filter(l => lookupVal(l.stage).toLowerCase() === "hot");
-        } else if (activeFilter === "today") {
-            list = list.filter(l => {
-                if (!l.createdAt) return false;
-                return new Date(l.createdAt).toDateString() === new Date().toDateString();
-            });
-        } else if (activeFilter !== "all" && activeFilter !== "") {
-            list = list.filter(l => lookupVal(l.stage).toLowerCase() === activeFilter.toLowerCase());
-        }
+            // 1. Stage/Source/Owner Filters
+            if (filters.stages.length > 0 && !filters.stages.includes(typeof l.stage === 'string' ? l.stage : (l.stage as any)?._id)) return false;
+            if (filters.sources.length > 0 && !filters.sources.includes(typeof l.source === 'string' ? l.source : (l.source as any)?._id)) return false;
+            if (filters.owners.length > 0 && !filters.owners.includes(typeof l.owner === 'string' ? l.owner : (l.owner as any)?._id)) return false;
 
-        const q = search.toLowerCase();
-        return list.filter((l) => {
+            // 2. Quick stats filter (exclusive)
+            if (activeFilter === "hot" && sVal !== "hot") return false;
+            if (activeFilter === "today" && (!l.createdAt || new Date(l.createdAt).toDateString() !== todayStr)) return false;
+            if (activeFilter !== "all" && activeFilter !== "" && activeFilter !== "hot" && activeFilter !== "today") {
+                if (sVal !== activeFilter.toLowerCase()) return false;
+            }
+
+            // 3. Search Matching
+            if (!q) return true;
             const name = leadName(l).toLowerCase();
             const mobile = (l.mobile ?? "").toLowerCase();
             const req = lookupVal(l.requirement).toLowerCase();
             const loc = (l.locCity || lookupVal(l.location)).toLowerCase();
             return name.includes(q) || mobile.includes(q) || req.includes(q) || loc.includes(q);
         });
-    }, [leads, search, activeFilter, filters]);
 
-    const stats = useMemo(() => {
-        return {
-            total: leads.length,
-            hot: leads.filter(l => lookupVal(l.stage).toLowerCase() === "hot").length,
-            today: leads.filter(l => l.createdAt && new Date(l.createdAt).toDateString() === new Date().toDateString()).length,
-            active: leads.filter(l => ["new", "active", "contacted"].includes(lookupVal(l.stage).toLowerCase())).length
+        return { 
+            filtered: list, 
+            localStats: { total: leads.length, hot: hotCount, today: todayCount } 
         };
-    }, [leads]);
+    }, [leads, debouncedSearch, activeFilter, filters]);
 
     const fabScale = useRef(new Animated.Value(1)).current;
 
@@ -1183,9 +1239,9 @@ export default function LeadsScreen() {
 
             <ActionSheet
                 visible={sheetVisible}
-                onClose={() => setSheetVisible(false)}
+                onClose={() => { setSheetVisible(false); setSelectedLead(null); }}
                 lead={selectedLead}
-                onUpdate={fetchLeads}
+                onUpdate={() => fetchLeads(1, false)}
                 statuses={getLookupsByType("Stage")}
                 users={users}
             />
@@ -1297,11 +1353,11 @@ const styles = StyleSheet.create({
     segmentTextActive: { color: "#fff" },
 
 
-    card: { borderRadius: 16, paddingHorizontal: 3, paddingBottom: 3, paddingTop: 8, marginBottom: 6, borderWidth: 1, elevation: 2, shadowOpacity: 0.03, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, overflow: 'hidden' },
+    card: { borderRadius: 14, paddingHorizontal: 3, paddingBottom: 2, paddingTop: 6, marginBottom: 4, borderWidth: 1, elevation: 2, shadowOpacity: 0.03, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, overflow: 'hidden' },
     cardSelected: { borderWidth: 2 },
-    cardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 2 },
+    cardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 1 },
     leadInfo: { flex: 1 },
-    leadName: { fontSize: 17, fontWeight: "700", marginBottom: 1 },
+    leadName: { fontSize: 17, fontWeight: "700", marginBottom: 0 },
     mobileRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
     leadMobile: { fontSize: 13.5, fontWeight: "500" },
     qualityBox: { marginRight: 0 },
@@ -1316,7 +1372,7 @@ const styles = StyleSheet.create({
     locRow: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 20 },
     locText: { fontSize: 11.5, fontWeight: "500" },
 
-    cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1, paddingTop: 1 },
+    cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 2, marginTop: 2 },
     footerLeftTicker: { flex: 1, height: 24, marginRight: 8, justifyContent: 'center' },
     footerRight: { alignItems: 'flex-end', gap: 1 },
     badgeGroup: { flexDirection: 'row', gap: 6 },

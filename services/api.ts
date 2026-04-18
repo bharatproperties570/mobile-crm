@@ -10,7 +10,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 // On Native (Expo Go on phone): use the Mac's LAN IP
 // The env var EXPO_PUBLIC_API_BASE_URL can override this.
 // ============================================================
-const MACHINE_IP = "192.168.1.6";
+const MACHINE_IP = "192.168.1.3";
 const BACKEND_PORT = "4000";
 
 const WEB_URL = `http://localhost:${BACKEND_PORT}/api`;
@@ -32,7 +32,6 @@ const api = axios.create({
   baseURL: BASE_URL,
   timeout: 120000,
   headers: {
-    "Origin": "https://crm.bharatproperties.co",
     "Content-Type": "application/json",
     "Accept": "application/json",
     "Bypass-Tunnel-Reminder": "true",
@@ -63,6 +62,19 @@ api.interceptors.request.use(
   },
   (error) => Promise.reject(error)
 );
+
+// --- Silent Token Refresh Implementation ---
+let isRefreshing = false;
+let refreshSubscribers: ((token: string) => void)[] = [];
+
+const subscribeTokenRefresh = (cb: (token: string) => void) => {
+  refreshSubscribers.push(cb);
+};
+
+const onRefreshed = (token: string) => {
+  refreshSubscribers.map((cb) => cb(token));
+  refreshSubscribers = [];
+};
 
 let on401Callback: (() => void) | null = null;
 
@@ -118,17 +130,78 @@ api.interceptors.response.use(
     const msg = error?.response?.data?.message || error?.message || "Unknown error";
     console.warn(`[API] ❌ ${status || "NO_RESPONSE"} ${url} — ${msg}`);
 
-    if (status === 401) {
-      // Professional Hardening: Do not logout on public route failures
-      const isPublicRoute = url.includes('/public/') || url.includes('/health') || url.includes('/sms-gateway/status');
-      if (!isPublicRoute) {
-        await storage.deleteItem("authToken").catch(() => { });
+    if (status === 401 && !error.config._retry) {
+      // 1. If the refresh call itself fails, we must logout
+      if (url.includes('/auth/refresh')) {
+        console.warn('[API] Refresh token expired. Force logout.');
+        await storage.deleteItem("authToken");
+        await storage.deleteItem("refreshToken");
         if (on401Callback) on401Callback();
-        console.log(`[API] 401 Unauthorized ${url} — session expired or missing token.`);
-      } else {
-        console.warn(`[API] 401 on public route ignored to prevent session termination: ${url}`);
+        return Promise.reject(error);
+      }
+
+      // 2. Queue simultaneous requests while refreshing
+      if (isRefreshing) {
+        return new Promise((resolve) => {
+          subscribeTokenRefresh((newToken) => {
+            error.config.headers.Authorization = `Bearer ${newToken}`;
+            resolve(api(error.config));
+          });
+        });
+      }
+
+      // 3. Start refresh process
+      error.config._retry = true;
+      isRefreshing = true;
+
+      try {
+        const savedRefreshToken = await storage.getItem('refreshToken');
+        if (!savedRefreshToken) {
+          // Explicitly handle standard session expiry without a scary error
+          console.warn('[API] Session expired (No refresh token). Redirecting to login.');
+          throw new Error('SESSION_EXPIRED');
+        }
+
+        console.log('[API] Attempting silent token refresh...');
+        const res = await axios.post(`${BASE_URL}/auth/refresh`, {
+          refreshToken: savedRefreshToken
+        }, {
+          headers: { "Content-Type": "application/json" }
+        });
+
+        if (res.data.success && res.data.token) {
+          const newToken = res.data.token;
+          const newRefreshToken = res.data.refreshToken;
+          
+          await storage.setItem('authToken', newToken);
+          if (newRefreshToken) await storage.setItem('refreshToken', newRefreshToken);
+          
+          isRefreshing = false;
+          onRefreshed(newToken);
+
+          error.config.headers.Authorization = `Bearer ${newToken}`;
+          return api(error.config);
+        }
+      } catch (refreshErr) {
+        isRefreshing = false;
+        
+        const isExpired = refreshErr.message === 'SESSION_EXPIRED' || refreshErr.message.includes('expired');
+        if (isExpired) {
+            console.warn('[API] Silent refresh skipped: Session is invalid or expired.');
+        } else {
+            console.error('[API] Refresh request failed:', refreshErr.message);
+        }
+        
+        // Final fallback: real logout
+        const isPublicRoute = url.includes('/public/') || url.includes('/health') || url.includes('/sms-gateway/status');
+        if (!isPublicRoute) {
+          await storage.deleteItem("authToken");
+          await storage.deleteItem("refreshToken");
+          if (on401Callback) on401Callback();
+        }
       }
     }
+
     return Promise.reject(error);
   }
 );

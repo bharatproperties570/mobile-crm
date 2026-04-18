@@ -9,20 +9,55 @@ interface AuthContextType {
     user: any | null;
     isAuthenticated: boolean;
     loading: boolean;
-    login: (token: string, user?: any) => Promise<void>;
+    login: (token: string, user: any) => Promise<void>;
     logout: () => Promise<void>;
+    checkAuth: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [token, setToken] = useState<string | null>(null);
     const [user, setUser] = useState<any | null>(null);
     const [loading, setLoading] = useState(true);
     const router = useRouter();
-    const segments = useSegments();
+    
+    // Safety check for segments
+    let segments: string[] = [];
+    try {
+        segments = useSegments();
+    } catch (e) {
+        console.warn("[AuthContext] useSegments hook failed (router might not be ready)");
+    }
 
-    console.log(`[AuthContext] State: loading=${loading}, token=${!!token}, segment=${segments[0]}`);
+    const checkAuth = async () => {
+        setLoading(true);
+        console.log("[AuthContext] Checking authentication...");
+        try {
+            const savedToken = await storage.getItem("authToken");
+            const savedUser = await storage.getItem("userData");
+            
+            if (savedToken) {
+                console.log("[AuthContext] Token found in storage");
+                setToken(savedToken);
+                if (savedUser) setUser(JSON.parse(savedUser));
+            } else {
+                console.log("[AuthContext] No token found");
+            }
+        } catch (error) {
+            console.error("[AuthContext] Auth check error:", error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const clearCaches = async () => {
+        try {
+            const keys = await AsyncStorage.getAllKeys();
+            const cacheKeys = keys.filter(k => k.startsWith("@cache_") || k.startsWith("@offline_cache_"));
+            if (cacheKeys.length > 0) await AsyncStorage.multiRemove(cacheKeys);
+        } catch (e) {}
+    }
 
     useEffect(() => {
         const { set401Callback } = require("@/services/api");
@@ -35,78 +70,65 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         checkAuth();
     }, []);
 
+    // 🚀 Redirection Engine: Handles path-based access control
     useEffect(() => {
-        // Redirection logic
         if (loading) return;
 
-        const inAuthGroup = segments[0] === '(auth)';
+        // segments[0] is the root group (e.g. "(auth)" or "(tabs)")
+        const group = segments[0];
+        const inAuthGroup = group === '(auth)';
+        const inTabsGroup = group === '(tabs)';
 
-        if (!token && !inAuthGroup) {
-            // Redirect to login if not authenticated and not in auth group
-            router.replace('/(auth)/login');
-        } else if (token && inAuthGroup) {
-            // Redirect to home if authenticated and in auth group
-            router.replace('/(tabs)');
-        }
-    }, [token, loading, segments]);
+        // SENIOR FIX: If we are at the root path (segments.length === 0), it's a redirection decision point
+        const isAtRoot = segments.length === 0;
 
-    const checkAuth = async () => {
-        try {
-            const savedToken = await storage.getItem('authToken');
-            if (savedToken) {
-                setToken(savedToken);
-                // Optionally fetch user profile here
+        if (!token) {
+            // Unauthenticated: Redirect to login if not already in auth flow
+            if (!inAuthGroup) {
+                console.log("[AuthContext] Redirecting to login (unauthenticated)");
+                router.replace("/(auth)/login");
             }
-        } catch (error) {
-            console.error('[AuthContext] Error checking auth:', error);
-        } finally {
-            setLoading(false);
+        } else {
+            // Authenticated: Redirect to tabs if at root or in auth flow
+            if (isAtRoot || inAuthGroup) {
+                console.log("[AuthContext] Redirecting to tabs (authenticated)");
+                router.replace("/(tabs)");
+            }
         }
-    };
+    }, [token, segments, loading]);
 
-    const login = async (newToken: string, userData?: any) => {
-        await storage.setItem('authToken', newToken);
+    const login = async (newToken: string, userData: any) => {
         setToken(newToken);
-        if (userData) setUser(userData);
-    };
-
-    const clearCaches = async () => {
-        const cacheKeys = [
-            "@cache_leads_list",
-            "@cache_deals_list",
-            "@cache_inventory_list",
-            "@cache_lookups",
-            "@cache_property_config",
-            "@cache_lead_master_fields",
-            "@cache_users",
-            "@cache_teams"
-        ];
-        try {
-            await AsyncStorage.multiRemove(cacheKeys);
-            console.log("[AuthContext] CRM Caches cleared");
-        } catch (e) {
-            console.warn("[AuthContext] Failed to clear caches", e);
-        }
+        setUser(userData);
+        await storage.setItem("authToken", newToken);
+        await storage.setItem("userData", JSON.stringify(userData));
     };
 
     const logout = async () => {
-        await storage.deleteItem('authToken');
         setToken(null);
         setUser(null);
+        await storage.deleteItem("authToken");
+        await storage.deleteItem("userData");
         await clearCaches();
     };
 
     return (
-        <AuthContext.Provider value={{ token, user, isAuthenticated: !!token, loading, login, logout }}>
+        <AuthContext.Provider value={{ 
+            token, 
+            user, 
+            isAuthenticated: !!token, 
+            loading, 
+            login, 
+            logout, 
+            checkAuth 
+        }}>
             {children}
         </AuthContext.Provider>
     );
-}
+};
 
-export function useAuth() {
+export const useAuth = () => {
     const context = useContext(AuthContext);
-    if (context === undefined) {
-        throw new Error('useAuth must be used within an AuthProvider');
-    }
+    if (!context) throw new Error('useAuth must be used within an AuthProvider');
     return context;
-}
+};

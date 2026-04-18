@@ -32,6 +32,7 @@ export const LookupProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const { isAuthenticated } = useAuth();
 
     const refreshLookups = useCallback(async (retryCount = 2) => {
+        console.log(`[LookupContext] refreshLookups starting (isAuthenticated=${isAuthenticated})...`);
         // 1. Try to load from cache first for instant UI response
         if (lookups.length === 0) {
             try {
@@ -48,10 +49,12 @@ export const LookupProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                     const newIdIndex = new Map<string, Lookup>();
                     const newTypeIndex = new Map<string, Lookup[]>();
                     parsed.forEach((item: Lookup) => {
-                        newIdIndex.set(item._id, item);
-                        const type = item.lookup_type.toLowerCase();
-                        if (!newTypeIndex.has(type)) newTypeIndex.set(type, []);
-                        newTypeIndex.get(type)?.push(item);
+                        if (item && item.lookup_type) {
+                            newIdIndex.set(item._id, item);
+                            const type = item.lookup_type.toLowerCase();
+                            if (!newTypeIndex.has(type)) newTypeIndex.set(type, []);
+                            newTypeIndex.get(type)?.push(item);
+                        }
                     });
                     setIdIndex(newIdIndex);
                     setTypeIndex(newTypeIndex);
@@ -93,10 +96,12 @@ export const LookupProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 const newTypeIndex = new Map<string, Lookup[]>();
 
                 data.forEach(item => {
-                    newIdIndex.set(item._id, item);
-                    const type = item.lookup_type.toLowerCase();
-                    if (!newTypeIndex.has(type)) newTypeIndex.set(type, []);
-                    newTypeIndex.get(type)?.push(item);
+                    if (item && item.lookup_type) {
+                        newIdIndex.set(item._id, item);
+                        const type = item.lookup_type.toLowerCase();
+                        if (!newTypeIndex.has(type)) newTypeIndex.set(type, []);
+                        newTypeIndex.get(type)?.push(item);
+                    }
                 });
 
                 setIdIndex(newIdIndex);
@@ -136,7 +141,7 @@ export const LookupProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         } finally {
             setLoading(false);
         }
-    }, [lookups.length]);
+    }, [lookups.length, isAuthenticated]); // Fixed: Added isAuthenticated to re-trigger fetch on login
 
     useEffect(() => {
         refreshLookups();

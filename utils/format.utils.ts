@@ -101,79 +101,73 @@ export function getSizeLabel(item: any, getLookupValue?: (type: string, val: any
     // Helper to check if a string is a raw MongoDB ID
     const isId = (s: any) => typeof s === 'string' && /^[a-f0-9]{24}$/i.test(s.trim());
     
-    // FIX: Only treat as malformed if it's explicitly the CORRUPTED STRING "[object Object]"
-    // If it's a real object, it's NOT malformed, just needs formatting.
+    // Malformed check: handles null, placeholder, or corrupted string
     const isMalformed = (s: any) => {
         if (!s || s === "—") return true;
         if (typeof s === 'string' && s.toLowerCase().includes("[object object]")) return true;
         return false;
     };
 
-    // 1. Check direct sizeLabel (On item or connected inventory)
-    let rawLabel = item.sizeLabel || item.size_label || "";
-    if (isMalformed(rawLabel)) {
-        rawLabel = inv?.sizeLabel || inv?.size_label || "";
-    }
-    
-    if (typeof rawLabel === 'string' && !isMalformed(rawLabel)) {
-        if (isId(rawLabel)) {
-            if (getLookupValue) {
-                const resolved = getLookupValue("Size", rawLabel);
-                if (resolved && !isId(resolved) && !isMalformed(resolved)) return resolved;
-                
-                const resolvedAny = getLookupValue("Any", rawLabel);
-                if (resolvedAny && !isId(resolvedAny) && !isMalformed(resolvedAny)) return resolvedAny;
-            }
-        } else {
-            return rawLabel;
-        }
-    }
+    // 1. Try resolving explicit labels (sizeLabel, unitSpecification.sizeLabel)
+    const possibleLabels = [
+        item.sizeLabel, item.size_label, 
+        item.unitSpecification?.sizeLabel,
+        inv?.sizeLabel, inv?.size_label,
+        inv?.unitSpecification?.sizeLabel
+    ];
 
-    // 2. Check sizeConfig lookup (On item or connected inventory)
-    let sizeConfig = item.sizeConfig || item.size_config;
-    if (isMalformed(sizeConfig)) {
-        sizeConfig = inv?.sizeConfig || inv?.size_config;
-    }
-    
-    if (sizeConfig && !isMalformed(sizeConfig)) {
-        // Handle if sizeConfig is already a populated object from backend
-        if (typeof sizeConfig === 'object' && sizeConfig !== null) {
-            const val = sizeConfig.lookup_value || sizeConfig.name || sizeConfig.label || sizeConfig.value;
-            if (val && typeof val !== 'object' && !isMalformed(val)) return String(val);
-            if (typeof val === 'object' && val !== null) {
-                const nestedVal = (val as any).lookup_value || (val as any).name || (val as any).label || (val as any).value || "";
-                if (nestedVal && !isMalformed(nestedVal)) return String(nestedVal);
+    for (const raw of possibleLabels) {
+        if (raw && !isMalformed(raw)) {
+            if (isId(raw)) {
+                if (getLookupValue) {
+                    const res = getLookupValue("Size", raw) || getLookupValue("Any", raw);
+                    if (res && !isId(res) && !isMalformed(res)) return res;
+                }
+            } else if (typeof raw === 'string') {
+                return raw;
+            } else if (typeof raw === 'object') {
+                const label = (raw as any).lookup_value || (raw as any).name || (raw as any).label || (raw as any).value;
+                if (label && typeof label !== 'object' && !isMalformed(label)) return String(label);
             }
         }
+    }
 
-        // Handle if sizeConfig is a string ID that needs lookup resolution
-        if (getLookupValue && typeof sizeConfig === 'string') {
-            const resolved = getLookupValue("Size", sizeConfig);
-            if (resolved && !isId(resolved) && !isMalformed(resolved)) return String(resolved);
+    // 2. Try resolving configurations (sizeConfig, unitSpecification.sizeConfig)
+    const possibleConfigs = [
+        item.sizeConfig, item.size_config,
+        item.unitSpecification?.sizeConfig,
+        inv?.sizeConfig, inv?.size_config,
+        inv?.unitSpecification?.sizeConfig
+    ];
 
-            const resolvedAny = getLookupValue("Any", sizeConfig);
-            if (resolvedAny && !isId(resolvedAny) && !isMalformed(resolvedAny)) return String(resolvedAny);
+    for (const conf of possibleConfigs) {
+        if (conf && !isMalformed(conf)) {
+            if (typeof conf === 'object' && conf !== null) {
+                const val = conf.lookup_value || conf.name || conf.label || conf.value;
+                if (val && typeof val !== 'object' && !isMalformed(val)) return String(val);
+                if (typeof val === 'object' && val !== null) {
+                    const nestedVal = (val as any).lookup_value || (val as any).name || (val as any).label || (val as any).value || "";
+                    if (nestedVal && !isMalformed(nestedVal)) return String(nestedVal);
+                }
+            }
+            if (getLookupValue && typeof conf === 'string') {
+                const res = getLookupValue("Size", conf) || getLookupValue("Any", conf);
+                if (res && !isId(res) && !isMalformed(res)) return String(res);
+            }
         }
     }
 
-    // 3. Fallback to raw size value with unit (On item or connected inventory)
-    let sizeValue = item.size ?? item.area;
-    let unit = item.sizeUnit || item.unit;
+    // 3. Fallback to raw size value with unit
+    const sizeVal = item.size ?? item.area ?? inv?.size ?? inv?.area;
+    const unit = item.sizeUnit || item.unit || inv?.sizeUnit || inv?.unit;
 
-    if (isMalformed(sizeValue)) {
-        sizeValue = inv?.size ?? inv?.area;
-        unit = inv?.sizeUnit ?? inv?.unit;
-    }
-
-    if (sizeValue !== undefined && sizeValue !== null && sizeValue !== "" && !isMalformed(sizeValue)) {
-        unit = unit || 'Sq.Ft.';
-        // If it's a string ID, try to resolve it as a size label one more time
-        if (typeof sizeValue === 'string' && isId(sizeValue) && getLookupValue) {
-            const res = getLookupValue("Size", sizeValue) || getLookupValue("Any", sizeValue);
-            if (res && !isId(res)) return res;
+    if (sizeVal !== undefined && sizeVal !== null && sizeVal !== "" && !isMalformed(sizeVal)) {
+        if (typeof sizeVal === 'string' && isId(sizeVal) && getLookupValue) {
+            const res = getLookupValue("Size", sizeVal) || getLookupValue("Any", sizeVal);
+            if (res && !isId(res) && !isMalformed(res)) return res;
         }
         
-        const formatted = formatSize(sizeValue, unit, getLookupValue);
+        const formatted = formatSize(sizeVal, unit || 'Sq.Ft.', getLookupValue);
         if (formatted && !formatted.includes("[object Object]")) {
             return String(formatted);
         }

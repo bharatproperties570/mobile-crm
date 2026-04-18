@@ -360,7 +360,7 @@ const DealCard = memo(({
                 <View style={styles.cardMain}>
                     <View style={styles.cardHeader}>
                         <View style={styles.cardIdentity}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 1 }}>
                                 <Text style={[styles.dealUnitNumber, { color: theme.text }]}>{deal.unitNo || deal.unitNumber || (typeof deal.inventoryId === 'object' ? (deal.inventoryId?.unitNo || deal.inventoryId?.unitNumber) : "") || "N/A"}</Text>
                                 <View style={[styles.typePill, { backgroundColor: color + (isDark ? '25' : '15') }]}>
                                     <Text style={[styles.typePillText, { color: color }]}>
@@ -377,25 +377,40 @@ const DealCard = memo(({
                                     <Text style={[styles.dealBlockName, { color: theme.textLight }]}> • {deal.block || (typeof deal.inventoryId === 'object' ? deal.inventoryId?.block : "") || "No Block"}</Text>
                                 </Text>
                             </View>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
                                 {deal.isPublished && (
                                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: theme.success + '15', paddingHorizontal: 4, paddingVertical: 1, borderRadius: 4 }}>
                                         <Ionicons name="globe" size={10} color={theme.success} />
                                         <Text style={{ fontSize: 9, color: theme.success, fontWeight: '800' }}>LIVE</Text>
                                     </View>
                                 )}
-                                {getSizeLabel(deal, getLookupValue) && (
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                                        <Ionicons name="expand-outline" size={11} color={theme.textMuted} />
-                                        <Text style={{ fontSize: 11, color: theme.textMuted, fontWeight: '600' }}>
-                                            {getSizeLabel(deal, getLookupValue)}
-                                        </Text>
-                                    </View>
-                                )}
+                                {(() => {
+                                    const label = getSizeLabel(deal, getLookupValue);
+                                    const hasSizeData = label && label !== "—";
+                                    
+                                    // Robust Fallback: Search in root deal fields if getSizeLabel failed 
+                                    // (happens if inventoryId population is delayed or partial)
+                                    let finalLabel = hasSizeData ? label : null;
+                                    if (!finalLabel || finalLabel === "—") {
+                                        if (deal.sizeLabel && deal.sizeLabel !== "—") finalLabel = deal.sizeLabel;
+                                        else if (deal.size || deal.sizeUnit) finalLabel = `${deal.size?.value ?? deal.size ?? ""} ${deal.sizeUnit ?? deal.size?.unit ?? ""}`.trim();
+                                    }
+
+                                    if (!finalLabel || finalLabel === "—" || finalLabel.includes("[object Object]")) return null;
+
+                                    return (
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#F1F5F9', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                                            <Ionicons name="expand-outline" size={10} color={theme.textMuted} />
+                                            <Text style={{ fontSize: 11, color: theme.textMuted, fontWeight: '700' }} numberOfLines={1}>
+                                                {finalLabel}
+                                            </Text>
+                                        </View>
+                                    );
+                                })()}
                             </View>
                         </View>
                         <View style={styles.headerRight}>
-                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 4 }}>
                                 <DealScoreRing score={liveScore ? liveScore.score : (deal.score || (deal as any).dealScore || 0)} color={liveScore?.color || color} size={32} />
                                 <View style={[styles.stagePill, { backgroundColor: color + "15" }]}>
                                     <View style={[styles.stageDot, { backgroundColor: color }]} />
@@ -408,9 +423,9 @@ const DealCard = memo(({
                         </View>
                     </View>
 
-                    <View style={styles.cardFooter}>
+                    <View style={[styles.cardFooter, { borderTopColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.03)' }]}>
                         {/* Owner/Associate Data - Row Based (Professional) */}
-                        <View style={{ flex: 1, gap: 6 }}>
+                        <View style={{ flex: 1, gap: 2 }}>
                              {/* Owner */}
                              <View style={styles.listMeta}>
                                 <Ionicons name="home-outline" size={13} color={theme.success} />
@@ -433,7 +448,7 @@ const DealCard = memo(({
                             </View>
                         </View>
 
-                        <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                        <View style={{ alignItems: 'flex-end', gap: 2 }}>
                             <Text style={[styles.dealAmount, { color: color }]}>{formatAmount(amount)}</Text>
                             {deal.createdAt && (
                                 <Text style={styles.dateText}>{new Date(deal.createdAt).toLocaleDateString("en-IN")}</Text>
@@ -808,6 +823,43 @@ export default function DealsScreen() {
         }
     };
 
+    const handleDeleteDeal = () => {
+        if (!selectedDeal || !selectedDeal._id) return;
+        
+        Vibration.vibrate([0, 50, 20, 50]); // Distinguishable double pulse
+        Alert.alert(
+            "Delete Deal Permanently?",
+            `Are you sure? This will remove the deal and all associated history. This action cannot be reversed.`,
+            [
+                { text: "Cancel", style: "cancel" },
+                {
+                    text: "Delete Now",
+                    style: "destructive",
+                    onPress: async () => {
+                        try {
+                            console.log(`[ACTION-DELETE] Triggering delete for deal: ${selectedDeal._id}`);
+                            const res = await api.delete(`/deals/${selectedDeal._id}`);
+                            
+                            if (res.status >= 200 && res.status < 300) {
+                                console.log('[ACTION-DELETE] Success on server');
+                                Vibration.vibrate(100);
+                                fetchDeals(); 
+                                closeHub();
+                                Alert.alert("Deleted Successfully", "The deal has been permanently removed.");
+                            } else {
+                                throw new Error(res.data?.message || "Server rejected the request");
+                            }
+                        } catch (err: any) {
+                            console.error("[ACTION-DELETE-DEAL] Failed:", err);
+                            const msg = err.response?.data?.message || err.message || "Network error";
+                            Alert.alert("Delete Failed", msg);
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
     const submitPublishData = async (dealToPublish: Deal, isPublished: boolean, shareUnitNumber: boolean, shareLocation: boolean) => {
         setIsPublishing(true);
         const payload = {
@@ -936,8 +988,8 @@ export default function DealsScreen() {
                     windowSize={5}
                     removeClippedSubviews={true}
                     getItemLayout={(data, index) => ({
-                        length: 120,
-                        offset: 120 * index,
+                        length: 100,
+                        offset: 100 * index,
                         index,
                     })}
                     onEndReached={loadMore}
@@ -997,6 +1049,7 @@ export default function DealsScreen() {
             <Modal transparent visible={hubVisible} animationType="none" onRequestClose={closeHub}>
                 <Pressable style={styles.modalOverlay} onPress={closeHub}>
                     <Animated.View style={[styles.sheetContainer, { backgroundColor: isDark ? '#000000' : '#FFFFFF', transform: [{ translateY: slideAnim }] }]}>
+                        <Pressable onPress={(e) => e.stopPropagation()} style={{ flex: 1 }}>
                         <View style={styles.sheetHandle} />
                         <ScrollView 
                             showsVerticalScrollIndicator={false}
@@ -1052,7 +1105,15 @@ export default function DealsScreen() {
                                     <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Book</Text>
                                 </TouchableOpacity>
 
-                                <TouchableOpacity style={styles.actionItem} onPress={() => { router.push(`/upload-media?id=${selectedDeal?.inventoryId?._id || selectedDeal?.inventoryId}`); closeHub(); }}>
+                                <TouchableOpacity style={styles.actionItem} onPress={() => { 
+                                    const invId = selectedDeal?.inventoryId?._id || selectedDeal?.inventoryId;
+                                    if (!invId || invId === "undefined") {
+                                        Alert.alert("Missing Connection", "This deal is not linked to any inventory item. Media cannot be uploaded.");
+                                        return;
+                                    }
+                                    router.push(`/upload-media?id=${invId}`); 
+                                    closeHub(); 
+                                }}>
                                     <View style={[styles.actionIcon, { backgroundColor: isDark ? 'rgba(22, 163, 74, 0.1)' : "#F0FDF4" }]}>
                                         <Ionicons name="cloud-upload" size={24} color="#16A34A" />
                                     </View>
@@ -1110,6 +1171,16 @@ export default function DealsScreen() {
                                 </TouchableOpacity>
                             </View>
 
+                            <View style={styles.dangerZone}>
+                                <TouchableOpacity 
+                                    style={[styles.dangerBtn, { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.1)' : "#FEF2F2" }]} 
+                                    onPress={handleDeleteDeal}
+                                >
+                                    <Ionicons name="trash-outline" size={20} color="#EF4444" />
+                                    <Text style={styles.dangerBtnText}>Delete Deal</Text>
+                                </TouchableOpacity>
+                            </View>
+
                             {showStagePicker && (
                                 <View style={[styles.pickerView, { backgroundColor: isDark ? 'rgba(255,255,255,0.02)' : '#F8FAFC' }]}>
                                     <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Change Stage</Text>
@@ -1134,14 +1205,40 @@ export default function DealsScreen() {
                             {showReassign && (
                                 <View style={[styles.pickerView, { backgroundColor: isDark ? 'rgba(255,255,255,0.02)' : '#F8FAFC' }]}>
                                     <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Reassign Deal</Text>
+                                    
+                                    <TextInput
+                                        style={[styles.tagInput, { backgroundColor: theme.card, color: theme.text, borderColor: theme.border, marginBottom: 16, height: 80, textAlignVertical: 'top' }]}
+                                        placeholder="Add transfer notes..."
+                                        placeholderTextColor={theme.textMuted}
+                                        multiline
+                                        value={newTag} // Re-using state for note or add dedicated
+                                        onChangeText={setNewTag}
+                                    />
+
                                     <View style={styles.chipList}>
                                         {users.map((u) => (
                                             <TouchableOpacity
                                                 key={u._id}
                                                 style={[styles.actionChip, { borderColor: theme.border, backgroundColor: theme.card }]}
-                                                onPress={() => handleReassign(u._id)}
+                                                onPress={async () => {
+                                                    const res = await safeApiCall(() => updateDeal(selectedDeal!._id, { 
+                                                        assignedTo: u._id, 
+                                                        assignmentNote: newTag.trim() || 'Direct transfer' 
+                                                    }));
+                                                    if (!res.error) {
+                                                        setNewTag("");
+                                                        fetchDeals();
+                                                        closeHub();
+                                                        Alert.alert("Success", "Deal reassigned professionally.");
+                                                    }
+                                                }}
                                             >
-                                                <Text style={[styles.actionChipText, { color: theme.text }]}>{u.fullName || u.name}</Text>
+                                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                                    <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: theme.primary + '15', justifyContent: 'center', alignItems: 'center' }}>
+                                                        <Text style={{ fontSize: 10, fontWeight: '800', color: theme.primary }}>{(u.fullName || u.name || "?")[0].toUpperCase()}</Text>
+                                                    </View>
+                                                    <Text style={[styles.actionChipText, { color: theme.text }]}>{u.fullName || u.name}</Text>
+                                                </View>
                                             </TouchableOpacity>
                                         ))}
                                     </View>
@@ -1150,11 +1247,11 @@ export default function DealsScreen() {
 
                             {showTagEditor && (
                                 <View style={[styles.pickerView, { backgroundColor: isDark ? 'rgba(255,255,255,0.02)' : '#F8FAFC' }]}>
-                                    <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Manage Tags</Text>
+                                    <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Deal Tagging</Text>
                                     <View style={styles.tagInputRow}>
                                         <TextInput
                                             style={[styles.tagInput, { backgroundColor: theme.card, color: theme.text, borderColor: theme.border }]}
-                                            placeholder="Add new tag..."
+                                            placeholder="Add descriptive tag..."
                                             placeholderTextColor={theme.textMuted}
                                             value={newTag}
                                             onChangeText={setNewTag}
@@ -1166,10 +1263,10 @@ export default function DealsScreen() {
                                     </View>
                                     <View style={styles.chipList}>
                                         {(selectedDeal?.tags || []).map((t: string, idx: number) => (
-                                            <View key={idx} style={[styles.tagChip, { backgroundColor: theme.primary + '15', borderColor: theme.primary + '30' }]}>
+                                            <View key={idx} style={[styles.tagChip, { backgroundColor: theme.primary + '10', borderColor: theme.primary + '20' }]}>
                                                 <Text style={[styles.tagChipText, { color: theme.primary }]}>{t}</Text>
-                                                <TouchableOpacity onPress={() => handleRemoveTag(t)}>
-                                                    <Ionicons name="close-circle" size={14} color="#94A3B8" />
+                                                <TouchableOpacity onPress={() => handleRemoveTag(t)} style={{ marginLeft: 4 }}>
+                                                    <Ionicons name="close-circle" size={16} color={theme.primary + '80'} />
                                                 </TouchableOpacity>
                                             </View>
                                         ))}
@@ -1177,8 +1274,9 @@ export default function DealsScreen() {
                                 </View>
                             )}
                         </ScrollView>
-                    </Animated.View>
-                </Pressable>
+                    </Pressable>
+                </Animated.View>
+            </Pressable>
             </Modal>
 
             <TouchableOpacity style={styles.fab} onPress={() => router.push("/add-deal")}>
@@ -1229,21 +1327,21 @@ const styles = StyleSheet.create({
     list: { paddingBottom: 100 },
 
     card: {
-        flexDirection: "row", marginHorizontal: 16, marginBottom: 12,
-        borderRadius: 16, overflow: "hidden", borderWidth: 1,
+        flexDirection: "row", marginHorizontal: 16, marginBottom: 6,
+        borderRadius: 14, overflow: "hidden", borderWidth: 1,
         elevation: 1, shadowOpacity: 0.02, shadowRadius: 10, shadowOffset: { width: 0, height: 5 }
     },
-    cardAccent: { width: 5 },
-    cardMain: { flex: 1, padding: 12 },
-    cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 },
+    cardAccent: { width: 4 },
+    cardMain: { flex: 1, paddingHorizontal: 10, paddingVertical: 4 },
+    cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 2 },
     cardIdentity: { flex: 1 },
-    dealUnitNumber: { fontSize: 18, fontWeight: "900" },
-    typePill: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
+    dealUnitNumber: { fontSize: 17, fontWeight: "900" },
+    typePill: { paddingHorizontal: 6, paddingVertical: 0, borderRadius: 6 },
     typePillText: { fontSize: 9, fontWeight: "900", textTransform: 'uppercase' },
-    dealProjectContainer: { marginTop: 1 },
+    dealProjectContainer: { marginTop: 0 },
     dealProjectName: { fontSize: 14, fontWeight: "800" },
     dealBlockName: { fontSize: 10, fontWeight: "500" },
-    dealAmount: { fontSize: 15, fontWeight: "900" },
+    dealAmount: { fontSize: 17, fontWeight: "900" },
 
     stagePill: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, gap: 6 },
     stageDot: { width: 6, height: 6, borderRadius: 3 },
@@ -1252,10 +1350,17 @@ const styles = StyleSheet.create({
     headerRight: { alignItems: 'flex-end', gap: 10 },
     menuTrigger: { padding: 4, marginRight: -4 },
 
-    cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 12, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(0,0,0,0.05)' },
-    listMeta: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    cardFooter: { 
+        flexDirection: 'row', 
+        justifyContent: 'space-between', 
+        alignItems: 'center', 
+        marginTop: 4, 
+        paddingTop: 4, 
+        borderTopWidth: StyleSheet.hairlineWidth
+    },
+    listMeta: { flexDirection: 'row', alignItems: 'center', gap: 4 },
     listMetaText: { fontSize: 12, fontWeight: "600" },
-    dateText: { fontSize: 11, fontWeight: "700", opacity: 0.6 },
+    dateText: { fontSize: 10, fontWeight: "700", opacity: 0.5 },
 
     pipelineWrapper: { marginBottom: 12 },
     pipelineScroll: { paddingHorizontal: 20, gap: 8 },
@@ -1325,10 +1430,8 @@ const styles = StyleSheet.create({
         fontWeight: '800'
     },
 
-    cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 12, borderTopWidth: 1 },
     locationGroup: { flexDirection: 'row', alignItems: 'center', gap: 4, flex: 1 },
     locationText: { fontSize: 12, fontWeight: "600" },
-    dateText: { fontSize: 11, fontWeight: "700" },
 
 
     rightActions: { flexDirection: 'row', paddingLeft: 10 },
@@ -1384,4 +1487,26 @@ const styles = StyleSheet.create({
     contactAvatar: { width: 40, height: 40, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
     contactName: { fontSize: 15, fontWeight: '800' },
     contactRole: { fontSize: 11, fontWeight: '600', marginTop: 2 },
+    dangerZone: {
+        marginTop: 24,
+        paddingTop: 24,
+        borderTopWidth: 1,
+        borderTopColor: 'rgba(0,0,0,0.05)',
+        alignItems: 'center',
+        paddingBottom: 40
+    },
+    dangerBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        height: 52,
+        borderRadius: 14,
+        width: '100%'
+    },
+    dangerBtnText: {
+        fontSize: 14,
+        fontWeight: "700",
+        color: "#EF4444"
+    },
 });

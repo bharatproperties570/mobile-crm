@@ -372,7 +372,7 @@ export default function OutcomeScreen() {
                             name={activity.type === "Call" ? "call" : activity.type === "Meeting" ? "people" : "map"}
                             size={14} color="#2563EB"
                         />
-                        <Text style={styles.typeText}>{activity.type.toUpperCase()}</Text>
+                        <Text style={styles.typeText}>{String(activity.type || "ACTIVITY").toUpperCase()}</Text>
                     </View>
                     <Text style={styles.subject}>{activity.subject}</Text>
                     <Text style={styles.subInfo}>{(activity as any).relatedTo?.[0]?.name || "General Client"}</Text>

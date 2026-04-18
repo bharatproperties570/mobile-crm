@@ -10,7 +10,9 @@ import { useTheme } from "@/context/ThemeContext";
 import { getContactById, updateContact } from "@/services/contacts.service";
 import { getInventory, getInventoryById, updateInventory } from "@/services/inventory.service";
 import { getHierarchicalDocs } from "@/services/lookups.service";
-import { getProjects } from "@/services/projects.service";
+import { getProjects, getProjectById, updateProject } from "@/services/projects.service";
+import { getLeadById, updateLead } from "@/services/leads.service";
+import { getDealById } from "@/services/deals.service";
 import api from "@/services/api";
 
 export default function AddDocumentScreen() {
@@ -56,7 +58,11 @@ export default function AddDocumentScreen() {
     });
 
     useEffect(() => {
-        if (id && type) init();
+        if (id && type) {
+            init();
+        } else {
+            setLoading(false);
+        }
     }, [id, type]);
 
     const init = async () => {
@@ -65,7 +71,11 @@ export default function AddDocumentScreen() {
             const [catRes, projRes, entityRes] = await Promise.all([
                 getHierarchicalDocs(),
                 getProjects(),
-                type === "Contact" ? getContactById(id!) : getInventoryById(id!)
+                type === "Contact" ? getContactById(id!) : 
+                type === "Lead" ? getLeadById(id!) :
+                type === "Deal" ? getDealById(id!) :
+                type === "Project" ? getProjectById(id!) :
+                getInventoryById(id!)
             ]);
 
             setCategories(catRes?.data || []);
@@ -73,9 +83,19 @@ export default function AddDocumentScreen() {
 
             const data = entityRes?.data ?? entityRes;
             setEntityData(data);
+            
             if (type === "Contact") {
-                setEntityName([data.name, data.surname].filter(Boolean).join(" ") || "Contact");
+                setEntityName([data.firstName, data.lastName, data.name, data.surname].filter(Boolean).join(" ") || "Contact");
                 setExistingDocs(data.documents || []);
+            } else if (type === "Lead") {
+                setEntityName(data.firstName ? `${data.firstName} ${data.lastName || ''}` : "Lead");
+                setExistingDocs(data.documents || []);
+            } else if (type === "Deal") {
+                setEntityName(data.dealId || [data.projectName, data.unitNo].filter(Boolean).join(" - ") || "Deal");
+                setExistingDocs(data.documents || []);
+            } else if (type === "Project") {
+                setEntityName(data.name || "Project");
+                setExistingDocs(data.projectDocuments || []);
             } else {
                 setEntityName(`Unit ${data.unitNumber || data.unitNo} - ${data.projectName}`);
                 setExistingDocs(data.inventoryDocuments || []);
@@ -86,26 +106,20 @@ export default function AddDocumentScreen() {
                     ...(data.associates || []).map((a: any) => ({ ...a, role: (a.relationship || 'Associate'), id: (a.contact?._id || a.contact) }))
                 ];
 
-                // Web CRM Fallback (Professionally synchronized)
                 if (contacts.length === 0) {
-                    if (data.ownerName) {
-                        contacts.push({ name: data.ownerName, mobile: data.ownerPhone, role: 'Property Owner', id: null });
-                    }
-                    if (data.associatedContact) {
-                        contacts.push({ name: data.associatedContact, mobile: data.associatedPhone, role: 'Associate', id: null });
-                    }
+                    if (data.ownerName) contacts.push({ name: data.ownerName, mobile: data.ownerPhone, role: 'Property Owner', id: null });
+                    if (data.associatedContact) contacts.push({ name: data.associatedContact, mobile: data.associatedPhone, role: 'Associate', id: null });
                 }
                 setPotentialContacts(contacts);
             }
         } catch (error) {
             console.error("Init error:", error);
-            Alert.alert("Error", "Failed to load initial data");
+            Alert.alert("Error", "Failed to load initial data. Check your network.");
         } finally {
             setLoading(false);
         }
     };
 
-    // Types depend on Category (already pre-fetched in the hierarchy)
     useEffect(() => {
         if (selectedCategory) {
             setTypes(selectedCategory.subCategories || []);
@@ -115,8 +129,6 @@ export default function AddDocumentScreen() {
         }
     }, [selectedCategory]);
 
-
-    // Cascading Inventory: Blocks depend on Project, Units depend on Block
     useEffect(() => {
         if (selectedProject) {
             setBlocks(selectedProject.blocks || []);
@@ -148,10 +160,7 @@ export default function AddDocumentScreen() {
                 type: ["application/pdf", "image/*"],
                 copyToCacheDirectory: true
             });
-
-            if (!result.canceled) {
-                setSelectedFile(result);
-            }
+            if (!result.canceled) setSelectedFile(result);
         } catch (err) {
             console.error("Picker error:", err);
         }
@@ -161,13 +170,18 @@ export default function AddDocumentScreen() {
         const formData = new FormData();
         const file = fileResult.assets[0];
 
-        formData.append("file", {
-            uri: Platform.OS === "android" ? file.uri : file.uri.replace("file://", ""),
-            name: file.name,
-            type: file.mimeType || "application/octet-stream"
-        } as any);
+        if (Platform.OS === 'web') {
+            const response = await fetch(file.uri);
+            const blob = await response.blob();
+            formData.append('file', blob, file.name || `upload_${Date.now()}`);
+        } else {
+            formData.append("file", {
+                uri: Platform.OS === "android" ? file.uri : file.uri.replace("file://", ""),
+                name: file.name,
+                type: file.mimeType || "application/octet-stream"
+            } as any);
+        }
 
-        // Add metadata for GDrive structuring
         if (options.entityType) formData.append("entityType", options.entityType);
         if (options.entityName) formData.append("entityName", options.entityName);
         if (options.docCategory) formData.append("docCategory", options.docCategory);
@@ -183,30 +197,31 @@ export default function AddDocumentScreen() {
         if (!selectedCategory) return Alert.alert("Error", "Select Document Category");
         if (!selectedType) return Alert.alert("Error", "Select Document Type");
         if (!docNumber) return Alert.alert("Error", "Provide Document Number");
+        if (!selectedFile || selectedFile.canceled) return Alert.alert("Error", "Select a file");
 
         setSaving(true);
         try {
             let fileUrl = "";
-            if (selectedFile && !selectedFile.canceled) {
-                const uploadRes = await uploadFile(selectedFile, {
-                    entityType: type,
-                    entityName: entityName,
-                    docCategory: selectedCategory.lookup_value,
-                    docType: selectedType.lookup_value
-                });
-                if (uploadRes.success) fileUrl = uploadRes.url;
-            }
+            const uploadRes = await uploadFile(selectedFile, {
+                entityType: type,
+                entityName: entityName,
+                docCategory: selectedCategory.lookup_value,
+                docType: selectedType.lookup_value
+            });
+            if (uploadRes.success) fileUrl = uploadRes.url;
+            else throw new Error("Upload failed");
 
             const newDoc = {
                 documentCategory: selectedCategory._id,
-                documentName: selectedCategory._id, // Web CRM maps 'Category' to documentName
+                documentName: selectedCategory._id,
                 documentType: selectedType._id,
                 documentNo: docNumber,
                 documentNumber: docNumber,
                 documentPicture: fileUrl,
                 url: fileUrl,
                 file: fileUrl,
-                // Metadata for cross-linking
+                name: selectedCategory.lookup_value, // For Deal model compatibility
+                type: selectedType.lookup_value, // For Deal model compatibility
                 projectName: type === "Contact" ? (linkToInventory ? (selectedProject?.name || "") : "") : (entityData?.projectName || ""),
                 block: type === "Contact" ? (linkToInventory ? (selectedBlock?.name || selectedBlock || "") : "") : (entityData?.block || ""),
                 unitNumber: type === "Contact" ? (linkToInventory ? (selectedUnit?.unitNumber || "") : "") : (entityData?.unitNumber || entityData?.unitNo || ""),
@@ -218,23 +233,25 @@ export default function AddDocumentScreen() {
 
             if (type === "Contact") {
                 await updateContact(id!, { documents: updatedDocs });
+            } else if (type === "Lead") {
+                await updateLead(id!, { documents: updatedDocs });
+            } else if (type === "Deal") {
+                await api.put(`/deals/${id}`, { documents: updatedDocs });
+            } else if (type === "Project") {
+                await updateProject(id!, { projectDocuments: updatedDocs });
             } else {
                 await updateInventory(id!, { inventoryDocuments: updatedDocs });
-
-                // DUAL SAVE: If linked to an owner/associate, push to their documents as well
                 if (type === "Inventory" && selectedContact?.id) {
                     try {
                         const contactRes = await getContactById(selectedContact.id);
                         const contactData = contactRes?.data ?? contactRes;
                         const contactDocs = [...(contactData.documents || []), newDoc];
                         await updateContact(selectedContact.id, { documents: contactDocs });
-                    } catch (err) {
-                        console.error("Failed to dual-save document to contact:", err);
-                    }
+                    } catch (err) { console.error("Dual-save error:", err); }
                 }
             }
 
-            Alert.alert("Success", "Document added and uploaded successfully", [
+            Alert.alert("Success", "Document added successfully", [
                 { text: "OK", onPress: () => router.canGoBack() ? router.back() : router.replace("/(tabs)") }
             ]);
         } catch (error: any) {

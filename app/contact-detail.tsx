@@ -9,7 +9,8 @@ import { useTheme } from "@/context/ThemeContext";
 import { useCallTracking } from "@/context/CallTrackingContext";
 import { getContactById } from "@/services/contacts.service";
 import { getActivities, getOrCreateCallActivity, getUnifiedTimeline } from "@/services/activities.service";
-import { getInventoryByContact } from "@/services/inventory.service";
+import { getInventoryByContact, getInventoryHistoryByContact } from "@/services/inventory.service";
+import { getDeals } from "@/services/deals.service";
 import { useLookup } from "@/context/LookupContext";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { formatSize, getSizeLabel } from "@/utils/format.utils";
@@ -17,7 +18,7 @@ import { formatSize, getSizeLabel } from "@/utils/format.utils";
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const CACHE_KEY_PREFIX = "@cache_contact_detail_";
 
-const TABS = ["Details", "Activities", "Inventory", "Documents"];
+const TABS = ["Details", "Activities", "Deals", "Inventory", "History", "Documents"];
 
 function lv(field: unknown): any {
     if (field === null || field === undefined || field === "" || field === "null" || field === "undefined") return "—";
@@ -92,6 +93,8 @@ export default function ContactDetailScreen() {
     const [contact, setContact] = useState<any>(null);
     const [activities, setActivities] = useState<any[]>([]);
     const [ownedInventory, setOwnedInventory] = useState<any[]>([]);
+    const [historyInventory, setHistoryInventory] = useState<any[]>([]);
+    const [deals, setDeals] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState(0);
     const lastFetchRef = useRef<number>(0);
@@ -115,38 +118,67 @@ export default function ContactDetailScreen() {
                     setContact(parsed.contact);
                     setActivities(parsed.activities);
                     setOwnedInventory(parsed.ownedInventory);
+                    setHistoryInventory(parsed.historyInventory || []);
+                    setDeals(parsed.deals || []);
                     setLoading(false);
                     Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }).start();
                 }
             }
 
-            const [contactRes, timelineRes, ownedRes] = await Promise.all([
-                getContactById(id as string),
-                getUnifiedTimeline("contact", id as string),
-                getInventoryByContact(id as string)
+            // Define safe fetch wrappers
+            const safeFetch = async (promise: Promise<any>, fallback: any, name: string) => {
+                try {
+                    const res = await promise;
+                    // Handle both { records } and { data } patterns
+                    if (res?.records) return res.records;
+                    if (res?.data) return res.data;
+                    return res || fallback;
+                } catch (err: any) {
+                    console.warn(`[ContactDetail] Fetch failed for ${name}:`, err.message, err.response?.status);
+                    return fallback;
+                }
+            };
+
+            const contactTask = getContactById(id as string).then(res => res?.data ?? res);
+            const timelineTask = getUnifiedTimeline("contact", id as string).then(res => (Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : [])));
+            
+            const [currentContact, currentActivities] = await Promise.all([
+                contactTask.catch(e => { console.error("Contact fetch failed:", e.message); return null; }),
+                timelineTask.catch(e => { console.error("Timeline fetch failed:", e.message); return []; })
             ]);
 
-            const currentContact = contactRes?.data ?? contactRes;
-            const currentActivities = Array.isArray(timelineRes?.data) ? timelineRes.data : (Array.isArray(timelineRes) ? timelineRes : []);
-            const currentInventory = Array.isArray(ownedRes?.data) ? ownedRes.data : (Array.isArray(ownedRes) ? ownedRes : []);
+            if (currentContact) {
+                setContact(currentContact);
+            }
 
-            setContact(currentContact);
             setActivities(currentActivities);
+
+            // Fetch secondary data in parallel but safely
+            const [currentInventory, currentHistory, currentDeals] = await Promise.all([
+                safeFetch(getInventoryByContact(id as string), [], "Inventory"),
+                safeFetch(getInventoryHistoryByContact(id as string), [], "History"),
+                safeFetch(getDeals({ contactId: id as string }), [], "Deals")
+            ]);
+
             setOwnedInventory(currentInventory);
+            setHistoryInventory(currentHistory);
+            setDeals(currentDeals);
             lastFetchRef.current = Date.now();
 
             AsyncStorage.setItem(cacheKey, JSON.stringify({
-                contact: currentContact,
+                contact: currentContact || contact,
                 activities: currentActivities,
                 ownedInventory: currentInventory,
+                historyInventory: currentHistory,
+                deals: currentDeals,
                 timestamp: Date.now()
             })).catch(e => console.warn("Cache save error:", e));
 
             if (loading) {
                 Animated.timing(fadeAnim, { toValue: 1, duration: 600, useNativeDriver: true }).start();
             }
-        } catch (error) {
-            console.error("Contact Detail Fetch error:", error);
+        } catch (error: any) {
+            console.error("Contact Detail Fetch error:", error.message, error.response?.status);
         } finally {
             setLoading(false);
         }
@@ -188,7 +220,10 @@ export default function ContactDetailScreen() {
             {/* Premium SaaS Header */}
             <SafeAreaView style={[styles.headerCard, { backgroundColor: theme.card }]}>
                 <View style={[styles.headerTop, { backgroundColor: isDark ? theme.glassBg : theme.card }]}>
-                    <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace("/(tabs)/contacts")} style={[styles.backBtnCircle, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }]}>
+                    <TouchableOpacity 
+                        onPress={() => router.canGoBack() ? router.back() : router.replace("/(tabs)/contacts")} 
+                        style={[styles.backBtnCircle, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }]}
+                    >
                         <Ionicons name="chevron-back" size={22} color={theme.text} />
                     </TouchableOpacity>
                     <View style={styles.headerTitleContainer}>
@@ -227,25 +262,24 @@ export default function ContactDetailScreen() {
                     <View style={[styles.strategyDivider, { backgroundColor: theme.border }]} />
 
                     <View style={styles.strategyBlock}>
-                        <Text style={[styles.strategyLabel, { color: theme.textLight }]}>TEAMS</Text>
-                        <View style={[styles.strategyValueRow, { flexWrap: 'wrap', gap: 4 }]}>
+                        <Text style={[styles.strategyLabel, { color: theme.textLight }]}>ASSIGNMENT</Text>
+                        <View style={[styles.strategyValueRow, { alignItems: 'center' }]}>
+                            <View style={{ flex: 1 }}>
+                                <Text style={[styles.strategyValue, { color: theme.text, fontSize: 13 }]} numberOfLines={1}>
+                                    {contact.assignment?.assignedTo?.fullName || contact.assignment?.assignedTo?.name || contact.assignedTo?.fullName || contact.assignedTo?.name || contact.owner?.fullName || contact.owner?.name || "Unassigned"}
+                                </Text>
+                                <Text style={{ fontSize: 9, color: theme.textLight, fontWeight: '700' }} numberOfLines={1}>
+                                    {lv(contact.teams?.[0] || contact.team) || "Standard Team"}
+                                </Text>
+                            </View>
+                            <View style={{ width: 1, height: 20, backgroundColor: theme.border, marginHorizontal: 10 }} />
                             {(() => {
-                                const teamData = lv(contact.teams || contact.team);
-                                if (Array.isArray(teamData)) {
-                                    return teamData.map((t, idx) => (
-                                        <View key={idx} style={[styles.teamMiniBadge, { backgroundColor: isDark ? 'rgba(99, 102, 241, 0.15)' : '#6366F1' + '10' }]}>
-                                            <Text style={[styles.teamMiniBadgeText, { color: isDark ? '#818CF8' : '#6366F1' }]}>{t}</Text>
-                                        </View>
-                                    ));
-                                }
-                                return (
-                                    <>
-                                        <Ionicons name="people-outline" size={12} color={isDark ? '#818CF8' : "#6366F1"} />
-                                        <Text style={[styles.strategyValue, { color: theme.text }]} numberOfLines={1}>
-                                            {teamData}
-                                        </Text>
-                                    </>
-                                );
+                                const v = (contact.visibleTo || contact.assignment?.visibleTo || 'Everyone').toLowerCase();
+                                let icon: any = "earth";
+                                let color = "#10B981";
+                                if (v === 'private') { icon = "lock-closed"; color = "#EF4444"; }
+                                else if (v === 'team') { icon = "people"; color = "#3B82F6"; }
+                                return <Ionicons name={icon} size={16} color={color} />;
                             })()}
                         </View>
                     </View>
@@ -259,7 +293,7 @@ export default function ContactDetailScreen() {
                             <Text style={[styles.marketingText, { color: theme.primary }]}>
                                 {getLookupValue("Source", contact.source) || "Direct"}
                             </Text>
-                            {(lv(contact.subSource) || lv(contact.contactDetails?.subSource)) && (
+                            {!!(lv(contact.subSource) || lv(contact.contactDetails?.subSource)) && (
                                 <Text style={[styles.marketingSubText, { color: theme.primary + '80' }]}>
                                     {` • ${lv(contact.subSource) || lv(contact.contactDetails?.subSource)}`}
                                 </Text>
@@ -416,12 +450,12 @@ export default function ContactDetailScreen() {
                                                     <Text style={styles.timelineDate}>{new Date(act.timestamp || act.createdAt).toLocaleDateString()}</Text>
                                                 </View>
                                                 <Text style={[styles.timelineSubject, { color: theme.text }]}>{act.title || act.subject}</Text>
-                                                {(act.description || act.details?.note) && (
+                                                {!!(act.description || act.details?.note) && (
                                                     <Text style={[styles.timelineNote, { color: theme.textLight }]}>
                                                         {act.description || act.details?.note}
                                                     </Text>
                                                 )}
-                                                {act.actor && <Text style={{ fontSize: 9, color: theme.textLight, marginTop: 4 }}>By {act.actor}</Text>}
+                                                {!!act.actor && <Text style={{ fontSize: 9, color: theme.textLight, marginTop: 4 }}>By {act.actor}</Text>}
                                                 {!isAudit && act.status !== 'Completed' && (
                                                     <TouchableOpacity
                                                         onPress={() => router.push({
@@ -461,7 +495,44 @@ export default function ContactDetailScreen() {
                     </ScrollView>
                 </View>
 
-                {/* 3. Inventory */}
+                {/* 3. Deals */}
+                <View style={styles.tabContent}>
+                    <ScrollView contentContainerStyle={styles.innerScroll}>
+                        <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                            <View style={styles.sectionHeader}>
+                                <Text style={[styles.cardTitle, { color: theme.text, marginBottom: 0 }]}>Associated Pipeline Deals</Text>
+                                <TouchableOpacity onPress={() => router.push(`/add-deal?contactId=${id}`)}>
+                                    <Text style={{ color: theme.primary, fontWeight: '700' }}>+ New Deal</Text>
+                                </TouchableOpacity>
+                            </View>
+                            {Array.isArray(deals) && deals.length === 0 ? (
+                                <Text style={styles.emptyText}>No active or past deals found for this contact.</Text>
+                            ) : (
+                                Array.isArray(deals) && deals.map((deal, i) => (
+                                    <TouchableOpacity key={i} style={[styles.matchItem, { borderBottomColor: theme.border }]} onPress={() => router.push(`/deal-detail?id=${deal._id}`)}>
+                                        <View style={styles.matchLeft}>
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                                <Text style={[styles.matchUnit, { color: theme.text }]}>{deal.dealId || "Deal"}</Text>
+                                                <View style={[styles.relationBadge, { backgroundColor: theme.primary + '10' }]}>
+                                                    <Text style={{ fontSize: 9, color: theme.primary, fontWeight: '800' }}>{lv(deal.stage).toUpperCase()}</Text>
+                                                </View>
+                                            </View>
+                                            <Text style={[styles.matchProject, { color: theme.textLight }]}>
+                                                {deal.projectName}{deal.unitNo ? ` • ${deal.unitNo}` : ""}{deal.block ? ` • ${deal.block}` : ""}
+                                            </Text>
+                                        </View>
+                                        <View style={styles.matchRight}>
+                                            <Text style={{ fontSize: 17, fontWeight: '900', color: theme.text }}>₹{(deal.price || deal.amount || 0).toLocaleString()}</Text>
+                                            <Text style={{ fontSize: 9, color: theme.textLight }}>{new Date(deal.createdAt).toLocaleDateString()}</Text>
+                                        </View>
+                                    </TouchableOpacity>
+                                ))
+                            )}
+                        </View>
+                    </ScrollView>
+                </View>
+
+                {/* 4. Inventory */}
                 <View style={styles.tabContent}>
                     <ScrollView contentContainerStyle={styles.innerScroll}>
                         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
@@ -487,7 +558,42 @@ export default function ContactDetailScreen() {
                     </ScrollView>
                 </View>
 
-                {/* 4. Documents */}
+                {/* 5. History */}
+                <View style={styles.tabContent}>
+                    <ScrollView contentContainerStyle={styles.innerScroll}>
+                        <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                            <Text style={[styles.cardTitle, { color: theme.text }]}>Previous Ownership History</Text>
+                            {Array.isArray(historyInventory) && historyInventory.length === 0 ? (
+                                <Text style={styles.emptyText}>No previous ownership records found.</Text>
+                            ) : (
+                                Array.isArray(historyInventory) && historyInventory.map((inv, i) => {
+                                    // Find relevant history entry
+                                    const histEntry = inv.ownerHistory?.find((h: any) => h.contactId === id || h.contactMobile === phone);
+                                    return (
+                                        <TouchableOpacity key={i} style={[styles.matchItem, { borderBottomColor: theme.border }]} onPress={() => router.push(`/inventory-detail?id=${inv._id}`)}>
+                                            <View style={styles.matchLeft}>
+                                                <Text style={[styles.matchUnit, { color: theme.text }]}>{inv.unitNumber || inv.unitNo}</Text>
+                                                <Text style={[styles.matchProject, { color: theme.textLight }]}>{inv.projectName} • {inv.block}</Text>
+                                                {!!histEntry && (
+                                                    <Text style={{ fontSize: 9, color: theme.textLight, marginTop: 2 }}>
+                                                        Record: {histEntry.type} on {new Date(histEntry.date).toLocaleDateString()}
+                                                    </Text>
+                                                )}
+                                            </View>
+                                            <View style={styles.matchRight}>
+                                                <View style={[styles.relationBadge, { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : '#EF4444' + '10' }]}>
+                                                    <Text style={{ fontSize: 10, color: isDark ? '#F87171' : '#EF4444', fontWeight: '700' }}>HISTORICAL</Text>
+                                                </View>
+                                            </View>
+                                        </TouchableOpacity>
+                                    );
+                                })
+                            )}
+                        </View>
+                    </ScrollView>
+                </View>
+
+                {/* 6. Documents */}
                 <View style={styles.tabContent}>
                     <ScrollView contentContainerStyle={styles.innerScroll}>
                         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
@@ -531,13 +637,13 @@ export default function ContactDetailScreen() {
                                                 {doc.documentCategory ? ` • ${lv(doc.documentCategory)}` : ""}
                                                 {doc.isInventoryDoc && <Text style={{ color: theme.primary, fontWeight: '700' }}> • Property Doc</Text>}
                                             </Text>
-                                            {(doc.projectName || doc.block || doc.unitNumber) && (
+                                            {!!(doc.projectName || doc.block || doc.unitNumber) && (
                                                 <Text style={[styles.docProject, { color: theme.textLight }]}>
                                                     {doc.projectName}{doc.block ? ` • ${doc.block}` : ""}{doc.unitNumber ? ` • ${doc.unitNumber}` : ""}
                                                 </Text>
                                             )}
                                         </View>
-                                        {(doc.documentPicture || doc.fileUrl || doc.file) && (
+                                        {!!(doc.documentPicture || doc.fileUrl || doc.file) && (
                                             <TouchableOpacity onPress={() => Linking.openURL(doc.documentPicture || doc.fileUrl || doc.file)}>
                                                 <Ionicons name="eye-outline" size={20} color={theme.primary} />
                                             </TouchableOpacity>

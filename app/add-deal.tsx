@@ -10,7 +10,7 @@ import { useTheme, SPACING } from "@/context/ThemeContext";
 import { useLookup } from "@/context/LookupContext";
 import { useUsers } from "@/context/UserContext";
 import { useProjects } from "@/context/ProjectContext";
-import { extractList } from "@/services/api.helpers";
+import { extractList, safeApiCall } from "@/services/api.helpers";
 import api from "@/services/api";
 import { MultiSearchableDropdown } from "@/components/MultiSearchableDropdown";
 
@@ -108,13 +108,13 @@ function SearchableDropdown({
 
 export default function AddDealScreen() {
     const router = useRouter();
-    const { id, prefill, location: pfLocation, price: pfPrice, size: pfSize, unitNo: pfUnitNo, mobile: pfMobile, name: pfName, type: pfType } = useLocalSearchParams<any>();
+    const { id, prefill, inventoryId: pfInventoryId, location: pfLocation, price: pfPrice, size: pfSize, unitNo: pfUnitNo, mobile: pfMobile, name: pfName, type: pfType } = useLocalSearchParams<any>();
     const [step, setStep] = useState(0);
     const [loading, setLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
-    const { getLookupValue, getLookupsByType, lookups, loading: loadingLookups } = useLookup();
-    const { users, teams, loading: loadingUsers } = useUsers();
-    const { projects, loading: loadingProjects } = useProjects();
+    const { getLookupValue, getLookupsByType, leadMasterFields, refreshLookups, loading: loadingLookups } = useLookup();
+    const { users, teams, refreshUsers, loading: loadingUsers } = useUsers();
+    const { projects, refreshProjects, loading: loadingProjects } = useProjects();
     const { theme } = useTheme();
 
 
@@ -201,6 +201,11 @@ export default function AddDealScreen() {
     useEffect(() => {
         const loadData = async () => {
             try {
+                // Force Refresh Metadata on Load
+                refreshLookups();
+                refreshUsers();
+                refreshProjects();
+
                 // 1. Load existing deal if ID is present
                 if (id) {
                     const existing = await getDealById(id);
@@ -227,16 +232,15 @@ export default function AddDealScreen() {
                     
                     // If we have an inventoryId, we should try to fetch the precise unit
                     // so that handleUnitChange can populate ALL details (size, owners, etc.)
-                    if (useLocalSearchParams<{ inventoryId: string }>().inventoryId) {
-                        const invId = useLocalSearchParams<{ inventoryId: string }>().inventoryId;
+                    if (pfInventoryId) {
                         try {
-                            const res = await api.get(`/inventory/${invId}`);
+                            const res = await api.get(`/inventory/${pfInventoryId}`);
                             if (res.data?.success && res.data.data) {
                                 const inv = res.data.data;
                                 updates.projectName = inv.projectName || pfName;
                                 updates.block = inv.block || pfLocation;
                                 updates.unitNo = inv.unitNumber || inv.unitNo || pfUnitNo;
-                                updates.inventoryId = invId;
+                                updates.inventoryId = pfInventoryId;
                             }
                         } catch (e) { console.warn("Prefill fetch failed", e); }
                     }
@@ -462,23 +466,20 @@ export default function AddDealScreen() {
             console.log('[DEBUG-DEAL] Starting Save Workflow...');
             console.log('[DEBUG-DEAL] Payload:', JSON.stringify(payload, null, 2));
 
-            const res = id ? await api.put(`/deals/${id}`, payload) : await api.post('/deals', payload);
+            const res = id 
+                ? await safeApiCall(() => api.put(`/deals/${id}`, payload)) 
+                : await safeApiCall(() => api.post('/deals', payload));
             
-            console.log('[DEBUG-DEAL] API Response Status:', res.status);
-            console.log('[DEBUG-DEAL] API Response Data:', JSON.stringify(res.data, null, 2));
-
-            if (res.data && (res.data.success || res.status === 200 || res.status === 201)) {
+            if (!res.error) {
+                Alert.alert("✅ Success", `Deal ${id ? "updated" : "created"} successfully!`);
                 router.dismissAll();
                 router.replace("/(tabs)/deals");
             } else {
-                const errorMsg = res.data?.error || res.data?.message || "Server returned failure without an error message.";
-                console.error("Deal save logic failure:", res.data);
-                Alert.alert("Failed to Save", errorMsg);
+                throw new Error(res.error || "Failed to save deal.");
             }
         } catch (e: any) {
-            console.error("Deal save network/runtime error:", e?.response?.data || e);
-            const errMsg = e?.response?.data?.error || e?.response?.data?.message || e.message || "An unexpected error occurred while saving.";
-            Alert.alert("Save Error", errMsg);
+            console.error("Deal save network/runtime error:", e);
+            Alert.alert("Save Error", e.message || "An unexpected error occurred while saving.");
         } finally {
             setIsSaving(false);
         }
@@ -711,28 +712,21 @@ export default function AddDealScreen() {
                         <View style={styles.row}>
                             <View style={{ flex: 1, marginRight: 8 }}>
                                 <FormLabel label="Deal Status" />
-                                <SelectButton value={formData.status} placeholder="Status" options={["Open", "Quote", "Negotiation", "Booked", "Won", "Lost"].map(s => ({ label: s, value: s }))} onSelect={v => setFormData({ ...formData, status: v })} />
+                                <SelectButton value={formData.status} placeholder="Status" options={(leadMasterFields?.dealStatuses || []).map((s: string) => ({ label: s, value: s }))} onSelect={v => setFormData({ ...formData, status: v })} />
                             </View>
                             <View style={{ flex: 1 }}>
                                 <FormLabel label="Deal Type (Documentation)" />
                                 <SelectButton 
                                     value={formData.dealType} 
                                     placeholder="Type" 
-                                    options={[
-                                        "Registry case", 
-                                        "Transfer case", 
-                                        "GPA", 
-                                        "Society case", 
-                                        "Lease/Rent", 
-                                        "Other"
-                                    ].map(s => ({ label: s, value: s }))} 
+                                    options={(leadMasterFields?.dealTypes || []).map((s: string) => ({ label: s, value: s }))} 
                                     onSelect={v => setFormData({ ...formData, dealType: v })} 
                                 />
                             </View>
                         </View>
 
                         <FormLabel label="Transaction Type" />
-                        <SelectButton value={formData.transactionType} placeholder="Select" options={["Full White", "Collector Rate", "Flexible"].map(s => ({ label: s, value: s }))} onSelect={v => setFormData({ ...formData, transactionType: v })} />
+                        <SelectButton value={formData.transactionType} placeholder="Select" options={(leadMasterFields?.transactionTypes || []).map((s: string) => ({ label: s, value: s }))} onSelect={v => setFormData({ ...formData, transactionType: v })} />
 
                         {formData.transactionType === "Flexible" && (
                             <View style={styles.sliderBox}>
@@ -756,7 +750,7 @@ export default function AddDealScreen() {
                         )}
 
                         <FormLabel label="Source" />
-                        <SelectButton value={formData.source} placeholder="Select Source" options={["Walk-in", "Newspaper", "99acres", "Social Media", "Cold Calling", "Own Website"].map(s => ({ label: s, value: s }))} onSelect={v => setFormData({ ...formData, source: v })} />
+                        <SelectButton value={formData.source} placeholder="Select Source" options={(leadMasterFields?.transactionSources || []).map((s: string) => ({ label: s, value: s }))} onSelect={v => setFormData({ ...formData, source: v })} />
                     </View>
                 )}
 

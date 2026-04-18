@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import {
     View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity,
-    ActivityIndicator, Alert, SafeAreaView, Switch, Dimensions
+    ActivityIndicator, Alert, SafeAreaView, Switch, Dimensions, Modal, Share, Linking
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -168,134 +168,226 @@ export default function AddQuote() {
         };
     }, [deal, formData, selectedCollectorRate, selectedRevenueRule]);
 
+    const [showShareModal, setShowShareModal] = useState(false);
+    const [generatedPdfUri, setGeneratedPdfUri] = useState("");
+    const [generatedPdfUrl, setGeneratedPdfUrl] = useState("");
+
     const generateHTML = (data: any) => {
-        const currency = (val: number) => `₹${val.toLocaleString('en-IN')}`;
+        const currency = (val: number) => `₹${Number(val || 0).toLocaleString('en-IN')}`;
+        const dateStr = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        const refNo = `BP/QTN/${new Date().getFullYear()}/${Math.floor(Math.random() * 900) + 100}`;
+        const prospectName = selectedLead?.fullName || selectedLead?.name || 'Titled Client';
+        const projectName = deal?.projectName || 'Premium Development';
+        const unitNo = deal?.unitNo || 'Standard';
+
         return `
+            <!DOCTYPE html>
             <html>
                 <head>
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no" />
                     <style>
-                        body { font-family: 'Helvetica', sans-serif; padding: 40px; color: #1e293b; }
+                        body { font-family: 'Helvetica', 'Arial', sans-serif; padding: 40px; color: #0f172a; line-height: 1.5; background: #fff; }
+                        .branding-top { text-align: center; color: #dc2626; font-size: 11px; font-weight: bold; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px; }
                         .header { text-align: center; border-bottom: 2px solid #e2e8f0; padding-bottom: 20px; margin-bottom: 30px; }
-                        .company-name { font-size: 28px; font-weight: bold; color: #0f172a; margin-bottom: 5px; }
-                        .company-info { font-size: 12px; color: #64748b; margin-bottom: 2px; }
-                        .title { font-size: 18px; font-weight: bold; color: #334155; margin-top: 20px; text-transform: uppercase; }
-                        .section { margin-top: 30px; }
-                        .section-title { font-size: 14px; font-weight: bold; color: #2563eb; border-bottom: 1px solid #e2e8f0; padding-bottom: 5px; margin-bottom: 15px; }
+                        .company-name { font-size: 34px; font-weight: bold; color: #1e293b; letter-spacing: -1.5px; margin-bottom: 4px; font-family: 'Times New Roman', serif; }
+                        .company-info { font-size: 11px; color: #64748b; font-weight: 600; margin-bottom: 2px; }
+                        .quote-badge-container { display: flex; justify-content: center; margin-top: 20px; }
+                        .quote-badge { background: #0f172a; color: #fff; padding: 6px 16px; font-size: 10px; font-weight: bold; border-radius: 4px; text-transform: uppercase; letter-spacing: 1.5px; }
+                        
+                        .meta-section { display: flex; justify-content: space-between; margin-top: 25px; border-top: 1px solid #f1f5f9; padding-top: 15px; }
+                        .meta-col { flex: 1; }
+                        .label { font-size: 9px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+                        .value-main { font-size: 18px; font-weight: bold; color: #1e293b; }
+                        .value-sub { font-size: 12px; color: #64748b; margin-top: 4px; font-weight: 500; }
+                        
+                        .section-title { font-size: 14px; font-weight: 800; color: #1e293b; margin-top: 40px; margin-bottom: 15px; border-left: 4px solid #0f172a; padding-left: 12px; }
+                        
                         table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-                        th { text-align: left; font-size: 12px; color: #64748b; padding: 10px; background: #f8fafc; }
-                        td { padding: 12px 10px; font-size: 13px; border-bottom: 1px solid #f1f5f9; }
-                        .total-box { margin-top: 40px; background: #f8fafc; padding: 20px; border-left: 5px solid #2563eb; }
-                        .total-label { font-size: 14px; font-weight: bold; color: #64748b; }
-                        .total-value { font-size: 24px; font-weight: bold; color: #2563eb; margin-top: 5px; }
-                        .footer { margin-top: 50px; font-size: 10px; color: #94a3b8; text-align: center; font-style: italic; }
+                        th { text-align: left; font-size: 10px; color: #64748b; padding: 14px 12px; background: #f8fafc; border-bottom: 2px solid #e2e8f0; text-transform: uppercase; letter-spacing: 0.5px; }
+                        td { padding: 14px 12px; font-size: 13px; color: #334155; border-bottom: 1px solid #f1f5f9; }
+                        .amount { text-align: right; font-weight: 700; color: #0f172a; }
+                        
+                        .total-card { margin-top: 40px; background: #f8fafc; border-left: 6px solid #2563eb; padding: 30px; border-radius: 0 12px 12px 0; display: flex; justify-content: space-between; align-items: center; }
+                        .total-label-group { display: flex; flexDirection: column; }
+                        .total-label { font-size: 11px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 1px; }
+                        .total-value { font-size: 32px; font-weight: 900; color: #2563eb; }
+                        
+                        .terms { margin-top: 50px; padding-top: 25px; border-top: 1px solid #f1f5f9; }
+                        .terms-title { font-size: 11px; font-weight: 800; color: #1e293b; margin-bottom: 12px; text-transform: uppercase; }
+                        .term-item { font-size: 10px; color: #94a3b8; margin-bottom: 6px; display: flex; gap: 10px; }
+                        
+                        .footer { margin-top: 60px; text-align: center; border-top: 1px dashed #cbd5e1; padding-top: 20px; }
+                        .motto { color: #1e293b; font-size: 13px; font-weight: 800; font-style: italic; letter-spacing: 1px; text-transform: uppercase; }
                     </style>
                 </head>
                 <body>
+                    <div class="branding-top">Jai Mata Di</div>
                     <div class="header">
                         <div class="company-name">BHARAT PROPERTIES</div>
-                        <div class="company-info">Mob: +91 99910 00570 | Email: bharatproperties570@gmail.com</div>
-                        <div class="company-info">Office: 166, Sec 3, Huda Mkt., Kurukshetra, Haryana</div>
-                    </div>
-
-                    <div style="display: flex; justify-content: space-between;">
-                        <div>
-                            <div class="section-title">VALUED PROSPECT</div>
-                            <div style="font-size: 16px; font-weight: bold;">${selectedLead?.fullName || 'Titled Client'}</div>
-                            <div style="font-size: 12px; color: #64748b;">Client Type: Individual (${formData.buyerType})</div>
-                        </div>
-                        <div style="text-align: right;">
-                            <div class="section-title">INVENTORY</div>
-                            <div style="font-size: 16px; font-weight: bold;">${deal?.projectName || 'Premium Development'}</div>
-                            <div style="font-size: 12px; color: #64748b;">Unit: ${deal?.unitNo || 'Standard'} | ${deal?.category || ''}</div>
+                        <div class="company-info">Mob: +91 99910 00570, 99913 33570 | bharatproperties570@gmail.com</div>
+                        <div class="company-info">Office: 166, Sec 3, Huda Mkt., Kurukshetra, Haryana - 136118</div>
+                        <div class="quote-badge-container">
+                            <div class="quote-badge">Property Acquisition Quotation</div>
                         </div>
                     </div>
-
-                    <div class="section">
-                        <div class="section-title">INVESTMENT DETAILS & REGULATORY CHARGES</div>
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>Description</th>
-                                    <th>Computation Basis</th>
-                                    <th style="text-align: right;">Amount</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr>
-                                    <td>Total Basic Sale Value</td>
-                                    <td>As per Master Pricing</td>
-                                    <td style="text-align: right; font-weight: bold;">${currency(data.basePrice)}</td>
-                                </tr>
-                                <tr>
-                                    <td>Estimated Stamp Duty (${data.stampDutyPercent}%)</td>
-                                    <td>Statutory Regulatory Levy</td>
-                                    <td style="text-align: right; font-weight: bold;">${currency(data.stampDutyAmount)}</td>
-                                </tr>
-                                <tr>
-                                    <td>Government Registration Fees</td>
-                                    <td>Fixed Document Charges</td>
-                                    <td style="text-align: right; font-weight: bold;">${currency(data.registrationAmount)}</td>
-                                </tr>
-                                <tr>
-                                    <td>Legal & Admin Documentation</td>
-                                    <td>Standard Processing</td>
-                                    <td style="text-align: right; font-weight: bold;">${currency(data.legalFees)}</td>
-                                </tr>
-                                ${formData.includeGst ? `
-                                <tr>
-                                    <td>GST Compliance (${formData.gstPercent}%)</td>
-                                    <td>Input Tax Liability</td>
-                                    <td style="text-align: right; font-weight: bold;">${currency(data.gstAmount)}</td>
-                                </tr>
-                                ` : ''}
-                                ${formData.includeBrokerage ? `
-                                <tr>
-                                    <td>Professional Brokerage (${formData.brokeragePercent}%)</td>
-                                    <td>Service Facilitation</td>
-                                    <td style="text-align: right; font-weight: bold;">${currency(data.brokerageAmount)}</td>
-                                </tr>
-                                ` : ''}
-                                ${formData.includeTds ? `
-                                <tr>
-                                    <td>TDS Deductible (${formData.tdsPercent}%)</td>
-                                    <td>Income Tax Compliance</td>
-                                    <td style="text-align: right; font-weight: bold;">-${currency(data.tdsAmount)}</td>
-                                </tr>
-                                ` : ''}
-                            </tbody>
-                        </table>
+                    
+                    <div class="meta-section">
+                        <div class="meta-col">
+                            <div class="label">Valued Prospect</div>
+                            <div class="value-main">${prospectName}</div>
+                            <div class="value-sub">Mobile: ${selectedLead?.mobile || 'Not Specified'}</div>
+                        </div>
+                        <div class="meta-col" style="text-align: right;">
+                            <div class="label">Reference & Validity</div>
+                            <div class="value-sub">Ref: ${refNo}</div>
+                            <div class="value-sub">Date: ${dateStr}</div>
+                        </div>
                     </div>
 
-                    <div class="total-box">
-                        <div class="total-label">NET LANDED COST ESTIMATE (NET PAYABLE)</div>
+                    <div class="section-title">Investment Specifications</div>
+                    <div class="meta-section" style="margin-top: 0; border: none; padding-top: 0;">
+                        <div class="meta-col">
+                            <div class="label">Project / Development</div>
+                            <div class="value-main" style="color: #2563eb;">${projectName}</div>
+                        </div>
+                        <div class="meta-col" style="text-align: right;">
+                            <div class="label">Unit Details</div>
+                            <div class="value-main">Unit No: ${unitNo}</div>
+                            <div class="value-sub">${deal?.category || 'Real Estate'} Property</div>
+                        </div>
+                    </div>
+
+                    <div class="section-title">Financial Breakdown</div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Description</th>
+                                <th>Basis of Calculation</th>
+                                <th style="text-align: right;">Amount (INR)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Total Basic Sale Value</td>
+                                <td>As per Negotiated Pricing</td>
+                                <td class="amount">${currency(data.basePrice)}</td>
+                            </tr>
+                            <tr>
+                                <td>Estimated Stamp Duty (${data.stampDutyPercent}%)</td>
+                                <td>Statutory Regulatory Levy</td>
+                                <td class="amount">${currency(data.stampDutyAmount)}</td>
+                            </tr>
+                            <tr>
+                                <td>Government Registration Fees</td>
+                                <td>Fixed Document Charges</td>
+                                <td class="amount">${currency(data.registrationAmount)}</td>
+                            </tr>
+                            <tr>
+                                <td>Legal & Admin Documentation</td>
+                                <td>Standard Processing</td>
+                                <td class="amount">${currency(data.legalFees)}</td>
+                            </tr>
+                            ${formData.includeGst ? `<tr><td>GST Compliance (18%)</td><td>Tax Liability</td><td class="amount">${currency(data.gstAmount)}</td></tr>` : ''}
+                            ${formData.includeBrokerage ? `<tr><td>Professional Brokerage (${formData.brokeragePercent}%)</td><td>Service Facilitation</td><td class="amount">${currency(data.brokerageAmount)}</td></tr>` : ''}
+                            ${formData.includeTds ? `<tr><td>TDS Deductible (1%)</td><td>IT Compliance</td><td class="amount">${currency(data.tdsAmount)}</td></tr>` : ''}
+                        </tbody>
+                    </table>
+
+                    <div class="total-card">
+                        <div class="total-label-group">
+                            <div class="total-label">Net Landed Cost Estimate</div>
+                            <div style="font-size: 11px; color: #64748b; font-weight: 600; margin-top: 5px;">Exclusive of maintenance & possession charges</div>
+                        </div>
                         <div class="total-value">${currency(data.netPayable)}</div>
                     </div>
 
+                    <div class="terms">
+                        <div class="terms-title">Standard Terms & Compliance</div>
+                        <div class="term-item"><span>•</span> <span>Quotation Validity: This estimate is valid for 7 business days from date of issue.</span></div>
+                        <div class="term-item"><span>•</span> <span>Statutory Charges: Subject to government adjustments at time of actual registration.</span></div>
+                        <div class="term-item"><span>•</span> <span>Verification: Buyers are requested to verify all property titles from physical records.</span></div>
+                    </div>
+
                     <div class="footer">
-                        "HONEST & FAIR DEAL IS OUR MOTTO"
+                        <div class="motto">"HONEST & FAIR DEAL IS OUR MOTTO"</div>
                     </div>
                 </body>
             </html>
         `;
     };
 
+    const handleUploadToWeb = async (uri: string) => {
+        try {
+            // Check if URI is valid blob or file path
+            if (!uri || uri.length < 5) return "";
+            
+            const fd = new FormData();
+            if (Platform.OS === 'web') {
+                // On web, uri might be a blob URL. We need the actual blob.
+                const response = await fetch(uri);
+                const blob = await response.blob();
+                fd.append('file', blob, `Quotation_${dealId}.pdf`);
+            } else {
+                fd.append('file', {
+                    uri,
+                    type: 'application/pdf',
+                    name: `Quotation_${dealId}.pdf`,
+                } as any);
+            }
+
+            const uploadRes = await api.post('/upload', fd, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+            });
+            return uploadRes.data?.url || uploadRes.data?.data?.url || "";
+        } catch (e) {
+            console.warn("PDF Upload failed:", e);
+            return "";
+        }
+    };
+
     const handleSave = async (generatePDF = true) => {
-        if (!calcs) return;
+        if (!deal || !calcs) return;
         setSaving(true);
         try {
-            let pdfUrl = '';
+            let pdfUri = "";
+            let publicUrl = "";
 
             if (generatePDF) {
                 const html = generateHTML(calcs);
-                const { uri } = await Print.printToFileAsync({ html });
+                console.log("[DEBUG] Generating Professional Quote HTML...");
                 
-                const shareAvailable = await Sharing.isAvailableAsync();
-                if (shareAvailable) {
-                    await Sharing.shareAsync(uri);
-                } else {
-                    Alert.alert("PDF Generated", "PDF saved to temporary storage.");
+                try {
+                    // Expo Print Options
+                    const printOptions = {
+                        html,
+                        base64: false,
+                    };
+                    
+                    const result = await Print.printToFileAsync(printOptions);
+                    
+                    if (!result || !result.uri) {
+                        // Fallback for Web if printToFileAsync is restricted
+                        if (Platform.OS === 'web') {
+                            console.warn("[DEBUG] PDF engine returned empty on Web. Attempting alternative...");
+                            // On Web, we can still save the deal data and trigger a print dialog
+                            // but we can't easily get a file for upload without a blob library.
+                            // We'll proceed with saving data and warn the user.
+                        } else {
+                            throw new Error("PDF engine returned an empty result.");
+                        }
+                    } else {
+                        pdfUri = result.uri;
+                        console.log("[DEBUG] PDF Generated at:", pdfUri);
+                        setGeneratedPdfUri(pdfUri);
+                        publicUrl = await handleUploadToWeb(pdfUri);
+                        setGeneratedPdfUrl(publicUrl);
+                    }
+                } catch (pdfError: any) {
+                    console.error("[CRITICAL] PDF Generation Failed:", pdfError);
+                    if (Platform.OS !== 'web') {
+                        throw new Error(`PDF Engine Error: ${pdfError.message || "Failed to initialize native print renderer"}`);
+                    }
                 }
-                pdfUrl = uri; 
             }
 
             const payload = {
@@ -303,18 +395,42 @@ export default function AddQuote() {
                 quotePrice: calcs.basePrice,
                 calculations: calcs,
                 stage: 'Quote',
-                quoteUrl: pdfUrl,
-                tags: [...(deal.tags || []), 'Quote Generated']
+                quoteUrl: publicUrl || pdfUri || "Pending Sync",
+                tags: Array.from(new Set([...(deal?.tags || []), 'Mobile Quote Generated']))
             };
 
-            await api.put(`/deals/${dealId}`, payload);
-            Alert.alert("Success", "Quotation saved and deal state updated to [QUOTE].");
-            router.back();
-        } catch (error) {
-            console.error("Quotation error:", error);
-            Alert.alert("Error", "Failed to generate or save quotation");
+            const res = await api.put(`/deals/${dealId}`, payload);
+            if (res.data && (res.data.success || res.status === 200 || res.data._id)) {
+                if (generatePDF && (publicUrl || pdfUri)) {
+                    setShowShareModal(true);
+                } else {
+                    Alert.alert("Success", "Quotation data saved. " + (generatePDF ? "PDF generation is pending sync." : ""));
+                    router.back();
+                }
+            } else {
+                throw new Error(res.data?.error || "Failed to sync quotation data to server.");
+            }
+        } catch (error: any) {
+            console.error("[CRITICAL] Quotation Save Failure:", error.message);
+            Alert.alert("Save Failed", error.message || "Unknown error occurred while generating the quote.");
         } finally {
             setSaving(false);
+        }
+    };
+
+    const handleShareWhatsApp = async () => {
+        if (!selectedLead?.mobile) {
+            Alert.alert("Error", "No mobile number for prospect.");
+            return;
+        }
+        const message = `Halo ${selectedLead.name},\n\nPlease find your property quotation for ${deal?.projectName}.\n\nView Document: ${generatedPdfUrl || 'Generating...'}\n\nThank you,\nBharat Properties`;
+        const phone = selectedLead.mobile.replace(/[^\d]/g, "");
+        const url = `whatsapp://send?phone=${phone.length === 10 ? "91" + phone : phone}&text=${encodeURIComponent(message)}`;
+        try {
+            if (await Linking.canOpenURL(url)) await Linking.openURL(url);
+            else await Share.share({ message });
+        } catch (e) {
+            await Share.share({ message });
         }
     };
 
@@ -356,8 +472,10 @@ export default function AddQuote() {
                             {isSearchingLeads && <ActivityIndicator size="small" style={{ marginTop: 10 }} />}
                             {leads.map(l => (
                                 <TouchableOpacity key={l._id} style={styles.leadResult} onPress={() => setSelectedLead(l)}>
-                                    <Text style={[styles.leadResultName, { color: theme.text }]}>{l.fullName}</Text>
-                                    <Text style={{ color: theme.textSecondary, fontSize: 10 }}>{l.mobile}</Text>
+                                    <Text style={[styles.leadResultName, { color: theme.text }]}>
+                                        {l.fullName || `${l.firstName || ""} ${l.lastName || ""}`.trim() || l.name || "Unknown Lead"}
+                                    </Text>
+                                    <Text style={{ color: theme.textSecondary, fontSize: 13, marginTop: 2 }}>{l.mobile}</Text>
                                 </TouchableOpacity>
                             ))}
                         </View>
@@ -502,6 +620,40 @@ export default function AddQuote() {
                     </>
                 )}
             </TouchableOpacity>
+            <Modal visible={showShareModal} transparent animationType="fade">
+                <View style={styles.modalOverlay}>
+                    <View style={[styles.modalContent, { backgroundColor: theme.card }]}>
+                        <View style={[styles.successBadge, { backgroundColor: theme.success + '15' }]}>
+                            <Ionicons name="checkmark-done-circle" size={60} color={theme.success} />
+                        </View>
+                        <Text style={[styles.modalTitle, { color: theme.text }]}>Quotation Ready!</Text>
+                        <Text style={[styles.modalSub, { color: theme.textSecondary }]}>The professional quotation has been generated and synced with the cloud.</Text>
+
+                        <View style={styles.shareOptions}>
+                            <TouchableOpacity style={styles.shareBtn} onPress={handleShareWhatsApp}>
+                                <View style={[styles.shareIcon, { backgroundColor: '#25D366' }]}>
+                                    <Ionicons name="logo-whatsapp" size={24} color="#fff" />
+                                </View>
+                                <Text style={[styles.shareBtnText, { color: theme.text }]}>WhatsApp</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity style={styles.shareBtn} onPress={() => Share.share({ url: generatedPdfUrl || generatedPdfUri, message: `Quotation for ${deal?.projectName}: ${generatedPdfUrl || 'See attachment'}` })}>
+                                <View style={[styles.shareIcon, { backgroundColor: theme.primary }]}>
+                                    <Ionicons name="share-social" size={24} color="#fff" />
+                                </View>
+                                <Text style={[styles.shareBtnText, { color: theme.text }]}>Share / Email</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity style={styles.shareBtn} onPress={() => { setShowShareModal(false); router.back(); }}>
+                                <View style={[styles.shareIcon, { backgroundColor: theme.textLight }]}>
+                                    <Ionicons name="checkmark" size={24} color="#fff" />
+                                </View>
+                                <Text style={[styles.shareBtnText, { color: theme.text }]}>Done</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
         </SafeAreaView>
     );
 }
@@ -525,7 +677,7 @@ const styles = StyleSheet.create({
     selectedLead: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 16, backgroundColor: 'rgba(37, 99, 235, 0.05)', marginBottom: 20 },
     selectedLeadName: { flex: 1, fontSize: 14, fontWeight: '700' },
     leadResult: { padding: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.05)' },
-    leadResultName: { fontSize: 14, fontWeight: '600' },
+    leadResultName: { fontSize: 17, fontWeight: '700' },
 
     tabRow: { flexDirection: 'row', gap: 8, marginTop: 4 },
     tab: { flex: 1, height: 42, borderRadius: 12, borderWidth: 1, justifyContent: 'center', alignItems: 'center' },
@@ -551,5 +703,15 @@ const styles = StyleSheet.create({
     totalValue: { fontSize: 20, fontWeight: '900' },
 
     saveBtn: { position: 'absolute', bottom: 30, left: 20, right: 20, height: 60, borderRadius: 20, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 10, elevation: 8, shadowOpacity: 0.3, shadowRadius: 10 },
-    saveBtnText: { color: '#fff', fontSize: 16, fontWeight: '800' }
+    saveBtnText: { color: '#fff', fontSize: 16, fontWeight: '800' },
+
+    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 },
+    modalContent: { width: '100%', borderRadius: 32, padding: 30, alignItems: 'center' },
+    successBadge: { width: 100, height: 100, borderRadius: 50, justifyContent: 'center', alignItems: 'center', marginBottom: 20 },
+    modalTitle: { fontSize: 22, fontWeight: '900', marginBottom: 10 },
+    modalSub: { fontSize: 14, fontWeight: '500', textAlign: 'center', marginBottom: 30, lineHeight: 20 },
+    shareOptions: { flexDirection: 'row', justifyContent: 'space-between', width: '100%', gap: 15 },
+    shareBtn: { flex: 1, alignItems: 'center', gap: 8 },
+    shareIcon: { width: 56, height: 56, borderRadius: 18, justifyContent: 'center', alignItems: 'center', elevation: 4, shadowOpacity: 0.2, shadowRadius: 5 },
+    shareBtnText: { fontSize: 12, fontWeight: '700' }
 });

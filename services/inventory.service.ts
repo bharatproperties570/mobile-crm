@@ -52,3 +52,8 @@ export const getInventoryByContact = async (contactId: string) => {
     const res = await api.get("/inventory", { params: { contactId, limit: "100" } });
     return res.data;
 };
+
+export const getInventoryHistoryByContact = async (contactId: string) => {
+    const res = await api.get("/inventory", { params: { contactId, history: "true", limit: "100" } });
+    return res.data;
+};

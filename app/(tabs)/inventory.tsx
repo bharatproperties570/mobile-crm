@@ -96,10 +96,9 @@ const TYPE_ICONS: Record<string, string> = {
     'Shop': 'cart'
 };
 
-const InventoryCard = memo(({ item, onPress, onCall, onWhatsApp, onSMS, onEmail, onMenuPress, viewMode }: {
+const InventoryCard = memo(({ item, onPress, onWhatsApp, onSMS, onEmail, onMenuPress, viewMode }: {
     item: Inventory;
     onPress: () => void;
-    onCall: () => void;
     onWhatsApp: () => void;
     onSMS: () => void;
     onEmail: () => void;
@@ -148,10 +147,6 @@ const InventoryCard = memo(({ item, onPress, onCall, onWhatsApp, onSMS, onEmail,
 
     const renderRightActions = () => (
         <View style={styles.rightActions}>
-            <TouchableOpacity style={[styles.swipeAction, { backgroundColor: theme.primary }]} onPress={onCall}>
-                <Ionicons name="call" size={20} color="#fff" />
-                <Text style={styles.swipeLabel}>Call</Text>
-            </TouchableOpacity>
             <TouchableOpacity style={[styles.swipeAction, { backgroundColor: isDark ? '#1E293B' : '#64748B' }]} onPress={onSMS}>
                 <Ionicons name="chatbubble" size={20} color="#fff" />
                 <Text style={styles.swipeLabel}>SMS</Text>
@@ -213,7 +208,7 @@ const InventoryCard = memo(({ item, onPress, onCall, onWhatsApp, onSMS, onEmail,
                             {(item.size || item.sizeUnit || item.sizeConfig || item.sizeLabel) ? (
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 }}>
                                     <Ionicons name="expand-outline" size={11} color={theme.textMuted} />
-                                    <Text style={{ fontSize: 11, color: theme.textMuted, fontWeight: '600' }}>
+                                    <Text style={{ fontSize: 12, color: theme.textMuted, fontWeight: '700' }}>
                                         {displayInfo.sizeLabel}
                                     </Text>
                                 </View>
@@ -641,9 +636,6 @@ export default function InventoryScreen() {
                         onChangeText={setSearch}
                     />
                     <View style={styles.searchRight}>
-                        <TouchableOpacity style={[styles.viewModeBtn, { backgroundColor: theme.card }]} onPress={() => setViewMode(v => v === 'list' ? 'grid' : 'list')}>
-                            <Ionicons name={viewMode === 'list' ? "grid-outline" : "list-outline"} size={20} color={theme.text} />
-                        </TouchableOpacity>
                         <TouchableOpacity 
                             style={[styles.filterBtn, { backgroundColor: theme.card }, filtersCount > 0 && { backgroundColor: theme.primary + '15' }]} 
                             onPress={() => setShowFilterModal(true)}
@@ -801,30 +793,23 @@ export default function InventoryScreen() {
                                 </TouchableOpacity>
 
                                 <TouchableOpacity style={styles.actionItem} onPress={() => {
-                                    if (selectedInv) router.push(`/upload-media?id=${selectedInv._id}`);
-                                    closeHub();
-                                }}>
-                                    <View style={[styles.actionIcon, { backgroundColor: isDark ? 'rgba(249, 115, 22, 0.1)' : "#FFEDD5" }]}>
-                                        <Ionicons name="images" size={24} color="#F97316" />
-                                    </View>
-                                    <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Media</Text>
-                                </TouchableOpacity>
-
-                                <TouchableOpacity style={styles.actionItem} onPress={() => handleCall(selectedInv!)}>
-                                    <View style={[styles.actionIcon, { backgroundColor: isDark ? 'rgba(16, 185, 129, 0.1)' : "#ECFDF5" }]}>
-                                        <Ionicons name="call" size={24} color="#10B981" />
-                                    </View>
-                                    <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Call</Text>
-                                </TouchableOpacity>
-
-                                <TouchableOpacity style={styles.actionItem} onPress={() => {
-                                    if (selectedInv) router.push(`/inventory-detail?id=${selectedInv._id}`);
+                                    if (selectedInv) router.push(`/add-document?inventoryId=${selectedInv._id}`);
                                     closeHub();
                                 }}>
                                     <View style={[styles.actionIcon, { backgroundColor: isDark ? 'rgba(14, 165, 233, 0.1)' : "#F0F9FF" }]}>
-                                        <Ionicons name="information-circle" size={24} color="#0EA5E9" />
+                                        <Ionicons name="document-add" size={24} color="#0EA5E9" />
                                     </View>
-                                    <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Details</Text>
+                                    <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Add Doc</Text>
+                                </TouchableOpacity>
+
+                                <TouchableOpacity style={styles.actionItem} onPress={() => {
+                                    if (selectedInv) router.push(`/upload-media?inventoryId=${selectedInv._id}`);
+                                    closeHub();
+                                }}>
+                                    <View style={[styles.actionIcon, { backgroundColor: isDark ? 'rgba(236, 72, 153, 0.1)' : "#FDF2F8" }]}>
+                                        <Ionicons name="images" size={24} color="#EC4899" />
+                                    </View>
+                                    <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Upload</Text>
                                 </TouchableOpacity>
 
                                 <TouchableOpacity style={styles.actionItem} onPress={() => { Alert.alert("Share", "Sharing unit details..."); closeHub(); }}>
@@ -882,22 +867,22 @@ const styles = StyleSheet.create({
     filterBadge: { position: 'absolute', top: -4, right: -4, width: 14, height: 14, borderRadius: 7, justifyContent: 'center', alignItems: 'center' },
     filterBadgeText: { color: '#fff', fontSize: 8, fontWeight: '900' },
     list: { paddingBottom: 100 },
-    listCard: { flexDirection: "row", marginHorizontal: 16, marginBottom: 12, borderRadius: 24, overflow: "hidden", borderWidth: 1, elevation: 1, shadowOpacity: 0.02, shadowRadius: 10, shadowOffset: { width: 0, height: 5 } },
-    listMain: { flex: 1, padding: 12 },
-    listHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 },
+    listCard: { flexDirection: "row", marginHorizontal: 16, marginBottom: 8, borderRadius: 18, overflow: "hidden", borderWidth: 1, elevation: 1, shadowOpacity: 0.02, shadowRadius: 10, shadowOffset: { width: 0, height: 5 } },
+    listMain: { flex: 1, padding: 8 },
+    listHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 },
     listProjectName: { fontSize: 13, fontWeight: "700" },
     listBlockName: { fontSize: 13, fontWeight: "600" },
-    listUnitNumber: { fontSize: 20, fontWeight: "900" },
-    listUnit: { fontSize: 13, fontWeight: "600", marginBottom: 8 },
+    listUnitNumber: { fontSize: 15, fontWeight: "900" },
+    listUnit: { fontSize: 12, fontWeight: "600", marginBottom: 6 },
     typePill: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
     typePillText: { fontSize: 10, fontWeight: "800", textTransform: 'uppercase' },
     statusPill: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 20, gap: 6 },
     statusDot: { width: 6, height: 6, borderRadius: 3 },
     statusPillText: { fontSize: 10, fontWeight: "800", textTransform: 'uppercase' },
     listUnit: { fontSize: 13, fontWeight: "600", marginBottom: 8 },
-    listFooter: { flexDirection: 'row', gap: 12, marginTop: 12, paddingTop: 10, borderTopWidth: 1 },
+    listFooter: { flexDirection: 'row', gap: 12, marginTop: 8, paddingTop: 6, borderTopWidth: 1 },
     listMeta: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-    listPrice: { fontSize: 14, fontWeight: "800" },
+    listPrice: { fontSize: 17, fontWeight: "800" },
     listMetaText: { fontSize: 12, fontWeight: "700" },
 
     // Grid Card Styles
@@ -919,7 +904,7 @@ const styles = StyleSheet.create({
     gridProject: { fontSize: 15, fontWeight: "800", marginBottom: 2 },
     gridUnit: { fontSize: 10, fontWeight: "500", marginBottom: 8 },
     gridMenuTrigger: { position: 'absolute', top: 10, left: 10, padding: 4 },
-    gridPrice: { fontSize: 14, fontWeight: "900", color: "#2563EB" },
+    gridPrice: { fontSize: 17, fontWeight: "900", color: "#2563EB" },
 
     // Swipe Styles
     rightActions: { flexDirection: 'row', paddingLeft: 10 },
@@ -962,12 +947,12 @@ const styles = StyleSheet.create({
 
     list: { paddingBottom: 100 },
     listCard: {
-        flexDirection: "row", marginHorizontal: 16, marginBottom: 12, borderRadius: 24,
+        flexDirection: "row", marginHorizontal: 16, marginBottom: 8, borderRadius: 18,
         overflow: "hidden", borderWidth: 1, elevation: 1, shadowOpacity: 0.02, shadowRadius: 10, shadowOffset: { width: 0, height: 5 }
     },
     cardAccent: { width: 5 },
-    listMain: { flex: 1, padding: 12 },
-    listHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 },
+    listMain: { flex: 1, padding: 8 },
+    listHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 },
     listUnitNumber: { fontSize: 17, fontWeight: "900" },
     listProjectContainer: { marginTop: 1 },
     listProjectName: { fontSize: 14, fontWeight: "800" },
@@ -979,7 +964,7 @@ const styles = StyleSheet.create({
     typePill: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
     typePillText: { fontSize: 9, fontWeight: "900", textTransform: 'uppercase' },
 
-    listFooter: { marginTop: 10, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(0,0,0,0.05)' },
+    listFooter: { marginTop: 6, paddingTop: 6, borderTopWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(0,0,0,0.05)' },
     listMeta: { flexDirection: 'row', alignItems: 'center', gap: 6 },
     listMetaText: { fontSize: 12, fontWeight: "600" },
 

@@ -29,6 +29,8 @@ import { safeApiCall, safeApiCallSingle, extractList } from "@/services/api.help
 import api from "@/services/api";
 import { useUsers } from "@/context/UserContext";
 import { useAuth } from "@/context/AuthContext";
+import { useLookup } from "@/context/LookupContext";
+import { useProjects } from "@/context/ProjectContext";
 
 const TYPES = ["Call", "Meeting", "Site Visit", "Task", "Email"];
 const PRIORITIES = ["Low", "Normal", "High"];
@@ -107,7 +109,9 @@ export default function AddActivityScreen() {
         subject?: string;
         actType?: string;
     }>();
-    const { users, findUser } = useUsers();
+    const { users, findUser, refreshUsers } = useUsers();
+    const { projects, refreshProjects } = useProjects();
+    const { leadMasterFields, refreshLookups } = useLookup();
     const { user: currentUser } = useAuth();
 
     console.log("[AddActivity] Rendered with params:", params);
@@ -151,7 +155,6 @@ export default function AddActivityScreen() {
     const [searchText, setSearchText] = useState("");
     const [searchResults, setSearchResults] = useState<RelatedItem[]>([]);
 
-    const [projects, setProjects] = useState<Project[]>([]);
     const [selectedProjects, setSelectedProjects] = useState<any[]>([]);
     const [isProjectModalVisible, setIsProjectModalVisible] = useState(false);
     const [isBlockModalVisible, setIsBlockModalVisible] = useState(false);
@@ -217,13 +220,12 @@ export default function AddActivityScreen() {
     const init = async () => {
         setLoading(true);
         try {
-            // 1. Fetch Projects if Site Visit might be used
-            const projRes = await safeApiCall(() => getProjects());
-            if (!projRes.error) {
-                setProjects(extractList(projRes.data));
-            }
+            // Force Data Refresh
+            refreshUsers();
+            refreshProjects();
+            refreshLookups();
 
-            // 2. Resolve initial entity if passed
+            // 1. Resolve initial entity if passed
             if (params.id && params.type) {
                 let name = "Loading...";
                 let mobile = "";
@@ -339,37 +341,44 @@ export default function AddActivityScreen() {
         }
 
         setSaving(true);
-        const payload = {
-            ...formData,
-            entityId: selectedEntity.id,
-            entityType: selectedEntity.type,
-            relatedTo: [{
-                id: selectedEntity.id,
-                name: selectedEntity.name,
-                model: selectedEntity.type,
-                mobile: selectedEntity.mobile
-            }],
-            completionResult: formData.details.completionResult, // Legacy top-level mapping
-            details: {
-                ...formData.details,
-                clientFeedback: formData.clientFeedback, // Aligned with Web CRM
-                completionDate: formData.details.completionDate,
-                completionTime: formData.details.completionTime,
-                meetingOutcomeStatus: formData.details.meetingOutcomeStatus,
-                visitedProperties: selectedProjects,
-                tasks: formData.type === "Task" ? formData.details.tasks : []
+        try {
+            const payload = {
+                ...formData,
+                entityId: selectedEntity.id,
+                entityType: selectedEntity.type,
+                relatedTo: [{
+                    id: selectedEntity.id,
+                    name: selectedEntity.name,
+                    model: selectedEntity.type,
+                    mobile: selectedEntity.mobile
+                }],
+                completionResult: formData.details.completionResult, // Legacy top-level mapping
+                details: {
+                    ...formData.details,
+                    clientFeedback: formData.clientFeedback, // Aligned with Web CRM
+                    completionDate: formData.details.completionDate,
+                    completionTime: formData.details.completionTime,
+                    meetingOutcomeStatus: formData.details.meetingOutcomeStatus,
+                    visitedProperties: selectedProjects,
+                    tasks: formData.type === "Task" ? formData.details.tasks : []
+                }
+            };
+
+            console.log("[AddActivity] Dispatching payload:", JSON.stringify(payload, null, 2));
+            const res = await safeApiCall(() => addActivity(payload));
+
+            if (!res.error) {
+                Alert.alert("Success", "Activity logged successfully", [
+                    { text: "OK", onPress: () => router.canGoBack() ? router.back() : router.replace("/(tabs)/activities") }
+                ]);
+            } else {
+                Alert.alert("Save Failed", res.error || "The server rejected the activity record. Please check your inputs.");
             }
-        };
-
-        const res = await safeApiCall(() => addActivity(payload));
-        setSaving(false);
-
-        if (!res.error) {
-            Alert.alert("Success", "Activity logged successfully", [
-                { text: "OK", onPress: () => router.canGoBack() ? router.back() : router.replace("/(tabs)/activities") }
-            ]);
-        } else {
-            Alert.alert("Error", res.error || "Failed to save activity");
+        } catch (error: any) {
+            console.error("[AddActivity] Critical Save Error:", error);
+            Alert.alert("System Error", error.message || "A critical error occurred while saving. Please try again.");
+        } finally {
+            setSaving(false);
         }
     };
 
@@ -552,7 +561,7 @@ export default function AddActivityScreen() {
                         {/* 2. Priority Selector */}
                         <Text style={[styles.label, { marginTop: 12 }]}>Priority</Text>
                         <View style={styles.toggleRow}>
-                            {PRIORITIES.map((pr: string) => (
+                            {(leadMasterFields?.activityPriorities || ["Low", "Normal", "High"]).map((pr: string) => (
                                 <TouchableOpacity
                                     key={pr}
                                     style={[styles.toggleBtn, formData.priority === pr && styles.activeToggle]}

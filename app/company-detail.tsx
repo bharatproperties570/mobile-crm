@@ -4,6 +4,7 @@ import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/context/ThemeContext";
 import api from "@/services/api";
+import { useCallTracking } from "@/context/CallTrackingContext";
 import { getActivities } from "@/services/activities.service";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -22,22 +23,21 @@ const getInitials = (name?: string) => {
     return name.split(" ").map((n) => n[0]).join("").substring(0, 2).toUpperCase();
 };
 
-function lv(field: unknown): any {
+function lv(field: unknown): string {
     if (field === null || field === undefined || field === "" || field === "null" || field === "undefined") return "—";
     
-    // Handle array of objects/strings (Multi-team support)
     if (Array.isArray(field)) {
         if (field.length === 0) return "—";
-        return field.map(item => lv(item)).filter(v => v !== "—");
+        return field.map(item => lv(item)).filter(v => v !== "—").join(", ") || "—";
     }
 
     if (typeof field === "object" && field !== null) {
-        if ("lookup_value" in field && (field as any).lookup_value) return (field as any).lookup_value;
-        if ("fullName" in field && (field as any).fullName) return (field as any).fullName;
-        if ("name" in field && (field as any).name) return (field as any).name;
+        if ("lookup_value" in field && (field as any).lookup_value) return String((field as any).lookup_value);
+        if ("fullName" in field && (field as any).fullName) return String((field as any).fullName);
+        if ("name" in field && (field as any).name) return String((field as any).name);
     }
     const str = String(field).trim();
-    return str || "—";
+    return (str && str !== "[object Object]") ? str : "—";
 }
 
 function InfoRow({ label, value, accent, icon }: { label: string; value: string; accent?: boolean; icon?: any }) {
@@ -59,6 +59,7 @@ export default function CompanyDetailScreen() {
     const id = params.id;
     const router = useRouter();
     const { theme } = useTheme();
+    const { trackCall } = useCallTracking();
 
     const [loading, setLoading] = useState(true);
     const [company, setCompany] = useState<any>(null);
@@ -176,13 +177,16 @@ export default function CompanyDetailScreen() {
                         <Text style={[styles.headerNamePremium, { color: theme.text }]} numberOfLines={1}>{company.name}</Text>
                         <View style={styles.headerBadgeRow}>
                             <View style={[styles.miniBadge, { backgroundColor: isDark ? 'rgba(99, 102, 241, 0.15)' : theme.primary + '15' }]}>
-                                <Text style={[styles.miniBadgeText, { color: isDark ? '#818CF8' : theme.primary }]}>{lv(company.companyType).toUpperCase()}</Text>
+                                <Text style={[styles.miniBadgeText, { color: isDark ? '#818CF8' : theme.primary }]}>{String(lv(company.companyType)).toUpperCase()}</Text>
                             </View>
                             <View style={[styles.miniBadge, { backgroundColor: isDark ? 'rgba(16, 185, 129, 0.15)' : theme.success + '15' }]}>
-                                <Text style={[styles.miniBadgeText, { color: isDark ? '#34D399' : theme.success }]}>{lv(company.industry).toUpperCase()}</Text>
+                                <Text style={[styles.miniBadgeText, { color: isDark ? '#34D399' : theme.success }]}>{String(lv(company.industry)).toUpperCase()}</Text>
                             </View>
                         </View>
-                    </View>
+                        <TouchableOpacity onPress={() => router.push(`/add-company?id=${id}`)} style={[styles.backBtnCircle, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }]}>
+                        <Ionicons name="create-outline" size={20} color={theme.primary} />
+                    </TouchableOpacity>
+                </View>
                 </View>
 
                 {/* Information Strategy Bar */}
@@ -227,7 +231,7 @@ export default function CompanyDetailScreen() {
                 {/* Professional Action Hub */}
                 <View style={styles.modernActionHub}>
                     {[
-                        { icon: 'call', color: theme.primary, onPress: () => primaryPhone ? Linking.openURL(`tel:${primaryPhone}`) : Alert.alert("No Phone", "No contact number available") },
+                        { icon: 'call', color: theme.primary, onPress: () => primaryPhone ? trackCall(primaryPhone, id as string, "Company", company.name) : Alert.alert("No Phone", "No contact number available") },
                         { icon: 'chatbox-ellipses', color: isDark ? '#A78BFA' : '#8B5CF6', onPress: () => primaryPhone ? Linking.openURL(`sms:${primaryPhone}`) : Alert.alert("No Phone", "No contact number available") },
                         { icon: 'logo-whatsapp', color: isDark ? '#059669' : '#10B981', onPress: () => primaryPhone ? Linking.openURL(`https://wa.me/${primaryPhone.replace(/\D/g, '')}`) : Alert.alert("No WhatsApp", "No mobile number available") },
                         { icon: 'mail', color: isDark ? '#FBBF24' : '#F59E0B', onPress: () => primaryEmail ? Linking.openURL(`mailto:${primaryEmail}`) : Alert.alert("No Email", "No email address available") },
@@ -419,7 +423,7 @@ export default function CompanyDetailScreen() {
                                         <View style={[styles.timelineDot, { backgroundColor: theme.primary }]} />
                                         <View style={styles.timelineBody}>
                                             <View style={styles.timelineHeader}>
-                                                <Text style={[styles.timelineType, { color: theme.primary }]}>{act.type?.toUpperCase() || "ACTIVITY"}</Text>
+                                                <Text style={[styles.timelineType, { color: theme.primary }]}>{String(act.type || "ACTIVITY").toUpperCase()}</Text>
                                                 <Text style={styles.timelineDate}>{new Date(act.createdAt).toLocaleDateString()}</Text>
                                             </View>
                                             <Text style={[styles.timelineSubject, { color: theme.text }]}>{act.subject}</Text>
@@ -443,7 +447,7 @@ export default function CompanyDetailScreen() {
                                     <View style={styles.listItemHeader}>
                                         <Text style={[styles.listItemTitle, { color: theme.text }]}>Deal #{d._id?.substring(d._id.length - 6).toUpperCase()}</Text>
                                         <View style={[styles.miniBadge, { backgroundColor: d.stage === 'Closed' ? theme.success + '20' : theme.primary + '20' }]}>
-                                            <Text style={[styles.miniBadgeText, { color: d.stage === 'Closed' ? theme.success : theme.primary }]}>{(d.stage || 'Pending').toUpperCase()}</Text>
+                                            <Text style={[styles.miniBadgeText, { color: d.stage === 'Closed' ? theme.success : theme.primary }]}>{String(lv(d.stage || 'Pending')).toUpperCase()}</Text>
                                         </View>
                                     </View>
                                     <Text style={[styles.listItemSub, { color: theme.textLight }]}>{d.projectName?.name || "Project"}</Text>
@@ -465,7 +469,7 @@ export default function CompanyDetailScreen() {
                                     <View style={styles.listItemHeader}>
                                         <Text style={[styles.listItemTitle, { color: theme.text }]}>Unit {inv.unitNo || inv.unitNumber}</Text>
                                         <View style={[styles.miniBadge, { backgroundColor: inv.status === 'Available' ? theme.success + '20' : theme.danger + '20' }]}>
-                                            <Text style={[styles.miniBadgeText, { color: inv.status === 'Available' ? theme.success : theme.danger }]}>{(inv.status || 'Available').toUpperCase()}</Text>
+                                            <Text style={[styles.miniBadgeText, { color: inv.status === 'Available' ? theme.success : theme.danger }]}>{lv(inv.status || 'Available').toUpperCase()}</Text>
                                         </View>
                                     </View>
                                     <Text style={[styles.listItemSub, { color: theme.textLight }]}>{inv.projectName}</Text>

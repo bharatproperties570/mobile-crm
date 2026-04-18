@@ -138,9 +138,14 @@ export default function ProjectDetailScreen() {
                         <Ionicons name="chevron-back" size={24} color={theme.text} />
                     </TouchableOpacity>
                     <Text style={[styles.navTitle, { color: theme.text }]}>Project Command</Text>
-                    <TouchableOpacity style={[styles.navBtn, { backgroundColor: theme.background }]} onPress={handleDelete}>
-                        <Ionicons name="trash-outline" size={22} color={isDark ? '#F87171' : "#EF4444"} />
-                    </TouchableOpacity>
+                    <View style={{ flexDirection: 'row', gap: 10 }}>
+                        <TouchableOpacity style={[styles.navBtn, { backgroundColor: theme.background }]} onPress={() => router.push(`/add-project?id=${id}`)}>
+                            <Ionicons name="create-outline" size={22} color={theme.primary} />
+                        </TouchableOpacity>
+                        <TouchableOpacity style={[styles.navBtn, { backgroundColor: theme.background }]} onPress={handleDelete}>
+                            <Ionicons name="trash-outline" size={22} color={isDark ? '#F87171' : "#EF4444"} />
+                        </TouchableOpacity>
+                    </View>
                 </View>
 
                 {/* Hero Summary */}
@@ -198,9 +203,13 @@ export default function ProjectDetailScreen() {
                                     <Ionicons name="map" size={20} color="#fff" />
                                     <Text style={styles.actionBtnText}>Open Maps</Text>
                                 </TouchableOpacity>
-                                <TouchableOpacity style={[styles.actionBtn, styles.actionBtnSoft, { backgroundColor: theme.card, borderColor: theme.border }]} onPress={() => Alert.alert("Share", "Sharing project link...")}>
-                                    <Ionicons name="share-outline" size={20} color={theme.primary} />
-                                    <Text style={[styles.actionBtnText, { color: theme.text }]}>Share</Text>
+                                <TouchableOpacity style={[styles.actionBtn, styles.actionBtnSoft, { backgroundColor: theme.card, borderColor: theme.border }]} onPress={() => router.push(`/add-document?id=${id}&type=Project&mode=document`)}>
+                                    <Ionicons name="document-text-outline" size={20} color={theme.primary} />
+                                    <Text style={[styles.actionBtnText, { color: theme.text }]}>Add Doc</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity style={[styles.actionBtn, styles.actionBtnSoft, { backgroundColor: theme.card, borderColor: theme.border }]} onPress={() => router.push(`/add-document?id=${id}&type=Project&mode=upload`)}>
+                                    <Ionicons name="cloud-upload-outline" size={20} color={theme.primary} />
+                                    <Text style={[styles.actionBtnText, { color: theme.text }]}>Media</Text>
                                 </TouchableOpacity>
                                 <TouchableOpacity style={[styles.actionBtn, styles.actionBtnSoft, { backgroundColor: theme.card, borderColor: theme.border }]} onPress={() => router.push(`/add-activity?id=${id}&type=Project`)}>
                                     <Ionicons name="calendar-outline" size={20} color={theme.textLight} />
@@ -232,26 +241,6 @@ export default function ProjectDetailScreen() {
                                     <InfoRow label="Sub-Category" value={lookupVal(project.subCategory)} icon="list-outline" />
                                     <InfoRow label="Land Area" value={project.landArea ? `${project.landArea} ${project.landAreaUnit}` : "—"} icon="resize-outline" />
                                     <InfoRow label="City" value={project.address?.city} icon="location-outline" />
-                                    
-                                    <View style={[styles.infoRow, { borderBottomColor: theme.border, alignItems: 'flex-start' }]}>
-                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 4 }}>
-                                            <Ionicons name="people-outline" size={14} color={theme.textLight} />
-                                            <Text style={[styles.infoLabel, { color: theme.textLight }]}>Teams</Text>
-                                        </View>
-                                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, flex: 1, justifyContent: 'flex-end' }}>
-                                            {(() => {
-                                                const teamData = lv(project.teams || project.team);
-                                                if (Array.isArray(teamData)) {
-                                                    return teamData.map((t, idx) => (
-                                                        <View key={idx} style={[styles.teamBadge, { backgroundColor: isDark ? 'rgba(99, 102, 241, 0.15)' : '#6366F1' + '10' }]}>
-                                                            <Text style={[styles.teamBadgeText, { color: isDark ? '#818CF8' : '#6366F1' }]}>{t}</Text>
-                                                        </View>
-                                                    ));
-                                                }
-                                                return <Text style={[styles.infoValue, { color: theme.text }]}>{teamData}</Text>;
-                                            })()}
-                                        </View>
-                                    </View>
                                 </View>
 
                                 {project.blocks && project.blocks.length > 0 && (
@@ -262,29 +251,6 @@ export default function ProjectDetailScreen() {
                                                 <View key={i} style={[styles.blockChip, { backgroundColor: theme.background }]}>
                                                     <Ionicons name="cube-outline" size={14} color={theme.primary} />
                                                     <Text style={[styles.blockText, { color: theme.text }]}>{typeof b === 'string' ? b : b.name}</Text>
-                                                </View>
-                                            ))}
-                                        </View>
-                                    </View>
-                                )}
-
-                                <View style={[styles.sectionCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
-                                    <Text style={[styles.sectionTitle, { color: theme.text }]}>Location Summary</Text>
-                                    <Text style={[styles.locAddress, { color: theme.text }]}>{location}</Text>
-                                    <TouchableOpacity style={[styles.mapLink, { backgroundColor: isDark ? 'rgba(99, 102, 241, 0.1)' : theme.primary + '10' }]} onPress={() => Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location)}`)}>
-                                        <Text style={[styles.mapLinkText, { color: isDark ? '#818CF8' : theme.primary }]}>Detailed View on Maps</Text>
-                                        <Ionicons name="chevron-forward" size={14} color={isDark ? '#818CF8' : theme.primary} />
-                                    </TouchableOpacity>
-                                </View>
-
-                                {project.amenities && (
-                                    <View style={[styles.sectionCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
-                                        <Text style={[styles.sectionTitle, { color: theme.text }]}>Amenities</Text>
-                                        <View style={styles.amenityBox}>
-                                            {Object.entries(project.amenities).map(([name, active]) => active && (
-                                                <View key={name} style={[styles.amenityChip, { backgroundColor: theme.background }]}>
-                                                    <Ionicons name="checkmark-circle" size={14} color="#10B981" />
-                                                    <Text style={[styles.amenityText, { color: theme.text }]}>{name}</Text>
                                                 </View>
                                             ))}
                                         </View>
@@ -325,6 +291,65 @@ export default function ProjectDetailScreen() {
                         </View>
                     </ScrollView>
                 </View>
+
+                {/* 3. Documents */}
+                <View style={styles.tabContent}>
+                    <ScrollView contentContainerStyle={styles.innerScroll}>
+                        <View style={[styles.sectionCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                            <View style={styles.sectionHeader}>
+                                <Text style={[styles.sectionTitle, { color: theme.text, marginBottom: 0 }]}>Project Documents</Text>
+                                <TouchableOpacity onPress={() => router.push(`/add-document?id=${id}&type=Project&mode=document`)}>
+                                    <Text style={{ color: theme.primary, fontWeight: '700' }}>+ Add</Text>
+                                </TouchableOpacity>
+                            </View>
+                            {(!project.projectDocuments || project.projectDocuments.length === 0) ? (
+                                <Text style={styles.emptyText}>No documents recorded.</Text>
+                            ) : (
+                                project.projectDocuments.map((doc: any, i: number) => (
+                                    <TouchableOpacity key={i} style={[styles.docRow, { borderBottomColor: theme.border }]} onPress={() => doc.url && Linking.openURL(doc.url)}>
+                                        <View style={[styles.docIcon, { backgroundColor: theme.primary + '10' }]}>
+                                            <Ionicons name="document-text" size={20} color={theme.primary} />
+                                        </View>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={[styles.docName, { color: theme.text }]}>{doc.documentType || doc.documentName || "Document"}</Text>
+                                            <Text style={[styles.docMeta, { color: theme.textLight }]}>{doc.documentNo ? `No: ${doc.documentNo}` : "No details"}</Text>
+                                        </View>
+                                        <Ionicons name="eye-outline" size={16} color={theme.primary} />
+                                    </TouchableOpacity>
+                                ))
+                            )}
+                        </View>
+                    </ScrollView>
+                </View>
+
+                {/* 4. Media */}
+                <View style={styles.tabContent}>
+                    <ScrollView contentContainerStyle={styles.innerScroll}>
+                        <View style={[styles.sectionCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                            <View style={styles.sectionHeader}>
+                                <Text style={[styles.sectionTitle, { color: theme.text, marginBottom: 0 }]}>Site Media</Text>
+                                <TouchableOpacity onPress={() => router.push(`/add-document?id=${id}&type=Project&mode=upload`)}>
+                                    <Text style={{ color: theme.primary, fontWeight: '700' }}>+ Upload</Text>
+                                </TouchableOpacity>
+                            </View>
+                            
+                            <View style={styles.mediaGrid}>
+                                {[...(project.projectImages || []), ...(project.projectVideos || [])].length === 0 ? (
+                                    <Text style={styles.emptyText}>No media uploaded.</Text>
+                                ) : (
+                                    [...(project.projectImages || []), ...(project.projectVideos || [])].map((item: any, i: number) => (
+                                        <TouchableOpacity key={i} style={styles.mediaItem} onPress={() => item.url && Linking.openURL(item.url)}>
+                                            <View style={[styles.mediaPlaceholder, { backgroundColor: theme.background, borderColor: theme.border }]}>
+                                                <Ionicons name={item.type === 'video' || (item.url && (item.url.includes('.mp4') || item.url.includes('.m4v'))) ? "play-circle" : "image"} size={30} color={theme.primary} />
+                                            </View>
+                                            <Text style={[styles.mediaTitle, { color: theme.text }]} numberOfLines={1}>{item.title || "Media"}</Text>
+                                        </TouchableOpacity>
+                                    ))
+                                )}
+                            </View>
+                        </View>
+                    </ScrollView>
+                </View>
             </ScrollView>
         </View>
     );
@@ -356,7 +381,7 @@ const styles = StyleSheet.create({
     quickActions: { flexDirection: 'row', gap: 12, marginBottom: 20 },
     actionBtn: { flex: 1, height: 48, borderRadius: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
     actionBtnSoft: { borderWidth: 1 },
-    actionBtnText: { color: "#fff", fontWeight: "800", fontSize: 13 },
+    actionBtnText: { color: "#fff", fontWeight: "800", fontSize: 11 },
 
     snapshotBar: { padding: 16, borderRadius: 20, borderWidth: 1, flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20 },
     snapItem: { flex: 1, alignItems: 'center' },
@@ -373,19 +398,7 @@ const styles = StyleSheet.create({
     infoLabel: { fontSize: 14, fontWeight: "600" },
     infoValue: { fontSize: 14, fontWeight: "700" },
 
-    locAddress: { fontSize: 14, fontWeight: "600", lineHeight: 22, marginBottom: 16 },
-    mapLink: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 12, borderRadius: 12 },
-    mapLinkText: { fontSize: 13, fontWeight: "800" },
-
-    amenityBox: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-    amenityChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 10 },
-    amenityText: { fontSize: 12, fontWeight: "700" },
-
-    blockGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-    blockChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: '#F1F5F9' },
-    blockText: { fontSize: 12, fontWeight: "700" },
-
-    emptyText: { textAlign: 'center', padding: 20, fontSize: 14, opacity: 0.5, fontWeight: '600' },
+    emptyText: { textAlign: 'center', padding: 20, fontSize: 13, opacity: 0.5, fontWeight: '600' },
 
     timelineItem: { borderLeftWidth: 2, marginLeft: 10, paddingLeft: 20, paddingBottom: 25 },
     timelineDot: { width: 12, height: 12, borderRadius: 6, position: 'absolute', left: -7, top: 0 },
@@ -396,16 +409,17 @@ const styles = StyleSheet.create({
     timelineSubject: { fontSize: 14, fontWeight: '700', marginBottom: 4 },
     timelineNote: { fontSize: 12, lineHeight: 18 },
 
-    teamBadge: {
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 6,
-        borderWidth: 1,
-        borderColor: 'rgba(99, 102, 241, 0.2)',
-    },
-    teamBadgeText: {
-        fontSize: 10,
-        fontWeight: '800',
-        textTransform: 'uppercase',
-    },
+    blockGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+    blockChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: '#F1F5F9' },
+    blockText: { fontSize: 12, fontWeight: "700" },
+
+    docRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, gap: 12 },
+    docIcon: { width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+    docName: { fontSize: 14, fontWeight: '700' },
+    docMeta: { fontSize: 11 },
+
+    mediaGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+    mediaItem: { width: (SCREEN_WIDTH - 80) / 2, marginBottom: 15 },
+    mediaPlaceholder: { width: '100%', height: 100, borderRadius: 12, borderWidth: 1, justifyContent: 'center', alignItems: 'center' },
+    mediaTitle: { fontSize: 12, fontWeight: '700', marginTop: 5, textAlign: 'center' },
 });

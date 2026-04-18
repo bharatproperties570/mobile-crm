@@ -13,7 +13,7 @@ import { getCompanies } from "@/services/companies.service";
 import api from "@/services/api";
 import { safeApiCall, lookupVal, safeApiCallSingle } from "@/services/api.helpers";
 import { useTheme, SPACING } from "@/context/ThemeContext";
-import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
+import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete/GooglePlacesAutocomplete';
 import { MultiSearchableDropdown } from "@/components/MultiSearchableDropdown";
 
 const GOOGLE_MAPS_API_KEY = "AIzaSyBd2gdMJVt5C_tgYqWoRbBiatzmevYdB9U";

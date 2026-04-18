@@ -16,6 +16,7 @@ import { useUsers } from "@/context/UserContext";
 import { useProjects } from "@/context/ProjectContext";
 import { useTheme, SPACING } from "@/context/ThemeContext";
 import { MultiSearchableDropdown } from "@/components/MultiSearchableDropdown";
+import { safeApiCall, safeApiCallSingle } from "@/services/api.helpers";
 
 const LEAD_LOOKUP_TYPES = [
     "Requirement", "Category", "SubCategory", "UnitType",
@@ -262,7 +263,7 @@ export default function AddLead() {
     const router = useRouter();
     const params = useLocalSearchParams();
     const { getLookupValue, getLookupsByType, propertyConfig, leadMasterFields, refreshLookups, loading: loadingLookups } = useLookup();
-    const { users, teams, loading: loadingUsers, findUser } = useUsers();
+    const { users, teams, loading: loadingUsers, findUser, refreshUsers } = useUsers();
     const { projects, loading: loadingProjects } = useProjects();
 
     const { 
@@ -435,6 +436,10 @@ function SearchableDropdown({
     useEffect(() => {
         const loadInitialData = async () => {
             try {
+                // Force refresh lookups and users to ensure we have latest backend data (No Mocks!)
+                refreshLookups();
+                refreshUsers();
+
                 const results = await Promise.all([
                     id ? getLeadById(id) : Promise.resolve(null),
                     refContact ? getContactById(refContact) : Promise.resolve(null),
@@ -586,12 +591,12 @@ function SearchableDropdown({
             const payload = {
                 ...formData,
                 requirement: getLookupId("Requirement", formData.requirement),
-                status: getLookupId("LeadStatus", formData.status),
-                stage: getLookupId("LeadStage", formData.stage),
+                status: getLookupId("Status", formData.status),
+                stage: getLookupId("Stage", formData.stage),
                 source: getLookupId("Source", formData.source),
                 subSource: getLookupId("SubSource", formData.subSource),
                 campaign: getLookupId("Campaign", formData.campaign),
-                subCampaign: getLookupId("SubCampaign", formData.subCampaign),
+                subCampaign: getLookupId("Sub Campaign", formData.subCampaign),
                 locBlock: formData.projectTowers,
                 budgetMin: formData.budgetMin ? Number(formData.budgetMin) : undefined,
                 budgetMax: formData.budgetMax ? Number(formData.budgetMax) : undefined,
@@ -605,11 +610,17 @@ function SearchableDropdown({
             };
             delete (payload as any).projectTowers;
 
-            const res = id ? await updateLead(id, payload) : await addLead(payload);
-            if (res.success || res.status === 200 || res.data) {
+            console.log('[DEBUG-LEAD] Submitting Payload:', JSON.stringify(payload, null, 2));
+
+            const res = id 
+                ? await safeApiCall(() => updateLead(id, payload)) 
+                : await safeApiCall(() => addLead(payload));
+
+            if (!res.error) {
+                Alert.alert("✅ Success", `Lead ${id ? "updated" : "created"} successfully!`);
                 router.replace("/(tabs)/leads");
             } else {
-                throw new Error(res.message || "Save failed");
+                throw new Error(res.error || "Save failed");
             }
         } catch (error: any) {
             Alert.alert("Error", error.message || "Failed to save lead.");
@@ -625,7 +636,16 @@ function SearchableDropdown({
             options = allowedNames.map(name => ({ label: name, value: name }));
         } else {
             const list = getLookupsByType(type);
-            options = (list || []).map(l => ({ label: l.lookup_value, value: l._id }));
+            // Deduplicate by label to avoid doubles like "Plot" in Residential
+            const seen = new Set();
+            options = (list || [])
+                .filter(l => {
+                    const val = l.lookup_value || "";
+                    if (seen.has(val)) return false;
+                    seen.add(val);
+                    return true;
+                })
+                .map(l => ({ label: l.lookup_value, value: l._id }));
             
             if (allowedNames && allowedNames.length > 0) {
                 options = options.filter(opt => 
@@ -793,17 +813,56 @@ function SearchableDropdown({
                                 <View style={{ flex: 1 }}><Field label="Max Area"><Input value={formData.areaMax} onChangeText={v => setFormData({ ...formData, areaMax: v })} placeholder="Max" keyboardType="numeric" /></Field></View>
                             </View>
                             <Field label="Funding">
-                                <SelectButton value={formData.funding} options={(leadMasterFields?.fundingTypes || ["Home Loan", "Self Funding"]).map((v: string) => ({ label: v, value: v }))} onSelect={(v) => setFormData({ ...formData, funding: v })} />
+                                <SelectButton value={formData.funding} options={(leadMasterFields?.fundingTypes || []).map((v: string) => ({ label: v, value: v }))} onSelect={(v) => setFormData({ ...formData, funding: v })} />
                             </Field>
                             <Field label="Timeline">
-                                <SelectButton value={formData.timeline} options={(leadMasterFields?.timelines || ["Immediate", "3 Months"]).map((v: string) => ({ label: v, value: v }))} onSelect={(v) => setFormData({ ...formData, timeline: v })} />
+                                <SelectButton value={formData.timeline} options={(leadMasterFields?.timelines || []).map((v: string) => ({ label: v, value: v }))} onSelect={(v) => setFormData({ ...formData, timeline: v })} />
                             </Field>
                             <Field label="Furnishing">
-                                <SelectButton value={formData.furnishing} options={(leadMasterFields?.furnishingStatuses || ["Unfurnished", "Semi-Furnished"]).map((v: string) => ({ label: v, value: v }))} onSelect={(v) => setFormData({ ...formData, furnishing: v })} />
+                                <SelectButton value={formData.furnishing} options={(leadMasterFields?.furnishingStatuses || []).map((v: string) => ({ label: v, value: v }))} onSelect={(v) => setFormData({ ...formData, furnishing: v })} />
                             </Field>
                             <Field label="Transaction Type">
-                                <SelectButton value={formData.transactionType} options={(leadMasterFields?.transactionTypes || ["Collector Rate", "Full White"]).map((v: string) => ({ label: v, value: v }))} onSelect={(v) => setFormData({ ...formData, transactionType: v })} />
+                                <SelectButton value={formData.transactionType} options={(leadMasterFields?.transactionTypes || []).map((v: string) => ({ label: v, value: v }))} onSelect={(v) => setFormData({ ...formData, transactionType: v })} />
                             </Field>
+
+                            {formData.transactionType === "Flexible" && (
+                                <FadeInView delay={50}>
+                                    <View style={[styles.sliderBox, { backgroundColor: theme.primary + '05', borderColor: theme.border, padding: 16, borderRadius: 16, marginTop: -8, marginBottom: 12 }]}>
+                                        <View style={[styles.rowAlign, { marginBottom: 12 }]}>
+                                            <Text style={{ fontSize: 13, fontWeight: '600', color: theme.textSecondary }}>White Component</Text>
+                                            <View style={{ backgroundColor: theme.primary, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 }}>
+                                                <Text style={{ fontSize: 14, fontWeight: '800', color: '#fff' }}>{formData.flexiblePercentage || 50}%</Text>
+                                            </View>
+                                        </View>
+                                        
+                                        {/* Visual Progress Bar to simulate Slider */}
+                                        <View style={{ height: 10, backgroundColor: theme.border, borderRadius: 5, overflow: 'hidden', marginBottom: 12 }}>
+                                            <View style={{ width: `${formData.flexiblePercentage || 50}%`, height: '100%', backgroundColor: theme.primary }} />
+                                        </View>
+
+                                        <View style={styles.chipGroup}>
+                                            {[20, 30, 40, 50, 60, 70, 80].map(pct => (
+                                                <TouchableOpacity 
+                                                    key={pct} 
+                                                    onPress={() => setFormData({ ...formData, flexiblePercentage: pct })}
+                                                    style={{ 
+                                                        backgroundColor: formData.flexiblePercentage === pct ? theme.primary : theme.inputBg,
+                                                        borderColor: formData.flexiblePercentage === pct ? theme.primary : theme.border,
+                                                        borderWidth: 1, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10
+                                                    }}
+                                                >
+                                                    <Text style={{ fontSize: 12, fontWeight: '700', color: formData.flexiblePercentage === pct ? '#fff' : theme.textPrimary }}>{pct}%</Text>
+                                                </TouchableOpacity>
+                                            ))}
+                                        </View>
+                                        
+                                        <View style={[styles.rowAlign, { marginTop: 12 }]}>
+                                            <Text style={{ fontSize: 11, color: theme.textMuted }}>{100 - (formData.flexiblePercentage || 50)}% Cash Component</Text>
+                                            <Text style={{ fontSize: 11, color: theme.textMuted }}>Total 100%</Text>
+                                        </View>
+                                    </View>
+                                </FadeInView>
+                            )}
                             <Field label="Facing">{renderMultiSelect("Facing", "facing")}</Field>
                             <Field label="Direction">{renderMultiSelect("Direction", "direction")}</Field>
                             <Field label="Purpose"><SelectButton value={formData.purpose} options={["End Use", "Investment"].map(v => ({ label: v, value: v }))} onSelect={(v) => setFormData({ ...formData, purpose: v })} /></Field>
@@ -1045,7 +1104,7 @@ function SearchableDropdown({
                                     <Text style={[styles.selectorText, { color: theme.textPrimary }, formData.teams.length === 0 && { color: theme.textMuted }]}>
                                         {formData.teams.length > 0 
                                             ? `${formData.teams.length} Team(s) Selected` 
-                                            : "Select Teams"}
+                                            : "Select Teams (All if empty)"}
                                     </Text>
                                     <Ionicons name="people-outline" size={18} color={theme.textSecondary} />
                                 </TouchableOpacity>
