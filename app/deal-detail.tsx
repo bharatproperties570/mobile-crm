@@ -824,15 +824,38 @@ export default function DealDetailScreen() {
                             {(!deal.inventoryId?.ownerHistory || deal.inventoryId.ownerHistory.length === 0) ? (
                                 <Text style={styles.emptyText}>No history recorded.</Text>
                             ) : (
-                                deal.inventoryId.ownerHistory.map((h: any, idx: number) => (
-                                    <View key={idx} style={[styles.timelineItem, { borderLeftColor: theme.border }]}>
-                                        <View style={[styles.timelineDot, { backgroundColor: '#10b981' }]} />
-                                        <View style={styles.timelineBody}>
-                                            <Text style={[styles.timelineSubject, { color: theme.text }]}>{h.contactName}</Text>
-                                            <Text style={styles.timelineDate}>{new Date(h.date).toLocaleDateString()}</Text>
+                                deal.inventoryId.ownerHistory.map((h: any, idx: number) => {
+                                    const contactNo = h.contactPhone || h.contactMobile || h.phone || h.mobile;
+                                    return (
+                                        <View key={idx} style={[styles.timelineItem, { borderLeftColor: theme.border }]}>
+                                            <View style={[styles.timelineDot, { backgroundColor: '#10B981' }]} />
+                                            <View style={styles.timelineBody}>
+                                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                    <View>
+                                                        <Text style={[styles.timelineSubject, { color: theme.text }]}>{h.contactName || h.name}</Text>
+                                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                                                            <View style={{ paddingHorizontal: 6, paddingVertical: 1, backgroundColor: '#10B98115', borderRadius: 4 }}>
+                                                                <Text style={{ fontSize: 9, fontWeight: '900', color: '#10B981' }}>PREVIOUS OWNER</Text>
+                                                            </View>
+                                                            <Text style={styles.timelineDate}>{new Date(h.date).toLocaleDateString()}</Text>
+                                                        </View>
+                                                    </View>
+                                                    {contactNo && (
+                                                        <TouchableOpacity 
+                                                            onPress={() => Linking.openURL(`tel:${contactNo.replace(/\D/g, "")}`)}
+                                                            style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: theme.primary + '15', justifyContent: 'center', alignItems: 'center' }}
+                                                        >
+                                                            <Ionicons name="call" size={18} color={theme.primary} />
+                                                        </TouchableOpacity>
+                                                    )}
+                                                </View>
+                                                {contactNo && (
+                                                    <Text style={{ fontSize: 13, color: theme.textMuted, fontWeight: '600', marginTop: 4 }}>{contactNo}</Text>
+                                                )}
+                                            </View>
                                         </View>
-                                    </View>
-                                ))
+                                    );
+                                })
                             )}
                         </View>
                     </ScrollView>

@@ -4,7 +4,7 @@ import {
     TextInput, RefreshControl, ActivityIndicator, Alert, Linking,
     Modal, Animated, Dimensions, Pressable, ScrollView, Vibration
 } from "react-native";
-import { useRouter, useFocusEffect } from "expo-router";
+import { useRouter, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import Swipeable from "react-native-gesture-handler/Swipeable";
 import { getLeads, leadName, updateLead, deleteLead, type Lead } from "@/services/leads.service";
@@ -20,6 +20,7 @@ import { useLookup } from "@/context/LookupContext";
 import { useUsers } from "@/context/UserContext";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAuth } from "@/context/AuthContext";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -135,8 +136,8 @@ function ActionSheet({ visible, onClose, lead, onUpdate, statuses, users }: {
     users: any[];
 }) {
     const router = useRouter();
-    const { theme } = useTheme();
-    const isDark = theme.background === '#0F172A';
+    const { theme, isDarkMode } = useTheme();
+    const isDark = isDarkMode;
     const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
     const [shouldRender, setShouldRender] = useState(false);
     const [showStatusPicker, setShowStatusPicker] = useState(false);
@@ -282,7 +283,7 @@ function ActionSheet({ visible, onClose, lead, onUpdate, statuses, users }: {
                 <Animated.View
                     style={[
                         styles.sheetContainer,
-                        { backgroundColor: isDark ? '#000000' : '#FFFFFF', transform: [{ translateY: slideAnim }] }
+                        { backgroundColor: theme.card, borderColor: theme.border, transform: [{ translateY: slideAnim }] }
                     ]}
                 >
                     <Pressable onPress={(e) => e.stopPropagation()} style={{ flex: 1 }}>
@@ -298,8 +299,8 @@ function ActionSheet({ visible, onClose, lead, onUpdate, statuses, users }: {
 
                         <View style={styles.actionGrid}>
                             <TouchableOpacity style={styles.actionItem} onPress={() => { router.push(`/add-lead?id=${lead._id}`); onClose(); }}>
-                                <View style={[styles.actionIcon, { backgroundColor: isDark ? 'rgba(100, 116, 139, 0.1)' : "#F1F5F9" }]}>
-                                    <Ionicons name="create" size={24} color={isDark ? theme.textSecondary : "#64748B"} />
+                                <View style={[styles.actionIcon, { backgroundColor: isDarkMode ? 'rgba(100, 116, 139, 0.15)' : "#F1F5F9" }]}>
+                                    <Ionicons name="create" size={24} color={theme.textSecondary} />
                                 </View>
                                 <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Edit</Text>
                             </TouchableOpacity>
@@ -469,8 +470,8 @@ function FilterModal({ visible, onClose, filters, setFilters, statuses, users, s
     users: any[];
     sources: Lookup[];
 }) {
-    const { theme } = useTheme();
-    const isDark = theme.background === '#0F172A';
+    const { theme, isDarkMode } = useTheme();
+    const isDark = isDarkMode;
     const toggleFilter = (key: string, val: string) => {
         const current = filters[key] || [];
         const next = current.includes(val) ? current.filter((v: string) => v !== val) : [...current, val];
@@ -480,7 +481,7 @@ function FilterModal({ visible, onClose, filters, setFilters, statuses, users, s
     return (
         <Modal visible={visible} animationType="slide" transparent>
             <View style={styles.filterModalContainer}>
-                <View style={[styles.filterHeader, { backgroundColor: theme.card, borderBottomColor: theme.border }]}>
+                <View style={[styles.header, { backgroundColor: theme.card, borderBottomColor: theme.border }]}>
                     <Text style={[styles.filterHeaderTitle, { color: theme.text }]}>Advanced Filters</Text>
                     <TouchableOpacity onPress={onClose}>
                         <Ionicons name="close" size={24} color={theme.text} />
@@ -617,14 +618,12 @@ const LeadCard = memo(({ lead, index, onPress, onMore, isSelected, onLongPress, 
     onLongPress?: () => void;
     liveScore?: { score: number; color: string; label: string };
 }) => {
-    const { theme } = useTheme();
+    const { theme, isDarkMode } = useTheme();
     const { trackCall } = useCallTracking();
     const { getLookupValue } = useLookup();
     const name = leadName(lead);
-    const isDark = theme.background === '#0F172A';
-    const stageCfgMap = (typeof STAGE_CONFIG_DARK !== 'undefined' && typeof STAGE_CONFIG_LIGHT !== 'undefined') 
-        ? (isDark ? STAGE_CONFIG_DARK : STAGE_CONFIG_LIGHT) 
-        : { default: { color: '#94A3B8', icon: 'ellipse-outline' } };
+    const isDark = isDarkMode;
+    const stageCfgMap = isDark ? STAGE_CONFIG_DARK : STAGE_CONFIG_LIGHT;
     const stageLabel = getLookupValue("Stage", lead.stage) || "New";
     const stageCfg = (stageCfgMap as any)[stageLabel] || (stageCfgMap as any).default;
     const score = liveScore ? { val: liveScore.score, color: liveScore.color } : getLeadScore(lead, isDark);
@@ -796,9 +795,11 @@ const LeadCard = memo(({ lead, index, onPress, onMore, isSelected, onLongPress, 
 
 export default function LeadsScreen() {
     const router = useRouter();
-    const { theme } = useTheme();
+    const { theme, isDarkMode } = useTheme();
     const { isAuthenticated } = useAuth();
-    const isDark = theme.background === '#0F172A';
+    const isDark = isDarkMode;
+    const { id, filter: paramFilter } = useLocalSearchParams<{ id?: string, filter?: string }>();
+    const insets = useSafeAreaInsets();
     const { getLookupValue, getLookupsByType, refreshLookups } = useLookup();
     const { users, loading: loadingUsers, findUser } = useUsers();
     const { simulateIncomingCall } = useCallTracking();
@@ -822,6 +823,22 @@ export default function LeadsScreen() {
     const [activeFilter, setActiveFilter] = useState<string>("all");
     const [showFilterModal, setShowFilterModal] = useState(false);
     const [filters, setFilters] = useState<{ stages: string[], sources: string[], owners: string[] }>({ stages: [], sources: [], owners: [] });
+
+    // Handle incoming filter from Dashboard (e.g. NFA, revived)
+    useEffect(() => {
+        if (paramFilter) {
+            if (paramFilter === 'NFA') {
+                // Special handling for No Future Action
+                setSearch("NFA:"); 
+                fetchLeads(1, false, 'NFA');
+            } else if (paramFilter === 'revived') {
+                setSearch("Revived:");
+                fetchLeads(1, false, 'revived');
+            } else {
+                handleQuickFilter(paramFilter);
+            }
+        }
+    }, [paramFilter]);
 
     // SENIOR OPTIMIZATION: Debounce search to prevent UI stutters on keystrokes
     useEffect(() => {
@@ -872,7 +889,21 @@ export default function LeadsScreen() {
         if (leads.length === 0 || !shouldAppend) setLoading(true);
         
         const params: any = { page: String(pageNum), limit: "50" };
-        if (qFilter) params.status = qFilter;
+        
+        // Handle search query
+        const query = qFilter || search;
+        if (query) {
+            if (query.startsWith("NFA:") || query === "NFA") {
+                params.filter = "NFA";
+            } else if (query.startsWith("Revived:") || query === "revived") {
+                params.filter = "revived";
+            } else if (qFilter) {
+                params.status = qFilter;
+            } else {
+                params.q = query;
+            }
+        }
+
         if (showDormant) params.showDormant = "true";
 
         const result = await safeApiCall<Lead>(() => getLeads(params));
@@ -1010,7 +1041,7 @@ export default function LeadsScreen() {
             }
 
             // 3. Search Matching
-            if (!q) return true;
+            if (!q || q === "nfa:" || q === "revived:") return true;
             const name = leadName(l).toLowerCase();
             const mobile = (l.mobile ?? "").toLowerCase();
             const req = lookupVal(l.requirement).toLowerCase();
@@ -1037,7 +1068,7 @@ export default function LeadsScreen() {
 
     const renderHeader = () => {
         return (
-            <View style={styles.header}>
+            <View style={[styles.header, { paddingTop: Math.max((insets?.top ?? 0) + 20, 55), paddingBottom: 16, backgroundColor: theme.card, borderBottomColor: theme.border }]}>
                 <View style={styles.headerTop}>
                     <View>
                         <Text style={styles.screenTitle}>{selectedIds.length > 0 ? `${selectedIds.length} Selected` : "SALES PIPELINE"}</Text>
@@ -1157,12 +1188,18 @@ export default function LeadsScreen() {
                         />
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.filterToggleBtn} onPress={() => setShowFilterModal(true)}>
-                        <Ionicons name="options-outline" size={22} color={Object.values(filters).flat().length > 0 ? "#2563EB" : "#475569"} />
-                        {Object.values(filters).flat().length > 0 && <View style={styles.filterDot} />}
+                        <Ionicons name="options-outline" size={22} color={Object.values(filters).flat().length > 0 ? theme.primary : theme.textSecondary} />
+                        {Object.values(filters).flat().length > 0 && <View style={[styles.filterDot, { backgroundColor: theme.primary, borderColor: theme.card }]} />}
                     </TouchableOpacity>
                 </View>
             </View>
         );
+    };
+
+    const headerStyle = {
+        paddingTop: Math.max(insets.top, 20),
+        paddingBottom: 12,
+        backgroundColor: theme.card
     };
 
     return (
@@ -1177,6 +1214,7 @@ export default function LeadsScreen() {
                     maxToRenderPerBatch={10}
                     windowSize={5}
                     removeClippedSubviews={true}
+                    contentContainerStyle={{ paddingBottom: 120, paddingHorizontal: 12 }}
                     renderItem={({ item, index }) => (
                         <LeadCard
                             lead={item}
@@ -1282,7 +1320,7 @@ export default function LeadsScreen() {
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
-    header: { paddingHorizontal: 12, paddingTop: 50, paddingBottom: 10, borderBottomWidth: 1 },
+    header: { paddingHorizontal: 16, borderBottomWidth: 1 },
     headerTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
     screenTitle: { fontSize: 22, fontWeight: "900", letterSpacing: -0.5 },
     screenSub: { fontSize: 10, fontWeight: "800", marginTop: 2, letterSpacing: 0.5 },
@@ -1417,9 +1455,9 @@ const styles = StyleSheet.create({
     filterSectionTitle: { fontSize: 12, fontWeight: "800", textTransform: 'uppercase', marginBottom: 12, marginTop: 16 },
     filterChipList: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
     filterChip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: 1 },
-    filterChipActive: { },
+    filterChipActive: { backgroundColor: '#2563EB', borderColor: '#2563EB' },
     filterChipText: { fontSize: 13, fontWeight: "600" },
-    filterChipTextActive: { },
+    filterChipTextActive: { color: "#fff" },
     filterFooter: { padding: 20, paddingBottom: 40, flexDirection: 'row', gap: 12, borderTopWidth: 1 },
     resetBtn: { flex: 1, height: 48, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
     resetBtnText: { fontSize: 14, fontWeight: "700" },

@@ -16,6 +16,13 @@
     },
     "android": {
       "package": "com.bharatproperties.crm",
+      "permissions": [
+        "READ_CALL_LOG",
+        "READ_PHONE_STATE",
+        "READ_CONTACTS",
+        "SYSTEM_ALERT_WINDOW",
+        "FOREGROUND_SERVICE"
+      ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundColor": "#1E40AF"
@@ -27,7 +34,13 @@
     "plugins": [
       "expo-router",
       "expo-secure-store",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-calendar",
+        {
+          "calendarPermission": "Allow Bharat Properties to sync with your calendar."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

@@ -17,11 +17,12 @@ import { useLookup } from "@/context/LookupContext";
 import { STAGE_COLORS } from "@/services/stageEngine.service";
 import api from "@/services/api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useLeadIntelligence } from "@/hooks/useLeadIntelligence";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const CACHE_KEY_PREFIX = "@cache_lead_detail_";
 
-const TABS = ["Requirement", "Details", "Activities", "Match", "Inventory"];
+const TABS = ["Requirement", "Details", "Intelligence", "Activities", "Match", "Inventory"];
 
 function lv(field: unknown): string {
     if (!field) return "";
@@ -241,6 +242,8 @@ export default function LeadDetailScreen() {
         }
     };
 
+    const intel = useLeadIntelligence(lead, activities);
+    
     if (loading) return <View style={styles.center}><ActivityIndicator size="large" color={theme.primary} /></View>;
     if (!lead) return <View style={styles.center}><Text style={styles.noData}>Lead not found</Text></View>;
 
@@ -619,7 +622,62 @@ export default function LeadDetailScreen() {
                     </ScrollView>
                 </View>
 
-                {/* 3. Activities */}
+                {/* 3. Intelligence */}
+                <View style={styles.tabContent}>
+                    <ScrollView contentContainerStyle={styles.innerScroll}>
+                        <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border, borderLeftWidth: 4, borderLeftColor: intel?.purchaseIntent.color }]}>
+                            <Text style={[styles.cardTitle, { color: theme.text }]}>AI Intelligence Summary</Text>
+                            <View style={styles.intelGrid}>
+                                <View style={styles.intelBox}>
+                                    <Text style={[styles.intelLabel, { color: theme.textLight }]}>PURCHASE INTENT</Text>
+                                    <Text style={[styles.intelValue, { color: intel?.purchaseIntent.color }]}>{intel?.purchaseIntent.level} {intel?.purchaseIntent.emoji}</Text>
+                                </View>
+                                <View style={styles.intelBox}>
+                                    <Text style={[styles.intelLabel, { color: theme.textLight }]}>RISK LEVEL</Text>
+                                    <Text style={[styles.intelValue, { color: intel?.riskLevel.color }]}>{intel?.riskLevel.status}</Text>
+                                </View>
+                            </View>
+                            <View style={[styles.playbook, { backgroundColor: theme.primary + '10', borderColor: theme.primary + '30' }]}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                                    <Ionicons name="flash" size={14} color={theme.primary} />
+                                    <Text style={[styles.playbookTitle, { color: theme.primary }]}>AGENT PLAYBOOK</Text>
+                                </View>
+                                <Text style={[styles.playbookText, { color: theme.text }]}>{intel?.playbookAction}</Text>
+                            </View>
+                        </View>
+
+                        <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                            <Text style={[styles.cardTitle, { color: theme.text }]}>Closing Probability Timeline</Text>
+                            <View style={{ marginTop: 10 }}>
+                                <View style={{ height: 8, backgroundColor: theme.border + '50', borderRadius: 4, overflow: 'hidden', marginBottom: 15 }}>
+                                    <View style={{ width: `${intel?.closingProbability.score}%`, height: '100%', backgroundColor: theme.primary }} />
+                                </View>
+                                {intel?.closingProbability.stages.map((st, i) => (
+                                    <View key={i} style={styles.probRow}>
+                                        <View style={[styles.probDot, { backgroundColor: st.status === 'completed' ? theme.primary : (st.status === 'active' ? '#EF4444' : theme.border) }]} />
+                                        <Text style={[styles.probLabel, { color: st.status === 'pending' ? theme.textLight : theme.text }]}>{st.label}</Text>
+                                        <Text style={[styles.probVal, { color: theme.textLight }]}>{st.prob}%</Text>
+                                    </View>
+                                ))}
+                            </View>
+                        </View>
+
+                        <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                            <Text style={[styles.cardTitle, { color: theme.text }]}>Strategic Risk Analysis</Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 5 }}>
+                                <View style={[styles.riskIcon, { backgroundColor: intel?.riskLevel.color + '20' }]}>
+                                    <Ionicons name="warning" size={20} color={intel?.riskLevel.color} />
+                                </View>
+                                <View>
+                                    <Text style={[styles.riskStatus, { color: intel?.riskLevel.color }]}>{intel?.riskLevel.status}</Text>
+                                    <Text style={[styles.riskReason, { color: theme.textSecondary }]}>{intel?.riskLevel.reason}</Text>
+                                </View>
+                            </View>
+                        </View>
+                    </ScrollView>
+                </View>
+
+                {/* 4. Activities */}
                 <View style={styles.tabContent}>
                     <ScrollView contentContainerStyle={styles.innerScroll}>
                         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
@@ -1152,4 +1210,19 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: '900'
     },
+    // Intelligence Styles
+    intelGrid: { flexDirection: 'row', gap: 12, marginVertical: 15 },
+    intelBox: { flex: 1, padding: 12, borderRadius: 12, backgroundColor: 'rgba(0,0,0,0.02)', borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)' },
+    intelLabel: { fontSize: 8, fontWeight: '800', letterSpacing: 0.5, marginBottom: 4 },
+    intelValue: { fontSize: 13, fontWeight: '900' },
+    playbook: { padding: 12, borderRadius: 12, borderWidth: 1, marginTop: 5 },
+    playbookTitle: { fontSize: 10, fontWeight: '900', letterSpacing: 0.5 },
+    playbookText: { fontSize: 13, fontWeight: '700', lineHeight: 18 },
+    probRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
+    probDot: { width: 8, height: 8, borderRadius: 4 },
+    probLabel: { flex: 1, fontSize: 12, fontWeight: '700' },
+    probVal: { fontSize: 11, fontWeight: '800' },
+    riskIcon: { width: 40, height: 40, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+    riskStatus: { fontSize: 15, fontWeight: '900' },
+    riskReason: { fontSize: 12, fontWeight: '600' },
 });

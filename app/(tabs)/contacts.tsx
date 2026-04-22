@@ -17,6 +17,7 @@ import { getOrCreateCallActivity } from "@/services/activities.service";
 import { useTheme } from "@/context/ThemeContext";
 import { useLookup } from "@/context/LookupContext";
 import FilterModal, { FilterField } from "@/components/FilterModal";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const CONTACT_FILTER_FIELDS: FilterField[] = [
     { key: "stage", label: "Stage", type: "lookup", lookupType: "Stage" },
@@ -150,10 +151,11 @@ const ContactCard = memo(({ contact, idx, onPress, onMenuPress }: { contact: Con
 });
 
 export default function ContactsScreen() {
-    const { theme } = useTheme();
-    const isDark = theme.background === '#0F172A';
-    const { trackCall } = useCallTracking();
+    const { theme, isDarkMode } = useTheme();
+    const isDark = isDarkMode;
+    const insets = useSafeAreaInsets();
     const router = useRouter();
+    const { getLookupValue, getLookupsByType } = useLookup();
     const [contacts, setContacts] = useState<Contact[]>([]);
     const [search, setSearch] = useState("");
     const [loading, setLoading] = useState(true);
@@ -273,7 +275,7 @@ export default function ContactsScreen() {
     }, [contacts, search, activeFilter, filters]);
 
     const renderHeader = () => (
-        <View style={[styles.header, { backgroundColor: theme.background }]}>
+        <View style={[styles.header, { backgroundColor: theme.card, borderBottomColor: theme.border, borderBottomWidth: 1, paddingTop: Math.max(insets.top, 30), paddingBottom: 16 }]}>
             <View style={styles.headerTop}>
                 <View>
                     <Text style={[styles.headerTitle, { color: theme.text }]}>Phonebook</Text>
@@ -288,7 +290,7 @@ export default function ContactsScreen() {
             </View>
 
             <View style={styles.commandBar}>
-                <View style={[styles.searchBox, { backgroundColor: theme.border }]}>
+                <View style={[styles.searchContainer, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#F1F5F9', flex: 1, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, borderRadius: 12, height: 44 }]}>
                     <Ionicons name="search" size={20} color={theme.textMuted} />
                     <TextInput
                         style={[styles.searchInput, { color: theme.text }]}
@@ -333,6 +335,8 @@ export default function ContactsScreen() {
                 ) : (
                     <SectionList
                         sections={sections}
+                        contentContainerStyle={{ paddingBottom: 140, paddingHorizontal: 16 }}
+                        stickySectionHeadersEnabled={true}
                         keyExtractor={(item) => item._id}
                         ListHeaderComponent={renderHeader}
                         renderItem={({ item, index }) => (
@@ -352,7 +356,6 @@ export default function ContactsScreen() {
                         maxToRenderPerBatch={20}
                         windowSize={10}
                         removeClippedSubviews={true}
-                        stickySectionHeadersEnabled={true}
                         onEndReached={loadMore}
                         onEndReachedThreshold={0.5}
                         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />}
@@ -468,7 +471,7 @@ export default function ContactsScreen() {
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: "#F8FAFC" },
     safeArea: { flex: 1, backgroundColor: "#fff" },
-    header: { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 20, backgroundColor: "#fff" },
+    header: { paddingHorizontal: 16, borderBottomWidth: 1 },
     headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
     headerTitle: { fontSize: 32, fontWeight: "900", color: "#0F172A", letterSpacing: -1 },
     headerCount: { fontSize: 13, color: "#94A3B8", fontWeight: "600", marginTop: 2 },

@@ -11,6 +11,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Swipeable from "react-native-gesture-handler/Swipeable";
 import { useUsers } from "@/context/UserContext";
 import { useTheme } from "@/context/ThemeContext";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const TYPE_META_LIGHT: Record<string, { color: string; icon: string; emoji: string }> = {
     "Call": { color: "#3B82F6", icon: "call", emoji: "📞" },
@@ -54,6 +55,7 @@ const STATUS_TABS = ["Pending", "Today", "Overdue", "Completed", "All"];
 export default function ActivitiesScreen() {
     const { theme } = useTheme();
     const isDark = theme.background === '#0F172A';
+    const insets = useSafeAreaInsets();
     const router = useRouter();
     const [activities, setActivities] = useState<Activity[]>([]);
     const [loading, setLoading] = useState(true);
@@ -365,7 +367,7 @@ export default function ActivitiesScreen() {
 
     return (
         <View style={[styles.container, { backgroundColor: theme.background }]}>
-            <View style={styles.header}>
+            <View style={[styles.header, { paddingTop: Math.max((insets?.top ?? 0) + 20, 55), paddingBottom: 16 }]}>
                 <View>
                     <Text style={[styles.headerTitle, { color: theme.text }]}>Activities</Text>
                     <Text style={[styles.headerSubtitle, { color: theme.textLight }]}>{activities.length} scheduled interactions</Text>
@@ -527,7 +529,7 @@ const styles = StyleSheet.create({
     container: { flex: 1 },
     center: { flex: 1, justifyContent: "center", alignItems: "center" },
 
-    header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20, paddingTop: 60, paddingBottom: 16 },
+    header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20, paddingBottom: 16 },
     headerTitle: { fontSize: 32, fontWeight: "900", letterSpacing: -1 },
     headerSubtitle: { fontSize: 13, fontWeight: "600", marginTop: 2 },
     addBtn: { width: 44, height: 44, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },

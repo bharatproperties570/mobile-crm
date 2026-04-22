@@ -44,8 +44,13 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
   }
 }
 
+import { useCallMonitor } from "@/utils/CallMonitor";
+
 export default function RootLayout() {
   console.log("[RootLayout] MOUNTING CORE SERVICES...");
+  
+  // Initialize Enterprise Call Monitor (Banner & Sync)
+  useCallMonitor();
   
   return (
     <ErrorBoundary>

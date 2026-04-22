@@ -459,18 +459,18 @@ function SearchableDropdown({
                         requirement: l.requirement?.lookup_value || l.requirement || "Buy",
                         purpose: l.purpose || "End Use",
                         nri: !!l.nri,
-                        propertyType: Array.isArray(l.propertyType) ? l.propertyType.map((v: any) => v._id || v) : (l.propertyType ? [l.propertyType._id || l.propertyType] : []),
-                        subType: Array.isArray(l.subType) ? l.subType.map((v: any) => v._id || v) : (l.subType ? [l.subType._id || l.subType] : []),
-                        unitType: Array.isArray(l.unitType) ? l.unitType.map((v: any) => v._id || v) : (l.unitType ? [l.unitType._id || l.unitType] : []),
+                        propertyType: Array.isArray(l.propertyType) ? l.propertyType.map((v: any) => v?._id || v) : (l.propertyType?._id ? [l.propertyType._id] : []),
+                        subType: Array.isArray(l.subType) ? l.subType.map((v: any) => v?._id || v) : (l.subType?._id ? [l.subType._id] : []),
+                        unitType: Array.isArray(l.unitType) ? l.unitType.map((v: any) => v?._id || v) : (l.unitType?._id ? [l.unitType._id] : []),
                         budget: l.budget?._id || l.budget || "",
                         budgetMin: String(l.budgetMin || ""),
                         budgetMax: String(l.budgetMax || ""),
                         areaMin: String(l.areaMin || ""),
                         areaMax: String(l.areaMax || ""),
                         areaMetric: l.areaMetric || "Sq Yard",
-                        facing: Array.isArray(l.facing) ? l.facing.map((v: any) => v._id || v) : (l.facing ? [l.facing._id || l.facing] : []),
-                        roadWidth: Array.isArray(l.roadWidth) ? l.roadWidth.map((v: any) => v._id || v) : (l.roadWidth ? [l.roadWidth._id || l.roadWidth] : []),
-                        direction: Array.isArray(l.direction) ? l.direction.map((v: any) => v._id || v) : (l.direction ? [l.direction._id || l.direction] : []),
+                        facing: Array.isArray(l.facing) ? l.facing.map((v: any) => v?._id || v) : (l.facing?._id ? [l.facing._id] : []),
+                        roadWidth: Array.isArray(l.roadWidth) ? l.roadWidth.map((v: any) => v?._id || v) : (l.roadWidth?._id ? [l.roadWidth._id] : []),
+                        direction: Array.isArray(l.direction) ? l.direction.map((v: any) => v?._id || v) : (l.direction?._id ? [l.direction._id] : []),
                         funding: l.funding || "",
                         timeline: l.timeline || "",
                         furnishing: l.furnishing || "",
@@ -480,7 +480,7 @@ function SearchableDropdown({
                         locArea: l.locArea || "",
                         locPinCode: l.locPinCode || "",
                         locRange: l.locRange || 5,
-                        projectName: Array.isArray(l.projectName) ? l.projectName.map((v: any) => v._id || v) : (l.projectName ? [l.projectName._id || l.projectName] : []),
+                        projectName: Array.isArray(l.projectName) ? l.projectName.map((v: any) => v?._id || v) : (l.projectName?._id ? [l.projectName._id] : []),
                         projectTowers: l.locBlock || [],
                         propertyNo: l.propertyNo || "",
                         propertyNoEnd: l.propertyNoEnd || "",
@@ -1045,7 +1045,24 @@ function SearchableDropdown({
                                 <View style={[styles.warningBox, { backgroundColor: theme.primary + '08', borderLeftColor: theme.primary }, isBlocked && { backgroundColor: theme.error + '08', borderLeftColor: theme.error }]}>
                                     <Text style={[styles.warningTitle, { color: isBlocked ? theme.error : theme.primary }]}>⚠️ {duplicates.length} Similar record(s) found</Text>
                                     {duplicates.map((d, i) => (
-                                        <Text key={i} style={[styles.dupItem, { color: theme.textPrimary }]}>{d.firstName} {d.lastName} ({d.mobile || (Array.isArray(d.phones) && d.phones[0]?.number)})</Text>
+                                        <View key={i} style={styles.dupItemRow}>
+                                            <Text style={[styles.dupItem, { color: theme.textPrimary, flex: 1 }]}>{d.firstName} {d.lastName} ({d.mobile || (Array.isArray(d.phones) && d.phones[0]?.number) || "No Mobile"})</Text>
+                                            <TouchableOpacity 
+                                                style={[styles.importBtn, { backgroundColor: theme.primary }]}
+                                                onPress={() => {
+                                                    setFormData({
+                                                        ...formData,
+                                                        firstName: d.firstName || formData.firstName,
+                                                        lastName: d.lastName || formData.lastName,
+                                                        mobile: d.mobile || (Array.isArray(d.phones) && d.phones[0]?.number) || formData.mobile,
+                                                        email: d.email || (Array.isArray(d.emails) && d.emails[0]?.address) || formData.email,
+                                                    });
+                                                    Vibration.vibrate(20);
+                                                }}
+                                            >
+                                                <Text style={styles.importBtnText}>Sync</Text>
+                                            </TouchableOpacity>
+                                        </View>
                                     ))}
                                 </View>
                             )}
@@ -1142,7 +1159,7 @@ function SearchableDropdown({
 
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-            <View style={[styles.header, { backgroundColor: theme.background, borderBottomColor: theme.border }]}>
+            <View style={[styles.header, { backgroundColor: theme.background, borderBottomColor: theme.border, paddingTop: Platform.OS === 'ios' ? 10 : 40, paddingBottom: 16 }]}>
                 <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace("/(tabs)/leads")} style={[styles.closeBtn, { backgroundColor: theme.inputBg }]} hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}>
                     <Ionicons name="close" size={24} color={theme.textPrimary} />
                 </TouchableOpacity>
@@ -1248,9 +1265,12 @@ const styles = StyleSheet.create({
     saveBtn: { flex: 1, height: 56, borderRadius: 18, justifyContent: "center", alignItems: "center", flexDirection: "row", elevation: 4, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8 },
     saveBtnText: { color: "#fff", fontSize: 16, fontWeight: "800" },
     disabledBtn: { opacity: 0.6 },
-    warningBox: { padding: 16, borderRadius: 16, borderLeftWidth: 5, marginBottom: 20 },
-    warningTitle: { fontSize: 15, fontWeight: "800", marginBottom: 8 },
-    dupItem: { fontSize: 13, marginBottom: 4, fontWeight: '500' },
+    warningBox: { padding: 12, borderRadius: 12, borderLeftWidth: 4, marginBottom: 16 },
+    warningTitle: { fontSize: 13, fontWeight: "800", marginBottom: 8 },
+    dupItemRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6, gap: 8 },
+    dupItem: { fontSize: 12, fontWeight: "600" },
+    importBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
+    importBtnText: { color: "#fff", fontSize: 10, fontWeight: "800" },
     helperText: { fontSize: 11, marginTop: 4, marginLeft: 4 },
     textMuted: { opacity: 0.6 },
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },

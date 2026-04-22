@@ -269,7 +269,7 @@ function ModernPicker({
 }
 
 export default function AddContactScreen() {
-    const { id, companyId } = useLocalSearchParams<{ id?: string, companyId?: string }>();
+    const { id, companyId, dealId } = useLocalSearchParams<{ id?: string, companyId?: string, dealId?: string }>();
     const router = useRouter();
     const { theme } = useTheme();
     const { getLookupsByType, leadMasterFields, refreshLookups, loading: loadingLookups } = useLookup();
@@ -279,7 +279,7 @@ export default function AddContactScreen() {
     const [loadingContact, setLoadingContact] = useState(false);
     const [form, setForm] = useState<ContactForm>(INITIAL);
     const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
-    const [localTeams, setLocalTeams] = useState<any[]>([]); // Renamed to avoid confusion if needed, or just use context
+    const [localTeams, setLocalTeams] = useState<any[]>([]); 
     const [localUsers, setLocalUsers] = useState<any[]>([]);
 
     useEffect(() => {
@@ -340,7 +340,6 @@ export default function AddContactScreen() {
     useEffect(() => {
         if (!id) {
             const loadLookups = async () => {
-                // Force Refresh
                 refreshLookups();
                 refreshUsers();
 
@@ -405,14 +404,11 @@ export default function AddContactScreen() {
                 anniversaryDate: form.anniversaryDate || undefined,
             };
 
-            console.log('[DEBUG-CONTACT] Submitting Payload:', JSON.stringify(payload, null, 2));
-
             const res = id 
                 ? await safeApiCall(() => api.put(`/contacts/${id}`, payload)) 
                 : await safeApiCall(() => api.post("/contacts", payload));
 
             if (!res.error) {
-                // Link to deal if dealId is provided
                 if (dealId && !id) {
                     const contactId = (res.data as any)?.[0]?._id || (res.data as any)?._id; 
                     if (contactId) {

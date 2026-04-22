@@ -95,3 +95,14 @@ export const getUnifiedTimeline = async (entityType: string, entityId: string) =
     const res = await api.get(`/activities/unified/${entityType}/${entityId}`);
     return res.data;
 };
+
+export const getMessagingStream = async (params: any = {}) => {
+    // Correcting mismatch: Backend uses /messaging for the unified stream
+    const res = await api.get("/activities/messaging", { params });
+    return res.data;
+};
+
+export const sendReply = async (data: { phoneNumber: string, message: string, channel: string, entityId?: string, entityType?: string }) => {
+    const res = await api.post("/activities/send-reply", data);
+    return res.data;
+};

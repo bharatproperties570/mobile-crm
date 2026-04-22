@@ -14,6 +14,7 @@ import { useCallTracking } from "@/context/CallTrackingContext";
 import { useLookup } from "@/context/LookupContext";
 import { useUsers } from "@/context/UserContext";
 import { useTheme } from "@/context/ThemeContext";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAuth } from "@/context/AuthContext";
 import FilterModal, { FilterField } from "@/components/FilterModal";
@@ -108,8 +109,8 @@ function getDealTitle(deal: Deal, getLookupValue?: (type: string, val: any) => s
 }
 
 const DealScoreRing = memo(({ score, color = "#2563EB", size = 44 }: { score: number; color?: string; size?: number }) => {
-    const { theme } = useTheme();
-    const isDark = theme.background === '#0F172A';
+    const { theme, isDarkMode } = useTheme();
+    const isDark = isDarkMode;
     const strokeWidth = 3;
     const radius = (size - strokeWidth) / 2;
     const animatedValue = useRef(new Animated.Value(0)).current;
@@ -165,8 +166,8 @@ const ChevronSegment = memo(({
     isLast?: boolean;
     onPress: () => void;
 }) => {
-    const { theme } = useTheme();
-    const isDark = theme.background === '#0F172A';
+    const { theme, isDarkMode } = useTheme();
+    const isDark = isDarkMode;
     const shortLabel = SHORT_NAMES[label.toLowerCase()] || label;
     const bgOpacity = isDark ? '25' : '15';
 
@@ -204,8 +205,8 @@ const DealPipelineHorizontal = memo(({
     activeStage: string | null;
     onStagePress: (label: string | null) => void;
 }) => {
-    const { theme } = useTheme();
-    const isDark = theme.background === '#0F172A';
+    const { theme, isDarkMode } = useTheme();
+    const isDark = isDarkMode;
     const [isClosedExpanded, setIsClosedExpanded] = useState(false);
 
     const toggleClosed = () => {
@@ -314,8 +315,8 @@ const DealCard = memo(({
     findUser?: (id: string) => any;
     liveScore?: { score: number; color: string; label: string };
 }) => {
-    const { theme } = useTheme();
-    const isDark = theme.background === '#0F172A';
+    const { theme, isDarkMode } = useTheme();
+    const isDark = isDarkMode;
     const stageStr = (resolveName(deal.stage, getLookupValue, findUser) || "open").toLowerCase();
     const stageColorMap = isDark ? STAGE_COLORS_DARK : STAGE_COLORS_LIGHT;
     const color = stageColorMap[stageStr] ?? (isDark ? "#94A3B8" : "#6366F1");
@@ -462,8 +463,9 @@ const DealCard = memo(({
 });
 
 export default function DealsScreen() {
-    const { theme } = useTheme();
-    const isDark = theme.background === '#0F172A';
+    const { theme, isDarkMode } = useTheme();
+    const isDark = isDarkMode;
+    const insets = useSafeAreaInsets();
     const { trackCall } = useCallTracking();
     const router = useRouter();
     const { getLookupValue } = useLookup();
@@ -639,7 +641,7 @@ export default function DealsScreen() {
     };
 
     const renderHeader = () => (
-        <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]}>
+        <View style={{ backgroundColor: theme.background, paddingTop: Math.max((insets?.top ?? 0) + 20, 55), paddingBottom: 16 }}>
             <View style={[styles.header, { backgroundColor: theme.background }]}>
                 <TouchableOpacity
                     activeOpacity={0.7}
@@ -675,7 +677,7 @@ export default function DealsScreen() {
                     {filtersCount > 0 && <View style={[styles.filterBadge, { backgroundColor: theme.primary }]}><Text style={styles.filterBadgeText}>{filtersCount}</Text></View>}
                 </TouchableOpacity>
             </View>
-        </SafeAreaView>
+        </View>
     );
 
     const openHub = (deal: Deal) => {

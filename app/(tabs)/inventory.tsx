@@ -14,6 +14,7 @@ import { useUsers } from "@/context/UserContext";
 import api from "@/services/api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTheme } from "@/context/ThemeContext";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import FilterModal, { FilterField } from "@/components/FilterModal";
 import { formatSize, getSizeLabel } from "@/utils/format.utils";
 
@@ -273,6 +274,7 @@ const InventoryCard = memo(({ item, onPress, onWhatsApp, onSMS, onEmail, onMenuP
 
 export default function InventoryScreen() {
     const { theme } = useTheme();
+    const insets = useSafeAreaInsets();
     const isDark = theme.background === '#0F172A';
     const { trackCall } = useCallTracking();
     const router = useRouter();
@@ -570,8 +572,8 @@ export default function InventoryScreen() {
         const filtersCount = Object.keys(filters).filter(k => filters[k]?.length > 0).length;
 
         return (
-            <View style={[styles.headerContainer, { backgroundColor: theme.background }]}>
-                <View style={[styles.header, { backgroundColor: theme.background }]}>
+            <View style={[styles.headerContainer, { backgroundColor: theme.background, paddingTop: Math.max((insets?.top ?? 0) + 20, 55), paddingBottom: 16 }]}>
+                <View style={[styles.header, { backgroundColor: theme.background, paddingTop: 10 }]}>
                     <View>
                         <Text style={[styles.headerTitle, { color: theme.text }]}>Inventory</Text>
                     </View>

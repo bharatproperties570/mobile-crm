@@ -19,6 +19,7 @@ import { Modal } from "react-native";
 import { useAuth } from "@/context/AuthContext";
 import { useNotifications } from "@/context/NotificationContext";
 import { NotificationListModal } from "@/components/NotificationListModal";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const CACHE_KEY_DASHBOARD = "@cache_dashboard_stats";
 
@@ -155,12 +156,9 @@ const PulseTile = memo(({ count, label, icon, color, bgColor, filter, router }: 
                 onPress={() => router.push({ pathname: "/(tabs)/activities", params: { filter } })}
             >
                 <View style={styles.monitorIconBoxCompact}>
-                    <View style={[styles.monitorIconBox, { backgroundColor: isDark ? color + '20' : bgColor }]}>
-                        <Ionicons name={icon} size={14} color={color} />
-                    </View>
                     <Counter value={count} style={[styles.monitorValueSmall, { color: theme.text }]} />
                 </View>
-                <Text style={[styles.monitorLabelCompact, { color: theme.textMuted }]}>{label}</Text>
+                <Text style={[styles.monitorLabelCompact, { color: theme.textSecondary }]} numberOfLines={2} ellipsizeMode="tail">{label}</Text>
             </TouchableOpacity>
         </Animated.View>
     );
@@ -247,14 +245,17 @@ function KPIItem({ label, value, icon, color, delay = 0, trend }: { label: strin
             <View style={[styles.kpiCircle, { backgroundColor: color + "10" }]}>
                 <Ionicons name={icon as any} size={18} color={color} />
             </View>
-            <Counter value={value} style={[styles.kpiItemValue, { color: theme.text }]} />
-            <Text style={[styles.kpiItemLabel, { color: theme.textMuted }]}>{label}</Text>
+            <View style={{ flex: 1, minWidth: 60 }}>
+                <Counter value={value} style={[styles.kpiItemValue, { color: theme.text }]} />
+                <Text style={[styles.kpiItemLabel, { color: theme.textSecondary }]} numberOfLines={1}>{label}</Text>
+            </View>
         </Animated.View>
     );
 }
 
 const IntelligenceTile = memo(({ count, label, icon, color, delay = 0 }: any) => {
     const { theme } = useTheme();
+    const router = useRouter();
     const isDark = theme.background === '#0F172A';
     const slideAnim = useRef(new Animated.Value(20)).current;
     const opacityAnim = useRef(new Animated.Value(0)).current;
@@ -267,31 +268,44 @@ const IntelligenceTile = memo(({ count, label, icon, color, delay = 0 }: any) =>
     }, []);
 
     return (
-        <Animated.View style={[styles.intelTile, { opacity: opacityAnim, transform: [{ translateY: slideAnim }], backgroundColor: theme.card, borderColor: isDark ? color + '40' : color + '20' }]}>
-            <View style={[styles.intelIconBox, { backgroundColor: color + '10' }]}>
-                <Ionicons name={icon} size={18} color={color} />
-            </View>
-            <View style={{ flex: 1 }}>
-                <Counter value={count} style={[styles.intelValue, { color: theme.text }]} />
-                <Text style={[styles.intelLabel, { color: theme.textMuted }]} numberOfLines={2}>{label}</Text>
-            </View>
+        <Animated.View style={[{ flex: 1, opacity: opacityAnim, transform: [{ translateY: slideAnim }] }]}>
+            <TouchableOpacity 
+                style={[styles.intelTile, { backgroundColor: theme.card, borderColor: isDark ? color + '40' : color + '20' }]}
+                onPress={() => {
+                    if (label.toLowerCase().includes('future')) {
+                        router.push({ pathname: "/(tabs)/leads", params: { filter: 'NFA' } });
+                    } else if (label.toLowerCase().includes('engaged')) {
+                        router.push({ pathname: "/(tabs)/leads", params: { filter: 'revived' } });
+                    }
+                }}
+            >
+                <View style={[styles.intelIconBox, { backgroundColor: color + '10' }]}>
+                    <Ionicons name={icon} size={18} color={color} />
+                </View>
+                <View style={{ flex: 1, flexShrink: 1 }}>
+                    <Counter value={count} style={[styles.intelValue, { color: theme.text }]} />
+                    <Text style={[styles.intelLabel, { color: theme.textMuted }]} numberOfLines={1}>{label}</Text>
+                </View>
+            </TouchableOpacity>
         </Animated.View>
     );
 });
 
-const IntelligencePulse = memo(({ revived, nfa }: { revived: number; nfa: number }) => {
+const IntelligencePulse = memo(({ revived, nfa, onNfaPress }: { revived: number; nfa: number, onNfaPress: () => void }) => {
     const { theme } = useTheme();
     return (
         <View style={styles.intelContainer}>
             <View style={styles.sectionHeaderRow}>
-                <Text style={[styles.sectionHeader, { color: theme.textMuted }]}>Intelligence Pulse</Text>
+                <Text style={[styles.sectionHeader, { color: theme.textSecondary }]}>Intelligence Pulse</Text>
                 <View style={[styles.aiBadge, { backgroundColor: theme.primary }]}>
                     <Text style={styles.aiBadgeText}>AI ENGINE</Text>
                 </View>
             </View>
             <View style={styles.intelGrid}>
                 <IntelligenceTile count={revived} label="Leads Re-engaged" icon="refresh-circle" color="#10B981" delay={0} />
-                <IntelligenceTile count={nfa} label="No Future Actions" icon="alert-circle" color="#EF4444" delay={100} />
+                <TouchableOpacity style={{ flex: 1 }} onPress={onNfaPress}>
+                   <IntelligenceTile count={nfa} label="No Future Actions" icon="alert-circle" color="#EF4444" delay={100} />
+                </TouchableOpacity>
             </View>
         </View>
     );
@@ -403,6 +417,7 @@ export default function MissionControlScreen() {
     const { currentDept, config } = useDepartment();
     const router = useRouter();
     const { theme } = useTheme();
+    const insets = useSafeAreaInsets();
     const isDark = theme.background === '#0F172A';
     const { getLookupValue } = useLookup();
     const { simulateIncomingCall } = useCallTracking();
@@ -413,6 +428,7 @@ export default function MissionControlScreen() {
     const [activities, setActivities] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
+    const { notifications, unreadCount: nc, loading: nl, markAsRead: mr, markAllAsRead: mar, fetchNotifications: fn } = useNotifications();
     const { users, teams, loading: usersLoading } = useUsers();
     const [selectedFilter, setSelectedFilter] = useState('all');
     const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
@@ -516,6 +532,12 @@ export default function MissionControlScreen() {
             <IntelligencePulse 
                 revived={dashboardData?.reengagedCount || 0} 
                 nfa={dashboardData?.nfaCount || 0} 
+                onNfaPress={() => {
+                   Alert.alert("No Future Actions", `There are ${dashboardData?.nfaCount || 0} leads requiring attention. View them now?`, [
+                       { text: "Later", style: "cancel" },
+                       { text: "View Leads", onPress: () => router.push({ pathname: "/(tabs)/leads", params: { filter: 'NFA' } }) }
+                   ]);
+                }}
             />
 
             {/* 3. Activity Monitor (Urgency Based) */}
@@ -653,8 +675,8 @@ export default function MissionControlScreen() {
             {dashboardData?.agenda && (dashboardData.agenda.tasks?.length > 0 || dashboardData.agenda.siteVisits?.length > 0) && (
                 <View style={[styles.pipelineContainer, { backgroundColor: theme.card, borderColor: theme.border }]}>
                     <Text style={[styles.sectionHeader, { color: theme.textMuted }]}>High-Value Agenda</Text>
-                    {dashboardData.agenda.siteVisits?.map((sv: any) => (
-                        <View key={sv.id} style={styles.agendaItem}>
+                    {dashboardData.agenda.siteVisits?.map((sv: any, idx: number) => (
+                        <View key={sv._id || sv.id || `sv-${idx}`} style={styles.agendaItem}>
                             <View style={[styles.agendaIcon, { backgroundColor: isDark ? 'rgba(16, 185, 129, 0.15)' : '#F0FDF4' }]}>
                                 <Ionicons name="navigate" size={16} color={isDark ? '#34D399' : "#10B981"} />
                             </View>
@@ -665,8 +687,8 @@ export default function MissionControlScreen() {
                             <View style={[styles.activeTag, { backgroundColor: isDark ? 'rgba(16, 185, 129, 0.2)' : '#10B981' }]}><Text style={[styles.activeTagText, { color: isDark ? '#34D399' : '#fff' }]}>VISIT</Text></View>
                         </View>
                     ))}
-                    {dashboardData.agenda.tasks?.map((t: any) => (
-                        <View key={t.id} style={styles.agendaItem}>
+                    {dashboardData.agenda.tasks?.map((t: any, idx: number) => (
+                        <View key={t._id || t.id || `task-${idx}`} style={styles.agendaItem}>
                             <View style={[styles.agendaIcon, { backgroundColor: isDark ? 'rgba(59, 130, 246, 0.15)' : '#F0F9FF' }]}>
                                 <Ionicons name="call" size={16} color={isDark ? '#60A5FA' : "#3B82F6"} />
                             </View>
@@ -806,7 +828,7 @@ export default function MissionControlScreen() {
         >
             <Animated.View style={{ opacity: fadeAnim }}>
                 {/* 1. Header Section – Mission Control */}
-                <View style={[styles.header, { backgroundColor: theme.glassBg, borderBottomColor: theme.glassBorder, borderBottomWidth: 1 }]}>
+                <View style={[styles.header, { backgroundColor: theme.glassBg, borderBottomColor: theme.glassBorder, borderBottomWidth: 1, paddingTop: Math.max((insets?.top ?? 0), 30), paddingBottom: 16 }]}>
                     <View style={styles.headerTop}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                             <Image 
@@ -921,10 +943,10 @@ export default function MissionControlScreen() {
                 {/* 2. Smart KPI Horizontal Scroll Row */}
                 <View style={styles.kpiContainer}>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.kpiScroll}>
-                        <KPIItem label="Total Leads" value={stats.leads || 0} icon="people" color="#3B82F6" delay={0} />
-                        <KPIItem label="Active Deals" value={stats.deals || 0} icon="briefcase" color="#F59E0B" delay={100} />
-                        <KPIItem label="Inventory" value={stats.inventory || 0} icon="cube" color="#8B5CF6" delay={200} />
-                        <KPIItem label="Projects" value={dashboardData?.projects || 0} icon="business" color="#4F46E5" delay={300} />
+                        <KPIItem label="Leads" value={stats.leads || 0} icon="people" color="#3B82F6" delay={0} />
+                        <KPIItem label="Deals" value={stats.deals || 0} icon="briefcase" color="#F59E0B" delay={100} />
+                        <KPIItem label="Inv." value={stats.inventory || 0} icon="cube" color="#8B5CF6" delay={200} />
+                        <KPIItem label="Proj." value={dashboardData?.projects || 0} icon="business" color="#4F46E5" delay={300} />
                         <KPIItem label="Revenue" value={Math.round((dashboardData?.performance?.revenue || 0) / 1000)} icon="wallet" color="#10B981" delay={400} trend="up" />
                     </ScrollView>
                 </View>
@@ -1040,6 +1062,83 @@ export default function MissionControlScreen() {
                     </TouchableOpacity>
                 </Modal>
             </Animated.View>
+
+            {/* 14. Notifications Modal (Real-time Flow) */}
+            <Modal
+                visible={isNotificationModalOpen}
+                animationType="slide"
+                transparent={true}
+                onRequestClose={() => setIsNotificationModalOpen(false)}
+            >
+                <View style={[styles.modalOverlay, { backgroundColor: 'rgba(0,0,0,0.5)' }]}>
+                    <View style={[styles.notificationModal, { backgroundColor: theme.card }]}>
+                        <View style={styles.modalHeader}>
+                            <View>
+                                <Text style={[styles.modalTitle, { color: theme.text }]}>Notifications</Text>
+                                <Text style={{ fontSize: 11, color: theme.textSecondary, marginTop: 2 }}>{nc} Unread Alerts</Text>
+                            </View>
+                            <TouchableOpacity onPress={() => setIsNotificationModalOpen(false)}>
+                                <Ionicons name="close-circle" size={32} color={theme.textMuted} />
+                            </TouchableOpacity>
+                        </View>
+
+                        {nc > 0 && (
+                            <TouchableOpacity 
+                                style={{ marginBottom: 15, padding: 8, borderRadius: 8, backgroundColor: theme.primary + '10', alignSelf: 'flex-start' }}
+                                onPress={() => mar()}
+                            >
+                                <Text style={{ fontSize: 12, fontWeight: '800', color: theme.primary }}>MARK ALL AS READ</Text>
+                            </TouchableOpacity>
+                        )}
+
+                        <ScrollView showsVerticalScrollIndicator={false}>
+                            {notifications.length === 0 ? (
+                                <View style={{ alignItems: 'center', marginTop: 60 }}>
+                                    <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: theme.background, justifyContent: 'center', alignItems: 'center', marginBottom: 20 }}>
+                                        <Ionicons name="notifications-off-outline" size={40} color={theme.textMuted} />
+                                    </View>
+                                    <Text style={{ fontSize: 16, fontWeight: '800', color: theme.text }}>All Clear!</Text>
+                                    <Text style={{ fontSize: 12, color: theme.textSecondary, marginTop: 8 }}>No notifications to show for now.</Text>
+                                </View>
+                            ) : (
+                                notifications.map((n: any) => (
+                                    <TouchableOpacity 
+                                        key={n._id} 
+                                        style={[
+                                            styles.notificationItem, 
+                                            { 
+                                                backgroundColor: n.isRead ? theme.background : theme.primary + '05',
+                                                borderLeftColor: n.isRead ? theme.textMuted + '20' : theme.primary
+                                            }
+                                        ]}
+                                        onPress={() => {
+                                            mr(n._id);
+                                            if (n.link) {
+                                                setIsNotificationModalOpen(false);
+                                                router.push(n.link);
+                                            }
+                                        }}
+                                    >
+                                        <View style={[styles.notifIconWrap, { backgroundColor: theme.primary + '15' }]}>
+                                            <Ionicons 
+                                                name={n.type === 'assignment' ? 'person-add' : n.type === 'reminder' ? 'time' : 'notifications'} 
+                                                size={18} 
+                                                color={theme.primary} 
+                                            />
+                                        </View>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={[styles.notifTitle, { color: theme.text }]} numberOfLines={1}>{n.title}</Text>
+                                            <Text style={[styles.notifMsg, { color: theme.textSecondary }]} numberOfLines={2}>{n.message}</Text>
+                                            <Text style={[styles.notifTime, { color: theme.textMuted }]}>{new Date(n.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
+                                        </View>
+                                        {!n.isRead && <View style={[styles.notifDot, { backgroundColor: theme.primary }]} />}
+                                    </TouchableOpacity>
+                                ))
+                            )}
+                        </ScrollView>
+                    </View>
+                </View>
+            </Modal>
         </ScrollView>
     );
 }
@@ -1102,16 +1201,24 @@ const styles = StyleSheet.create({
 
     kpiContainer: { marginVertical: 12 },
     kpiScroll: { paddingHorizontal: 20, gap: 12 },
-    kpiItem: {
-        padding: 16, borderRadius: 20, minWidth: 110,
-        alignItems: 'center', elevation: 4, shadowOpacity: 0.04, shadowRadius: 10
+    kpiItem: { 
+        paddingHorizontal: 8,
+        paddingVertical: 12, 
+        borderRadius: 14, 
+        borderWidth: 1, 
+        flexDirection: 'row', 
+        alignItems: 'center', 
+        gap: 6,
+        minWidth: 92,
+        minHeight: 68, 
+        marginBottom: 8
     },
-    kpiCircle: { width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
-    kpiItemValue: { fontSize: 20, fontWeight: "800" },
-    kpiItemLabel: { fontSize: 11, fontWeight: "700", marginTop: 4 },
+    kpiCircle: { width: 30, height: 30, borderRadius: 15, justifyContent: 'center', alignItems: 'center' },
+    kpiItemValue: { fontSize: 16, fontWeight: "800" },
+    kpiItemLabel: { fontSize: 10, fontWeight: "600" },
 
     content: { paddingHorizontal: 20 },
-    grid: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginBottom: 24 },
+    grid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", paddingHorizontal: 20, marginTop: 10 },
 
     actionBtn: {
         flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10,
@@ -1274,13 +1381,13 @@ const styles = StyleSheet.create({
     intelContainer: { marginBottom: 24 },
     intelGrid: { flexDirection: 'row', gap: 12 },
     intelTile: { 
-        flex: 1, padding: 16, borderRadius: 24, borderWidth: 1.5,
-        flexDirection: 'row', alignItems: 'center', gap: 12,
+        flex: 1, padding: 12, borderRadius: 24, borderWidth: 1.5,
+        flexDirection: 'row', alignItems: 'center', gap: 8,
         elevation: 4, shadowOpacity: 0.05, shadowRadius: 10
     },
-    intelIconBox: { width: 44, height: 44, borderRadius: 16, justifyContent: 'center', alignItems: 'center' },
-    intelValue: { fontSize: 24, fontWeight: '900' },
-    intelLabel: { fontSize: 10, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 2 },
+    intelIconBox: { width: 36, height: 36, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+    intelValue: { fontSize: 22, fontWeight: '900' },
+    intelLabel: { fontSize: 8, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 1 },
     aiBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
     aiBadgeText: { fontSize: 8, fontWeight: '900' },
 
@@ -1314,6 +1421,14 @@ const styles = StyleSheet.create({
     modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
     modalTitle: { fontSize: 18, fontWeight: '900' },
     modalSectionLabel: { fontSize: 10, fontWeight: '800', letterSpacing: 1, marginTop: 20, marginBottom: 12 },
-    filterOption: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, paddingHorizontal: 16, borderRadius: 16, marginBottom: 6 },
-    filterOptionText: { fontSize: 14, fontWeight: '700' },
+    modalOption: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, paddingHorizontal: 16, borderRadius: 16, marginBottom: 6 },
+    modalOptionText: { fontSize: 14, fontWeight: '700' },
+
+    notificationModal: { borderTopLeftRadius: 32, borderTopRightRadius: 32, height: '80%', padding: 24, elevation: 15 },
+    notificationItem: { flexDirection: 'row', gap: 12, padding: 12, borderRadius: 16, marginBottom: 10, borderLeftWidth: 4 },
+    notifIconWrap: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center' },
+    notifTitle: { fontSize: 14, fontWeight: '800' },
+    notifMsg: { fontSize: 12, fontWeight: '600', marginTop: 2 },
+    notifTime: { fontSize: 10, fontWeight: '700', marginTop: 4 },
+    notifDot: { width: 8, height: 8, borderRadius: 4, position: 'absolute', top: 0, right: 0 }
 });

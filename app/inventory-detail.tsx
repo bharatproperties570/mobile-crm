@@ -15,7 +15,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const CACHE_KEY_PREFIX = "@cache_inventory_detail_";
 
-const TABS = ["Details", "Location", "Activities", "Owner", "Document", "History"];
+const TABS = ["Details", "Location", "Activities", "Owner", "Resources", "History"];
 
 function lv(field: unknown): string {
     if (field === null || field === undefined || field === "" || field === "null" || field === "undefined") return "—";
@@ -266,7 +266,7 @@ export default function InventoryDetailScreen() {
                     )}
                 </View>
 
-                {/* Senior Professional Action Ribbon - Icons Only */}
+                {/* Action Ribbon - Icons Only */}
                 <View style={[styles.actionRibbonContainer, { backgroundColor: isDark ? 'rgba(255,255,255,0.02)' : '#f8fafc', borderColor: theme.border }]}>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.actionRibbonScroll}>
                         {(() => {
@@ -308,7 +308,7 @@ export default function InventoryDetailScreen() {
                     </ScrollView>
                 </View>
 
-                {/* Swipeable Tabs Navigation */}
+                {/* Tabs Navigation */}
                 <View>
                     <ScrollView
                         ref={tabScrollViewRef}
@@ -338,7 +338,7 @@ export default function InventoryDetailScreen() {
                 onMomentumScrollEnd={onScroll}
                 style={{ flex: 1 }}
             >
-                {/* 1. Details */}
+                {/* 0. Details */}
                 <View style={styles.tabContent}>
                     <ScrollView contentContainerStyle={styles.innerScroll}>
                         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
@@ -374,23 +374,10 @@ export default function InventoryDetailScreen() {
                             <InfoRow label="Built-up Area" value={formatSize(inv.builtUpArea, 'Sq.Ft.', getLookupValue)} icon="business-outline" />
                             <InfoRow label="Carpet Area" value={formatSize(inv.carpetArea, 'Sq.Ft.', getLookupValue)} icon="grid-outline" />
                         </View>
-
-                        {inv.amenities && typeof inv.amenities === 'object' && Object.entries(inv.amenities).length > 0 && (
-                            <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-                                <Text style={[styles.cardTitle, { color: theme.text }]}>Amenities</Text>
-                                <View style={styles.chipRow}>
-                                    {Object.entries(inv.amenities).map(([key, val], i) => val ? (
-                                        <View key={i} style={[styles.chip, { backgroundColor: theme.primary + '15' }]}>
-                                            <Text style={[styles.chipText, { color: theme.primary }]}>{key.replace(/([A-Z])/g, ' $1').trim()}</Text>
-                                        </View>
-                                    ) : null)}
-                                </View>
-                            </View>
-                        )}
                     </ScrollView>
                 </View>
 
-                {/* 2. Location */}
+                {/* 1. Location */}
                 <View style={styles.tabContent}>
                     <ScrollView contentContainerStyle={styles.innerScroll}>
                         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
@@ -401,26 +388,22 @@ export default function InventoryDetailScreen() {
                         </View>
 
                         {(inv.latitude || inv.address?.lat) && (
-                            <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-                                <Text style={[styles.cardTitle, { color: theme.text }]}>Map Integration</Text>
-                                <TouchableOpacity
-                                    style={[styles.googleMapsBtn, { backgroundColor: theme.primary }]}
-                                    onPress={() => {
-                                        const lat = inv.latitude || inv.address?.lat;
-                                        const lng = inv.longitude || inv.address?.lng;
-                                        const label = `${unitNo}, ${projectName}`;
-                                        Linking.openURL(`geo:${lat},${lng}?q=${lat},${lng}(${label})`);
-                                    }}
-                                >
-                                    <Ionicons name="map" size={18} color="#fff" />
-                                    <Text style={styles.googleMapsBtnText}>Open in Google Maps</Text>
-                                </TouchableOpacity>
-                            </View>
+                            <TouchableOpacity
+                                style={[styles.googleMapsBtn, { backgroundColor: theme.primary, marginHorizontal: 20 }]}
+                                onPress={() => {
+                                    const lat = inv.latitude || inv.address?.lat;
+                                    const lng = inv.longitude || inv.address?.lng;
+                                    Linking.openURL(`geo:${lat},${lng}?q=${lat},${lng}(${unitNo})`);
+                                }}
+                            >
+                                <Ionicons name="map" size={18} color="#fff" />
+                                <Text style={styles.googleMapsBtnText}>Open in Google Maps</Text>
+                            </TouchableOpacity>
                         )}
                     </ScrollView>
                 </View>
 
-                {/* 3. Activities */}
+                {/* 2. Activities */}
                 <View style={styles.tabContent}>
                     <ScrollView contentContainerStyle={styles.innerScroll}>
                         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
@@ -442,11 +425,7 @@ export default function InventoryDetailScreen() {
                                                 <Text style={styles.timelineDate}>{new Date(act.createdAt).toLocaleDateString()}</Text>
                                             </View>
                                             <Text style={[styles.timelineSubject, { color: theme.text }]}>{act.subject}</Text>
-                                            {(act.description || act.details?.note || act.note) && (
-                                                <Text style={[styles.timelineNote, { color: theme.textLight }]}>
-                                                    {act.description || act.details?.note || act.note}
-                                                </Text>
-                                            )}
+                                            <Text style={[styles.timelineNote, { color: theme.textLight }]}>{act.description || act.note}</Text>
                                         </View>
                                     </View>
                                 ))
@@ -455,94 +434,41 @@ export default function InventoryDetailScreen() {
                     </ScrollView>
                 </View>
 
-                {/* 4. Owner */}
+                {/* 3. Owner */}
                 <View style={styles.tabContent}>
                     <ScrollView contentContainerStyle={styles.innerScroll}>
                         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
                             <View style={styles.sectionHeader}>
                                 <Text style={[styles.cardTitle, { color: theme.text, marginBottom: 0 }]}>Current Owners</Text>
-                                <TouchableOpacity
-                                    onPress={() => router.push(`/manage-owners?id=${id}`)}
-                                    style={{ backgroundColor: theme.primary + '10', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 }}
-                                >
-                                    <Text style={{ fontSize: 12, fontWeight: '800', color: theme.primary }}>+ ADD</Text>
+                                <TouchableOpacity onPress={() => router.push(`/manage-owners?id=${id}`)}>
+                                    <Text style={{ fontSize: 12, fontWeight: '800', color: theme.primary }}>+ MANAGE</Text>
                                 </TouchableOpacity>
                             </View>
-                            {/* Merge: owners[] array + legacy ownerName/ownerPhone flat field */}
                             {(() => {
-                                const ownersArr = inv.owners && inv.owners.length > 0 ? inv.owners : [];
-                                // Build a combined list: array owners first, then legacy if array is empty
-                                const displayOwners = ownersArr.length > 0 ? ownersArr :
-                                    (inv.ownerName ? [{ name: inv.ownerName, phone: inv.ownerPhone, _legacy: true }] : []);
-
-                                if (displayOwners.length === 0) {
-                                    return <Text style={styles.emptyText}>No owners assigned.</Text>;
-                                }
-                                return displayOwners.map((owner: any, idx: number) => (
-                                    <TouchableOpacity
-                                        key={idx}
-                                        style={[styles.partyCard, { backgroundColor: theme.background }]}
-                                        onPress={() => !owner._legacy && owner._id && router.push(`/contact-detail?id=${owner._id}`)}
-                                    >
+                                const ownersArr = inv.owners || (inv.ownerName ? [{ name: inv.ownerName, phone: inv.ownerPhone }] : []);
+                                if (ownersArr.length === 0) return <Text style={styles.emptyText}>No owners assigned.</Text>;
+                                return ownersArr.map((owner: any, idx: number) => (
+                                    <TouchableOpacity key={idx} style={[styles.partyCard, { backgroundColor: theme.background, marginBottom: 12 }]} onPress={() => owner._id && router.push(`/contact-detail?id=${owner._id}`)}>
                                         <View style={styles.matchLeft}>
-                                            <Text style={[styles.matchUnit, { color: theme.text }]}>
-                                                {owner.name || owner.fullName || '—'}
-                                            </Text>
-                                            <Text style={[styles.matchProject, { color: theme.textLight }]}>
-                                                {owner.phones?.[0]?.number || owner.mobile || owner.phone || 'No Phone'}
-                                            </Text>
-                                            {owner._legacy && (
-                                                <Text style={{ fontSize: 9, color: '#94A3B8', fontWeight: '600', marginTop: 2 }}>Legacy record</Text>
-                                            )}
+                                            <Text style={[styles.matchUnit, { color: theme.text }]}>{owner.name || owner.fullName || '—'}</Text>
+                                            <Text style={[styles.matchProject, { color: theme.textLight }]}>{owner.phones?.[0]?.number || owner.phone || 'No Phone'}</Text>
                                         </View>
-                                        <View style={[styles.relationBadge, { backgroundColor: isDark ? 'rgba(16, 185, 129, 0.15)' : '#10B981' + '10' }]}>
-                                            <Text style={{ fontSize: 10, color: isDark ? '#34D399' : '#10B981', fontWeight: '700' }}>OWNER</Text>
+                                        <View style={[styles.relationBadge, { backgroundColor: theme.primary + '15' }]}>
+                                            <Text style={{ fontSize: 10, color: theme.primary, fontWeight: '700' }}>OWNER</Text>
                                         </View>
                                     </TouchableOpacity>
                                 ));
                             })()}
                         </View>
-
-                        {inv.associates?.length > 0 && (
-                            <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-                                <View style={styles.sectionHeader}>
-                                    <Text style={[styles.cardTitle, { color: theme.text, marginBottom: 0 }]}>Associates</Text>
-                                    <TouchableOpacity
-                                        onPress={() => router.push(`/manage-owners?id=${id}`)}
-                                        style={{ backgroundColor: theme.primary + '10', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 }}
-                                    >
-                                        <Text style={{ fontSize: 12, fontWeight: '800', color: theme.primary }}>+ MANAGE</Text>
-                                    </TouchableOpacity>
-                                </View>
-                                {inv.associates.map((assoc: any, idx: number) => (
-                                    <TouchableOpacity key={idx} style={[styles.partyCard, { backgroundColor: theme.background }]} onPress={() => assoc._id && router.push(`/contact-detail?id=${assoc._id}`)}>
-                                        <View style={styles.matchLeft}>
-                                            <Text style={[styles.matchUnit, { color: theme.text }]}>
-                                                {typeof assoc === 'object' ? (assoc.name || assoc.fullName || '—') : lv(assoc)}
-                                            </Text>
-                                            <Text style={[styles.matchProject, { color: theme.textLight }]}>
-                                                {assoc.phones?.[0]?.number || assoc.mobile || assoc.phone || 'No Phone'}
-                                            </Text>
-                                            {assoc.relationship ? (
-                                                <Text style={{ fontSize: 10, color: '#F59E0B', fontWeight: '700', marginTop: 2 }}>{assoc.relationship}</Text>
-                                            ) : null}
-                                        </View>
-                                        <View style={[styles.relationBadge, { backgroundColor: isDark ? 'rgba(37, 99, 235, 0.15)' : theme.primary + '10' }]}>
-                                            <Text style={{ fontSize: 10, color: isDark ? '#60A5FA' : theme.primary, fontWeight: '700' }}>ASSOCIATE</Text>
-                                        </View>
-                                    </TouchableOpacity>
-                                ))}
-                            </View>
-                        )}
                     </ScrollView>
                 </View>
 
-                {/* 5. Document */}
+                {/* 4. Resources (Doc + Media) */}
                 <View style={styles.tabContent}>
                     <ScrollView contentContainerStyle={styles.innerScroll}>
                         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
                             <View style={styles.sectionHeader}>
-                                <Text style={[styles.cardTitle, { color: theme.text, marginBottom: 0 }]}>Inventory Documents</Text>
+                                <Text style={[styles.cardTitle, { color: theme.text, marginBottom: 0 }]}>Documents</Text>
                                 <TouchableOpacity onPress={() => router.push(`/add-document?id=${id}&type=Inventory&mode=document`)}>
                                     <Text style={{ color: theme.primary, fontWeight: '700' }}>+ Add</Text>
                                 </TouchableOpacity>
@@ -552,48 +478,33 @@ export default function InventoryDetailScreen() {
                             ) : (
                                 inv.inventoryDocuments.map((doc: any, i: number) => (
                                     <View key={i} style={[styles.docItem, { borderBottomColor: theme.border }]}>
-                                        <View style={[styles.docIcon, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : theme.primary + '10' }]}>
-                                            <Ionicons name="document-text" size={20} color={isDark ? theme.textSecondary : theme.primary} />
-                                        </View>
+                                        <Ionicons name="document-text" size={20} color={theme.primary} />
                                         <View style={styles.docInfo}>
-                                            <Text style={[styles.docName, { color: theme.text }]}>
-                                                {doc.documentType || doc.documentName || "Document"}
-                                            </Text>
-                                            <Text style={[styles.docMeta, { color: theme.textLight }]}>
-                                                {doc.documentNo ? `No: ${doc.documentNo}` : ""}
-                                            </Text>
+                                            <Text style={[styles.docName, { color: theme.text }]}>{doc.documentType || "Document"}</Text>
+                                            <Text style={[styles.docMeta, { color: theme.textLight }]}>{doc.documentNo}</Text>
                                         </View>
-                                        {doc.url && (
-                                            <TouchableOpacity onPress={() => Linking.openURL(doc.url)}>
-                                                <Ionicons name="eye-outline" size={20} color={theme.primary} />
-                                            </TouchableOpacity>
-                                        )}
+                                        {doc.url && <TouchableOpacity onPress={() => Linking.openURL(doc.url)}><Ionicons name="eye-outline" size={20} color={theme.primary} /></TouchableOpacity>}
                                     </View>
                                 ))
                             )}
                         </View>
-                    </ScrollView>
-                </View>
 
-                {/* 6. Media */}
-                <View style={styles.tabContent}>
-                    <ScrollView contentContainerStyle={styles.innerScroll}>
+                        {/* Media Section */}
                         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
                             <View style={styles.sectionHeader}>
-                                <Text style={[styles.cardTitle, { color: theme.text, marginBottom: 0 }]}>Property Media</Text>
+                                <Text style={[styles.cardTitle, { color: theme.text, marginBottom: 0 }]}>Media Gallery</Text>
                                 <TouchableOpacity onPress={() => router.push(`/add-document?id=${id}&type=Inventory&mode=upload`)}>
                                     <Text style={{ color: theme.primary, fontWeight: '700' }}>+ Upload</Text>
                                 </TouchableOpacity>
                             </View>
-                            
                             <View style={styles.mediaGrid}>
                                 {[...(inv.inventoryImages || []), ...(inv.inventoryVideos || [])].length === 0 ? (
-                                    <Text style={styles.emptyText}>No media uploaded yet.</Text>
+                                    <Text style={styles.emptyText}>No media uploaded.</Text>
                                 ) : (
                                     [...(inv.inventoryImages || []), ...(inv.inventoryVideos || [])].map((item: any, i: number) => (
                                         <TouchableOpacity key={i} style={styles.mediaItem} onPress={() => item.url && Linking.openURL(item.url)}>
                                             <View style={[styles.mediaPlaceholder, { backgroundColor: theme.background, borderColor: theme.border }]}>
-                                                <Ionicons name={item.url?.includes('.mp4') || item.type === 'video' ? "play-circle" : "image"} size={32} color={theme.primary} />
+                                                <Ionicons name={item.type === 'video' || item.url?.includes('.mp4') ? "play-circle" : "image"} size={32} color={theme.primary} />
                                             </View>
                                             <Text style={[styles.mediaTitle, { color: theme.text }]} numberOfLines={1}>{item.title || "Media"}</Text>
                                         </TouchableOpacity>
@@ -604,12 +515,47 @@ export default function InventoryDetailScreen() {
                     </ScrollView>
                 </View>
 
-                {/* 7. History */}
+                {/* 5. History */}
                 <View style={styles.tabContent}>
                     <ScrollView contentContainerStyle={styles.innerScroll}>
                         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
                             <Text style={[styles.cardTitle, { color: theme.text }]}>Ownership History</Text>
-                            <Text style={styles.emptyText}>History tracking is currently active. Changes to owners and associates will appear here.</Text>
+                            {(!inv.ownerHistory || inv.ownerHistory.length === 0) ? (
+                                <Text style={styles.emptyText}>No records found.</Text>
+                            ) : (
+                                inv.ownerHistory.map((h: any, idx: number) => {
+                                    const contactNo = h.contactPhone || h.contactMobile || h.phone || h.mobile;
+                                    return (
+                                        <View key={idx} style={[styles.timelineItem, { borderLeftColor: theme.border }]}>
+                                            <View style={[styles.timelineDot, { backgroundColor: '#10B981' }]} />
+                                            <View style={styles.timelineBody}>
+                                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                    <View>
+                                                        <Text style={[styles.timelineSubject, { color: theme.text }]}>{h.contactName || h.name}</Text>
+                                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                                                            <View style={{ paddingHorizontal: 6, paddingVertical: 1, backgroundColor: '#10B98115', borderRadius: 4 }}>
+                                                                <Text style={{ fontSize: 9, fontWeight: '900', color: '#10B981' }}>PREVIOUS OWNER</Text>
+                                                            </View>
+                                                            <Text style={styles.timelineDate}>{new Date(h.date).toLocaleDateString()}</Text>
+                                                        </View>
+                                                    </View>
+                                                    {contactNo && (
+                                                        <TouchableOpacity 
+                                                            onPress={() => Linking.openURL(`tel:${contactNo.replace(/\D/g, "")}`)}
+                                                            style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: theme.primary + '15', justifyContent: 'center', alignItems: 'center' }}
+                                                        >
+                                                            <Ionicons name="call" size={18} color={theme.primary} />
+                                                        </TouchableOpacity>
+                                                    )}
+                                                </View>
+                                                {contactNo && (
+                                                    <Text style={{ fontSize: 13, color: theme.textLight, fontWeight: '600', marginTop: 4 }}>{contactNo}</Text>
+                                                )}
+                                            </View>
+                                        </View>
+                                    );
+                                })
+                            )}
                         </View>
                     </ScrollView>
                 </View>
@@ -617,7 +563,7 @@ export default function InventoryDetailScreen() {
 
             {/* Edit FAB */}
             <TouchableOpacity
-                style={[styles.fab, { backgroundColor: theme.primary, shadowColor: theme.primary }]}
+                style={[styles.fab, { backgroundColor: theme.primary }]}
                 onPress={() => router.push(`/add-inventory?id=${id}`)}
             >
                 <Ionicons name="create" size={24} color="#fff" />
@@ -630,7 +576,6 @@ const styles = StyleSheet.create({
     container: { flex: 1 },
     center: { flex: 1, justifyContent: "center", alignItems: "center" },
     noData: { fontSize: 16, fontWeight: "600" },
-
     headerCard: { paddingBottom: 10, shadowOpacity: 0.05, shadowRadius: 10, elevation: 5, zIndex: 10 },
     headerTop: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingTop: 12, paddingBottom: 16, gap: 15 },
     backBtnCircle: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
@@ -639,67 +584,32 @@ const styles = StyleSheet.create({
     headerBadgeRow: { flexDirection: 'row', gap: 6, marginTop: 4 },
     miniBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
     miniBadgeText: { fontSize: 13, fontWeight: '800' },
-
-    statusContainer: { width: 70, alignItems: 'center', flexDirection: 'row', gap: 10, justifyContent: 'flex-end' },
-    statusRing: { alignItems: 'center', justifyContent: 'center' },
-    statusLabel: { fontSize: 8, fontWeight: '900', marginTop: 2 },
-    smallHeaderShare: { width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(0,0,0,0.03)', alignItems: 'center', justifyContent: 'center' },
-
+    statusContainer: { width: 70, alignItems: 'center', justifyContent: 'flex-end' },
+    statusRing: { alignItems: 'center', justifyContent: 'center', borderWidth: 1, padding: 4, borderRadius: 8 },
+    statusLabel: { fontSize: 8, fontWeight: '900' },
     strategyBar: { flexDirection: 'row', borderTopWidth: 1, borderBottomWidth: 1, paddingVertical: 12, marginHorizontal: 20 },
     strategyBlock: { flex: 1, paddingHorizontal: 5 },
-    strategyLabel: { fontSize: 8, fontWeight: '800', marginBottom: 4, letterSpacing: 0.5 },
+    strategyLabel: { fontSize: 8, fontWeight: '800', marginBottom: 4 },
     strategyValueRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
     strategyValue: { fontSize: 12, fontWeight: '700' },
     strategyDivider: { width: 1, height: '70%', alignSelf: 'center', opacity: 0.5 },
-
-    marketingRow: { flexDirection: 'row', paddingHorizontal: 20, paddingVertical: 12, gap: 10, flexWrap: 'wrap' },
+    marketingRow: { flexDirection: 'row', paddingHorizontal: 20, paddingVertical: 12, gap: 10 },
     marketingPill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
     marketingText: { fontSize: 11, fontWeight: '800' },
-
-    actionRibbonContainer: { 
-        marginHorizontal: 20, 
-        marginTop: 15, 
-        borderRadius: 22, 
-        borderWidth: 1, 
-        overflow: 'hidden',
-        paddingVertical: 14,
-        paddingHorizontal: 10
-    },
-    actionRibbonScroll: { 
-        flexGrow: 1,
-        justifyContent: 'center', 
-        gap: 24, 
-        paddingHorizontal: 15 
-    },
-    ribbonBtn: { 
-        width: 44,
-        height: 44,
-        borderRadius: 14,
-        justifyContent: 'center',
-        alignItems: 'center',
-        elevation: 2,
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        shadowOffset: { width: 0, height: 2 }
-    },
-
+    actionRibbonContainer: { marginHorizontal: 20, marginTop: 15, borderRadius: 22, borderWidth: 1, paddingVertical: 14, paddingHorizontal: 10 },
+    actionRibbonScroll: { flexGrow: 1, justifyContent: 'center', gap: 24, paddingHorizontal: 15 },
+    ribbonBtn: { width: 44, height: 44, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
     tabsScroll: { paddingHorizontal: 20, gap: 25 },
     tabItem: { paddingVertical: 12, borderBottomWidth: 3, borderBottomColor: 'transparent' },
     tabLabel: { fontSize: 14, fontWeight: '800' },
-
     tabContent: { width: SCREEN_WIDTH },
     innerScroll: { padding: 20, paddingBottom: 100 },
-    card: { padding: 20, borderRadius: 24, borderWidth: 1, marginBottom: 16, shadowOpacity: 0.03, shadowRadius: 10, elevation: 2 },
+    card: { padding: 20, borderRadius: 24, borderWidth: 1, marginBottom: 16 },
     cardTitle: { fontSize: 15, fontWeight: '800', marginBottom: 16 },
     infoRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1 },
     infoLabel: { fontSize: 13, fontWeight: '600' },
     infoValue: { fontSize: 14, fontWeight: '700' },
-    emptyText: { textAlign: 'center', padding: 20, fontSize: 13, opacity: 0.5, lineHeight: 18 },
-
-    chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-    chip: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 },
-    chipText: { fontSize: 11, fontWeight: '600' },
-
+    emptyText: { textAlign: 'center', padding: 20, fontSize: 13, opacity: 0.5 },
     sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
     timelineItem: { borderLeftWidth: 2, marginLeft: 10, paddingLeft: 20, paddingBottom: 25 },
     timelineDot: { width: 12, height: 12, borderRadius: 6, position: 'absolute', left: -7, top: 0 },
@@ -708,38 +618,21 @@ const styles = StyleSheet.create({
     timelineType: { fontSize: 10, fontWeight: '800' },
     timelineDate: { fontSize: 10, fontWeight: '600' },
     timelineSubject: { fontSize: 14, fontWeight: '700', marginBottom: 4 },
-
-    partyCard: { padding: 16, borderRadius: 18, flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
+    timelineNote: { fontSize: 12 },
+    partyCard: { padding: 16, borderRadius: 18, flexDirection: 'row', alignItems: 'center' },
     matchLeft: { flex: 1 },
     matchUnit: { fontSize: 15, fontWeight: '800', marginBottom: 4 },
     matchProject: { fontSize: 12, fontWeight: '600' },
     relationBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 },
-
     docItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, gap: 12 },
-    docIcon: { width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
     docInfo: { flex: 1 },
     docName: { fontSize: 14, fontWeight: '700' },
     docMeta: { fontSize: 11, marginTop: 2 },
-
-    googleMapsBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 12, borderRadius: 14, marginTop: 10 },
+    googleMapsBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 12, borderRadius: 14 },
     googleMapsBtnText: { color: '#fff', fontSize: 14, fontWeight: '800' },
-    timelineNote: { fontSize: 12, lineHeight: 18 },
     mediaGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
     mediaItem: { width: (SCREEN_WIDTH - 80) / 2, marginBottom: 15 },
     mediaPlaceholder: { width: '100%', height: 100, borderRadius: 12, borderWidth: 1, justifyContent: 'center', alignItems: 'center' },
     mediaTitle: { fontSize: 12, fontWeight: '700', marginTop: 5, textAlign: 'center' },
-    fab: {
-        position: 'absolute',
-        bottom: 30,
-        right: 20,
-        width: 56,
-        height: 56,
-        borderRadius: 28,
-        justifyContent: 'center',
-        alignItems: 'center',
-        elevation: 8,
-        shadowOpacity: 0.4,
-        shadowRadius: 12,
-        shadowOffset: { width: 0, height: 6 },
-    },
+    fab: { position: 'absolute', bottom: 30, right: 20, width: 56, height: 56, borderRadius: 28, justifyContent: 'center', alignItems: 'center', elevation: 8, shadowOpacity: 0.4, shadowRadius: 12 },
 });

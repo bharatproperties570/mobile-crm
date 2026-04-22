@@ -10,14 +10,12 @@ const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const TABS_CONFIG = [
     { name: 'index', label: 'Home', icon: 'home-outline', iconActive: 'home' },
     { name: 'leads', label: 'Leads', icon: 'people-outline', iconActive: 'people' },
-    { name: 'contacts', label: 'Contacts', icon: 'person-circle-outline', iconActive: 'person-circle' },
     { name: 'deals', label: 'Deals', icon: 'wallet-outline', iconActive: 'wallet' },
     { name: 'activities', label: 'Activities', icon: 'calendar-outline', iconActive: 'calendar' },
-    { name: 'companies', label: 'Company', icon: 'business-outline', iconActive: 'business' },
-    { name: 'projects', label: 'Project', icon: 'cube-outline', iconActive: 'cube' },
+    { name: 'communication', label: 'Inbox', icon: 'chatbox-ellipses-outline', iconActive: 'chatbox-ellipses' },
+    { name: 'contacts', label: 'Contacts', icon: 'person-circle-outline', iconActive: 'person-circle' },
+    { name: 'company', label: 'Company', icon: 'business-outline', iconActive: 'business' },
     { name: 'inventory', label: 'Inventory', icon: 'grid-outline', iconActive: 'grid' },
-    { name: 'bookings', label: 'Booking', icon: 'newspaper-outline', iconActive: 'newspaper' },
-    { name: 'accounts', label: 'Account', icon: 'cash-outline', iconActive: 'cash' },
     { name: 'marketing', label: 'Marketing', icon: 'megaphone-outline', iconActive: 'megaphone' },
     { name: 'intake', label: 'Intake', icon: 'scan-outline', iconActive: 'scan' },
 ];
