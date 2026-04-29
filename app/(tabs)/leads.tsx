@@ -24,6 +24,20 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get("window");
 
+function KPIItem({ label, value, color, icon, theme }: any) {
+    return (
+        <View style={[styles.kpiItem, { backgroundColor: theme.background, borderColor: theme.border }]}>
+            <View style={[styles.kpiIcon, { backgroundColor: color + '15' }]}>
+                <Ionicons name={icon} size={14} color={color} />
+            </View>
+            <View>
+                <Text style={[styles.kpiValue, { color }]}>{value}</Text>
+                <Text style={[styles.kpiLabel, { color: theme.textMuted }]}>{label}</Text>
+            </View>
+        </View>
+    );
+}
+
 const STATUS_COLORS_LIGHT: Record<string, string> = {
     active: "#1DB954", new: "#64748B", contacted: "#8B5CF6",
     qualified: "#7C3AED", prospect: "#3B82F6", opportunity: "#F59E0B",
@@ -626,7 +640,7 @@ const LeadCard = memo(({ lead, index, onPress, onMore, isSelected, onLongPress, 
     const stageCfgMap = isDark ? STAGE_CONFIG_DARK : STAGE_CONFIG_LIGHT;
     const stageLabel = getLookupValue("Stage", lead.stage) || "New";
     const stageCfg = (stageCfgMap as any)[stageLabel] || (stageCfgMap as any).default;
-    const score = liveScore ? { val: liveScore.score, color: liveScore.color } : getLeadScore(lead, isDark);
+    const score = liveScore ? { val: liveScore.score, color: liveScore.color, bg: liveScore.color + (isDark ? '25' : '15') } : getLeadScore(lead, isDark);
 
     const scaleValue = useRef(new Animated.Value(1)).current;
     const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -684,6 +698,15 @@ const LeadCard = memo(({ lead, index, onPress, onMore, isSelected, onLongPress, 
     };
     const currentIntent = intentConfig[intent] || null;
 
+    const requirementText = [
+        getLookupValue("Category", lead.propertyType) || getLookupValue("Requirement", lead.requirement), 
+        getLookupValue("SubCategory", lead.subType) || getLookupValue("SubRequirement", lead.subRequirement), 
+        getLookupValue("UnitType", lead.unitType)
+    ].filter(v => v && v !== '—').join(" • ") || "No Requirement specified";
+
+    const locationText = [lead.locArea, getLookupValue("Location", lead.location), getLookupValue("City", lead.locCity)]
+        .filter(v => v && v !== "—").join(", ");
+
     return (
         <Swipeable renderRightActions={renderRightActions} renderLeftActions={renderLeftActions}>
             <Animated.View style={{ opacity: fadeAnim, transform: [{ scale: scaleValue }, { translateY: fadeAnim.interpolate({ inputRange: [0, 1], outputRange: [20, 0] }) }] }}>
@@ -693,97 +716,65 @@ const LeadCard = memo(({ lead, index, onPress, onMore, isSelected, onLongPress, 
                     onPressOut={onPressOut}
                     onPress={onPress}
                     onLongPress={onLongPress}
-                    style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border, position: 'relative' }, isSelected && styles.cardSelected]}
+                    style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }, isSelected && styles.cardSelected]}
                 >
-                    {currentIntent ? (
-                        <View style={[styles.intentRibbon, { backgroundColor: isDark ? (currentIntent.text + '25') : currentIntent.bg }]}>
-                            <Text style={[styles.intentRibbonText, { color: isDark ? currentIntent.text : currentIntent.text }]}>{intent.toUpperCase()}</Text>
-                        </View>
-                    ) : null}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                            <View style={{ width: 44, justifyContent: 'center', alignItems: 'center' }}>
+                                <LeadScoreRing score={score.val} isDark={isDark} color={score.color} size={44} />
+                            </View>
 
-                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        <View style={styles.leftScoreContainer}>
-                            <LeadScoreRing score={score.val} isDark={isDark} color={score.color} size={42} />
-                        </View>
-
-                        <View style={{ flex: 1 }}>
-                            <View style={styles.cardHeader}>
-                                <View style={styles.leadInfo}>
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                        <Text style={[styles.leadName, { color: theme.text }]} numberOfLines={1}>{name}</Text>
-                                    </View>
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
-                                        <Ionicons name="call-outline" size={12} color={theme.textMuted} />
-                                        <Text style={{ fontSize: 12, color: theme.textSecondary, fontWeight: '600', marginLeft: 4 }}>{lead.mobile}</Text>
-                                        {lead.email ? (
-                                            <>
-                                                <Text style={{ fontSize: 12, color: theme.textMuted, marginHorizontal: 6 }}>•</Text>
-                                                <Ionicons name="mail-outline" size={12} color={theme.textMuted} />
-                                                <Text style={{ fontSize: 12, color: theme.textSecondary, fontWeight: '600', marginLeft: 4, flex: 1 }} numberOfLines={1}>{lead.email}</Text>
-                                            </>
-                                        ) : null}
-                                    </View>
+                            <View style={styles.rowContent}>
+                                <View style={styles.rowTop}>
+                                    <Text style={[styles.rowName, { color: theme.text }]} numberOfLines={1}>{name}</Text>
                                 </View>
-                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                                    <View style={{ alignItems: 'flex-end', gap: 3 }}>
-                                        <View style={[styles.stageBadge, { backgroundColor: stageCfg.color + '15', borderColor: stageCfg.color + '30' }]}>
-                                            <Ionicons name={stageCfg.icon} size={10} color={stageCfg.color} />
-                                            <Text style={[styles.stageText, { color: stageCfg.color }]}>{stageLabel.toUpperCase()}</Text>
+
+                                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                                    <Ionicons name="call-outline" size={12} color={theme.textMuted} />
+                                    <Text style={{ fontSize: 12, color: theme.textSecondary, fontWeight: '600', marginLeft: 4 }}>{lead.mobile}</Text>
+                                    {lead.email ? (
+                                        <>
+                                            <Text style={{ fontSize: 12, color: theme.textMuted, marginHorizontal: 6 }}>•</Text>
+                                            <Ionicons name="mail-outline" size={12} color={theme.textMuted} />
+                                            <Text style={{ fontSize: 12, color: theme.textSecondary, fontWeight: '600', marginLeft: 4, flex: 1 }} numberOfLines={1}>{lead.email}</Text>
+                                        </>
+                                    ) : null}
+                                </View>
+                                
+                                <Text style={[styles.rowSubject, { color: theme.textSecondary, marginBottom: 8 }]} numberOfLines={2}>
+                                    {requirementText} {locationText ? ` in ${locationText}` : ''}
+                                </Text>
+
+                                <View style={styles.rowMeta}>
+                                    {currentIntent && (
+                                        <View style={[styles.outcomeBadge, { backgroundColor: currentIntent.bg }]}>
+                                            <Text style={[styles.outcomeText, { color: currentIntent.text }]}>{intent.toUpperCase()}</Text>
                                         </View>
-                                        {lead.source ? (
-                                            <View style={[styles.sourceBadge, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : theme.border, borderColor: isDark ? 'rgba(255,255,255,0.1)' : theme.border, paddingVertical: 1, paddingHorizontal: 5 }]}>
-                                                <Ionicons name="radio-outline" size={9} color={theme.textMuted} />
-                                                <Text style={[styles.sourceText, { color: theme.textSecondary, fontSize: 8.5 }]}>{getLookupValue("Source", lead.source)}</Text>
-                                            </View>
-                                        ) : null}
-                                    </View>
-                                    <TouchableOpacity onPress={onMore} style={styles.moreBtn}>
-                                        <Ionicons name="ellipsis-vertical" size={18} color={theme.textMuted} />
-                                    </TouchableOpacity>
-                                </View>
-                            </View>
-
-                            <View style={styles.cardBody}>
-                                {(lead.propertyType || lead.subType || lead.subRequirement) ? (
-                                    <View style={styles.reqRow}>
-                                        <Ionicons name="business-outline" size={12} color={theme.textMuted} />
-                                        <Text style={[styles.reqText, { color: theme.textSecondary }]}>
-                                            {(lead.propertyType && lead.propertyType.length > 0) ? getLookupValue("Category", lead.propertyType) : getLookupValue("Requirement", lead.requirement)}
-                                            {(lead.subType && lead.subType.length > 0) 
-                                                ? ` • ${getLookupValue("SubCategory", lead.subType)}` 
-                                                : (lead.subRequirement ? ` • ${getLookupValue("SubRequirement", lead.subRequirement)}` : '')
-                                            }
-                                        </Text>
-                                    </View>
-                                ) : null}
-                                <View style={styles.reqRow}>
-                                    <Ionicons name="home-outline" size={12} color={theme.textMuted} />
-                                    <Text style={[styles.reqText, { color: theme.textSecondary }]}>{getLookupValue("UnitType", lead.unitType)}</Text>
-                                </View>
-                                {(lead.locCity || lead.location || lead.locArea) ? (
-                                    <View style={styles.locRow}>
-                                        <Ionicons name="location-outline" size={12} color={theme.textMuted} />
-                                        <Text style={[styles.reqText, { color: theme.textSecondary }]}>
-                                            {[getLookupValue("City", lead.locCity), lead.locArea, getLookupValue("Location", lead.location)].filter(v => v && v !== "—").join(", ") || "No Location"}
-                                        </Text>
-                                    </View>
-                                ) : null}
-                            </View>
-
-                            <View style={[styles.cardFooter, { borderTopColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.03)' }]}>
-                                <View style={styles.tagStrip}>
-                                    {lead.tags?.slice(0, 3).map((tag, i) => (
-                                        <View key={i} style={[styles.miniTag, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : theme.border, borderColor: isDark ? 'rgba(255,255,255,0.1)' : theme.border }]}>
-                                            <Text style={[styles.miniTagText, { color: isDark ? '#94A3B8' : theme.textMuted }]}>{tag}</Text>
+                                    )}
+                                    {lead.source && (
+                                        <View style={[styles.outcomeBadge, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : theme.border }]}>
+                                            <Text style={[styles.outcomeText, { color: theme.textSecondary }]}>{getLookupValue("Source", lead.source)}</Text>
+                                        </View>
+                                    )}
+                                    {lead.tags?.slice(0, 1).map((tag, i) => (
+                                        <View key={i} style={[styles.outcomeBadge, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : theme.border }]}>
+                                            <Text style={[styles.outcomeText, { color: isDark ? '#94A3B8' : theme.textMuted }]}>{tag.toUpperCase()}</Text>
                                         </View>
                                     ))}
-                                    {(lead.tags?.length || 0) > 3 && (
-                                        <Text style={{ fontSize: 10, color: theme.textLight }}>+{(lead.tags?.length || 0) - 3}</Text>
-                                    )}
                                 </View>
-                                <View style={styles.footerRight}>
-                                    <Text style={[styles.timeLabel, { color: theme.textMuted }]}>{formatTimeAgo(lead.createdAt)}</Text>
-                                </View>
+                            </View>
+                        </View>
+
+                        <View style={styles.rightContentColumn}>
+                            <TouchableOpacity onPress={onMore} style={styles.menuTouch}>
+                                <Ionicons name="ellipsis-vertical" size={20} color={theme.textMuted} />
+                            </TouchableOpacity>
+                            
+                            <Text style={[styles.rowTime, { color: theme.textMuted, fontSize: 10 }]}>{formatTimeAgo(lead.createdAt)}</Text>
+                            
+                            <View style={[styles.outcomeBadge, { backgroundColor: stageCfg.color + '15', flexDirection: 'row', alignItems: 'center' }]}>
+                                <Ionicons name={stageCfg.icon} size={8} color={stageCfg.color} style={{marginRight: 3}} />
+                                <Text style={[styles.outcomeText, { color: stageCfg.color }]}>{stageLabel.toUpperCase()}</Text>
                             </View>
                         </View>
                     </View>
@@ -1084,78 +1075,37 @@ export default function LeadsScreen() {
                 </View>
 
                 {/* Professional Arrow Style Sales Pipeline Flow */}
-                <View style={styles.modernPipelineRoot}>
-                    <View style={styles.pipelineTitleInnerRow}>
-                        <Text style={styles.pipelineTitleText}>SALES PIPELINE STAGES</Text>
-                        <View style={styles.pipelineActionHint}>
-                            <Ionicons name="swap-horizontal" size={10} color="#94A3B8" />
-                            <Text style={styles.pipelineActionText}>SWIPE TO EXPLORE</Text>
-                        </View>
-                    </View>
-                    
-                    <ScrollView 
-                        horizontal 
-                        showsHorizontalScrollIndicator={false} 
-                        contentContainerStyle={styles.modernPipelineScroll}
-                        decelerationRate="fast"
-                    >
-                        {[
-                            { key: "incoming", label: "NEW", color: "#6366F1" },
-                            { key: "prospect", label: "PROSPECT", color: "#3B82F6" },
-                            { key: "opportunity", label: "OPPORTUNITY", color: "#EC4899" },
-                            { key: "negotiation", label: "NEGOTIATION", color: "#F59E0B" },
-                            { key: "won", label: "WON", color: "#10B981" }
-                        ].map((item, idx) => {
-                            const count = (leadsStats.pipeline as any)?.[item.key] || 0;
-                            const isActive = activeQuickFilter === item.key;
-                            const isFirst = idx === 0;
-                            
-                            return (
-                                <TouchableOpacity 
-                                    key={item.key}
-                                    style={[
-                                        styles.arrowStageSegment,
-                                        { 
-                                            backgroundColor: isActive ? item.color : `${item.color}15`,
-                                            zIndex: 10 - idx,
-                                            marginLeft: isFirst ? 0 : -20, // Tighter overlap for sharper arrow flow
-                                            borderTopLeftRadius: isFirst ? 12 : 0,
-                                            borderBottomLeftRadius: isFirst ? 12 : 0,
-                                            width: 145,
-                                            // Add subtle shadow for depth on active state
-                                            ...(isActive ? { shadowColor: item.color, shadowOpacity: 0.3, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 5 } : {})
-                                        }
-                                    ]}
-                                    onPress={() => handleQuickFilter(item.key)}
-                                    activeOpacity={0.8}
-                                >
-                                    <View style={[styles.arrowContent, { paddingLeft: isFirst ? 20 : 35 }]}>
-                                        <Text style={[styles.arrowCountText, { color: isActive ? '#fff' : item.color }]}>{count}</Text>
-                                        <Text style={[styles.arrowLabelText, { color: isActive ? 'rgba(255,255,255,0.9)' : '#64748B' }]}>{item.label}</Text>
-                                    </View>
-                                    
-                                    {/* The Chevron Point */}
-                                    <View style={[
-                                        styles.arrowChevron, 
-                                        { 
-                                            backgroundColor: isActive ? item.color : (isDark ? theme.card : '#F8FAFC'),
-                                            borderColor: isActive ? '#fff' : `${item.color}30`,
-                                            borderLeftWidth: 2,
-                                            borderTopWidth: 2,
-                                            right: -15, // Perfect overlap
-                                            borderRadius: 2,
-                                            top: 15,
-                                            width: 30,
-                                            height: 30,
-                                            transform: [{ rotate: '45deg' }],
-                                            zIndex: 2
-                                        }
-                                    ]} />
-                                </TouchableOpacity>
-                            );
-                        })}
-                    </ScrollView>
+                {/* Enterprise KPI Bar (Communication Hub Style) */}
+                <View style={styles.kpiRow}>
+                    <KPIItem label="Total" value={leadsStats.total} color={theme.primary} icon="people" theme={theme} />
+                    <KPIItem label="Hot" value={leadsStats.hot} color="#EF4444" icon="flame" theme={theme} />
+                    <KPIItem label="Today" value={leadsStats.today} color="#10B981" icon="calendar" theme={theme} />
+                    <KPIItem label="Fresh" value={leadsStats.fresh} color="#8B5CF6" icon="leaf" theme={theme} />
                 </View>
+
+                {/* Pipeline Stage Switcher (Communication Hub Channel Style) */}
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.channelScroll}>
+                    {[
+                        { key: "all", label: "ALL", icon: "grid-outline", color: theme.primary },
+                        { key: "incoming", label: "NEW", icon: "star-outline", color: "#6366F1" },
+                        { key: "prospect", label: "PROSPECT", icon: "person-outline", color: "#3B82F6" },
+                        { key: "opportunity", label: "OPPORTUNITY", icon: "flashlight-outline", color: "#EC4899" },
+                        { key: "negotiation", label: "NEGOTIATION", icon: "chatbubbles-outline", color: "#F59E0B" },
+                        { key: "won", label: "WON", icon: "trophy-outline", color: "#10B981" }
+                    ].map(ch => (
+                        <TouchableOpacity 
+                            key={ch.key} 
+                            onPress={() => handleQuickFilter(ch.key === 'all' ? '' : ch.key)}
+                            style={[
+                                styles.channelTab, 
+                                (activeQuickFilter === ch.key || (ch.key === 'all' && !activeQuickFilter)) ? { backgroundColor: ch.color, borderColor: ch.color } : { backgroundColor: theme.background, borderColor: theme.border }
+                            ]}
+                        >
+                            <Ionicons name={ch.icon as any} size={16} color={(activeQuickFilter === ch.key || (ch.key === 'all' && !activeQuickFilter)) ? '#fff' : theme.textMuted} />
+                            <Text style={[styles.channelText, { color: (activeQuickFilter === ch.key || (ch.key === 'all' && !activeQuickFilter)) ? '#fff' : theme.textSecondary }]}>{ch.label}</Text>
+                        </TouchableOpacity>
+                    ))}
+                </ScrollView>
 
                 <View style={styles.commandBar}>
                     <View style={[styles.searchContainer, { backgroundColor: theme.card, borderColor: theme.border, borderWidth: 1 }]}>
@@ -1391,43 +1341,46 @@ const styles = StyleSheet.create({
     segmentTextActive: { color: "#fff" },
 
 
-    card: { borderRadius: 14, paddingHorizontal: 3, paddingBottom: 2, paddingTop: 6, marginBottom: 4, borderWidth: 1, elevation: 2, shadowOpacity: 0.03, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, overflow: 'hidden' },
+    card: { flexDirection: 'row', padding: 15, borderRadius: 20, borderWidth: 1, marginBottom: 12, alignItems: 'center' },
     cardSelected: { borderWidth: 2 },
-    cardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 1 },
-    leadInfo: { flex: 1 },
-    leadName: { fontSize: 17, fontWeight: "700", marginBottom: 0 },
-    mobileRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-    leadMobile: { fontSize: 13.5, fontWeight: "500" },
-    qualityBox: { marginRight: 0 },
-    leftScoreContainer: { width: 48, justifyContent: 'center', alignItems: 'center', marginRight: 10 },
-    intentRibbon: { position: 'absolute', top: 5, left: -22, width: 80, height: 20, justifyContent: 'center', alignItems: 'center', transform: [{ rotate: '-45deg' }], zIndex: 10 },
-    intentRibbonText: { fontSize: 10, fontWeight: "900", letterSpacing: 0.8 },
-    moreBtn: { width: 32, height: 32, justifyContent: 'center', alignItems: 'center', zIndex: 11 },
+    avatar: { width: 48, height: 48, borderRadius: 14, borderWidth: 1, justifyContent: 'center', alignItems: 'center' },
+    avatarText: { fontSize: 18, fontWeight: '800' },
+    channelIconSmall: { position: 'absolute', bottom: -4, right: -4, width: 16, height: 16, borderRadius: 8, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#fff' },
+    rowContent: { flex: 1, marginLeft: 15 },
+    rowTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
+    rowName: { fontSize: 15, fontWeight: '800' },
+    rowTime: { fontSize: 11, fontWeight: '600' },
+    rowSubject: { fontSize: 13, fontWeight: '600', marginBottom: 8 },
+    rowMeta: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+    outcomeBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
+    outcomeText: { fontSize: 9, fontWeight: '900', textTransform: 'uppercase' },
+    chevron: { marginLeft: 10 },
+    rightContentColumn: { 
+        alignItems: 'flex-end', 
+        justifyContent: 'center', 
+        marginLeft: 10,
+        width: 90,
+        gap: 8,
+    },
+    menuTouch: { 
+        padding: 4,
+        marginRight: -4,
+    },
 
-    cardBody: { marginBottom: 0, gap: 1.5 },
-    reqRow: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 20 },
-    reqText: { fontSize: 12.5, fontWeight: "600" },
-    locRow: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 20 },
-    locText: { fontSize: 11.5, fontWeight: "500" },
+    kpiRow: { flexDirection: 'row', gap: 10, marginBottom: 16, paddingHorizontal: 4 },
+    kpiItem: { flex: 1, padding: 12, borderRadius: 16, borderWidth: 1, flexDirection: 'row', alignItems: 'center', gap: 10 },
+    kpiIcon: { width: 32, height: 32, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
+    kpiValue: { fontSize: 16, fontWeight: '800' },
+    kpiLabel: { fontSize: 10, fontWeight: '700', textTransform: 'uppercase' },
 
-    cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 2, marginTop: 2 },
-    footerLeftTicker: { flex: 1, height: 24, marginRight: 8, justifyContent: 'center' },
-    footerRight: { alignItems: 'flex-end', gap: 1 },
-    badgeGroup: { flexDirection: 'row', gap: 6 },
-    statusBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 },
-    statusText: { fontSize: 10, fontWeight: "800", textTransform: 'uppercase' },
-    sourceBadge: { flexDirection: 'row', alignItems: 'center', gap: 2, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, borderWidth: 1 },
-    sourceText: { fontSize: 9, fontWeight: "700", textTransform: 'uppercase' },
-    timeLabel: { fontSize: 11, fontWeight: "500" },
+    channelScroll: { gap: 10, paddingBottom: 16, paddingHorizontal: 4 },
+    channelTab: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 14, borderWidth: 1 },
+    channelText: { fontSize: 13, fontWeight: '800' },
 
     rightActions: { flexDirection: 'row', gap: 8, paddingLeft: 10, marginBottom: 12 },
     leftActions: { flexDirection: 'row', gap: 8, paddingRight: 10, marginBottom: 12 },
     swipeAction: { width: 60, height: '100%', borderRadius: 16, justifyContent: 'center', alignItems: 'center' },
     swipeLabel: { color: '#fff', fontSize: 10, fontWeight: '800', marginTop: 4 },
-
-    tagStrip: { flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 },
-    miniTag: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, borderWidth: 1 },
-    miniTagText: { fontSize: 10, fontWeight: '700' },
 
     fab: { width: 56, height: 56, borderRadius: 28, justifyContent: 'center', alignItems: 'center', elevation: 8, shadowOpacity: 0.4, shadowRadius: 12, shadowOffset: { width: 0, height: 6 } },
     empty: { alignItems: 'center', marginTop: 100, gap: 12 },

@@ -148,6 +148,10 @@ export default function ActivitiesScreen() {
     }, [activities, statusFilter]);
 
     const handlePlayAudio = async (id: string, url: string) => {
+        if (!url) {
+            Alert.alert("Error", "No audio recording available for this activity.");
+            return;
+        }
         try {
             if (playingId === id) {
                 if (sound) {
@@ -323,15 +327,17 @@ export default function ActivitiesScreen() {
                                         </>
                                     ) : null}
 
-                                            <TouchableOpacity
-                                                style={[styles.playBadge, { backgroundColor: isPlaying ? theme.primary : theme.primary + '15' }]}
-                                                onPress={() => onPlayAudio(item._id!, item.details.audioUrl)}
-                                            >
-                                                <Ionicons name={isPlaying ? "pause" : "play"} size={12} color={isPlaying ? "#fff" : theme.primary} />
-                                                <Text style={[styles.playBadgeText, { color: isPlaying ? "#fff" : theme.primary }]}>
-                                                    {isPlaying ? "PLAYING" : "VOICE"}
-                                                </Text>
-                                            </TouchableOpacity>
+                                    {item.details?.audioUrl ? (
+                                        <TouchableOpacity
+                                            style={[styles.playBadge, { backgroundColor: isPlaying ? theme.primary : theme.primary + '15' }]}
+                                            onPress={() => onPlayAudio(item._id!, item.details.audioUrl)}
+                                        >
+                                            <Ionicons name={isPlaying ? "pause" : "play"} size={12} color={isPlaying ? "#fff" : theme.primary} />
+                                            <Text style={[styles.playBadgeText, { color: isPlaying ? "#fff" : theme.primary }]}>
+                                                {isPlaying ? "PLAYING" : "VOICE"}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    ) : null}
                                 </View>
                             </View>
                         ) : null}
