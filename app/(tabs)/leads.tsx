@@ -83,13 +83,22 @@ const KPIItem = memo(({ label, value, color, icon, theme }: any) => (
 
 const LeadScoreRing = memo(({ score, color, size = 44 }: any) => {
     const { theme } = useTheme();
-    const anim = useRef(new Animated.Value(0)).current;
-    useEffect(() => { Animated.timing(anim, { toValue: score / 100, duration: 1000, useNativeDriver: false }).start(); }, [score]);
+    const s = Number(score) || 0;
     return (
         <View style={{ width: size, height: size, justifyContent: 'center', alignItems: 'center' }}>
             <View style={{ width: size, height: size, borderRadius: size / 2, borderWidth: 3, borderColor: theme.border, position: 'absolute' }} />
-            <View style={{ width: size, height: size, borderRadius: size / 2, borderWidth: 3, borderColor: color, borderLeftColor: 'transparent', borderBottomColor: 'transparent', transform: [{ rotate: '45deg' }] }} />
-            <Text style={{ fontSize: 10, fontWeight: '900', color: theme.text }}>{String(Math.round(score))}</Text>
+            <View style={{ 
+                width: size, height: size, borderRadius: size / 2, borderWidth: 3, 
+                borderColor: color, 
+                borderLeftColor: s > 75 ? color : 'transparent',
+                borderBottomColor: s > 50 ? color : 'transparent',
+                borderRightColor: s > 25 ? color : 'transparent',
+                transform: [{ rotate: '-45deg' }],
+                position: 'absolute'
+            }} />
+            <View style={{ width: size - 8, height: size - 8, borderRadius: (size - 8) / 2, backgroundColor: color + '10', justifyContent: 'center', alignItems: 'center' }}>
+                <Text style={{ fontSize: 10, fontWeight: '900', color: theme.text }}>{String(Math.round(s))}</Text>
+            </View>
         </View>
     );
 });
@@ -99,7 +108,7 @@ const ActionSheet = memo(({ visible, onClose, lead, onUpdate, statuses, users }:
     const { theme } = useTheme();
     if (!lead || !visible) return null;
     return (
-        <Modal transparent visible={visible} animationType="fade" onRequestClose={onClose}>
+        <Modal transparent visible={visible} animationType="slide" onRequestClose={onClose}>
             <Pressable style={styles.modalOverlay} onPress={onClose}>
                 <View style={[styles.sheetContainer, { backgroundColor: theme.card, borderColor: theme.border }]}>
                     <View style={styles.sheetHandle} />
@@ -182,14 +191,14 @@ const LeadCard = memo(({ lead, index, onPress, onMore, isSelected, liveScore }: 
                         </View>
                         <View style={styles.metaRow}>
                             <Ionicons name="call-outline" size={12} color={theme.textMuted} />
-                            <Text style={[styles.metaText, { color: theme.textSecondary }]}>{String(lead.mobile)}</Text>
+                            <Text style={{ fontSize: 12, color: theme.textSecondary, fontWeight: '600', marginLeft: 4 }}>{String(lead.mobile)}</Text>
                             <Text style={{ color: theme.textMuted, marginHorizontal: 4 }}>|</Text>
-                            <Text style={[styles.metaText, { color: theme.textSecondary, flex: 1 }]} numberOfLines={1}>{reqText || "No Requirement"}</Text>
+                            <Text style={{ fontSize: 12, color: theme.textSecondary, fontWeight: '600', flex: 1 }} numberOfLines={1}>{reqText || "No Requirement"}</Text>
                         </View>
                         {(budgetText || areaText) && (
                             <View style={styles.detailRow}>
-                                {budgetText && <View style={[styles.outcomeBadge, { backgroundColor: '#ECFDF5' }]}><Text style={styles.outcomeText}>{budgetText}</Text></View>}
-                                {areaText && <View style={[styles.outcomeBadge, { backgroundColor: '#EEF2FF' }]}><Text style={[styles.outcomeText, { color: '#6366F1' }]}>{areaText}</Text></View>}
+                                {budgetText && <View style={[styles.outcomeBadge, { backgroundColor: isDarkMode ? 'rgba(16,185,129,0.1)' : '#ECFDF5' }]}><Text style={styles.outcomeText}>{budgetText}</Text></View>}
+                                {areaText && <View style={[styles.outcomeBadge, { backgroundColor: isDarkMode ? 'rgba(99,102,241,0.1)' : '#EEF2FF' }]}><Text style={[styles.outcomeText, { color: '#6366F1' }]}>{areaText}</Text></View>}
                             </View>
                         )}
                         <View style={styles.footerRow}>
