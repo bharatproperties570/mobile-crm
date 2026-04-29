@@ -125,6 +125,16 @@ function resolveName(field: unknown, getLookupValue?: (type: string, val: any) =
     return str;
 }
 
+function formatAmount(amount?: any): string {
+    if (amount === undefined || amount === null) return "—";
+    const val = Number(amount);
+    if (isNaN(val)) return String(amount);
+    if (val >= 10000000) return `${(val / 10000000).toFixed(2)} Cr`;
+    if (val >= 100000) return `${(val / 100000).toFixed(2)} L`;
+    if (val >= 1000) return `${(val / 1000).toFixed(1)} K`;
+    return val.toString();
+}
+
 function formatTimeAgo(dateString?: string) {
     if (!dateString) return "—";
     const now = new Date();
