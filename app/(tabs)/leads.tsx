@@ -135,12 +135,6 @@ const ActionSheet = memo(({ visible, onClose, lead, onUpdate, statuses, users }:
         handleAction({ tags: [...currentTags, newTag.trim()] });
     };
 
-    const markDormant = () => {
-        const dStatus = statuses.find((s: any) => s.lookup_value.toLowerCase() === "dormant");
-        if (dStatus) handleAction({ stage: dStatus._id });
-        else Alert.alert("Error", "Dormant status not found in lookups");
-    };
-
     return (
         <Modal transparent visible={visible} animationType="slide" onRequestClose={onClose}>
             <Pressable style={styles.modalOverlay} onPress={onClose}>
@@ -166,9 +160,9 @@ const ActionSheet = memo(({ visible, onClose, lead, onUpdate, statuses, users }:
                                 <View style={[styles.actionIcon, { backgroundColor: '#22C55E15' }]}><Ionicons name="repeat" size={24} color="#22C55E" /></View>
                                 <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Sequence</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity style={styles.actionItem} onPress={() => { router.push(`/add-activity?id=${lead._id}`); onClose(); }}>
-                                <View style={[styles.actionIcon, { backgroundColor: '#EA580C15' }]}><Ionicons name="add-circle" size={24} color="#EA580C" /></View>
-                                <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Outcome</Text>
+                            <TouchableOpacity style={styles.actionItem} onPress={() => setActiveSection(activeSection === 'stage' ? null : 'stage')}>
+                                <View style={[styles.actionIcon, { backgroundColor: '#F59E0B15' }]}><Ionicons name="flag" size={24} color="#F59E0B" /></View>
+                                <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Stage</Text>
                             </TouchableOpacity>
                             <TouchableOpacity style={styles.actionItem} onPress={() => setActiveSection(activeSection === 'assign' ? null : 'assign')}>
                                 <View style={[styles.actionIcon, { backgroundColor: '#7C3AED15' }]}><Ionicons name="person-add" size={24} color="#7C3AED" /></View>
@@ -178,11 +172,33 @@ const ActionSheet = memo(({ visible, onClose, lead, onUpdate, statuses, users }:
                                 <View style={[styles.actionIcon, { backgroundColor: '#4F46E515' }]}><Ionicons name="pricetags" size={24} color="#4F46E5" /></View>
                                 <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Tag</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity style={styles.actionItem} onPress={markDormant}>
-                                <View style={[styles.actionIcon, { backgroundColor: '#94A3B815' }]}><Ionicons name="moon" size={24} color="#94A3B8" /></View>
-                                <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Dormant</Text>
+                            <TouchableOpacity style={styles.actionItem} onPress={() => {
+                                Alert.alert("Delete?", "Remove lead permanently?", [
+                                    { text: "Cancel" },
+                                    { text: "Delete", style: "destructive", onPress: async () => { await deleteLead(lead._id); onUpdate(); onClose(); } }
+                                ]);
+                            }}>
+                                <View style={[styles.actionIcon, { backgroundColor: '#EF444415' }]}><Ionicons name="trash" size={24} color="#EF4444" /></View>
+                                <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Delete</Text>
                             </TouchableOpacity>
                         </View>
+
+                        {activeSection === 'stage' && (
+                            <View style={[styles.subSection, { backgroundColor: isDarkMode ? 'rgba(245,158,11,0.05)' : '#FFFBEB' }]}>
+                                <Text style={[styles.sectionTitle, { color: '#D97706' }]}>Update Pipeline Stage</Text>
+                                <View style={styles.stageGrid}>
+                                    {statuses.map((s: any) => {
+                                        const cfg = STAGE_CONFIG[s.lookup_value] || STAGE_CONFIG.default;
+                                        const isCurrent = lead.stage === s._id || lead.stage?._id === s._id;
+                                        return (
+                                            <TouchableOpacity key={s._id} style={[styles.stageChip, { backgroundColor: isCurrent ? cfg.color : theme.card, borderColor: isCurrent ? cfg.color : theme.border }]} onPress={() => handleAction({ stage: s._id })}>
+                                                <Text style={[styles.stageChipText, { color: isCurrent ? '#fff' : theme.textSecondary }]}>{String(s.lookup_value).toUpperCase()}</Text>
+                                            </TouchableOpacity>
+                                        );
+                                    })}
+                                </View>
+                            </View>
+                        )}
 
                         {activeSection === 'sequence' && (
                             <View style={[styles.subSection, { backgroundColor: isDarkMode ? 'rgba(22,163,74,0.05)' : '#F0FDF4' }]}>
@@ -330,6 +346,8 @@ export default function LeadsScreen() {
     const { getLookupsByType } = useLookup();
     const { users } = useUsers();
     
+    const stages = useMemo(() => getLookupsByType("Stage"), [getLookupsByType]);
+    
     const [leads, setLeads] = useState<Lead[]>([]);
     const [stats, setStats] = useState<any>({ total: 0, hot: 0, today: 0, fresh: 0 });
     const [loading, setLoading] = useState(true);
@@ -390,15 +408,12 @@ export default function LeadsScreen() {
                 </View>
             </View>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabsScroll}>
-                {[
-                    { key: "all", label: "ALL" },
-                    { key: "incoming", label: "NEW" },
-                    { key: "prospect", label: "PROSPECT" },
-                    { key: "opportunity", label: "OPPORTUNITY" },
-                    { key: "won", label: "WON" }
-                ].map(tab => (
-                    <TouchableOpacity key={tab.key} onPress={() => setActiveTab(tab.key)} style={[styles.tab, activeTab === tab.key ? { backgroundColor: theme.primary, borderColor: theme.primary } : { backgroundColor: theme.background, borderColor: theme.border }]}>
-                        <Text style={[styles.tabText, { color: activeTab === tab.key ? "#fff" : theme.textSecondary }]}>{tab.label}</Text>
+                <TouchableOpacity onPress={() => setActiveTab("all")} style={[styles.tab, activeTab === "all" ? { backgroundColor: theme.primary, borderColor: theme.primary } : { backgroundColor: theme.background, borderColor: theme.border }]}>
+                    <Text style={[styles.tabText, { color: activeTab === "all" ? "#fff" : theme.textSecondary }]}>ALL</Text>
+                </TouchableOpacity>
+                {stages.map(s => (
+                    <TouchableOpacity key={s._id} onPress={() => setActiveTab(s._id)} style={[styles.tab, activeTab === s._id ? { backgroundColor: theme.primary, borderColor: theme.primary } : { backgroundColor: theme.background, borderColor: theme.border }]}>
+                        <Text style={[styles.tabText, { color: activeTab === s._id ? "#fff" : theme.textSecondary }]}>{String(s.lookup_value).toUpperCase()}</Text>
                     </TouchableOpacity>
                 ))}
             </ScrollView>
@@ -422,7 +437,7 @@ export default function LeadsScreen() {
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchLeads(1, false); }} tintColor={theme.primary} />}
                 ListEmptyComponent={!loading ? <View style={styles.empty}><Ionicons name="clipboard-outline" size={64} color={theme.border} /><Text style={[styles.emptyText, { color: theme.textLight }]}>No leads matching filters</Text></View> : null}
             />
-            <ActionSheet visible={sheetVisible} onClose={() => { setSheetVisible(false); setSelectedLead(null); }} lead={selectedLead} onUpdate={() => fetchLeads(1, false)} statuses={getLookupsByType("Stage")} users={users} />
+            <ActionSheet visible={sheetVisible} onClose={() => { setSheetVisible(false); setSelectedLead(null); }} lead={selectedLead} onUpdate={() => fetchLeads(page, false)} statuses={stages} users={users} />
         </View>
     );
 }
@@ -482,6 +497,9 @@ const styles = StyleSheet.create({
     tagList: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
     tagBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
     tagText: { fontSize: 12, fontWeight: '700' },
+    stageGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+    stageChip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, borderWidth: 1 },
+    stageChipText: { fontSize: 10, fontWeight: '800' },
     sequenceCard: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 12, borderWidth: 1, marginBottom: 8 },
     sequenceText: { fontSize: 13, fontWeight: '700' },
     empty: { alignItems: 'center', marginTop: 100 },
