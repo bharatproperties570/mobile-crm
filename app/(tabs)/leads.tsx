@@ -772,7 +772,6 @@ const LeadCard = memo(({ lead, index, onPress, onMore, isSelected, onLongPress, 
                             <View style={{ width: 44, justifyContent: 'center', alignItems: 'center' }}>
                                 <LeadScoreRing score={score.val} isDark={isDark} color={score.color} size={44} />
                             </View>
-
                             <View style={styles.rowContent}>
                                 <View style={styles.rowTop}>
                                     <Text style={[styles.rowName, { color: theme.text }]} numberOfLines={1}>{name}</Text>
