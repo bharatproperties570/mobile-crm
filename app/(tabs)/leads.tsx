@@ -21,9 +21,7 @@ import { useUsers } from "@/context/UserContext";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAuth } from "@/context/AuthContext";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get("window");
-
 function KPIItem({ label, value, color, icon, theme }: any) {
     return (
         <View style={[styles.kpiItem, { backgroundColor: theme.background, borderColor: theme.border }]}>
@@ -37,7 +35,6 @@ function KPIItem({ label, value, color, icon, theme }: any) {
         </View>
     );
 }
-
 const STATUS_COLORS_LIGHT: Record<string, string> = {
     active: "#1DB954", new: "#64748B", contacted: "#8B5CF6",
     qualified: "#7C3AED", prospect: "#3B82F6", opportunity: "#F59E0B",
@@ -46,7 +43,6 @@ const STATUS_COLORS_LIGHT: Record<string, string> = {
     hot: "#EF4444", warm: "#F59E0B", cold: "#3B82F6",
     urgent: "#E11D48"
 };
-
 const STATUS_COLORS_DARK: Record<string, string> = {
     active: "#1DB954", new: "#B3B3B3", contacted: "#8B5CF6",
     qualified: "#A78BFA", prospect: "#60A5FA", opportunity: "#FBBF24",
@@ -55,7 +51,6 @@ const STATUS_COLORS_DARK: Record<string, string> = {
     hot: "#E91429", warm: "#FBBF24", cold: "#60A5FA",
     urgent: "#FF4D4D"
 };
-
 const STAGE_CONFIG_LIGHT: Record<string, { color: string; icon: any }> = {
     "New": { color: "#94A3B8", icon: "star" },
     "Prospect": { color: "#3B82F6", icon: "person" },
@@ -69,7 +64,6 @@ const STAGE_CONFIG_LIGHT: Record<string, { color: string; icon: any }> = {
     "Dormant": { color: "#64748B", icon: "moon" },
     "default": { color: "#94A3B8", icon: "help-circle" }
 };
-
 const STAGE_CONFIG_DARK: Record<string, { color: string; icon: any }> = {
     "New": { color: "#B3B3B3", icon: "star" },
     "Prospect": { color: "#60A5FA", icon: "person" },
@@ -83,21 +77,18 @@ const STAGE_CONFIG_DARK: Record<string, { color: string; icon: any }> = {
     "Dormant": { color: "#535353", icon: "moon" },
     "default": { color: "#B3B3B3", icon: "help-circle" }
 };
-
 const REQ_CONFIG_LIGHT: Record<string, { icon: any; color: string; label: string }> = {
     buy: { icon: "cart", color: "#6366F1", label: "BUY" },
     rent: { icon: "key", color: "#F59E0B", label: "RENT" },
     lease: { icon: "business", color: "#8B5CF6", label: "LEASE" },
     default: { icon: "home", color: "#94A3B8", label: "REQ" }
 };
-
 const REQ_CONFIG_DARK: Record<string, { icon: any; color: string; label: string }> = {
     buy: { icon: "cart", color: "#818CF8", label: "BUY" },
     rent: { icon: "key", color: "#FBBF24", label: "RENT" },
     lease: { icon: "business", color: "#A78BFA", label: "LEASE" },
     default: { icon: "home", color: "#CBD5E1", label: "REQ" }
 };
-
 function resolveName(field: unknown, getLookupValue?: (type: string, val: any) => string, findUser?: (id: string) => any): string {
     if (!field) return "—";
     if (Array.isArray(field)) {
@@ -124,7 +115,6 @@ function resolveName(field: unknown, getLookupValue?: (type: string, val: any) =
     }
     return str;
 }
-
 function formatAmount(amount?: any): string {
     if (amount === undefined || amount === null) return "—";
     const val = Number(amount);
@@ -134,7 +124,6 @@ function formatAmount(amount?: any): string {
     if (val >= 1000) return `${(val / 1000).toFixed(1)} K`;
     return val.toString();
 }
-
 function formatTimeAgo(dateString?: string) {
     if (!dateString) return "—";
     const now = new Date();
@@ -143,16 +132,13 @@ function formatTimeAgo(dateString?: string) {
     const diffMins = Math.floor(diffMs / 60000);
     const diffHours = Math.floor(diffMins / 60);
     const diffDays = Math.floor(diffHours / 24);
-
     if (diffMins < 60) return `${diffMins}m ago`;
     if (diffHours < 24) return `${diffHours}h ago`;
     return `${diffDays}d ago`;
 }
-
 function getLeadScore(lead: Lead, isDark = false) {
     const bgOpacity = isDark ? '25' : '15';
     const colors = isDark ? STATUS_COLORS_DARK : STATUS_COLORS_LIGHT;
-
     // 1. Prefer Backend Enrichment Score if available (Lead Score 3.0)
     if (lead.intent_index !== undefined && lead.intent_index !== null) {
         const scoreVal = lead.intent_index || 0;
@@ -160,24 +146,19 @@ function getLeadScore(lead: Lead, isDark = false) {
         if (scoreVal >= 81) color = colors.contacted; // Hot purple
         else if (scoreVal >= 61) color = colors.hot; 
         else if (scoreVal >= 31) color = colors.warm; 
-
         return { val: scoreVal, color, bg: color + bgOpacity };
     }
-
     // 2. Fallback to heuristic logic if not enriched
     const stage = lookupVal(lead.stage).toLowerCase();
     const stageColor = colors[stage] || colors.cold;
-
     let val = 30;
     if (stage === "hot") val = 98;
     else if (["new", "contacted"].includes(stage)) val = 65;
     else if (["qualified", "active"].includes(stage)) val = 85;
     else if (["won", "booked"].includes(stage)) val = 100;
     else if (stage === "dormant" || stage === "lost") val = 10;
-
     return { val, color: stageColor, bg: stageColor + bgOpacity };
 }
-
 function ActionSheet({ visible, onClose, lead, onUpdate, statuses, users }: {
     visible: boolean;
     onClose: () => void;
@@ -195,7 +176,6 @@ function ActionSheet({ visible, onClose, lead, onUpdate, statuses, users }: {
     const [showReassign, setShowReassign] = useState(false);
     const [showTagEditor, setShowTagEditor] = useState(false);
     const [newTag, setNewTag] = useState("");
-
     useEffect(() => {
         if (visible) {
             setShouldRender(true);
@@ -214,7 +194,6 @@ function ActionSheet({ visible, onClose, lead, onUpdate, statuses, users }: {
             });
         }
     }, [visible]);
-
     const handleUpdateStatus = async (statusId: string) => {
         if (!lead) return;
         const res = await safeApiCall(() => updateLead(lead._id, { status: statusId }));
@@ -225,7 +204,6 @@ function ActionSheet({ visible, onClose, lead, onUpdate, statuses, users }: {
             Alert.alert("Error", "Failed to update status");
         }
     };
-
     const handleQuickDormant = async () => {
         if (!lead) return;
         const dormantStatus = statuses.find(s => s.lookup_value.toLowerCase() === "dormant");
@@ -235,7 +213,6 @@ function ActionSheet({ visible, onClose, lead, onUpdate, statuses, users }: {
         }
         await handleUpdateStatus(dormantStatus._id);
     };
-
     const handleReassign = async (userId: string) => {
         if (!lead) return;
         const res = await safeApiCall(() => updateLead(lead._id, { owner: userId }));
@@ -246,7 +223,6 @@ function ActionSheet({ visible, onClose, lead, onUpdate, statuses, users }: {
             Alert.alert("Error", "Failed to reassign lead");
         }
     };
-
     const handleAddTag = async () => {
         if (!lead || !newTag.trim()) return;
         const updatedTags = [...(lead.tags || []), newTag.trim()];
@@ -256,7 +232,6 @@ function ActionSheet({ visible, onClose, lead, onUpdate, statuses, users }: {
             onUpdate();
         }
     };
-
     const handleRemoveTag = async (tag: string) => {
         if (!lead) return;
         const updatedTags = (lead.tags || []).filter((t: string) => t !== tag);
@@ -265,16 +240,13 @@ function ActionSheet({ visible, onClose, lead, onUpdate, statuses, users }: {
             onUpdate();
         }
     };
-
     const handleDelete = () => {
         if (!lead || !lead._id) {
             console.error("[ACTION-DELETE] Aborted: No valid lead selected");
             Alert.alert("Error", "No lead selected for deletion.");
             return;
         }
-
         Vibration.vibrate([0, 50, 20, 50]); 
-        
         Alert.alert(
             "Delete Lead Permanently?",
             `Are you sure you want to delete ${leadName(lead)}? This action is irreversible.`,
@@ -288,11 +260,9 @@ function ActionSheet({ visible, onClose, lead, onUpdate, statuses, users }: {
                             console.log(`[ACTION-DELETE] Initiating service call for ID: ${lead._id}`);
                             // Using the centralized service function for consistency
                             const res = await deleteLead(lead._id);
-                            
                             // res from service is res.data
                             console.log('[ACTION-DELETE] Server responded:', res);
                             Vibration.vibrate(100);
-                            
                             onUpdate(); // Refresh the list
                             onClose(); // Close the sheet
                             Alert.alert("Deleted", "Lead has been removed successfully.");
@@ -306,7 +276,6 @@ function ActionSheet({ visible, onClose, lead, onUpdate, statuses, users }: {
             ]
         );
     };
-
     const handleEmail = () => {
         if (!lead?.email) {
             Alert.alert("Error", "No email address found for this lead.");
@@ -314,20 +283,16 @@ function ActionSheet({ visible, onClose, lead, onUpdate, statuses, users }: {
         }
         Linking.openURL(`mailto:${lead.email}`);
     };
-
     const handleSMS = () => {
         if (!lead?.mobile) return;
         Linking.openURL(`sms:${lead.mobile}`);
     };
-
     const handleWhatsApp = () => {
         if (!lead?.mobile) return;
         const cleanPhone = (lead.mobile || "").replace(/[^0-9]/g, "");
         Linking.openURL(`whatsapp://send?phone=${cleanPhone.length === 10 ? "91" + cleanPhone : cleanPhone}`);
     };
-
     if (!lead || (!visible && !shouldRender)) return null;
-
     return (
         <Modal transparent visible={visible} animationType="none" onRequestClose={onClose}>
             <Pressable style={styles.modalOverlay} onPress={onClose}>
@@ -347,7 +312,6 @@ function ActionSheet({ visible, onClose, lead, onUpdate, statuses, users }: {
                             <Text style={[styles.sheetTitle, { color: theme.text }]}>{leadName(lead)}</Text>
                             <Text style={[styles.sheetSub, { color: theme.textSecondary }]}>{lead.mobile}</Text>
                         </View>
-
                         <View style={styles.actionGrid}>
                             <TouchableOpacity style={styles.actionItem} onPress={() => { router.push(`/add-lead?id=${lead._id}`); onClose(); }}>
                                 <View style={[styles.actionIcon, { backgroundColor: isDarkMode ? 'rgba(100, 116, 139, 0.15)' : "#F1F5F9" }]}>
@@ -355,56 +319,48 @@ function ActionSheet({ visible, onClose, lead, onUpdate, statuses, users }: {
                                 </View>
                                 <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Edit</Text>
                             </TouchableOpacity>
-
                             <TouchableOpacity style={styles.actionItem} onPress={() => { router.push(`/match-lead?id=${lead._id}`); onClose(); }}>
                                 <View style={[styles.actionIcon, { backgroundColor: isDark ? 'rgba(219, 39, 119, 0.1)' : "#FDF2F8" }]}>
                                     <Ionicons name="git-compare" size={24} color="#DB2777" />
                                 </View>
                                 <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Match</Text>
                             </TouchableOpacity>
-
                             <TouchableOpacity style={styles.actionItem} onPress={() => { router.push(`/add-document?id=${lead._id}&type=Lead`); onClose(); }}>
                                 <View style={[styles.actionIcon, { backgroundColor: isDark ? 'rgba(14, 165, 233, 0.1)' : "#F0F9FF" }]}>
                                     <Ionicons name="document-attach" size={24} color="#0EA5E9" />
                                 </View>
                                 <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Doc</Text>
                             </TouchableOpacity>
-
                             <TouchableOpacity style={styles.actionItem} onPress={() => { router.push(`/sequences?id=${lead._id}`); onClose(); }}>
                                 <View style={[styles.actionIcon, { backgroundColor: isDark ? 'rgba(139, 92, 246, 0.1)' : "#F5F3FF" }]}>
                                     <Ionicons name="repeat" size={24} color="#8B5CF6" />
                                 </View>
                                 <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Seq</Text>
                             </TouchableOpacity>
-
                             <TouchableOpacity style={styles.actionItem} onPress={() => { router.push(`/add-activity?id=${lead._id}`); onClose(); }}>
                                 <View style={[styles.actionIcon, { backgroundColor: isDark ? 'rgba(234, 88, 12, 0.1)' : "#FFF7ED" }]}>
                                     <Ionicons name="add-circle" size={24} color="#EA580C" />
                                 </View>
                                 <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Activity</Text>
                             </TouchableOpacity>
-
                             <TouchableOpacity style={styles.actionItem} onPress={() => { setShowReassign(!showReassign); setShowStatusPicker(false); setShowTagEditor(false); }}>
                                 <View style={[styles.actionIcon, { backgroundColor: isDark ? 'rgba(124, 58, 237, 0.1)' : "#F5F3FF" }]}>
                                     <Ionicons name="person-add" size={24} color="#7C3AED" />
                                 </View>
                                 <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Assign</Text>
                             </TouchableOpacity>
-
                             <TouchableOpacity style={styles.actionItem} onPress={() => { setShowTagEditor(!showTagEditor); setShowStatusPicker(false); setShowReassign(false); }}>
                                 <View style={[styles.actionIcon, { backgroundColor: isDark ? 'rgba(79, 70, 229, 0.1)' : "#EEF2FF" }]}>
                                     <Ionicons name="pricetags" size={24} color="#4F46E5" />
                                 </View>
                                 <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Tag</Text>
                             </TouchableOpacity>
-
                             <TouchableOpacity style={styles.actionItem} onPress={handleQuickDormant}>
                                 <View style={[styles.actionIcon, { backgroundColor: isDark ? 'rgba(148, 163, 184, 0.1)' : "#F1F5F9" }]}>
                                     <Ionicons name="moon" size={24} color="#94A3B8" />
                                 </View>
                                 <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Dormant</Text>
                             </TouchableOpacity>
-
                             <TouchableOpacity style={styles.actionItem} onPress={async () => {
                                 try {
                                     const act = await getOrCreateCallActivity(lead._id, "Lead", leadName(lead));
@@ -422,11 +378,9 @@ function ActionSheet({ visible, onClose, lead, onUpdate, statuses, users }: {
                                 <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Outcome</Text>
                             </TouchableOpacity>
                         </View>
-
                         {showReassign && (
                             <View style={[styles.pickerView, { backgroundColor: isDark ? 'rgba(255,255,255,0.02)' : '#F8FAFC' }]}>
                                 <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Direct Assignment</Text>
-                                
                                 <TextInput
                                     style={[styles.tagInput, { backgroundColor: theme.card, color: theme.text, borderColor: theme.border, marginBottom: 16, height: 80, textAlignVertical: 'top' }]}
                                     placeholder="Add assignment internal note..."
@@ -435,7 +389,6 @@ function ActionSheet({ visible, onClose, lead, onUpdate, statuses, users }: {
                                     value={newTag} // Re-using newTag for note or adding a new state
                                     onChangeText={setNewTag}
                                 />
-
                                 <View style={styles.chipList}>
                                     {users.map((u) => (
                                         <TouchableOpacity
@@ -464,7 +417,6 @@ function ActionSheet({ visible, onClose, lead, onUpdate, statuses, users }: {
                                 </View>
                             </View>
                         )}
-
                         {showTagEditor && (
                             <View style={[styles.pickerView, { backgroundColor: isDark ? 'rgba(255,255,255,0.02)' : '#F8FAFC' }]}>
                                 <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Enterprise Tagging</Text>
@@ -493,7 +445,6 @@ function ActionSheet({ visible, onClose, lead, onUpdate, statuses, users }: {
                                 </View>
                             </View>
                         )}
-
                             <View style={styles.dangerZone}>
                                 <TouchableOpacity 
                                     activeOpacity={0.7}
@@ -511,7 +462,6 @@ function ActionSheet({ visible, onClose, lead, onUpdate, statuses, users }: {
         </Modal>
     );
 }
-
 function FilterModal({ visible, onClose, filters, setFilters, statuses, users, sources }: {
     visible: boolean;
     onClose: () => void;
@@ -528,7 +478,6 @@ function FilterModal({ visible, onClose, filters, setFilters, statuses, users, s
         const next = current.includes(val) ? current.filter((v: string) => v !== val) : [...current, val];
         setFilters({ ...filters, [key]: next });
     };
-
     return (
         <Modal visible={visible} animationType="slide" transparent>
             <View style={styles.filterModalContainer}>
@@ -538,7 +487,6 @@ function FilterModal({ visible, onClose, filters, setFilters, statuses, users, s
                         <Ionicons name="close" size={24} color={theme.text} />
                     </TouchableOpacity>
                 </View>
-
                 <ScrollView style={[styles.filterContent, { backgroundColor: theme.background }]}>
                     <Text style={[styles.filterSectionTitle, { color: theme.textMuted }]}>By Stage</Text>
                     <View style={styles.filterChipList}>
@@ -560,7 +508,6 @@ function FilterModal({ visible, onClose, filters, setFilters, statuses, users, s
                             </TouchableOpacity>
                         ))}
                     </View>
-
                     <Text style={styles.filterSectionTitle}>By Source</Text>
                     <View style={styles.filterChipList}>
                         {sources.map(s => (
@@ -573,7 +520,6 @@ function FilterModal({ visible, onClose, filters, setFilters, statuses, users, s
                             </TouchableOpacity>
                         ))}
                     </View>
-
                     <Text style={styles.filterSectionTitle}>By Owner</Text>
                     <View style={styles.filterChipList}>
                         {users.map(u => (
@@ -587,7 +533,6 @@ function FilterModal({ visible, onClose, filters, setFilters, statuses, users, s
                         ))}
                     </View>
                 </ScrollView>
-
                 <View style={[styles.filterFooter, { backgroundColor: theme.card, borderTopColor: theme.border }]}>
                     <TouchableOpacity style={[styles.resetBtn, { backgroundColor: theme.border }]} onPress={() => setFilters({ stages: [], sources: [], owners: [] })}>
                         <Text style={[styles.resetBtnText, { color: theme.textSecondary }]}>Reset All</Text>
@@ -600,14 +545,12 @@ function FilterModal({ visible, onClose, filters, setFilters, statuses, users, s
         </Modal>
     );
 }
-
 const LeadScoreRing = memo(({ score, isDark, color = "#2563EB", size = 44 }: { score: number; isDark: boolean; color?: string; size?: number }) => {
     const strokeWidth = 3;
     const { theme } = useTheme();
     const radius = (size - strokeWidth) / 2;
     const circumference = radius * 2 * Math.PI;
     const animatedValue = useRef(new Animated.Value(0)).current;
-
     useEffect(() => {
         Animated.timing(animatedValue, {
             toValue: score / 100,
@@ -615,7 +558,6 @@ const LeadScoreRing = memo(({ score, isDark, color = "#2563EB", size = 44 }: { s
             useNativeDriver: true,
         }).start();
     }, [score]);
-
     return (
         <View style={{ width: size, height: size, justifyContent: 'center', alignItems: 'center' }}>
             <View style={{
@@ -637,10 +579,8 @@ const LeadScoreRing = memo(({ score, isDark, color = "#2563EB", size = 44 }: { s
         </View>
     );
 });
-
 const StaggeredLeadItem = memo(({ item, index, renderItem }: any) => {
     const fadeAnim = useRef(new Animated.Value(0)).current;
-
     useEffect(() => {
         Animated.timing(fadeAnim, {
             toValue: 1,
@@ -649,7 +589,6 @@ const StaggeredLeadItem = memo(({ item, index, renderItem }: any) => {
             useNativeDriver: true,
         }).start();
     }, []);
-
     return (
         <Animated.View style={{
             opacity: fadeAnim,
@@ -659,7 +598,6 @@ const StaggeredLeadItem = memo(({ item, index, renderItem }: any) => {
         </Animated.View>
     );
 });
-
 const LeadCard = memo(({ lead, index, onPress, onMore, isSelected, onLongPress, liveScore }: {
     lead: Lead;
     index: number;
@@ -679,10 +617,8 @@ const LeadCard = memo(({ lead, index, onPress, onMore, isSelected, onLongPress, 
     const stageLabel = getLookupValue("Stage", lead.stage) || "New";
     const stageCfg = (stageCfgMap as any)[stageLabel] || (stageCfgMap as any).default;
     const score = liveScore ? { val: liveScore.score, color: liveScore.color, bg: liveScore.color + (isDark ? '25' : '15') } : getLeadScore(lead, isDark);
-
     const scaleValue = useRef(new Animated.Value(1)).current;
     const fadeAnim = useRef(new Animated.Value(0)).current;
-
     useEffect(() => {
         Animated.timing(fadeAnim, {
             toValue: 1,
@@ -691,14 +627,12 @@ const LeadCard = memo(({ lead, index, onPress, onMore, isSelected, onLongPress, 
             useNativeDriver: true,
         }).start();
     }, [index]);
-
     const onPressIn = () => {
         Animated.spring(scaleValue, { toValue: 0.98, useNativeDriver: true }).start();
     };
     const onPressOut = () => {
         Animated.spring(scaleValue, { toValue: 1, useNativeDriver: true }).start();
     };
-
     const renderRightActions = () => (
         <View style={styles.rightActions}>
             <TouchableOpacity style={[styles.swipeAction, { backgroundColor: theme.primary }]} onPress={() => trackCall(lead.mobile || "", lead._id, "Lead", name)}>
@@ -711,7 +645,6 @@ const LeadCard = memo(({ lead, index, onPress, onMore, isSelected, onLongPress, 
             </TouchableOpacity>
         </View>
     );
-
     const renderLeftActions = () => (
         <View style={styles.leftActions}>
             <TouchableOpacity style={[styles.swipeAction, { backgroundColor: theme.success }]} onPress={() => {
@@ -727,7 +660,6 @@ const LeadCard = memo(({ lead, index, onPress, onMore, isSelected, onLongPress, 
             </TouchableOpacity>
         </View>
     );
-
     const intent = getLookupValue("Requirement", lead.requirement).toLowerCase();
     const intentConfig: Record<string, { bg: string; text: string }> = {
         buy: { bg: isDark ? 'rgba(34, 197, 94, 0.15)' : '#DCFCE7', text: isDark ? '#34D399' : '#15803D' },
@@ -735,27 +667,21 @@ const LeadCard = memo(({ lead, index, onPress, onMore, isSelected, onLongPress, 
         lease: { bg: isDark ? 'rgba(59, 130, 246, 0.15)' : '#E0F2FE', text: isDark ? '#60A5FA' : '#0369A1' }
     };
     const currentIntent = intentConfig[intent] || null;
-
     const requirementText = [
         getLookupValue("Category", lead.propertyType) || getLookupValue("Requirement", lead.requirement), 
         getLookupValue("SubCategory", lead.subType) || getLookupValue("SubRequirement", lead.subRequirement), 
         getLookupValue("UnitType", lead.unitType)
     ].filter(v => v && v !== '—').join(" • ") || "No Requirement specified";
-
     const budgetText = (lead.budgetMin || lead.budgetMax) 
         ? `₹${formatAmount(lead.budgetMin || 0)} - ₹${formatAmount(lead.budgetMax || 0)}`
         : "";
-
     const sizeText = (lead.areaMin || lead.areaMax)
         ? `${lead.areaMin || ""}${lead.areaMin && lead.areaMax ? "-" : ""}${lead.areaMax || ""} ${lead.areaMetric || ""}`.trim()
         : "";
-
     const locationText = [lead.locArea, getLookupValue("Location", lead.location), getLookupValue("City", lead.locCity)]
         .filter(v => v && v !== "—").join(", ");
-
     const projectText = lead.projectName || lead.project?.name;
     const blockText = lead.locBlock;
-
     return (
         <Swipeable renderRightActions={renderRightActions} renderLeftActions={renderLeftActions}>
             <Animated.View style={{ opacity: fadeAnim, transform: [{ scale: scaleValue }, { translateY: fadeAnim.interpolate({ inputRange: [0, 1], outputRange: [20, 0] }) }] }}>
@@ -771,11 +697,11 @@ const LeadCard = memo(({ lead, index, onPress, onMore, isSelected, onLongPress, 
                         <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
                             <View style={{ width: 44, justifyContent: 'center', alignItems: 'center' }}>
                                 <LeadScoreRing score={score.val} isDark={isDark} color={score.color} size={44} />
-                            </View><View style={styles.rowContent}>
+                            </View>
+                            <View style={styles.rowContent}>
                                 <View style={styles.rowTop}>
                                     <Text style={[styles.rowName, { color: theme.text }]} numberOfLines={1}>{name}</Text>
                                 </View>
-
                                 <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
                                     <Ionicons name="call-outline" size={12} color={theme.textMuted} />
                                     <Text style={{ fontSize: 12, color: theme.textSecondary, fontWeight: '600', marginLeft: 4 }}>{lead.mobile}</Text>
@@ -787,11 +713,9 @@ const LeadCard = memo(({ lead, index, onPress, onMore, isSelected, onLongPress, 
                                         </>
                                     ) : null}
                                 </View>
-                                
                                 <Text style={[styles.rowSubject, { color: theme.textSecondary, marginBottom: 4 }]} numberOfLines={1}>
                                     {requirementText}
                                 </Text>
-
                                 {(budgetText || sizeText) && (
                                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 }}>
                                         {budgetText && (
@@ -808,7 +732,6 @@ const LeadCard = memo(({ lead, index, onPress, onMore, isSelected, onLongPress, 
                                         )}
                                     </View>
                                 )}
-
                                 {(projectText || blockText || locationText) && (
                                     <View style={{ marginBottom: 8 }}>
                                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
@@ -819,14 +742,12 @@ const LeadCard = memo(({ lead, index, onPress, onMore, isSelected, onLongPress, 
                                         </View>
                                     </View>
                                 )}
-
                                 <View style={styles.rowMeta}>
                                     <View style={[styles.outcomeBadge, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : theme.border }]}>
                                         <Text style={[styles.outcomeText, { color: theme.textSecondary }]}>
                                             {resolveName(lead.assignment?.assignedTo || lead.owner, getLookupValue, findUser)}
                                         </Text>
                                     </View>
-
                                     {(() => {
                                         const team = resolveName(lead.assignment?.team?.[0] || lead.owner?.team, getLookupValue, findUser);
                                         if (team && team !== "—") {
@@ -838,13 +759,11 @@ const LeadCard = memo(({ lead, index, onPress, onMore, isSelected, onLongPress, 
                                         }
                                         return null;
                                     })()}
-
                                     {lead.isTemporary && lead.expiryDate && (
                                         <View style={[styles.outcomeBadge, { backgroundColor: '#FEF2F2' }]}>
                                             <Text style={[styles.outcomeText, { color: '#EF4444' }]}>EXPIRING</Text>
                                         </View>
                                     )}
-
                                     {currentIntent && (
                                         <View style={[styles.outcomeBadge, { backgroundColor: currentIntent.bg }]}>
                                             <Text style={[styles.outcomeText, { color: currentIntent.text }]}>{intent.toUpperCase()}</Text>
@@ -858,14 +777,11 @@ const LeadCard = memo(({ lead, index, onPress, onMore, isSelected, onLongPress, 
                                 </View>
                             </View>
                         </View>
-
                         <View style={styles.rightContentColumn}>
                             <TouchableOpacity onPress={onMore} style={styles.menuTouch}>
                                 <Ionicons name="ellipsis-vertical" size={20} color={theme.textMuted} />
                             </TouchableOpacity>
-                            
                             <Text style={[styles.rowTime, { color: theme.textMuted, fontSize: 10 }]}>{formatTimeAgo(lead.createdAt)}</Text>
-                            
                             <View style={[styles.outcomeBadge, { backgroundColor: stageCfg.color + '15', flexDirection: 'row', alignItems: 'center' }]}>
                                 <Ionicons name={stageCfg.icon} size={8} color={stageCfg.color} style={{marginRight: 3}} />
                                 <Text style={[styles.outcomeText, { color: stageCfg.color }]}>{stageLabel.toUpperCase()}</Text>
@@ -877,7 +793,6 @@ const LeadCard = memo(({ lead, index, onPress, onMore, isSelected, onLongPress, 
         </Swipeable>
     );
 });
-
 export default function LeadsScreen() {
     const router = useRouter();
     const { theme, isDarkMode } = useTheme();
@@ -908,7 +823,6 @@ export default function LeadsScreen() {
     const [activeFilter, setActiveFilter] = useState<string>("all");
     const [showFilterModal, setShowFilterModal] = useState(false);
     const [filters, setFilters] = useState<{ stages: string[], sources: string[], owners: string[] }>({ stages: [], sources: [], owners: [] });
-
     // Handle incoming filter from Dashboard (e.g. NFA, revived)
     useEffect(() => {
         if (paramFilter) {
@@ -924,7 +838,6 @@ export default function LeadsScreen() {
             }
         }
     }, [paramFilter]);
-
     // SENIOR OPTIMIZATION: Debounce search to prevent UI stutters on keystrokes
     useEffect(() => {
         const timer = setTimeout(() => {
@@ -932,19 +845,15 @@ export default function LeadsScreen() {
         }, 300);
         return () => clearTimeout(timer);
     }, [search]);
-
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
     const [showDormant, setShowDormant] = useState(false);
     const [bulkAssignVisible, setBulkAssignVisible] = useState(false);
     const [liveScores, setLiveScores] = useState<Record<string, { score: number; color: string; label: string }>>({});
-
     const filterScale = useRef(new Animated.Value(1)).current;
     const searchFocusAnim = useRef(new Animated.Value(0)).current;
-
     const animateFilter = (toValue: number) => {
         Animated.spring(filterScale, { toValue, useNativeDriver: true, tension: 100, friction: 5 }).start();
     };
-
     const handleSearchFocus = (focused: boolean) => {
         Animated.timing(searchFocusAnim, {
             toValue: focused ? 1 : 0,
@@ -952,9 +861,7 @@ export default function LeadsScreen() {
             useNativeDriver: false
         }).start();
     };
-
     const lastFetchTime = useRef<number>(0);
-
     const fetchLeads = useCallback(async (pageNum = 1, shouldAppend = false, qFilter?: string) => {
         if (!isAuthenticated) return;
         // 1. Instant Cache Load (only on first page, non-append load)
@@ -970,11 +877,8 @@ export default function LeadsScreen() {
                 }
             } catch (e) { console.warn("[Leads] Cache read failed", e); }
         }
-
         if (leads.length === 0 || !shouldAppend) setLoading(true);
-        
         const params: any = { page: String(pageNum), limit: "50" };
-        
         // Handle search query
         const query = qFilter || search;
         if (query) {
@@ -988,15 +892,11 @@ export default function LeadsScreen() {
                 params.q = query;
             }
         }
-
         if (showDormant) params.showDormant = "true";
-
         const result = await safeApiCall<Lead>(() => getLeads(params));
-
         if (!result.error && result.data) {
             if (result.stats) setLeadsStats(result.stats);
             const recs = result.data;
-            
             setLeads(prev => {
                 const combined = shouldAppend ? [...prev, ...recs] : recs;
                 // Deduplicate
@@ -1007,15 +907,12 @@ export default function LeadsScreen() {
                     seen.add(id);
                     return true;
                 });
-
                 if (pageNum === 1 && !shouldAppend && !qFilter) {
                     AsyncStorage.setItem("@cache_leads_list", JSON.stringify(filtered.slice(0, 50))).catch(() => {});
                     lastFetchTime.current = Date.now();
                 }
-                
                 return filtered;
             });
-            
             setHasMore(recs.length === 50);
             setPage(pageNum);
             if (!shouldAppend) {
@@ -1025,7 +922,6 @@ export default function LeadsScreen() {
         setLoading(false);
         setRefreshing(false);
     }, [leads.length, showDormant, isAuthenticated]);
-
     const handleQuickFilter = (type: string) => {
         if (activeQuickFilter === type) {
             setActiveQuickFilter(null);
@@ -1033,24 +929,20 @@ export default function LeadsScreen() {
             fetchLeads(1, false);
             return;
         }
-
         setActiveQuickFilter(type);
         setActiveFilter(type);
         fetchLeads(1, false, type);
     };
-
     const onRefresh = useCallback(() => {
         setRefreshing(true);
         refreshLookups();
         fetchLeads(1, false);
     }, [fetchLeads, refreshLookups]);
-
     const loadMore = useCallback(() => {
         if (!loading && hasMore) {
             fetchLeads(page + 1, true);
         }
     }, [loading, hasMore, page, fetchLeads]);
-
     const toggleSelection = (id: string) => {
         const next = selectedIds.includes(id)
             ? selectedIds.filter(x => x !== id)
@@ -1058,7 +950,6 @@ export default function LeadsScreen() {
         setSelectedIds(next);
         Vibration.vibrate(10);
     };
-
     const handleBulkDelete = () => {
         Alert.alert(
             "Bulk Delete",
@@ -1077,7 +968,6 @@ export default function LeadsScreen() {
             ]
         );
     };
-
     const handleBulkAssign = async (userId: string) => {
         try {
             await Promise.all(selectedIds.map(id => updateLead(id, { owner: userId })));
@@ -1089,7 +979,6 @@ export default function LeadsScreen() {
             Alert.alert("Error", "Failed to reassign some leads");
         }
     };
-
     useFocusEffect(
         useCallback(() => {
             const now = Date.now();
@@ -1099,32 +988,27 @@ export default function LeadsScreen() {
             }
         }, [fetchLeads, leads.length, isAuthenticated])
     );
-
     // SENIOR OPTIMIZATION: Unified Filtering & Stats pass (Single loop O(N))
     const { filtered, localStats } = useMemo(() => {
         const q = debouncedSearch.toLowerCase();
         let hotCount = 0;
         let todayCount = 0;
         const todayStr = new Date().toDateString();
-
         const list = leads.filter(l => {
             // Count for local stats
             const sVal = lookupVal(l.stage).toLowerCase();
             if (sVal === "hot") hotCount++;
             if (l.createdAt && new Date(l.createdAt).toDateString() === todayStr) todayCount++;
-
             // 1. Stage/Source/Owner Filters
             if (filters.stages.length > 0 && !filters.stages.includes(typeof l.stage === 'string' ? l.stage : (l.stage as any)?._id)) return false;
             if (filters.sources.length > 0 && !filters.sources.includes(typeof l.source === 'string' ? l.source : (l.source as any)?._id)) return false;
             if (filters.owners.length > 0 && !filters.owners.includes(typeof l.owner === 'string' ? l.owner : (l.owner as any)?._id)) return false;
-
             // 2. Quick stats filter (exclusive)
             if (activeFilter === "hot" && sVal !== "hot") return false;
             if (activeFilter === "today" && (!l.createdAt || new Date(l.createdAt).toDateString() !== todayStr)) return false;
             if (activeFilter !== "all" && activeFilter !== "" && activeFilter !== "hot" && activeFilter !== "today") {
                 if (sVal !== activeFilter.toLowerCase()) return false;
             }
-
             // 3. Search Matching
             if (!q || q === "nfa:" || q === "revived:") return true;
             const name = leadName(l).toLowerCase();
@@ -1133,15 +1017,12 @@ export default function LeadsScreen() {
             const loc = (l.locCity || lookupVal(l.location)).toLowerCase();
             return name.includes(q) || mobile.includes(q) || req.includes(q) || loc.includes(q);
         });
-
         return { 
             filtered: list, 
             localStats: { total: leads.length, hot: hotCount, today: todayCount } 
         };
     }, [leads, debouncedSearch, activeFilter, filters]);
-
     const fabScale = useRef(new Animated.Value(1)).current;
-
     const animateFab = (toValue: number) => {
         Animated.spring(fabScale, {
             toValue,
@@ -1150,7 +1031,6 @@ export default function LeadsScreen() {
             friction: 5
         }).start();
     };
-
     const renderHeader = () => {
         return (
             <View style={[styles.header, { paddingTop: Math.max((insets?.top ?? 0) + 20, 55), paddingBottom: 16, backgroundColor: theme.card, borderBottomColor: theme.border }]}>
@@ -1167,7 +1047,6 @@ export default function LeadsScreen() {
                         </TouchableOpacity>
                     </View>
                 </View>
-
                 {/* Professional Arrow Style Sales Pipeline Flow */}
                 {/* Enterprise KPI Bar (Communication Hub Style) */}
                 <View style={styles.kpiRow}>
@@ -1176,7 +1055,6 @@ export default function LeadsScreen() {
                     <KPIItem label="Today" value={leadsStats.today} color="#10B981" icon="calendar" theme={theme} />
                     <KPIItem label="Fresh" value={leadsStats.fresh} color="#8B5CF6" icon="leaf" theme={theme} />
                 </View>
-
                 {/* Pipeline Stage Switcher (Communication Hub Channel Style) */}
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.channelScroll}>
                     {[
@@ -1200,7 +1078,6 @@ export default function LeadsScreen() {
                         </TouchableOpacity>
                     ))}
                 </ScrollView>
-
                 <View style={styles.commandBar}>
                     <View style={[styles.searchContainer, { backgroundColor: theme.card, borderColor: theme.border, borderWidth: 1 }]}>
                         <Ionicons name="search" size={20} color={theme.textMuted} style={styles.searchIcon} />
@@ -1239,13 +1116,11 @@ export default function LeadsScreen() {
             </View>
         );
     };
-
     const headerStyle = {
         paddingTop: Math.max(insets.top, 20),
         paddingBottom: 12,
         backgroundColor: theme.card
     };
-
     return (
         <View style={[styles.container, { backgroundColor: theme.background }]}>
             {loading && page === 1 ? (
@@ -1289,7 +1164,6 @@ export default function LeadsScreen() {
                     }
                 />
             )}
-
             {selectedIds.length > 0 ? (
                 <View style={[styles.bulkActionsBar, { backgroundColor: isDark ? theme.card : theme.primary, borderColor: isDark ? theme.border : 'transparent', borderWidth: isDark ? 1 : 0 }]}>
                     <TouchableOpacity style={styles.bulkActionBtn} onPress={handleBulkDelete}>
@@ -1318,7 +1192,6 @@ export default function LeadsScreen() {
                     </TouchableOpacity>
                 </Animated.View>
             )}
-
             <ActionSheet
                 visible={sheetVisible}
                 onClose={() => { setSheetVisible(false); setSelectedLead(null); }}
@@ -1327,7 +1200,6 @@ export default function LeadsScreen() {
                 statuses={getLookupsByType("Stage")}
                 users={users}
             />
-
             <FilterModal
                 visible={showFilterModal}
                 onClose={() => setShowFilterModal(false)}
@@ -1337,7 +1209,6 @@ export default function LeadsScreen() {
                 users={users}
                 sources={getLookupsByType("Source")}
             />
-
             <Modal visible={bulkAssignVisible} transparent animationType="fade">
                 <Pressable style={styles.modalOverlay} onPress={() => setBulkAssignVisible(false)}>
                     <View style={[styles.bulkModalContent, { backgroundColor: theme.card, borderColor: theme.border, borderWidth: 1 }]}>
@@ -1361,21 +1232,18 @@ export default function LeadsScreen() {
         </View>
     );
 }
-
 const styles = StyleSheet.create({
     container: { flex: 1 },
     header: { paddingHorizontal: 16, borderBottomWidth: 1 },
     headerTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
     screenTitle: { fontSize: 22, fontWeight: "900", letterSpacing: -0.5 },
     screenSub: { fontSize: 10, fontWeight: "800", marginTop: 2, letterSpacing: 0.5 },
-    
     modernPipelineRoot: { marginTop: 12, marginBottom: 16 },
     pipelineTitleInnerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, marginBottom: 12 },
     pipelineTitleText: { fontSize: 10, fontWeight: '900', letterSpacing: 1.2 },
     pipelineActionHint: { flexDirection: 'row', alignItems: 'center', gap: 4 },
     pipelineActionText: { fontSize: 8, fontWeight: '800' },
     modernPipelineScroll: { paddingLeft: 16, paddingRight: 40, paddingBottom: 16 },
-    
     arrowStageSegment: { 
         width: 140, 
         height: 60, 
@@ -1408,7 +1276,6 @@ const styles = StyleSheet.create({
         transform: [{ rotate: '45deg' }],
         zIndex: 4,
     },
-
     stageBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, borderWidth: 1 },
     stageText: { fontSize: 10, fontWeight: '900' },
     versionBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
@@ -1426,15 +1293,12 @@ const styles = StyleSheet.create({
     quickAddBtn: { padding: 4, justifyContent: 'center', alignItems: 'center' },
     filterToggleBtn: { width: 42, height: 42, borderRadius: 12, justifyContent: "center", alignItems: "center", position: "relative" },
     filterDot: { position: "absolute", top: 10, right: 10, width: 7, height: 7, borderRadius: 3.5, borderWidth: 1.5 },
-
     segmentContainer: { marginTop: 4 },
     segmentScroll: { gap: 8 },
     segmentItem: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 10, borderWidth: 1 },
     segmentItemActive: {  },
     segmentText: { fontSize: 13, fontWeight: "700" },
     segmentTextActive: { color: "#fff" },
-
-
     card: { flexDirection: 'row', padding: 15, borderRadius: 20, borderWidth: 1, marginBottom: 12, alignItems: 'center' },
     cardSelected: { borderWidth: 2 },
     avatar: { width: 48, height: 48, borderRadius: 14, borderWidth: 1, justifyContent: 'center', alignItems: 'center' },
@@ -1460,31 +1324,25 @@ const styles = StyleSheet.create({
         padding: 4,
         marginRight: -4,
     },
-
     kpiRow: { flexDirection: 'row', gap: 10, marginBottom: 16, paddingHorizontal: 4 },
     kpiItem: { flex: 1, padding: 12, borderRadius: 16, borderWidth: 1, flexDirection: 'row', alignItems: 'center', gap: 10 },
     kpiIcon: { width: 32, height: 32, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
     kpiValue: { fontSize: 16, fontWeight: '800' },
     kpiLabel: { fontSize: 10, fontWeight: '700', textTransform: 'uppercase' },
-
     channelScroll: { gap: 10, paddingBottom: 16, paddingHorizontal: 4 },
     channelTab: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 14, borderWidth: 1 },
     channelText: { fontSize: 13, fontWeight: '800' },
-
     rightActions: { flexDirection: 'row', gap: 8, paddingLeft: 10, marginBottom: 12 },
     leftActions: { flexDirection: 'row', gap: 8, paddingRight: 10, marginBottom: 12 },
     swipeAction: { width: 60, height: '100%', borderRadius: 16, justifyContent: 'center', alignItems: 'center' },
     swipeLabel: { color: '#fff', fontSize: 10, fontWeight: '800', marginTop: 4 },
-
     fab: { width: 56, height: 56, borderRadius: 28, justifyContent: 'center', alignItems: 'center', elevation: 8, shadowOpacity: 0.4, shadowRadius: 12, shadowOffset: { width: 0, height: 6 } },
     empty: { alignItems: 'center', marginTop: 100, gap: 12 },
     emptyText: { fontSize: 15, fontWeight: "600" },
-
     bulkActionsBar: { position: 'absolute', bottom: 34, alignSelf: 'center', flexDirection: 'row', borderRadius: 20, paddingHorizontal: 20, height: 56, alignItems: 'center', gap: 16, shadowOpacity: 0.3, shadowRadius: 15 },
     bulkActionBtn: { flexDirection: 'row', alignItems: 'center', gap: 8 },
     bulkActionText: { color: "#fff", fontWeight: "700", fontSize: 13 },
     bulkDivider: { width: 1, height: 20, backgroundColor: "rgba(255,255,255,0.2)" },
-
     modalOverlay: { flex: 1, backgroundColor: "rgba(15, 23, 42, 0.4)", justifyContent: "flex-end", alignItems: 'center' },
     bulkModalContent: { width: "90%", borderRadius: 32, padding: 24 },
     bulkModalTitle: { fontSize: 18, fontWeight: "700", marginBottom: 20, textAlign: 'center' },
@@ -1494,7 +1352,6 @@ const styles = StyleSheet.create({
     bulkUserName: { fontSize: 15, fontWeight: "600" },
     bulkCancelBtn: { marginTop: 16, paddingVertical: 12, alignItems: 'center' },
     bulkCancelText: { fontSize: 14, fontWeight: "700", color: "#EF4444" },
-
     filterModalContainer: { flex: 1 },
     filterHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, paddingTop: 60, borderBottomWidth: 1 },
     filterHeaderTitle: { fontSize: 18, fontWeight: "800" },
@@ -1510,7 +1367,6 @@ const styles = StyleSheet.create({
     resetBtnText: { fontSize: 14, fontWeight: "700" },
     applyBtn: { flex: 2, height: 48, borderRadius: 24, justifyContent: 'center', alignItems: 'center' },
     applyBtnText: { fontSize: 14, fontWeight: "700", color: "#fff" },
-
     sheetContainer: { 
         borderTopLeftRadius: 32, 
         borderTopRightRadius: 32, 
