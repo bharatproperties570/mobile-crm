@@ -105,32 +105,122 @@ const LeadScoreRing = memo(({ score, color, size = 44 }: any) => {
 
 const ActionSheet = memo(({ visible, onClose, lead, onUpdate, statuses, users }: any) => {
     const router = useRouter();
-    const { theme } = useTheme();
+    const { theme, isDarkMode } = useTheme();
+    const [activeSection, setActiveSection] = useState<string | null>(null);
+    const [newTag, setNewTag] = useState("");
+    const [updating, setUpdating] = useState(false);
+
     if (!lead || !visible) return null;
+
+    const handleAction = async (updateData: any) => {
+        setUpdating(true);
+        const res = await safeApiCall(() => updateLead(lead._id, updateData));
+        setUpdating(false);
+        if (!res.error) {
+            Vibration.vibrate(20);
+            onUpdate();
+            onClose();
+        } else {
+            Alert.alert("Error", "Failed to update lead");
+        }
+    };
+
+    const handleAddTag = async () => {
+        if (!newTag.trim()) return;
+        const currentTags = lead.tags || [];
+        if (currentTags.includes(newTag.trim())) return;
+        handleAction({ tags: [...currentTags, newTag.trim()] });
+    };
+
+    const markDormant = () => {
+        const dStatus = statuses.find((s: any) => s.lookup_value.toLowerCase() === "dormant");
+        if (dStatus) handleAction({ stage: dStatus._id });
+        else Alert.alert("Error", "Dormant status not found in lookups");
+    };
+
     return (
         <Modal transparent visible={visible} animationType="slide" onRequestClose={onClose}>
             <Pressable style={styles.modalOverlay} onPress={onClose}>
                 <View style={[styles.sheetContainer, { backgroundColor: theme.card, borderColor: theme.border }]}>
                     <View style={styles.sheetHandle} />
-                    <Text style={[styles.sheetTitle, { color: theme.text }]}>{String(leadName(lead))}</Text>
-                    <View style={styles.actionGrid}>
-                        {[
-                            { label: "Edit", icon: "create", color: theme.primary, action: () => { router.push(`/add-lead?id=${lead._id}`); onClose(); } },
-                            { label: "Match", icon: "git-compare", color: "#DB2777", action: () => { router.push(`/match-lead?id=${lead._id}`); onClose(); } },
-                            { label: "Activity", icon: "add-circle", color: "#EA580C", action: () => { router.push(`/add-activity?id=${lead._id}`); onClose(); } },
-                            { label: "Delete", icon: "trash", color: "#EF4444", action: () => {
+                    <ScrollView showsVerticalScrollIndicator={false}>
+                        <Text style={[styles.sheetTitle, { color: theme.text }]}>{String(leadName(lead))}</Text>
+                        
+                        <View style={styles.actionGrid}>
+                            <TouchableOpacity style={styles.actionItem} onPress={() => { router.push(`/add-lead?id=${lead._id}`); onClose(); }}>
+                                <View style={[styles.actionIcon, { backgroundColor: theme.primary + '15' }]}><Ionicons name="create" size={24} color={theme.primary} /></View>
+                                <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Edit</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.actionItem} onPress={() => { router.push(`/match-lead?id=${lead._id}`); onClose(); }}>
+                                <View style={[styles.actionIcon, { backgroundColor: '#DB277715' }]}><Ionicons name="git-compare" size={24} color="#DB2777" /></View>
+                                <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Match</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.actionItem} onPress={() => { router.push(`/add-document?id=${lead._id}&type=Lead`); onClose(); }}>
+                                <View style={[styles.actionIcon, { backgroundColor: '#0EA5E915' }]}><Ionicons name="document-attach" size={24} color="#0EA5E9" /></View>
+                                <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Doc</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.actionItem} onPress={() => { router.push(`/add-activity?id=${lead._id}`); onClose(); }}>
+                                <View style={[styles.actionIcon, { backgroundColor: '#EA580C15' }]}><Ionicons name="add-circle" size={24} color="#EA580C" /></View>
+                                <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Outcome</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.actionItem} onPress={() => setActiveSection(activeSection === 'assign' ? null : 'assign')}>
+                                <View style={[styles.actionIcon, { backgroundColor: '#7C3AED15' }]}><Ionicons name="person-add" size={24} color="#7C3AED" /></View>
+                                <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Assign</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.actionItem} onPress={() => setActiveSection(activeSection === 'tag' ? null : 'tag')}>
+                                <View style={[styles.actionIcon, { backgroundColor: '#4F46E515' }]}><Ionicons name="pricetags" size={24} color="#4F46E5" /></View>
+                                <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Tag</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.actionItem} onPress={markDormant}>
+                                <View style={[styles.actionIcon, { backgroundColor: '#94A3B815' }]}><Ionicons name="moon" size={24} color="#94A3B8" /></View>
+                                <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Dormant</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.actionItem} onPress={() => {
                                 Alert.alert("Delete?", "Remove lead permanently?", [
                                     { text: "Cancel" },
                                     { text: "Delete", style: "destructive", onPress: async () => { await deleteLead(lead._id); onUpdate(); onClose(); } }
                                 ]);
-                            }}
-                        ].map((item, idx) => (
-                            <TouchableOpacity key={idx} style={styles.actionItem} onPress={item.action}>
-                                <View style={[styles.actionIcon, { backgroundColor: item.color + '15' }]}><Ionicons name={item.icon as any} size={24} color={item.color} /></View>
-                                <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>{item.label}</Text>
+                            }}>
+                                <View style={[styles.actionIcon, { backgroundColor: '#EF444415' }]}><Ionicons name="trash" size={24} color="#EF4444" /></View>
+                                <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Delete</Text>
                             </TouchableOpacity>
-                        ))}
-                    </View>
+                        </View>
+
+                        {activeSection === 'assign' && (
+                            <View style={[styles.subSection, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.03)' : '#F8FAFC' }]}>
+                                <Text style={[styles.sectionTitle, { color: theme.text }]}>Assign to Team Member</Text>
+                                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12 }}>
+                                    {users.map((u: any) => (
+                                        <TouchableOpacity key={u._id} style={styles.userChip} onPress={() => handleAction({ owner: u._id })}>
+                                            <View style={[styles.userAvatar, { backgroundColor: theme.primary + '15' }]}><Text style={{ color: theme.primary, fontWeight: 'bold' }}>{String((u.fullName || u.name || "?")[0])}</Text></View>
+                                            <Text style={[styles.userChipText, { color: theme.textSecondary }]}>{String(u.fullName || u.name)}</Text>
+                                        </TouchableOpacity>
+                                    ))}
+                                </ScrollView>
+                            </View>
+                        )}
+
+                        {activeSection === 'tag' && (
+                            <View style={[styles.subSection, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.03)' : '#F8FAFC' }]}>
+                                <Text style={[styles.sectionTitle, { color: theme.text }]}>Manage Tags</Text>
+                                <View style={styles.tagInputRow}>
+                                    <TextInput style={[styles.tagInput, { backgroundColor: theme.card, color: theme.text, borderColor: theme.border }]} placeholder="New tag..." placeholderTextColor={theme.textMuted} value={newTag} onChangeText={setNewTag} />
+                                    <TouchableOpacity style={[styles.addTagBtn, { backgroundColor: theme.primary }]} onPress={handleAddTag} disabled={updating}>
+                                        {updating ? <ActivityIndicator color="#fff" size="small" /> : <Ionicons name="add" size={24} color="#fff" />}
+                                    </TouchableOpacity>
+                                </View>
+                                <View style={styles.tagList}>
+                                    {(lead.tags || []).map((t: string, i: number) => (
+                                        <View key={i} style={[styles.tagBadge, { backgroundColor: theme.primary + '10' }]}>
+                                            <Text style={[styles.tagText, { color: theme.primary }]}>{String(t)}</Text>
+                                            <TouchableOpacity onPress={() => handleAction({ tags: (lead.tags || []).filter((tag: string) => tag !== t) })}><Ionicons name="close-circle" size={14} color={theme.primary} /></TouchableOpacity>
+                                        </View>
+                                    ))}
+                                </View>
+                            </View>
+                        )}
+                        <View style={{ height: 40 }} />
+                    </ScrollView>
                 </View>
             </Pressable>
         </Modal>
@@ -358,13 +448,24 @@ const styles = StyleSheet.create({
     swipeBtn: { width: 60, height: '100%', borderRadius: 16, justifyContent: 'center', alignItems: 'center' },
     swipeLabel: { color: '#fff', fontSize: 10, fontWeight: '800', marginTop: 4 },
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-    sheetContainer: { padding: 24, borderTopLeftRadius: 32, borderTopRightRadius: 32, paddingBottom: 40 },
+    sheetContainer: { padding: 24, borderTopLeftRadius: 32, borderTopRightRadius: 32, paddingBottom: 40, maxHeight: '85%' },
     sheetHandle: { width: 40, height: 4, borderRadius: 2, backgroundColor: '#E2E8F0', alignSelf: 'center', marginBottom: 20 },
-    sheetTitle: { fontSize: 18, fontWeight: '800', marginBottom: 20, textAlign: 'center' },
-    actionGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, justifyContent: 'center' },
-    actionItem: { width: '22%', alignItems: 'center', gap: 8 },
+    sheetTitle: { fontSize: 18, fontWeight: '800', marginBottom: 24, textAlign: 'center' },
+    actionGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 16, justifyContent: 'center', marginBottom: 24 },
+    actionItem: { width: '21%', alignItems: 'center', gap: 8 },
     actionIcon: { width: 48, height: 48, borderRadius: 24, justifyContent: 'center', alignItems: 'center' },
     actionLabel: { fontSize: 11, fontWeight: '700' },
+    subSection: { padding: 16, borderRadius: 20, marginBottom: 16 },
+    sectionTitle: { fontSize: 12, fontWeight: '800', textTransform: 'uppercase', marginBottom: 12 },
+    userChip: { alignItems: 'center', gap: 6, width: 70 },
+    userAvatar: { width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center' },
+    userChipText: { fontSize: 10, fontWeight: '700', textAlign: 'center' },
+    tagInputRow: { flexDirection: 'row', gap: 10, marginBottom: 12 },
+    tagInput: { flex: 1, height: 44, borderRadius: 12, paddingHorizontal: 16, borderWidth: 1, fontSize: 14 },
+    addTagBtn: { width: 44, height: 44, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+    tagList: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+    tagBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
+    tagText: { fontSize: 12, fontWeight: '700' },
     empty: { alignItems: 'center', marginTop: 100 },
     emptyText: { fontSize: 15, fontWeight: '600', marginTop: 12 }
 });
