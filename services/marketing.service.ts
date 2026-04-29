@@ -36,24 +36,11 @@ export const marketingService = {
    */
   getCampaignReports: async () => {
     try {
-      const { data } = await api.get("/marketing/campaign-reports");
+      const { data } = await api.get("/marketing/campaign-runs");
       return data;
     } catch (error) {
-       // Fallback for professional UI rendering if API is not yet live
-       return {
-         success: true,
-         campaigns: [
-           { id: 'c1', name: 'Direct Deal Push (WA)', reach: 852, conversion: '12.4%', status: 'Active', roi: '5.2x' },
-           { id: 'c2', name: 'Sector 7 Investor Blast', reach: 2150, conversion: '8.2%', status: 'Active', roi: '14.8x' },
-           { id: 'c3', name: 'Re-engagement Drip', reach: 412, conversion: '15.6%', status: 'Paused', roi: '2.1x' }
-         ],
-         kpis: {
-            efficiency: '94%',
-            matchRate: '68%',
-            costPerLead: '₹420',
-            roiIndex: '4.8x'
-         }
-       };
+      console.error("[MARKETING SERVICE]: Failed to fetch campaign reports", error);
+      return { success: false, data: [] };
     }
   },
 
@@ -82,6 +69,73 @@ export const marketingService = {
         previewUrl: "https://bharatproperties.co/assets/ai_preview_reel.jpg",
         type: params.format.includes("Reel") ? "video" : "image"
       };
+    }
+  },
+  /**
+   * Launch an Omnichannel Marketing Campaign
+   */
+  sendCampaign: async (payload: any) => {
+    try {
+      const { data } = await api.post("/marketing/send-campaign", payload);
+      return data;
+    } catch (error: any) {
+      console.error("[MARKETING SERVICE]: Failed to send campaign", error);
+      return { success: false, error: error.response?.data?.error || "Dispatch failed" };
+    }
+  },
+
+  /**
+   * Fetch Scheduled & Repeatable Campaigns
+   */
+  getScheduledCampaigns: async () => {
+    try {
+      const { data } = await api.get("/marketing/scheduled");
+      return data;
+    } catch (error) {
+      console.error("[MARKETING SERVICE]: Failed to fetch scheduled campaigns", error);
+      return { success: true, delayed: [], repeatable: [] };
+    }
+  },
+
+  /**
+   * Fetch WhatsApp/SMS Templates (Meta Verified & DLT)
+   */
+  getTemplates: async (channel: string) => {
+    try {
+      const endpoint = channel.toLowerCase() === 'whatsapp' ? "/marketing/whatsapp/templates" : "/marketing/sms/templates";
+      const { data } = await api.get(endpoint);
+      return data;
+    } catch (error) {
+      console.error(`[MARKETING SERVICE]: Failed to fetch ${channel} templates`, error);
+      return { success: false, templates: [] };
+    }
+  },
+
+  /**
+   * Calculate Real-time Audience Size based on filters
+   */
+  getAudienceCount: async (params: any) => {
+    try {
+      const { data } = await api.post("/marketing/audience-count", params);
+      return data;
+    } catch (error) {
+      console.error("[MARKETING SERVICE]: Failed to fetch audience count", error);
+      return { success: true, count: 0 };
+    }
+  },
+
+  /**
+   * Import Audience from Excel/CSV
+   */
+  importAudience: async (formData: any) => {
+    try {
+      const { data } = await api.post("/marketing/import-audience", formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      return data;
+    } catch (error) {
+      console.error("[MARKETING SERVICE]: Failed to import audience", error);
+      return { success: false, error: "File parsing failed" };
     }
   }
 };

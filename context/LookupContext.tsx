@@ -5,9 +5,11 @@ import { useAuth } from "./AuthContext";
 
 interface Lookup {
     _id: string;
+    id?: string; // Add id for compatibility
     lookup_type: string;
     lookup_value: string;
     parent_id?: string;
+    metadata?: any;
 }
 
 interface LookupContextType {

@@ -11,6 +11,7 @@ import { lookupVal, safeApiCall } from "@/services/api.helpers";
 import { useCallTracking } from "@/context/CallTrackingContext";
 import { useLookup } from "@/context/LookupContext";
 import { useUsers } from "@/context/UserContext";
+import { useProjects } from "@/context/ProjectContext";
 import api from "@/services/api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTheme } from "@/context/ThemeContext";
@@ -18,12 +19,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import FilterModal, { FilterField } from "@/components/FilterModal";
 import { formatSize, getSizeLabel } from "@/utils/format.utils";
 
-const INVENTORY_FILTER_FIELDS: FilterField[] = [
-    { key: "status", label: "Status", type: "lookup", lookupType: "InventoryStatus" },
-    { key: "category", label: "Category", type: "lookup", lookupType: "Category" },
-    { key: "subCategory", label: "Sub Category", type: "lookup", lookupType: "SubCategory" },
-    { key: "unitType", label: "Unit Type", type: "lookup", lookupType: "UnitType" },
-];
+// The list of filter fields is now generated inside the component to allow for dynamic project options.
 
 function lv(field: unknown, getLookupValue?: (type: string, val: any) => string, findUser?: (id: string) => any): string {
     if (field === null || field === undefined || field === "" || field === "null" || field === "undefined") return "—";
@@ -71,7 +67,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const COLUMN_WIDTH = (SCREEN_WIDTH - 48) / 2;
 
 const STATUS_COLORS_LIGHT: Record<string, string> = {
-    'Available': '#10B981',
+    'Available': '#1DB954', // Spotify Green
     'Sold': '#EF4444',
     'Reserved': '#F59E0B',
     'Blocked': '#64748B',
@@ -79,11 +75,11 @@ const STATUS_COLORS_LIGHT: Record<string, string> = {
 };
 
 const STATUS_COLORS_DARK: Record<string, string> = {
-    'Available': '#34D399',
-    'Sold': '#F87171',
-    'Reserved': '#FBBF24',
-    'Blocked': '#94A3B8',
-    'Hold': '#A78BFA'
+    'Available': '#1DB954', // Spotify Green
+    'Sold': '#E91429',      // Spotify Red
+    'Reserved': '#FFD700',
+    'Blocked': '#7A7A7A',
+    'Hold': '#B3B3B3'
 };
 
 const ACTIVE_STATUSES = ['Available', 'Active', 'Interested / Warm', 'Interested / Hot', 'Request Call Back', 'Busy / Driving', 'Market Feedback', 'General Inquiry', 'Blocked', 'Booked', 'Interested'];
@@ -97,19 +93,20 @@ const TYPE_ICONS: Record<string, string> = {
     'Shop': 'cart'
 };
 
-const InventoryCard = memo(({ item, onPress, onWhatsApp, onSMS, onEmail, onMenuPress, viewMode }: {
+const InventoryCard = memo(({ item, onPress, onCall, onWhatsApp, onSMS, onEmail, onMenuPress, viewMode }: {
     item: Inventory;
     onPress: () => void;
+    onCall: () => void;
     onWhatsApp: () => void;
     onSMS: () => void;
     onEmail: () => void;
     onMenuPress: () => void;
     viewMode: 'list' | 'grid';
 }) => {
-    const { theme } = useTheme();
+    const { theme, isDarkMode } = useTheme();
     const { getLookupValue } = useLookup();
     const { findUser } = useUsers();
-    const isDark = theme.background === '#0F172A';
+    const isDark = isDarkMode;
 
     const statusColors = isDark ? STATUS_COLORS_DARK : STATUS_COLORS_LIGHT;
 
@@ -157,6 +154,10 @@ const InventoryCard = memo(({ item, onPress, onWhatsApp, onSMS, onEmail, onMenuP
 
     const renderLeftActions = () => (
         <View style={styles.leftActions}>
+            <TouchableOpacity style={[styles.swipeAction, { backgroundColor: isDark ? '#1E3A8A' : '#3B82F6' }]} onPress={onCall}>
+                <Ionicons name="call" size={22} color="#fff" />
+                <Text style={styles.swipeLabel}>Call</Text>
+            </TouchableOpacity>
             <TouchableOpacity style={[styles.swipeAction, { backgroundColor: isDark ? '#166534' : '#25D366' }]} onPress={onWhatsApp}>
                 <Ionicons name="logo-whatsapp" size={22} color="#fff" />
                 <Text style={styles.swipeLabel}>WhatsApp</Text>
@@ -180,7 +181,7 @@ const InventoryCard = memo(({ item, onPress, onWhatsApp, onSMS, onEmail, onMenuP
                 </View>
                 <View style={styles.gridInfo}>
                     <Text style={[styles.gridProject, { color: theme.text }]} numberOfLines={1}>{item.projectName}</Text>
-                    <Text style={[styles.gridUnit, { color: theme.textLight }]}>{item.block} • {item.unitNumber || item.unitNo}</Text>
+                    <Text style={[styles.gridUnit, { color: theme.textSecondary }]}>{item.block} • {item.unitNumber || item.unitNo}</Text>
                 </View>
             </TouchableOpacity>
         );
@@ -203,13 +204,13 @@ const InventoryCard = memo(({ item, onPress, onWhatsApp, onSMS, onEmail, onMenuP
                             </View>
                             <Text numberOfLines={1} style={styles.listProjectContainer}>
                                 <Text style={[styles.listProjectName, { color: theme.textSecondary }]}>{item.projectName || "N/A"}</Text>
-                                <Text style={[styles.listBlockName, { color: theme.textLight }]}> • {item.block || "No Block"}</Text>
+                                <Text style={[styles.listBlockName, { color: theme.textSecondary }]}> • {item.block || "No Block"}</Text>
                             </Text>
                             {/* Size shown below project name */}
                             {(item.size || item.sizeUnit || item.sizeConfig || item.sizeLabel) ? (
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 }}>
-                                    <Ionicons name="expand-outline" size={11} color={theme.textMuted} />
-                                    <Text style={{ fontSize: 12, color: theme.textMuted, fontWeight: '700' }}>
+                                    <Ionicons name="expand-outline" size={11} color={theme.textSecondary} />
+                                    <Text style={{ fontSize: 12, color: theme.textSecondary, fontWeight: '700' }}>
                                         {displayInfo.sizeLabel}
                                     </Text>
                                 </View>
@@ -223,7 +224,7 @@ const InventoryCard = memo(({ item, onPress, onWhatsApp, onSMS, onEmail, onMenuP
                                 </View>
                             </View>
                             <TouchableOpacity style={styles.menuTrigger} onPress={onMenuPress}>
-                                <Ionicons name="ellipsis-vertical" size={18} color={theme.textMuted} />
+                                <Ionicons name="ellipsis-vertical" size={18} color={theme.textSecondary} />
                             </TouchableOpacity>
                         </View>
                     </View>
@@ -238,7 +239,7 @@ const InventoryCard = memo(({ item, onPress, onWhatsApp, onSMS, onEmail, onMenuP
                                     {resolveNameFromObject(item.owners?.[0], item.ownerName, getLookupValue, findUser)}
                                 </Text>
                                 {(item.owners?.[0]?.phones?.[0]?.number || item.owners?.[0]?.phone || item.ownerPhone) ? (
-                                    <Text style={[styles.listMetaText, { color: theme.textLight }]}>
+                                    <Text style={[styles.listMetaText, { color: theme.textSecondary }]}>
                                         • {item.owners?.[0]?.phones?.[0]?.number || item.owners?.[0]?.phone || item.ownerPhone}
                                     </Text>
                                 ) : null}
@@ -252,7 +253,7 @@ const InventoryCard = memo(({ item, onPress, onWhatsApp, onSMS, onEmail, onMenuP
                                     {resolveNameFromObject(item.associates?.[0], item.associatedContact, getLookupValue, findUser)}
                                 </Text>
                                 {(item.associates?.[0]?.phones?.[0]?.number || item.associates?.[0]?.phone || item.associatedPhone) ? (
-                                    <Text style={[styles.listMetaText, { color: theme.textLight }]}>
+                                    <Text style={[styles.listMetaText, { color: theme.textSecondary }]}>
                                         • {item.associates?.[0]?.phones?.[0]?.number || item.associates?.[0]?.phone || item.associatedPhone}
                                     </Text>
                                 ) : null}
@@ -273,9 +274,9 @@ const InventoryCard = memo(({ item, onPress, onWhatsApp, onSMS, onEmail, onMenuP
 });
 
 export default function InventoryScreen() {
-    const { theme } = useTheme();
+    const { theme, isDarkMode } = useTheme();
     const insets = useSafeAreaInsets();
-    const isDark = theme.background === '#0F172A';
+    const isDark = isDarkMode;
     const { trackCall } = useCallTracking();
     const router = useRouter();
     const [inventory, setInventory] = useState<Inventory[]>([]);
@@ -293,6 +294,31 @@ export default function InventoryScreen() {
     const lastFetchTime = useRef<number>(0);
     const [activeQuickFilter, setActiveQuickFilter] = useState<'active' | 'inactive' | null>(null);
     const { getLookupsByType, getLookupValue } = useLookup();
+    const { projects } = useProjects();
+
+    const inventoryFilterFields = useMemo<FilterField[]>(() => [
+        { key: "header_status", label: "Status", type: "header" },
+        { key: "status", label: "Specific Status", type: "lookup", lookupType: "Status" },
+        
+        { key: "header_property", label: "Property Information", type: "header" },
+        { key: "category", label: "Category", type: "lookup", lookupType: "Category" },
+        { key: "subCategory", label: "Sub Category", type: "lookup", lookupType: "SubCategory" },
+        { key: "unitType", label: "Unit Type", type: "lookup", lookupType: "UnitType" },
+        { key: "size", label: "Size (Sq.Ft.)", type: "range" },
+        
+        { key: "header_location", label: "Location & Project", type: "header" },
+        { key: "project", label: "Project Name", type: "select", options: projects.map(p => ({ label: p.name, value: p.name })) },
+        
+        { key: "header_orientation", label: "Orientation", type: "header" },
+        { key: "direction", label: "Direction", type: "lookup", lookupType: "Direction" },
+        { key: "facing", label: "Facing", type: "lookup", lookupType: "Facing" },
+        { key: "roadWidth", label: "Road Width", type: "lookup", lookupType: "RoadWidth" },
+    
+        { key: "header_activity", label: "Feedback & Activity", type: "header" },
+        { key: "feedbackOutcome", label: "Feedback Outcome", type: "lookup", lookupType: "PropertyOwnerFeedback" },
+        { key: "followUpFrom", label: "Follow-up From", type: "date" },
+        { key: "followUpTo", label: "Follow-up To", type: "date" },
+    ], [projects]);
 
     // Action Hub State
     const [selectedInv, setSelectedInv] = useState<Inventory | null>(null);
@@ -747,6 +773,19 @@ export default function InventoryScreen() {
                             </View>
 
                             <View style={styles.actionGrid}>
+                                {selectedInv?.owners?.[0]?.mobile && (
+                                    <TouchableOpacity style={styles.actionItem} onPress={() => {
+                                        const phone = selectedInv.owners[0].mobile.replace(/\D/g, "");
+                                        Linking.openURL(`tel:${phone}`);
+                                        closeHub();
+                                    }}>
+                                        <View style={[styles.actionIcon, { backgroundColor: isDark ? 'rgba(16, 185, 129, 0.1)' : "#DCFCE7" }]}>
+                                            <Ionicons name="call" size={24} color="#10B981" />
+                                        </View>
+                                        <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Call Owner</Text>
+                                    </TouchableOpacity>
+                                )}
+
                                 <TouchableOpacity style={styles.actionItem} onPress={() => {
                                     router.push(`/add-inventory?id=${selectedInv?._id}`); closeHub();
                                 }}>
@@ -836,12 +875,13 @@ export default function InventoryScreen() {
                 </Pressable >
             </Modal >
 
+            {/* Upgraded Filter Modal (Professional Grade) */}
             <FilterModal
                 visible={showFilterModal}
                 onClose={() => setShowFilterModal(false)}
-                onApply={setFilters}
+                onApply={(newFilters) => setFilters(newFilters)}
                 initialFilters={filters}
-                fields={INVENTORY_FILTER_FIELDS}
+                fields={inventoryFilterFields}
             />
         </SafeAreaView>
     );
@@ -870,48 +910,8 @@ const styles = StyleSheet.create({
     filterBadgeText: { color: '#fff', fontSize: 8, fontWeight: '900' },
     list: { paddingBottom: 100 },
     listCard: { flexDirection: "row", marginHorizontal: 16, marginBottom: 8, borderRadius: 18, overflow: "hidden", borderWidth: 1, elevation: 1, shadowOpacity: 0.02, shadowRadius: 10, shadowOffset: { width: 0, height: 5 } },
-    listMain: { flex: 1, padding: 8 },
-    listHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 },
-    listProjectName: { fontSize: 13, fontWeight: "700" },
-    listBlockName: { fontSize: 13, fontWeight: "600" },
-    listUnitNumber: { fontSize: 15, fontWeight: "900" },
-    listUnit: { fontSize: 12, fontWeight: "600", marginBottom: 6 },
-    typePill: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
-    typePillText: { fontSize: 10, fontWeight: "800", textTransform: 'uppercase' },
-    statusPill: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 20, gap: 6 },
-    statusDot: { width: 6, height: 6, borderRadius: 3 },
-    statusPillText: { fontSize: 10, fontWeight: "800", textTransform: 'uppercase' },
-    listUnit: { fontSize: 13, fontWeight: "600", marginBottom: 8 },
-    listFooter: { flexDirection: 'row', gap: 12, marginTop: 8, paddingTop: 6, borderTopWidth: 1 },
-    listMeta: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-    listPrice: { fontSize: 17, fontWeight: "800" },
-    listMetaText: { fontSize: 12, fontWeight: "700" },
-
-    // Grid Card Styles
-    inactiveSelected: {
-        borderWidth: 2,
-    },
-    activeSelected: {
-        borderWidth: 2,
-        borderColor: '#22C55E',
-    },
-    gridCard: {
-        width: COLUMN_WIDTH, borderRadius: 24,
-        padding: 12, marginBottom: 16, borderWidth: 1,
-        shadowOpacity: 0.02, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }
-    },
-    gridMediaSlot: { height: 100, borderRadius: 18, marginBottom: 12, justifyContent: 'center', alignItems: 'center', position: 'relative' },
-    gridStatusDot: { position: 'absolute', top: 10, right: 10, width: 8, height: 8, borderRadius: 4, borderWidth: 1.5 },
-    gridInfo: { paddingHorizontal: 4 },
-    gridProject: { fontSize: 15, fontWeight: "800", marginBottom: 2 },
-    gridUnit: { fontSize: 10, fontWeight: "500", marginBottom: 8 },
-    gridMenuTrigger: { position: 'absolute', top: 10, left: 10, padding: 4 },
-    gridPrice: { fontSize: 17, fontWeight: "900", color: "#2563EB" },
-
-    // Swipe Styles
-    rightActions: { flexDirection: 'row', paddingLeft: 10 },
-    leftActions: { flexDirection: 'row', paddingRight: 10 },
     container: { flex: 1 },
+    safeArea: { flex: 1 },
     headerContainer: { paddingBottom: 16 },
     header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20, paddingTop: 12, paddingBottom: 16 },
     headerTitle: { fontSize: 28, fontWeight: "900", letterSpacing: -0.5 },
@@ -959,8 +959,9 @@ const styles = StyleSheet.create({
     listProjectContainer: { marginTop: 1 },
     listProjectName: { fontSize: 14, fontWeight: "800" },
     listBlockName: { fontSize: 10, fontWeight: "500" },
+    listUnit: { fontSize: 13, fontWeight: "600", marginBottom: 8 },
 
-    statusPill: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
+    statusPill: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, flexDirection: 'row', alignItems: 'center', gap: 6 },
     statusDot: { width: 6, height: 6, borderRadius: 3 },
     statusPillText: { fontSize: 11, fontWeight: "800", textTransform: 'uppercase' },
     typePill: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
@@ -969,9 +970,11 @@ const styles = StyleSheet.create({
     listFooter: { marginTop: 6, paddingTop: 6, borderTopWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(0,0,0,0.05)' },
     listMeta: { flexDirection: 'row', alignItems: 'center', gap: 6 },
     listMetaText: { fontSize: 12, fontWeight: "600" },
+    listMetaContainer: { flex: 1 },
 
+    gridRow: { justifyContent: 'space-between', paddingHorizontal: 16 },
     gridCard: {
-        width: COLUMN_WIDTH, marginHorizontal: 8, marginBottom: 16,
+        width: COLUMN_WIDTH, marginBottom: 16,
         borderRadius: 20, overflow: "hidden", borderWidth: 1,
         elevation: 1, shadowOpacity: 0.02, shadowRadius: 10, shadowOffset: { width: 0, height: 5 }
     },
@@ -981,6 +984,7 @@ const styles = StyleSheet.create({
     gridInfo: { padding: 12 },
     gridProject: { fontSize: 14, fontWeight: "800", marginBottom: 2 },
     gridUnit: { fontSize: 11, fontWeight: "600" },
+    gridPrice: { fontSize: 17, fontWeight: "900", color: "#2563EB" },
 
     rightActions: { flexDirection: 'row', paddingLeft: 10 },
     leftActions: { flexDirection: 'row', paddingRight: 10 },
@@ -989,11 +993,11 @@ const styles = StyleSheet.create({
 
     empty: { alignItems: "center", marginTop: 100 },
     emptyText: { marginTop: 16, fontSize: 15, fontWeight: "600", textAlign: 'center' },
+    center: { flex: 1, justifyContent: "center", alignItems: "center" },
 
     menuTrigger: { padding: 4, marginLeft: 8 },
     cardQuickActions: { flexDirection: 'row', gap: 6, alignItems: 'center' },
     quickActionBtn: { width: 30, height: 30, borderRadius: 8, justifyContent: 'center', alignItems: 'center', borderWidth: 1 },
-    listMetaContainer: { flex: 1 },
 
     modalOverlay: { flex: 1, backgroundColor: "rgba(15, 23, 42, 0.4)", justifyContent: "flex-end" },
     sheetContainer: { 
@@ -1018,4 +1022,6 @@ const styles = StyleSheet.create({
     contactAvatar: { width: 40, height: 40, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
     contactName: { fontSize: 15, fontWeight: '800' },
     contactRole: { fontSize: 11, fontWeight: '600', marginTop: 2 },
+    inactiveSelected: { borderWidth: 2 },
+    activeSelected: { borderWidth: 2, borderColor: '#22C55E' },
 });

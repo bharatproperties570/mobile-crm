@@ -169,6 +169,25 @@ export default function CommunicationHub() {
         });
     }, [channel, subTab, activities, emails, aiConvos, searchQ]);
 
+    const displayItems = useMemo(() => {
+        let base = filteredItems;
+        
+        // Grouping logic (similar to Web CRM)
+        const groups: Record<string, any> = {};
+        base.forEach(item => {
+            const key = item.phone || item.participant || 'Unknown';
+            if (!groups[key]) {
+                groups[key] = { ...item };
+            } else {
+                if (new Date(item.date) > new Date(groups[key].date)) {
+                    groups[key] = { ...item };
+                }
+            }
+        });
+
+        return Object.values(groups).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    }, [filteredItems]);
+
     const kpis = useMemo(() => ({
         total: activities.length + emails.length + aiConvos.length,
         matched: [
@@ -198,7 +217,7 @@ export default function CommunicationHub() {
                 <View style={styles.kpiRow}>
                     <KPIItem label="Total" value={kpis.total} color={theme.primary} icon="globe" theme={theme} />
                     <KPIItem label="Matched" value={kpis.matched} color="#10B981" icon="link" theme={theme} />
-                    <KPIItem label="AI" value={kpis.ai} color="#8B5CF6" icon="airplane" theme={theme} />
+                    <KPIItem label="AI" value={kpis.ai} color="#8B5CF6" icon="chatbox" theme={theme} />
                     <KPIItem label="Failed" value={kpis.failed} color="#EF4444" icon="alert-circle" theme={theme} />
                 </View>
 
@@ -246,7 +265,7 @@ export default function CommunicationHub() {
                 </View>
             ) : (
                 <FlatList 
-                    data={filteredItems}
+                    data={displayItems}
                     keyExtractor={item => `${item.id}_${item.via}`}
                     contentContainerStyle={styles.listContent}
                     refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => fetchAll(true)} tintColor={theme.primary} />}
@@ -255,7 +274,18 @@ export default function CommunicationHub() {
                                     item={item} 
                                     theme={theme} 
                                     isDark={isDark} 
-                                    onPress={() => setSelectedItem(item)}
+                                    onPress={() => {
+                                        router.push({
+                                            pathname: "/conversation",
+                                            params: {
+                                                id: item.id,
+                                                participant: item.participant,
+                                                phone: item.phone || '',
+                                                via: item.via
+                                            }
+                                        });
+                                    }}
+                                    onLongPress={() => setSelectedItem(item)}
                                 />
                     )}
                     ListEmptyComponent={
@@ -424,13 +454,14 @@ function ActionBtn({ icon, label, onPress, theme, color, isCancel }: any) {
     );
 }
 
-function InboxRow({ item, theme, isDark, onPress }: any) {
+function InboxRow({ item, theme, isDark, onPress, onLongPress }: any) {
     const ch = CHANNELS.find(c => c.id === item.via) || CHANNELS[0];
     const outcomeColor = OUTCOME_COLOR[item.outcome] || theme.textMuted;
 
     return (
         <TouchableOpacity 
             onPress={onPress}
+            onLongPress={onLongPress}
             style={[styles.inboxRow, { backgroundColor: theme.card, borderColor: theme.border }]}
         >
             <View style={[styles.avatar, { backgroundColor: ch.color + '15', borderColor: ch.color + '30' }]}>

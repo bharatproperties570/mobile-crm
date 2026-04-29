@@ -42,6 +42,9 @@ export interface Lead {
     intent_index?: number;
     lead_classification?: string;
     intent_tags?: string[];
+    documents?: any[];
+    vault?: any[];
+    notes?: any[];
 }
 
 export function leadName(lead: Lead): string {

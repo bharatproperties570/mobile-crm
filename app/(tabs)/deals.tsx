@@ -375,7 +375,7 @@ const DealCard = memo(({
                             <View style={styles.dealProjectContainer}>
                                 <Text numberOfLines={1}>
                                     <Text style={[styles.dealProjectName, { color: theme.textSecondary }]}>{deal.projectName || (deal.projectId && typeof deal.projectId === 'object' ? (deal.projectId as any).name : "") || "Unnamed Project"}</Text>
-                                    <Text style={[styles.dealBlockName, { color: theme.textLight }]}> • {deal.block || (typeof deal.inventoryId === 'object' ? deal.inventoryId?.block : "") || "No Block"}</Text>
+                                    <Text style={[styles.dealBlockName, { color: theme.textSecondary }]}> • {deal.block || (typeof deal.inventoryId === 'object' ? deal.inventoryId?.block : "") || "No Block"}</Text>
                                 </Text>
                             </View>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
@@ -401,8 +401,8 @@ const DealCard = memo(({
 
                                     return (
                                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#F1F5F9', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
-                                            <Ionicons name="expand-outline" size={10} color={theme.textMuted} />
-                                            <Text style={{ fontSize: 11, color: theme.textMuted, fontWeight: '700' }} numberOfLines={1}>
+                                            <Ionicons name="expand-outline" size={10} color={theme.textSecondary} />
+                                            <Text style={{ fontSize: 11, color: theme.textSecondary, fontWeight: '700' }} numberOfLines={1}>
                                                 {finalLabel}
                                             </Text>
                                         </View>
@@ -419,7 +419,7 @@ const DealCard = memo(({
                                 </View>
                             </View>
                             <TouchableOpacity style={styles.menuTrigger} onPress={onMenuPress}>
-                                <Ionicons name="ellipsis-vertical" size={18} color={theme.textMuted} />
+                                <Ionicons name="ellipsis-vertical" size={18} color={theme.textSecondary} />
                             </TouchableOpacity>
                         </View>
                     </View>
@@ -501,7 +501,7 @@ export default function DealsScreen() {
 
     const pipelineStats = useMemo(() => {
         const stats: Record<string, number> = {};
-        const isDark = theme.background === '#0F172A';
+        const isDark = isDarkMode;
         const stageColorMap = isDark ? STAGE_COLORS_DARK : STAGE_COLORS_LIGHT;
         
         deals.forEach(d => {
@@ -953,7 +953,7 @@ export default function DealsScreen() {
     const totalValue = deals.reduce((sum: number, d: Deal) => sum + (Number(d.price) || Number(d.amount) || 0), 0);
 
     return (
-        <GestureHandlerRootView style={styles.container}>
+        <GestureHandlerRootView style={[styles.container, { backgroundColor: theme.background }]}>
             {loading && page === 1 ? (
                 <View style={styles.center}><ActivityIndicator color="#2563EB" size="large" /></View>
             ) : (

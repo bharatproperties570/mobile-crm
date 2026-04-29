@@ -55,9 +55,9 @@ function Field({ label, required, children, helperText }: { label?: string; requ
 }
 
 function Input({
-    value, onChangeText, placeholder, keyboardType, multiline, numberOfLines, editable = true, label, icon
+    value, onChangeText = () => {}, placeholder, keyboardType, multiline, numberOfLines, editable = true, label, icon
 }: {
-    value: string; onChangeText: (t: string) => void; placeholder?: string; keyboardType?: any; multiline?: boolean; numberOfLines?: number; editable?: boolean; label?: string; icon?: string;
+    value: string; onChangeText?: (t: string) => void; placeholder?: string; keyboardType?: any; multiline?: boolean; numberOfLines?: number; editable?: boolean; label?: string; icon?: string;
 }) {
     const { theme } = useTheme();
     const [isFocused, setIsFocused] = useState(false);
@@ -331,7 +331,7 @@ export default function AddProjectScreen() {
 
             const usersRes = await safeApiCall<any>(() => api.get("/users?limit=1000"));
             if (!usersRes.error) {
-                const userList = usersRes.data?.data || [];
+                const userList = (usersRes.data?.data || usersRes.data || []) as any[];
                 setUsers(userList.map((u: any) => ({ label: u.fullName || u.name, value: u._id, team: u.team?._id || u.team })));
             }
         };
@@ -1012,4 +1012,5 @@ const styles = StyleSheet.create({
     blockMeta: { fontSize: 12, marginTop: 4, fontWeight: '500' },
     blockActions: { flexDirection: 'row', gap: 12 },
     blockActionBtn: { padding: 8 },
+    helperText: { fontSize: 11, marginTop: 4, fontWeight: '500' },
 });

@@ -90,7 +90,12 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
           playNotificationSound();
         }
         
-        setNotifications(newNotifs);
+        // Explicitly sort newest first
+        const sortedNotifs = [...newNotifs].sort((a, b) => 
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        );
+
+        setNotifications(sortedNotifs);
         setUnreadCount(newCount);
         knownIdsRef.current = new Set(currentIds);
         isInitialLoad.current = false;
@@ -135,7 +140,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     if (isAuthenticated) {
       loadSound();
       fetchNotifications();
-      const interval = setInterval(() => fetchNotifications(true), 8000); // 8s polling
+      const interval = setInterval(() => fetchNotifications(true), 5000); // 5s polling for live feel
       
       return () => {
         subscription.remove();

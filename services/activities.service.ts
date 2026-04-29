@@ -102,7 +102,19 @@ export const getMessagingStream = async (params: any = {}) => {
     return res.data;
 };
 
-export const sendReply = async (data: { phoneNumber: string, message: string, channel: string, entityId?: string, entityType?: string }) => {
-    const res = await api.post("/activities/send-reply", data);
+export const sendReply = async (data: { 
+    phoneNumber: string, 
+    message?: string, 
+    channel: string, 
+    entityId?: string, 
+    entityType?: string,
+    attachment?: {
+        type: 'image' | 'video' | 'audio' | 'document' | 'location',
+        url: string,
+        filename?: string,
+        caption?: string
+    }
+}) => {
+    const res = await api.post("/activities/messaging/reply", data);
     return res.data;
 };

@@ -206,7 +206,7 @@ export default function DealDetailScreen() {
     const { theme } = useTheme();
     const { trackCall } = useCallTracking();
     const { getLookupValue } = useLookup();
-    const { users } = useUsers();
+    const { users, findUser } = useUsers();
     const [deal, setDeal] = useState<any>(null);
     const [activities, setActivities] = useState<any[]>([]);
     const [matchingLeads, setMatchingLeads] = useState<any[]>([]);
@@ -320,21 +320,21 @@ export default function DealDetailScreen() {
     if (loading) return <View style={[styles.center, { backgroundColor: theme.background }]}><ActivityIndicator size="large" color={theme.primary} /></View>;
     if (!deal) return <View style={[styles.center, { backgroundColor: theme.background }]}><Text style={[styles.noData, { color: theme.textLight }]}>Deal not found</Text></View>;
 
-    const stageLabel = lv(deal.stage, getLookupValue, users) || "Open"; // Safe string resolution
+    const stageLabel = lv(deal.stage, getLookupValue, findUser) || "Open"; // Safe string resolution
     const stageColorMap = isDark ? STAGE_COLORS_DARK : STAGE_COLORS_LIGHT;
     const stageColor = stageColorMap[stageLabel.toLowerCase()] ?? theme.primary;
     const score = getDealScore(deal, dealHealth, isDark);
     const insight = getDealInsight(deal, activities, dealHealth);
 
     // Header Data
-    const projectName = lv(deal.projectName, getLookupValue, users) !== "—" ? lv(deal.projectName, getLookupValue, users) : lv(deal.projectId, getLookupValue, users);
-    const unitNo = lv(deal.unitNo || deal.unitNumber, getLookupValue, users) !== "—" ? lv(deal.unitNo || deal.unitNumber, getLookupValue, users) : lv(deal.inventoryId?.unitNumber || deal.inventoryId?.unitNo, getLookupValue, users);
-    const unitType = lv(deal.unitType, getLookupValue, users) !== "—" ? lv(deal.unitType, getLookupValue, users) : lv(deal.inventoryId?.unitType, getLookupValue, users);
-    const block = lv(deal.block, getLookupValue, users) !== "—" ? lv(deal.block, getLookupValue, users) : lv(deal.inventoryId?.block, getLookupValue, users);
-    const assignedTo = lv(deal.assignedTo, getLookupValue, users);
-    const intent = lv(deal.intent, getLookupValue, users);
+    const projectName = lv(deal.projectName, getLookupValue, findUser) !== "—" ? lv(deal.projectName, getLookupValue, findUser) : lv(deal.projectId, getLookupValue, findUser);
+    const unitNo = lv(deal.unitNo || deal.unitNumber, getLookupValue, findUser) !== "—" ? lv(deal.unitNo || deal.unitNumber, getLookupValue, findUser) : lv(deal.inventoryId?.unitNumber || deal.inventoryId?.unitNo, getLookupValue, findUser);
+    const unitType = lv(deal.unitType, getLookupValue, findUser) !== "—" ? lv(deal.unitType, getLookupValue, findUser) : lv(deal.inventoryId?.unitType, getLookupValue, findUser);
+    const block = lv(deal.block, getLookupValue, findUser) !== "—" ? lv(deal.block, getLookupValue, findUser) : lv(deal.inventoryId?.block, getLookupValue, findUser);
+    const assignedTo = lv(deal.assignedTo, getLookupValue, findUser);
+    const intent = lv(deal.intent, getLookupValue, findUser);
 
-    const buyer = resolveNameFromObject(deal.partyStructure?.buyer, deal.owner, getLookupValue, users);
+    const buyer = resolveNameFromObject(deal.partyStructure?.buyer, deal.owner, getLookupValue, findUser);
     const buyerPhone = resolvePhoneFromObject(deal.partyStructure?.buyer) || resolvePhoneFromObject(deal.owner) || resolvePhoneFromObject(deal.associatedContact) || "";
     const buyerEmail = resolveEmailFromObject(deal.partyStructure?.buyer) || resolveEmailFromObject(deal.owner) || resolveEmailFromObject(deal.associatedContact) || "";
 

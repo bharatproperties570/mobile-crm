@@ -10,7 +10,7 @@ import { useLookup } from "@/context/LookupContext";
 export interface FilterField {
     key: string;
     label: string;
-    type: 'lookup' | 'range' | 'select' | 'tags';
+    type: 'lookup' | 'range' | 'select' | 'tags' | 'header' | 'date';
     lookupType?: string;
     options?: { label: string; value: string }[];
 }
@@ -75,7 +75,7 @@ export default function FilterModal({
                                 styles.chipText,
                                 { color: theme.textMuted },
                                 (filters[field.key] || []).includes(opt._id) && { color: theme.primary, fontWeight: '700' }
-                            ]}>{opt.lookup_value}</Text>
+                            ]}>{opt.lookup_value || getLookupValue(field.lookupType || "", opt._id) || opt._id}</Text>
                         </TouchableOpacity>
                     ))}
                 </View>
@@ -138,6 +138,27 @@ export default function FilterModal({
         );
     };
 
+    const renderHeader = (field: FilterField) => (
+        <View key={field.key} style={{ marginTop: 20, marginBottom: 15, borderBottomWidth: 1, borderBottomColor: theme.border, paddingBottom: 8 }}>
+            <Text style={{ fontSize: 16, fontWeight: '800', color: theme.primary, textTransform: 'uppercase', letterSpacing: 1.2 }}>{field.label}</Text>
+        </View>
+    );
+
+    const renderDateField = (field: FilterField) => (
+        <View key={field.key} style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>{field.label}</Text>
+            <View style={styles.rangeRow}>
+                <TextInput
+                    style={[styles.rangeInput, { backgroundColor: theme.inputBg, color: theme.text, borderColor: theme.border }]}
+                    placeholder="YYYY-MM-DD"
+                    placeholderTextColor={theme.textMuted}
+                    value={filters[field.key] || ''}
+                    onChangeText={(v) => setFilters({ ...filters, [field.key]: v })}
+                />
+            </View>
+        </View>
+    );
+
     return (
         <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
             <View style={styles.overlay}>
@@ -154,9 +175,11 @@ export default function FilterModal({
 
                     <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent}>
                         {fields.map(field => {
+                            if (field.type === 'header') return renderHeader(field);
                             if (field.type === 'lookup') return renderLookupField(field);
                             if (field.type === 'range') return renderRangeField(field);
                             if (field.type === 'select') return renderSelectField(field);
+                            if (field.type === 'date') return renderDateField(field);
                             return null;
                         })}
                     </ScrollView>

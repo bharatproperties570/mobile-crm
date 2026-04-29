@@ -142,7 +142,7 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
     container: { 
         flex: 1, 
-        backgroundColor: "#F8FAFC" 
+        backgroundColor: "#121212" 
     },
     scroll: { 
         flexGrow: 1, 
@@ -150,14 +150,14 @@ const styles = StyleSheet.create({
         paddingBottom: 40 
     },
     headerSection: {
-        backgroundColor: "#0F172A",
+        backgroundColor: "#121212",
         height: height * 0.35,
         justifyContent: "center",
         alignItems: "center",
         borderBottomLeftRadius: 60,
         borderBottomRightRadius: 60,
         paddingBottom: 40,
-        shadowColor: "#0F172A",
+        shadowColor: "#000",
         shadowOffset: { width: 0, height: 10 },
         shadowOpacity: 0.25,
         shadowRadius: 15,
@@ -187,21 +187,23 @@ const styles = StyleSheet.create({
         fontWeight: "500"
     },
     authCard: {
-        backgroundColor: "#fff",
-        borderRadius: 30,
+        backgroundColor: "#181818",
+        borderRadius: 32,
         marginHorizontal: 20,
         marginTop: -60,
         padding: 30,
         shadowColor: "#000",
         shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.1,
+        shadowOpacity: 0.3,
         shadowRadius: 30,
         elevation: 10,
+        borderWidth: 1,
+        borderColor: '#282828'
     },
     welcomeText: {
         fontSize: 24,
         fontWeight: "800",
-        color: "#0F172A",
+        color: "#FFFFFF",
         textAlign: "left"
     },
     loginInstruction: {
@@ -216,7 +218,7 @@ const styles = StyleSheet.create({
     inputLabel: {
         fontSize: 12,
         fontWeight: "700",
-        color: "#334155",
+        color: "#B3B3B3",
         textTransform: "uppercase",
         letterSpacing: 1,
         marginBottom: 8,
@@ -225,11 +227,11 @@ const styles = StyleSheet.create({
     inputWrapper: {
         flexDirection: "row",
         alignItems: "center",
-        backgroundColor: "#F1F5F9",
+        backgroundColor: "#282828",
         borderRadius: 15,
         paddingHorizontal: 15,
         borderWidth: 1,
-        borderColor: "#E2E8F0"
+        borderColor: "#333333"
     },
     inputIcon: {
         marginRight: 10
@@ -238,7 +240,7 @@ const styles = StyleSheet.create({
         flex: 1,
         paddingVertical: 15,
         fontSize: 16,
-        color: "#0F172A",
+        color: "#FFFFFF",
         fontWeight: "600"
     },
     forgotPassword: {
@@ -247,16 +249,16 @@ const styles = StyleSheet.create({
     },
     forgotText: {
         fontSize: 13,
-        color: "#0F172A",
+        color: "#B3B3B3",
         fontWeight: "700"
     },
     primaryButton: {
-        backgroundColor: "#1E3A8A",
-        borderRadius: 18,
+        backgroundColor: "#1DB954",
+        borderRadius: 24,
         paddingVertical: 18,
         alignItems: "center",
         justifyContent: "center",
-        shadowColor: "#1E3A8A",
+        shadowColor: "#1DB954",
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.3,
         shadowRadius: 8,

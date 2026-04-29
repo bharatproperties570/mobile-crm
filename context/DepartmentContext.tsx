@@ -14,8 +14,8 @@ interface DeptConfig {
 const DEPARTMENTS: Record<Department, DeptConfig> = {
     'Sales': {
         name: 'Sales',
-        color: '#3B82F6', // Blue
-        bg: '#EFF6FF',
+        color: '#1DB954', // Spotify Green
+        bg: 'rgba(29, 185, 84, 0.1)',
         icon: 'trending-up',
         tabs: [
             { name: 'index', label: 'Home', icon: 'home', route: '/(tabs)' },
@@ -27,8 +27,8 @@ const DEPARTMENTS: Record<Department, DeptConfig> = {
     },
     'Inventory': {
         name: 'Inventory',
-        color: '#F59E0B', // Amber
-        bg: '#FFFBEB',
+        color: '#FFD700', // Gold/Amber
+        bg: 'rgba(255, 215, 0, 0.1)',
         icon: 'business',
         tabs: [
             { name: 'index', label: 'Home', icon: 'home', route: '/(tabs)' },
@@ -40,8 +40,8 @@ const DEPARTMENTS: Record<Department, DeptConfig> = {
     },
     'Post-Sales': {
         name: 'Post-Sales',
-        color: '#10B981', // Emerald
-        bg: '#ECFDF5',
+        color: '#1DB954', // Emerald/Spotify Green
+        bg: 'rgba(29, 185, 84, 0.1)',
         icon: 'receipt',
         tabs: [
             { name: 'index', label: 'Home', icon: 'home', route: '/(tabs)' },

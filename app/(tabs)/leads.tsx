@@ -25,21 +25,21 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get("window");
 
 const STATUS_COLORS_LIGHT: Record<string, string> = {
-    active: "#10B981", new: "#64748B", contacted: "#8B5CF6",
+    active: "#1DB954", new: "#64748B", contacted: "#8B5CF6",
     qualified: "#7C3AED", prospect: "#3B82F6", opportunity: "#F59E0B",
-    negotiation: "#F97316", booked: "#10B981", won: "#059669", 
+    negotiation: "#F97316", booked: "#1DB954", won: "#1DB954", 
     lost: "#EF4444", stalled: "#78716C", dormant: "#94A3B8",
     hot: "#EF4444", warm: "#F59E0B", cold: "#3B82F6",
     urgent: "#E11D48"
 };
 
 const STATUS_COLORS_DARK: Record<string, string> = {
-    active: "#34D399", new: "#94A3B8", contacted: "#A78BFA",
-    qualified: "#8B5CF6", prospect: "#60A5FA", opportunity: "#FBBF24",
-    negotiation: "#FB923C", booked: "#34D399", won: "#10B981", 
-    lost: "#F87171", stalled: "#A8A29E", dormant: "#CBD5E1",
-    hot: "#F87171", warm: "#FBBF24", cold: "#60A5FA",
-    urgent: "#F43F5E"
+    active: "#1DB954", new: "#B3B3B3", contacted: "#8B5CF6",
+    qualified: "#A78BFA", prospect: "#60A5FA", opportunity: "#FBBF24",
+    negotiation: "#FB923C", booked: "#1DB954", won: "#1DB954", 
+    lost: "#E91429", stalled: "#7A7A7A", dormant: "#535353",
+    hot: "#E91429", warm: "#FBBF24", cold: "#60A5FA",
+    urgent: "#FF4D4D"
 };
 
 const STAGE_CONFIG_LIGHT: Record<string, { color: string; icon: any }> = {
@@ -57,17 +57,17 @@ const STAGE_CONFIG_LIGHT: Record<string, { color: string; icon: any }> = {
 };
 
 const STAGE_CONFIG_DARK: Record<string, { color: string; icon: any }> = {
-    "New": { color: "#CBD5E1", icon: "star" },
+    "New": { color: "#B3B3B3", icon: "star" },
     "Prospect": { color: "#60A5FA", icon: "person" },
     "Qualified": { color: "#A78BFA", icon: "checkmark-circle" },
     "Opportunity": { color: "#FBBF24", icon: "flame" },
     "Negotiation": { color: "#FB923C", icon: "chatbubbles" },
-    "Booked": { color: "#34D399", icon: "calendar" },
-    "Closed Won": { color: "#34D399", icon: "trophy" },
-    "Closed Lost": { color: "#F87171", icon: "close-circle" },
-    "Stalled": { color: "#94A3B8", icon: "pause-circle" },
-    "Dormant": { color: "#94A3B8", icon: "moon" },
-    "default": { color: "#CBD5E1", icon: "help-circle" }
+    "Booked": { color: "#1DB954", icon: "calendar" },
+    "Closed Won": { color: "#1DB954", icon: "trophy" },
+    "Closed Lost": { color: "#E91429", icon: "close-circle" },
+    "Stalled": { color: "#7A7A7A", icon: "pause-circle" },
+    "Dormant": { color: "#535353", icon: "moon" },
+    "default": { color: "#B3B3B3", icon: "help-circle" }
 };
 
 const REQ_CONFIG_LIGHT: Record<string, { icon: any; color: string; label: string }> = {
@@ -713,13 +713,13 @@ const LeadCard = memo(({ lead, index, onPress, onMore, isSelected, onLongPress, 
                                         <Text style={[styles.leadName, { color: theme.text }]} numberOfLines={1}>{name}</Text>
                                     </View>
                                     <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
-                                        <Ionicons name="call-outline" size={12} color={theme.textLight} />
-                                        <Text style={{ fontSize: 12, color: theme.textLight, fontWeight: '600', marginLeft: 4 }}>{lead.mobile}</Text>
+                                        <Ionicons name="call-outline" size={12} color={theme.textMuted} />
+                                        <Text style={{ fontSize: 12, color: theme.textSecondary, fontWeight: '600', marginLeft: 4 }}>{lead.mobile}</Text>
                                         {lead.email ? (
                                             <>
-                                                <Text style={{ fontSize: 12, color: theme.textLight, marginHorizontal: 6 }}>•</Text>
-                                                <Ionicons name="mail-outline" size={12} color={theme.textLight} />
-                                                <Text style={{ fontSize: 12, color: theme.textLight, fontWeight: '600', marginLeft: 4, flex: 1 }} numberOfLines={1}>{lead.email}</Text>
+                                                <Text style={{ fontSize: 12, color: theme.textMuted, marginHorizontal: 6 }}>•</Text>
+                                                <Ionicons name="mail-outline" size={12} color={theme.textMuted} />
+                                                <Text style={{ fontSize: 12, color: theme.textSecondary, fontWeight: '600', marginLeft: 4, flex: 1 }} numberOfLines={1}>{lead.email}</Text>
                                             </>
                                         ) : null}
                                     </View>
@@ -732,13 +732,13 @@ const LeadCard = memo(({ lead, index, onPress, onMore, isSelected, onLongPress, 
                                         </View>
                                         {lead.source ? (
                                             <View style={[styles.sourceBadge, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : theme.border, borderColor: isDark ? 'rgba(255,255,255,0.1)' : theme.border, paddingVertical: 1, paddingHorizontal: 5 }]}>
-                                                <Ionicons name="radio-outline" size={9} color={theme.textLight} />
-                                                <Text style={[styles.sourceText, { color: theme.textLight, fontSize: 8.5 }]}>{getLookupValue("Source", lead.source)}</Text>
+                                                <Ionicons name="radio-outline" size={9} color={theme.textMuted} />
+                                                <Text style={[styles.sourceText, { color: theme.textSecondary, fontSize: 8.5 }]}>{getLookupValue("Source", lead.source)}</Text>
                                             </View>
                                         ) : null}
                                     </View>
                                     <TouchableOpacity onPress={onMore} style={styles.moreBtn}>
-                                        <Ionicons name="ellipsis-vertical" size={18} color={theme.textLight} />
+                                        <Ionicons name="ellipsis-vertical" size={18} color={theme.textMuted} />
                                     </TouchableOpacity>
                                 </View>
                             </View>
@@ -746,8 +746,8 @@ const LeadCard = memo(({ lead, index, onPress, onMore, isSelected, onLongPress, 
                             <View style={styles.cardBody}>
                                 {(lead.propertyType || lead.subType || lead.subRequirement) ? (
                                     <View style={styles.reqRow}>
-                                        <Ionicons name="business-outline" size={12} color={theme.textLight} />
-                                        <Text style={[styles.reqText, { color: theme.textMuted }]}>
+                                        <Ionicons name="business-outline" size={12} color={theme.textMuted} />
+                                        <Text style={[styles.reqText, { color: theme.textSecondary }]}>
                                             {(lead.propertyType && lead.propertyType.length > 0) ? getLookupValue("Category", lead.propertyType) : getLookupValue("Requirement", lead.requirement)}
                                             {(lead.subType && lead.subType.length > 0) 
                                                 ? ` • ${getLookupValue("SubCategory", lead.subType)}` 
@@ -757,13 +757,13 @@ const LeadCard = memo(({ lead, index, onPress, onMore, isSelected, onLongPress, 
                                     </View>
                                 ) : null}
                                 <View style={styles.reqRow}>
-                                    <Ionicons name="home-outline" size={12} color={theme.textLight} />
-                                    <Text style={[styles.reqText, { color: theme.textMuted }]}>{getLookupValue("UnitType", lead.unitType)}</Text>
+                                    <Ionicons name="home-outline" size={12} color={theme.textMuted} />
+                                    <Text style={[styles.reqText, { color: theme.textSecondary }]}>{getLookupValue("UnitType", lead.unitType)}</Text>
                                 </View>
                                 {(lead.locCity || lead.location || lead.locArea) ? (
                                     <View style={styles.locRow}>
-                                        <Ionicons name="location-outline" size={12} color={theme.textLight} />
-                                        <Text style={[styles.reqText, { color: theme.textMuted }]}>
+                                        <Ionicons name="location-outline" size={12} color={theme.textMuted} />
+                                        <Text style={[styles.reqText, { color: theme.textSecondary }]}>
                                             {[getLookupValue("City", lead.locCity), lead.locArea, getLookupValue("Location", lead.location)].filter(v => v && v !== "—").join(", ") || "No Location"}
                                         </Text>
                                     </View>
@@ -782,7 +782,7 @@ const LeadCard = memo(({ lead, index, onPress, onMore, isSelected, onLongPress, 
                                     )}
                                 </View>
                                 <View style={styles.footerRight}>
-                                    <Text style={[styles.timeLabel, { color: theme.textLight }]}>{formatTimeAgo(lead.createdAt)}</Text>
+                                    <Text style={[styles.timeLabel, { color: theme.textMuted }]}>{formatTimeAgo(lead.createdAt)}</Text>
                                 </View>
                             </View>
                         </View>
@@ -1439,7 +1439,7 @@ const styles = StyleSheet.create({
     bulkDivider: { width: 1, height: 20, backgroundColor: "rgba(255,255,255,0.2)" },
 
     modalOverlay: { flex: 1, backgroundColor: "rgba(15, 23, 42, 0.4)", justifyContent: "flex-end", alignItems: 'center' },
-    bulkModalContent: { width: "90%", borderRadius: 24, padding: 24 },
+    bulkModalContent: { width: "90%", borderRadius: 32, padding: 24 },
     bulkModalTitle: { fontSize: 18, fontWeight: "700", marginBottom: 20, textAlign: 'center' },
     bulkUserItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1 },
     bulkUserAvatar: { width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
@@ -1461,7 +1461,7 @@ const styles = StyleSheet.create({
     filterFooter: { padding: 20, paddingBottom: 40, flexDirection: 'row', gap: 12, borderTopWidth: 1 },
     resetBtn: { flex: 1, height: 48, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
     resetBtnText: { fontSize: 14, fontWeight: "700" },
-    applyBtn: { flex: 2, height: 48, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+    applyBtn: { flex: 2, height: 48, borderRadius: 24, justifyContent: 'center', alignItems: 'center' },
     applyBtnText: { fontSize: 14, fontWeight: "700", color: "#fff" },
 
     sheetContainer: { 
@@ -1476,7 +1476,7 @@ const styles = StyleSheet.create({
     sheetSub: { fontSize: 13, fontWeight: "600", marginTop: 4 },
     actionGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
     actionItem: { width: '22%', alignItems: 'center', gap: 8 },
-    actionIcon: { width: 48, height: 48, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
+    actionIcon: { width: 48, height: 48, borderRadius: 24, justifyContent: 'center', alignItems: 'center' },
     actionLabel: { fontSize: 11, fontWeight: "700" },
     pickerView: { marginTop: 24, borderRadius: 20 },
     tagInputRow: { flexDirection: 'row', gap: 12, marginBottom: 16 },

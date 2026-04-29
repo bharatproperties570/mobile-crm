@@ -185,7 +185,7 @@ export default function AddActivityScreen() {
     }, []);
 
     const autoGenerateSubject = useCallback(() => {
-        if (!selectedEntity) return;
+        if (!selectedEntity || params.subject) return;
 
         let subject = "";
         const formattedDate = new Date(formData.dueDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
@@ -266,9 +266,12 @@ export default function AddActivityScreen() {
                     }
                 }
                 setSelectedEntity({ id: params.id, type: params.type as any, name, mobile });
-                if (!params.subject) {
-                    setFormData(prev => ({ ...prev, subject: `${params.actType || "Follow up"} with ${name}` }));
-                }
+                
+                setFormData(prev => ({ 
+                    ...prev, 
+                    type: (params.actType || prev.type) as any,
+                    subject: params.subject || prev.subject || `${params.actType || "Follow up"} with ${name}` 
+                }));
             }
 
             // 3. Fetch Activity Master Fields

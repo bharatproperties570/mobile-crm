@@ -32,11 +32,11 @@ const STAGE_COLORS_LIGHT: Record<string, string> = {
 };
 
 const STAGE_COLORS_DARK: Record<string, string> = {
-    incoming: "#818CF8",
-    prospect: "#A78BFA",
+    incoming: "#1DB954",  // Spotify Green
+    prospect: "#60A5FA",
     opportunity: "#FBBF24",
     negotiation: "#FB923C",
-    closed: "#34D399",
+    closed: "#1DB954",
 };
 
 const SHORT_NAMES: Record<string, string> = {
@@ -70,8 +70,8 @@ const ChevronSegment = memo(({
         <View style={[
             styles.dashChevronSegment,
             { backgroundColor: isDark ? color + '25' : color + '15' },
-            isFirst && { borderTopLeftRadius: 10, borderBottomLeftRadius: 10 },
-            isLast && { borderTopRightRadius: 10, borderBottomRightRadius: 10 }
+            isFirst && { borderTopLeftRadius: 20, borderBottomLeftRadius: 20 },
+            isLast && { borderTopRightRadius: 20, borderBottomRightRadius: 20 }
         ]}>
             <View style={styles.chevronContentCompact}>
                 <Text style={[styles.dashChevronLabel, { color: color }]}>{shortLabel}</Text>

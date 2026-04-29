@@ -1286,4 +1286,8 @@ const styles = StyleSheet.create({
     smallIcon: { width: 24, height: 24, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
     selector: { height: 50, borderRadius: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, borderWidth: 1.5 },
     selectorText: { fontSize: 15, fontWeight: '600' },
+    sliderBox: {
+        height: 100,
+        justifyContent: 'center',
+    },
 });

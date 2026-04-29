@@ -44,7 +44,7 @@ export default function Index() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: "#EEF2FF",
+        backgroundColor: "#121212", // Spotify Black
         justifyContent: "center",
         alignItems: "center",
         padding: 40
@@ -55,7 +55,7 @@ const styles = StyleSheet.create({
     },
     title: {
         marginTop: 24,
-        color: "#1E40AF",
+        color: "#1DB954", // Spotify Green
         fontSize: 18,
         fontWeight: "900",
         textAlign: "center",
@@ -63,7 +63,7 @@ const styles = StyleSheet.create({
     },
     sub: {
         marginTop: 8,
-        color: "#64748B",
+        color: "#B3B3B3", // Spotify Gray
         fontSize: 14,
         fontWeight: "600",
         textAlign: "center"
@@ -72,10 +72,10 @@ const styles = StyleSheet.create({
         marginTop: 60,
         width: '100%',
         padding: 20,
-        backgroundColor: '#fff',
-        borderRadius: 20,
+        backgroundColor: '#181818', // Spotify Surface
+        borderRadius: 24,
         borderWidth: 1,
-        borderColor: '#E2E8F0',
+        borderColor: '#282828',
         elevation: 10,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 4 },
@@ -83,16 +83,16 @@ const styles = StyleSheet.create({
         shadowRadius: 10
     },
     emergencyHint: {
-        color: "#94A3B8",
+        color: "#7A7A7A",
         fontSize: 12,
         textAlign: "center",
         marginBottom: 16,
         fontWeight: "600"
     },
     bypassBtn: {
-        backgroundColor: "#1E40AF",
+        backgroundColor: "#1DB954", // Spotify Green
         padding: 16,
-        borderRadius: 12,
+        borderRadius: 24,
         alignItems: 'center'
     },
     bypassText: {

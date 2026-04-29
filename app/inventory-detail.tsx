@@ -17,23 +17,22 @@ const CACHE_KEY_PREFIX = "@cache_inventory_detail_";
 
 const TABS = ["Details", "Location", "Activities", "Owner", "Resources", "History"];
 
-function lv(field: unknown): string {
+function lv(field: unknown, getLookupValue?: (type: string, val: any) => string): string {
     if (field === null || field === undefined || field === "" || field === "null" || field === "undefined") return "—";
     if (Array.isArray(field)) {
-        return field.map(f => lv(f)).filter(v => v !== "—").join(", ") || "—";
+        return field.map(f => lv(f, getLookupValue)).filter(v => v !== "—").join(", ") || "—";
     }
     if (typeof field === "object" && field !== null) {
         const val = (field as any).lookup_value || (field as any).fullName || (field as any).name || (field as any).label || (field as any).value;
         if (val && typeof val !== 'object') return String(val).trim();
-        if (typeof val === 'object' && val !== null) {
-            const nested = (val as any).lookup_value || (val as any).name || (val as any).fullName || "";
-            if (nested && typeof nested !== 'object') return String(nested).trim();
-        }
     }
     const str = String(field).trim();
+    if (/^[a-f0-9]{24}$/i.test(str) && getLookupValue) {
+        const resolved = getLookupValue("Any", str);
+        if (resolved && resolved !== str) return resolved;
+    }
     return (str && str !== "[object Object]") ? str : "—";
 }
-
 function InfoRow({ label, value, accent, icon }: { label: string; value: string; accent?: boolean; icon?: any }) {
     const { theme } = useTheme();
     if (!value || value === "—" || value === "") return null;
@@ -61,7 +60,6 @@ const RibbonButton = ({ icon, color, onPress }: { icon: any; color: string; onPr
         </TouchableOpacity>
     );
 };
-
 const ACTIVE_STATUSES = ['Available', 'Interested / Medium', 'Interested / High', 'Request Call Back', 'Busy / Driving', 'Market Feedback', 'General Inquiry'];
 const INACTIVE_STATUSES = ['Sold Out', 'Rented Out', 'Not Interested', 'Inactive', 'Wrong Number / Invalid', 'Switch Off / Unreachable'];
 
@@ -80,12 +78,7 @@ export default function InventoryDetailScreen() {
     const resolveStatus = (val: any): string => {
         if (!val) return '';
         if (typeof val === 'object') return val.lookup_value || val.name || '';
-        const byStatus = lookups.find(l => l.lookup_type.toLowerCase() === 'status' && (l._id === val || l.lookup_value === val));
-        if (byStatus) return byStatus.lookup_value;
-        const byInvStatus = lookups.find(l => l.lookup_type.toLowerCase() === 'inventorystatus' && (l._id === val || l.lookup_value === val));
-        if (byInvStatus) return byInvStatus.lookup_value;
-        const isId = /^[a-f0-9]{24}$/i.test(String(val));
-        return isId ? '' : String(val);
+        return getLookupValue('Status', val) || getLookupValue('InventoryStatus', val) || String(val);
     };
 
     const tabScrollViewRef = useRef<ScrollView>(null);
@@ -164,10 +157,10 @@ export default function InventoryDetailScreen() {
     const stageLabel = INACTIVE_STATUSES.includes(resolvedStatus) ? 'InActive' : 'Active';
     const isDark = theme.background === '#0F172A';
     const stageColor = stageLabel === 'Active' ? (isDark ? '#34D399' : '#10B981') : (isDark ? '#FBBF24' : '#F59E0B');
-    const unitNo = lv(inv.unitNumber || inv.unitNo);
-    const unitType = lv(inv.unitType);
-    const projectName = lv(inv.projectName || "Unknown Project");
-    const block = lv(inv.block);
+    const unitNo = lv(inv.unitNumber || inv.unitNo, getLookupValue);
+    const unitType = lv(inv.unitType, getLookupValue);
+    const projectName = lv(inv.projectName || "Unknown Project", getLookupValue);
+    const block = lv(inv.block, getLookupValue);
 
     return (
         <View style={[styles.container, { backgroundColor: theme.background }]}>
