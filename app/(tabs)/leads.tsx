@@ -98,6 +98,33 @@ const REQ_CONFIG_DARK: Record<string, { icon: any; color: string; label: string 
     default: { icon: "home", color: "#CBD5E1", label: "REQ" }
 };
 
+function resolveName(field: unknown, getLookupValue?: (type: string, val: any) => string, findUser?: (id: string) => any): string {
+    if (!field) return "—";
+    if (Array.isArray(field)) {
+        return field.map(item => resolveName(item, getLookupValue, findUser)).filter(name => name && name !== "—").join(", ") || "—";
+    }
+    if (typeof field === "object" && field !== null) {
+        const obj = field as any;
+        if (obj.lookup_value) return obj.lookup_value;
+        if (obj.fullName) return obj.fullName;
+        if (obj.name) return obj.name;
+        if (obj.firstName) return [obj.firstName, obj.lastName].filter(Boolean).join(" ");
+    }
+    const str = String(field).trim();
+    if (/^[a-f0-9]{24}$/i.test(str)) {
+        if (getLookupValue) {
+            const resolved = getLookupValue("Any", str);
+            if (resolved && resolved !== str && resolved !== "—") return resolved;
+        }
+        if (findUser) {
+            const user = findUser(str);
+            if (user) return user.fullName || user.name || str;
+        }
+        return "—";
+    }
+    return str;
+}
+
 function formatTimeAgo(dateString?: string) {
     if (!dateString) return "—";
     const now = new Date();
@@ -635,6 +662,7 @@ const LeadCard = memo(({ lead, index, onPress, onMore, isSelected, onLongPress, 
     const { theme, isDarkMode } = useTheme();
     const { trackCall } = useCallTracking();
     const { getLookupValue } = useLookup();
+    const { findUser } = useUsers();
     const name = leadName(lead);
     const isDark = isDarkMode;
     const stageCfgMap = isDark ? STAGE_CONFIG_DARK : STAGE_CONFIG_LIGHT;
