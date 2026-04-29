@@ -704,8 +704,19 @@ const LeadCard = memo(({ lead, index, onPress, onMore, isSelected, onLongPress, 
         getLookupValue("UnitType", lead.unitType)
     ].filter(v => v && v !== '—').join(" • ") || "No Requirement specified";
 
+    const budgetText = (lead.budgetMin || lead.budgetMax) 
+        ? `₹${formatAmount(lead.budgetMin || 0)} - ₹${formatAmount(lead.budgetMax || 0)}`
+        : "";
+
+    const sizeText = (lead.areaMin || lead.areaMax)
+        ? `${lead.areaMin || ""}${lead.areaMin && lead.areaMax ? "-" : ""}${lead.areaMax || ""} ${lead.areaMetric || ""}`.trim()
+        : "";
+
     const locationText = [lead.locArea, getLookupValue("Location", lead.location), getLookupValue("City", lead.locCity)]
         .filter(v => v && v !== "—").join(", ");
+
+    const projectText = lead.projectName || lead.project?.name;
+    const blockText = lead.locBlock;
 
     return (
         <Swipeable renderRightActions={renderRightActions} renderLeftActions={renderLeftActions}>
@@ -741,11 +752,63 @@ const LeadCard = memo(({ lead, index, onPress, onMore, isSelected, onLongPress, 
                                     ) : null}
                                 </View>
                                 
-                                <Text style={[styles.rowSubject, { color: theme.textSecondary, marginBottom: 8 }]} numberOfLines={2}>
-                                    {requirementText} {locationText ? ` in ${locationText}` : ''}
+                                <Text style={[styles.rowSubject, { color: theme.textSecondary, marginBottom: 4 }]} numberOfLines={1}>
+                                    {requirementText}
                                 </Text>
 
+                                {(budgetText || sizeText) && (
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                                        {budgetText && (
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: isDark ? 'rgba(16, 185, 129, 0.1)' : '#ECFDF5', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                                                <Ionicons name="pricetag-outline" size={10} color="#10B981" />
+                                                <Text style={{ fontSize: 10, color: '#10B981', fontWeight: '800' }}>{budgetText}</Text>
+                                            </View>
+                                        )}
+                                        {sizeText && (
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: isDark ? 'rgba(99, 102, 241, 0.1)' : '#EEF2FF', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                                                <Ionicons name="expand-outline" size={10} color="#6366F1" />
+                                                <Text style={{ fontSize: 10, color: '#6366F1', fontWeight: '800' }}>{sizeText}</Text>
+                                            </View>
+                                        )}
+                                    </View>
+                                )}
+
+                                {(projectText || blockText || locationText) && (
+                                    <View style={{ marginBottom: 8 }}>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                            <Ionicons name="location-outline" size={12} color={theme.textMuted} />
+                                            <Text style={{ fontSize: 11, color: theme.textSecondary, fontWeight: '700' }} numberOfLines={1}>
+                                                {projectText ? `${projectText}${blockText ? ` (Block ${blockText})` : ''} • ` : ''}{locationText}
+                                            </Text>
+                                        </View>
+                                    </View>
+                                )}
+
                                 <View style={styles.rowMeta}>
+                                    <View style={[styles.outcomeBadge, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : theme.border }]}>
+                                        <Text style={[styles.outcomeText, { color: theme.textSecondary }]}>
+                                            {resolveName(lead.assignment?.assignedTo || lead.owner, getLookupValue, findUser)}
+                                        </Text>
+                                    </View>
+
+                                    {(() => {
+                                        const team = resolveName(lead.assignment?.team?.[0] || lead.owner?.team, getLookupValue, findUser);
+                                        if (team && team !== "—") {
+                                            return (
+                                                <View style={[styles.outcomeBadge, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : theme.border }]}>
+                                                    <Text style={[styles.outcomeText, { color: theme.textSecondary }]}>{team}</Text>
+                                                </View>
+                                            );
+                                        }
+                                        return null;
+                                    })()}
+
+                                    {lead.isTemporary && lead.expiryDate && (
+                                        <View style={[styles.outcomeBadge, { backgroundColor: '#FEF2F2' }]}>
+                                            <Text style={[styles.outcomeText, { color: '#EF4444' }]}>EXPIRING</Text>
+                                        </View>
+                                    )}
+
                                     {currentIntent && (
                                         <View style={[styles.outcomeBadge, { backgroundColor: currentIntent.bg }]}>
                                             <Text style={[styles.outcomeText, { color: currentIntent.text }]}>{intent.toUpperCase()}</Text>
@@ -756,11 +819,6 @@ const LeadCard = memo(({ lead, index, onPress, onMore, isSelected, onLongPress, 
                                             <Text style={[styles.outcomeText, { color: theme.textSecondary }]}>{getLookupValue("Source", lead.source)}</Text>
                                         </View>
                                     )}
-                                    {lead.tags?.slice(0, 1).map((tag, i) => (
-                                        <View key={i} style={[styles.outcomeBadge, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : theme.border }]}>
-                                            <Text style={[styles.outcomeText, { color: isDark ? '#94A3B8' : theme.textMuted }]}>{tag.toUpperCase()}</Text>
-                                        </View>
-                                    ))}
                                 </View>
                             </View>
                         </View>

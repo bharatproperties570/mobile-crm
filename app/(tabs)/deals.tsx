@@ -379,6 +379,21 @@ const DealCard = memo(({
                                 </Text>
                             </View>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                                {(() => {
+                                    const intent = resolveName(deal.intent, getLookupValue);
+                                    if (!intent || intent === "—") return null;
+                                    
+                                    const intentColor = intent.toLowerCase().includes('rent') ? '#F59E0B' : 
+                                                       intent.toLowerCase().includes('lease') ? '#8B5CF6' : 
+                                                       '#6366F1'; // Default for Sell/Buy
+                                                       
+                                    return (
+                                        <View style={{ backgroundColor: intentColor + '15', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4, borderWidth: 1, borderColor: intentColor + '30' }}>
+                                            <Text style={{ fontSize: 9, color: intentColor, fontWeight: '800' }}>{intent.toUpperCase()}</Text>
+                                        </View>
+                                    );
+                                })()}
+                                
                                 {deal.isPublished && (
                                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: theme.success + '15', paddingHorizontal: 4, paddingVertical: 1, borderRadius: 4 }}>
                                         <Ionicons name="globe" size={10} color={theme.success} />
@@ -418,11 +433,36 @@ const DealCard = memo(({
                                     <Text style={[styles.stageText, { color }]}>{resolveName(deal.stage, getLookupValue, findUser)}</Text>
                                 </View>
                             </View>
-                            <TouchableOpacity style={styles.menuTrigger} onPress={onMenuPress}>
-                                <Ionicons name="ellipsis-vertical" size={18} color={theme.textSecondary} />
-                            </TouchableOpacity>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                {(() => {
+                                    const matched = deal.matched || 0;
+                                    if (matched > 0) {
+                                        return (
+                                            <View style={{ backgroundColor: '#EEF2FF', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4 }}>
+                                                <Text style={{ fontSize: 9, color: '#6366F1', fontWeight: '800' }}>{matched} MATCHES</Text>
+                                            </View>
+                                        );
+                                    }
+                                    return null;
+                                })()}
+                                <TouchableOpacity style={styles.menuTrigger} onPress={onMenuPress}>
+                                    <Ionicons name="ellipsis-vertical" size={18} color={theme.textSecondary} />
+                                </TouchableOpacity>
+                            </View>
                         </View>
                     </View>
+
+                    {/* Latest Activity Snippet */}
+                    {(deal as any).lastActivity && (
+                        <View style={{ paddingHorizontal: 10, paddingVertical: 4, backgroundColor: isDark ? 'rgba(255,255,255,0.02)' : '#F8FAFC', marginHorizontal: 4, borderRadius: 8, marginBottom: 4 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                <Ionicons name="flash-outline" size={10} color={theme.primary} />
+                                <Text style={{ fontSize: 10, color: theme.textSecondary, fontWeight: '700' }} numberOfLines={1}>
+                                    {(deal as any).lastActivity.type}: {(deal as any).lastActivity.content}
+                                </Text>
+                            </View>
+                        </View>
+                    )}
 
                     <View style={[styles.cardFooter, { borderTopColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.03)' }]}>
                         {/* Owner/Associate Data - Row Based (Professional) */}
@@ -446,6 +486,25 @@ const DealCard = memo(({
                                         return associate && associate !== "—" ? `Associate: ${associate}` : "No Associate";
                                     })()}
                                 </Text>
+                            </View>
+                            {/* Assigned To & Team Badge */}
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                                <View style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#F1F5F9', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4 }}>
+                                    <Text style={{ fontSize: 9, color: theme.textSecondary, fontWeight: '700' }}>
+                                        {resolveName(deal.assignedTo, getLookupValue, findUser)}
+                                    </Text>
+                                </View>
+                                {(() => {
+                                    const team = resolveName(deal.team || deal.assignment?.team, getLookupValue, findUser);
+                                    if (team && team !== "—") {
+                                        return (
+                                            <View style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#F1F5F9', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4 }}>
+                                                <Text style={{ fontSize: 9, color: theme.textSecondary, fontWeight: '700' }}>{team}</Text>
+                                            </View>
+                                        );
+                                    }
+                                    return null;
+                                })()}
                             </View>
                         </View>
 
@@ -1334,7 +1393,7 @@ const styles = StyleSheet.create({
         elevation: 1, shadowOpacity: 0.02, shadowRadius: 10, shadowOffset: { width: 0, height: 5 }
     },
     cardAccent: { width: 4 },
-    cardMain: { flex: 1, paddingHorizontal: 10, paddingVertical: 4 },
+    cardMain: { flex: 1, paddingHorizontal: 10, paddingVertical: 2 },
     cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 2 },
     cardIdentity: { flex: 1 },
     dealUnitNumber: { fontSize: 17, fontWeight: "900" },
@@ -1356,8 +1415,8 @@ const styles = StyleSheet.create({
         flexDirection: 'row', 
         justifyContent: 'space-between', 
         alignItems: 'center', 
-        marginTop: 4, 
-        paddingTop: 4, 
+        marginTop: 2, 
+        paddingTop: 2, 
         borderTopWidth: StyleSheet.hairlineWidth
     },
     listMeta: { flexDirection: 'row', alignItems: 'center', gap: 4 },
