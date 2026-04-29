@@ -113,46 +113,7 @@ const LeadCard = memo(({ lead, index, onPress, onMore, isSelected, onLongPress, 
         getLookupValue("SubCategory", lead.subType) || getLookupValue("SubRequirement", lead.subRequirement)
     ].filter(v => v && v !== "-").join(" - ");
 
-    return (
-        <TouchableOpacity
-            activeOpacity={0.9}
-            onPress={onPress}
-            onLongPress={onLongPress}
-            style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }, isSelected && styles.cardSelected]}
-        >
-            <View style={styles.cardInner}>
-                <LeadScoreRing score={score.val} color={score.color} isDark={isDark} />
-                <View style={styles.rowContent}>
-                    <View style={styles.rowTop}>
-                        <Text style={[styles.rowName, { color: theme.text }]} numberOfLines={1}>{name}</Text>
-                        <TouchableOpacity onPress={onMore} style={styles.menuTouch}><Ionicons name="ellipsis-vertical" size={20} color={theme.textMuted} /></TouchableOpacity>
-                    </View>
-                    <View style={styles.contactRow}>
-                        <Ionicons name="call-outline" size={12} color={theme.textMuted} />
-                        <Text style={[styles.contactText, { color: theme.textSecondary }]}>{lead.mobile}</Text>
-                        {lead.email && (
-                            <View style={styles.emailRow}>
-                                <Text style={{ color: theme.textMuted, marginHorizontal: 4 }}>-</Text>
-                                <Ionicons name="mail-outline" size={12} color={theme.textMuted} />
-                                <Text style={[styles.contactText, { color: theme.textSecondary, flex: 1 }]} numberOfLines={1}>{lead.email}</Text>
-                            </View>
-                        )}
-                    </View>
-                    <Text style={[styles.requirementText, { color: theme.textSecondary }]} numberOfLines={1}>{requirementText}</Text>
-                    <View style={styles.rowMeta}>
-                        <View style={[styles.badge, { backgroundColor: theme.border }]}>
-                            <Text style={[styles.badgeText, { color: theme.textSecondary }]}>{resolveName(lead.assignment?.assignedTo || lead.owner, getLookupValue, findUser)}</Text>
-                        </View>
-                        {currentIntent && (
-                            <View style={[styles.badge, { backgroundColor: currentIntent.bg }]}>
-                                <Text style={[styles.badgeText, { color: currentIntent.text }]}>{intent.toUpperCase()}</Text>
-                            </View>
-                        )}
-                    </View>
-                </View>
-            </View>
-        </TouchableOpacity>
-    );
+    return (<TouchableOpacity activeOpacity={0.9} onPress={onPress} onLongPress={onLongPress} style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }, isSelected && styles.cardSelected]}><View style={styles.cardInner}><LeadScoreRing score={score.val} color={score.color} isDark={isDark} /><View style={styles.rowContent}><View style={styles.rowTop}><Text style={[styles.rowName, { color: theme.text }]} numberOfLines={1}>{name}</Text><TouchableOpacity onPress={onMore} style={styles.menuTouch}><Ionicons name="ellipsis-vertical" size={20} color={theme.textMuted} /></TouchableOpacity></View><View style={styles.contactRow}><Ionicons name="call-outline" size={12} color={theme.textMuted} /><Text style={[styles.contactText, { color: theme.textSecondary }]}>{lead.mobile}</Text>{lead.email && (<View style={styles.emailRow}><Text style={{ color: theme.textMuted, marginHorizontal: 4 }}>-</Text><Ionicons name="mail-outline" size={12} color={theme.textMuted} /><Text style={[styles.contactText, { color: theme.textSecondary, flex: 1 }]} numberOfLines={1}>{lead.email}</Text></View>)}</View><Text style={[styles.requirementText, { color: theme.textSecondary }]} numberOfLines={1}>{requirementText}</Text><View style={styles.rowMeta}><View style={[styles.badge, { backgroundColor: theme.border }]}><Text style={[styles.badgeText, { color: theme.textSecondary }]}>{resolveName(lead.assignment?.assignedTo || lead.owner, getLookupValue, findUser)}</Text></View>{currentIntent && (<View style={[styles.badge, { backgroundColor: currentIntent.bg }]}><Text style={[styles.badgeText, { color: currentIntent.text }]}>{intent.toUpperCase()}</Text></View>)}</View></View></View></TouchableOpacity>);
 });
 
 export default function LeadsScreen() {
