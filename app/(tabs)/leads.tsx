@@ -106,9 +106,12 @@ const LeadScoreRing = memo(({ score, color, size = 44 }: any) => {
 const ActionSheet = memo(({ visible, onClose, lead, onUpdate, statuses, users }: any) => {
     const router = useRouter();
     const { theme, isDarkMode } = useTheme();
+    const { getLookupsByType } = useLookup();
     const [activeSection, setActiveSection] = useState<string | null>(null);
     const [newTag, setNewTag] = useState("");
     const [updating, setUpdating] = useState(false);
+
+    const sequences = getLookupsByType("MarketingSequence");
 
     if (!lead || !visible) return null;
 
@@ -159,6 +162,10 @@ const ActionSheet = memo(({ visible, onClose, lead, onUpdate, statuses, users }:
                                 <View style={[styles.actionIcon, { backgroundColor: '#0EA5E915' }]}><Ionicons name="document-attach" size={24} color="#0EA5E9" /></View>
                                 <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Doc</Text>
                             </TouchableOpacity>
+                            <TouchableOpacity style={styles.actionItem} onPress={() => setActiveSection(activeSection === 'sequence' ? null : 'sequence')}>
+                                <View style={[styles.actionIcon, { backgroundColor: '#22C55E15' }]}><Ionicons name="repeat" size={24} color="#22C55E" /></View>
+                                <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Sequence</Text>
+                            </TouchableOpacity>
                             <TouchableOpacity style={styles.actionItem} onPress={() => { router.push(`/add-activity?id=${lead._id}`); onClose(); }}>
                                 <View style={[styles.actionIcon, { backgroundColor: '#EA580C15' }]}><Ionicons name="add-circle" size={24} color="#EA580C" /></View>
                                 <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Outcome</Text>
@@ -175,16 +182,22 @@ const ActionSheet = memo(({ visible, onClose, lead, onUpdate, statuses, users }:
                                 <View style={[styles.actionIcon, { backgroundColor: '#94A3B815' }]}><Ionicons name="moon" size={24} color="#94A3B8" /></View>
                                 <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Dormant</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity style={styles.actionItem} onPress={() => {
-                                Alert.alert("Delete?", "Remove lead permanently?", [
-                                    { text: "Cancel" },
-                                    { text: "Delete", style: "destructive", onPress: async () => { await deleteLead(lead._id); onUpdate(); onClose(); } }
-                                ]);
-                            }}>
-                                <View style={[styles.actionIcon, { backgroundColor: '#EF444415' }]}><Ionicons name="trash" size={24} color="#EF4444" /></View>
-                                <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Delete</Text>
-                            </TouchableOpacity>
                         </View>
+
+                        {activeSection === 'sequence' && (
+                            <View style={[styles.subSection, { backgroundColor: isDarkMode ? 'rgba(22,163,74,0.05)' : '#F0FDF4' }]}>
+                                <Text style={[styles.sectionTitle, { color: '#16A34A' }]}>Add to Marketing Sequence</Text>
+                                <View style={{ gap: 8 }}>
+                                    {sequences.length > 0 ? sequences.map((s: any) => (
+                                        <TouchableOpacity key={s._id} style={[styles.sequenceCard, { backgroundColor: theme.card, borderColor: theme.border }]} onPress={() => handleAction({ marketingSequence: s._id })}>
+                                            <Ionicons name="flash" size={16} color="#16A34A" />
+                                            <Text style={[styles.sequenceText, { color: theme.text }]}>{String(s.lookup_value)}</Text>
+                                            <Ionicons name="chevron-forward" size={16} color={theme.textMuted} style={{ marginLeft: 'auto' }} />
+                                        </TouchableOpacity>
+                                    )) : <Text style={{ color: theme.textMuted, fontSize: 12 }}>No active sequences found</Text>}
+                                </View>
+                            </View>
+                        )}
 
                         {activeSection === 'assign' && (
                             <View style={[styles.subSection, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.03)' : '#F8FAFC' }]}>
@@ -334,9 +347,12 @@ export default function LeadsScreen() {
         if (!shouldAppend) setLoading(true);
         const params: any = { page: String(pageNum), limit: "50" };
         if (search) params.q = search;
-        if (activeTab !== "all") params.status = activeTab;
+        if (activeTab !== "all") params.stage = activeTab;
 
+        console.log("[DEBUG] Fetching leads with params:", params);
         const result = await safeApiCall<Lead>(() => getLeads(params));
+        console.log("[DEBUG] Fetch result data count:", result.data?.length, "Error:", result.error);
+
         if (!result.error && result.data) {
             setLeads(prev => shouldAppend ? [...prev, ...result.data] : result.data);
             setHasMore(result.data.length === 50);
@@ -353,7 +369,7 @@ export default function LeadsScreen() {
         return () => clearTimeout(timer);
     }, [search, activeTab]);
 
-    useFocusEffect(useCallback(() => { fetchLeads(1, false); }, []));
+    useFocusEffect(useCallback(() => { fetchLeads(1, false); }, [fetchLeads]));
 
     const loadMore = () => { if (!loading && hasMore) fetchLeads(page + 1, true); };
 
@@ -466,6 +482,8 @@ const styles = StyleSheet.create({
     tagList: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
     tagBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
     tagText: { fontSize: 12, fontWeight: '700' },
+    sequenceCard: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 12, borderWidth: 1, marginBottom: 8 },
+    sequenceText: { fontSize: 13, fontWeight: '700' },
     empty: { alignItems: 'center', marginTop: 100 },
     emptyText: { fontSize: 15, fontWeight: '600', marginTop: 12 }
 });
