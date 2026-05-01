@@ -186,12 +186,26 @@ export default function MarketingScreen() {
             setIsImporting(true);
 
             const file = res.assets[0];
+            console.log("[MARKETING] DocumentPicker file:", file);
             const formData = new FormData();
             
             if (Platform.OS === 'web') {
                 // On Web, expo-document-picker provides the native File object in the 'file' property
-                const webFile = (file as any).file || file;
-                formData.append('file', webFile);
+                const webFile = (file as any).file;
+                console.log("[MARKETING] Web File Object:", webFile);
+                if (webFile) {
+                    formData.append('file', webFile);
+                } else {
+                    // Fallback: try to fetch blob from URI if 'file' property is missing
+                    try {
+                        const blobRes = await fetch(file.uri);
+                        const blob = await blobRes.blob();
+                        formData.append('file', blob, file.name);
+                    } catch (err) {
+                        console.error("[MARKETING] Failed to create blob from URI:", err);
+                        formData.append('file', file as any); // Last resort
+                    }
+                }
             } else {
                 // Standardize file attachment for React Native (iOS/Android)
                 const fileToUpload = {

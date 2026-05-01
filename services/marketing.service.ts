@@ -130,7 +130,11 @@ export const marketingService = {
   importAudience: async (formData: any) => {
     try {
       // 🧠 SENIOR PROFESSIONAL: Force-disable global JSON headers for binary data
-      const { data } = await api.post("/marketing/import-audience", formData);
+      const { data } = await api.post("/marketing/import-audience", formData, {
+        headers: {
+          'Content-Type': undefined, // Force axios to calculate the boundary
+        }
+      });
       return data;
     } catch (error) {
       console.error("[MARKETING SERVICE]: Failed to import audience", error);
