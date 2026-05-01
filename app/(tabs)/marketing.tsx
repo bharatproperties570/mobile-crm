@@ -188,19 +188,24 @@ export default function MarketingScreen() {
             const file = res.assets[0];
             const formData = new FormData();
             
-            // Standardize file attachment for React Native FormData
-            const fileToUpload = {
-                uri: Platform.OS === 'ios' ? file.uri.replace('file://', '') : file.uri,
-                name: file.name || (file.uri.split('/').pop()) || 'import.xlsx',
-                type: file.mimeType || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            };
-            
-            // Re-add file:// prefix for Android if missing
-            if (Platform.OS === 'android' && !fileToUpload.uri.startsWith('file://') && !fileToUpload.uri.startsWith('content://')) {
-                fileToUpload.uri = `file://${fileToUpload.uri}`;
+            if (Platform.OS === 'web') {
+                // On Web, expo-document-picker provides the native File object in the 'file' property
+                const webFile = (file as any).file || file;
+                formData.append('file', webFile);
+            } else {
+                // Standardize file attachment for React Native (iOS/Android)
+                const fileToUpload = {
+                    uri: Platform.OS === 'ios' ? file.uri.replace('file://', '') : file.uri,
+                    name: file.name || (file.uri.split('/').pop()) || 'import.xlsx',
+                    type: file.mimeType || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                };
+                
+                // Re-add file:// prefix for Android if missing
+                if (Platform.OS === 'android' && !fileToUpload.uri.startsWith('file://') && !fileToUpload.uri.startsWith('content://')) {
+                    fileToUpload.uri = `file://${fileToUpload.uri}`;
+                }
+                formData.append('file', fileToUpload as any);
             }
-            
-            formData.append('file', fileToUpload as any);
 
             const result = await marketingService.importAudience(formData);
             
