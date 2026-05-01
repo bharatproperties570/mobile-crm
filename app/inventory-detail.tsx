@@ -374,7 +374,15 @@ export default function InventoryDetailScreen() {
                 <View style={styles.tabContent}>
                     <ScrollView contentContainerStyle={styles.innerScroll}>
                         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-                            <Text style={[styles.cardTitle, { color: theme.text }]}>Property Location</Text>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                                <Text style={[styles.cardTitle, { color: theme.text, marginBottom: 0 }]}>Property Location</Text>
+                                <TouchableOpacity 
+                                    onPress={() => router.push(`/add-inventory?id=${id}&step=2`)}
+                                    style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: theme.primary + '15', justifyContent: 'center', alignItems: 'center' }}
+                                >
+                                    <Ionicons name="create-outline" size={18} color={theme.primary} />
+                                </TouchableOpacity>
+                            </View>
                             <InfoRow label="City" value={lv(inv.city || inv.address?.city)} icon="business-outline" />
                             <InfoRow label="Sector/Locality" value={lv(inv.sector || inv.address?.locality)} icon="map-outline" />
                             <InfoRow label="Address" value={lv(inv.address?.street || inv.address?.hNo)} icon="location-outline" />

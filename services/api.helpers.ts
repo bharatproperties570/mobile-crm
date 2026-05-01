@@ -29,9 +29,12 @@ export function extractList(res: any): any[] {
     // { success, data: { data: [] } }
     if (res.data?.data && Array.isArray(res.data.data)) return res.data.data;
 
-    console.log("[DEBUG] extractList: Could not find array in keys:", Object.keys(res));
-    if (res.data) console.log("[DEBUG] extractList: res.data keys:", Object.keys(res.data));
-
+    if (typeof res === 'string' && res.includes('<!DOCTYPE html>')) {
+        console.warn("[DEBUG] extractList: Detected Localtunnel Bypass HTML. Rejecting response.");
+        throw new Error("Tunnel bypass required - please refresh again");
+    }
+    
+    console.log("[DEBUG] extractList: Could not find array in keys:", Object.keys(res || {}));
     return [];
 }
 

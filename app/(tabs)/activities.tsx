@@ -18,7 +18,6 @@ const TYPE_META_LIGHT: Record<string, { color: string; icon: string; emoji: stri
     "Meeting": { color: "#8B5CF6", icon: "people", emoji: "🤝" },
     "Site Visit": { color: "#10B981", icon: "map", emoji: "🏠" },
     "Task": { color: "#F59E0B", icon: "checkbox", emoji: "✅" },
-    "Email": { color: "#64748B", icon: "mail", emoji: "📧" },
 };
 
 const TYPE_META_DARK: Record<string, { color: string; icon: string; emoji: string }> = {
@@ -26,7 +25,6 @@ const TYPE_META_DARK: Record<string, { color: string; icon: string; emoji: strin
     "Meeting": { color: "#A78BFA", icon: "people", emoji: "🤝" },
     "Site Visit": { color: "#34D399", icon: "map", emoji: "🏠" },
     "Task": { color: "#FBBF24", icon: "checkbox", emoji: "✅" },
-    "Email": { color: "#94A3B8", icon: "mail", emoji: "📧" },
 };
 
 const STATUS_COLORS_LIGHT: Record<string, { bg: string; text: string }> = {
@@ -49,7 +47,7 @@ const PRIORITY_ICONS: Record<string, string> = {
     "High": "🔴", "Normal": "🟡", "Low": "🟢"
 };
 
-const TYPE_TABS = ["All", "Call", "Meeting", "Site Visit", "Task", "Email"];
+const TYPE_TABS = ["All", "Call", "Meeting", "Site Visit", "Task"];
 const STATUS_TABS = ["Pending", "Today", "Overdue", "Completed", "All"];
 
 export default function ActivitiesScreen() {
@@ -71,18 +69,22 @@ export default function ActivitiesScreen() {
 
     const fetchActivities = async (isRefreshing = false) => {
         if (!isRefreshing) setLoading(true);
-        console.log("[Activities] Fetching with type:", typeFilter, "status:", statusFilter);
+        console.log("[Activities] Senior Fetch: Filtering for Manual Interactions Only");
         try {
-            const params: any = { search, limit: 500 };
-            if (typeFilter !== "All") params.type = typeFilter;
+            const params: any = { 
+                search, 
+                limit: 500,
+                includeCommunications: 'false' // Strict exclusion of WhatsApp/SMS/Email campaigns
+            };
 
-            // Only send actual statuses to backend
+            // If "All" is selected, we let the backend use its $nin communication filter.
+            if (typeFilter !== "All") {
+                params.type = typeFilter;
+            }
+
+            // Status Filter Logic
             if (["Pending", "Completed", "In Progress"].includes(statusFilter)) {
                 params.status = statusFilter;
-            } else if (statusFilter === "Today" || statusFilter === "Overdue" || statusFilter === "All") {
-                // Backend returns all if status is not provided, 
-                // client-side filteredActivities handles Today/Overdue
-                delete params.status;
             }
 
             const res = await getActivities(params);
@@ -133,6 +135,10 @@ export default function ActivitiesScreen() {
 
     const filteredActivities = useMemo(() => {
         return activities.filter(a => {
+            // Filter out automated/omnichannel logs and marketing campaigns from the main timeline
+            const isOmni = ["SMS", "WhatsApp", "Email", "Conversation", "Messaging", "RCS", "Chat", "Marketing", "Campaign", "Bulk"].includes(a.type);
+            if (isOmni && typeFilter === "All") return false;
+
             if (statusFilter === "Pending") return ["Pending", "In Progress", "Overdue"].includes(a.status);
             if (statusFilter === "Completed") return a.status === "Completed";
             if (statusFilter === "Today") {
@@ -143,9 +149,9 @@ export default function ActivitiesScreen() {
                 if (!a.dueDate || a.status === "Completed") return false;
                 return new Date(a.dueDate) < new Date();
             }
-            return true; // All
+            return true;
         });
-    }, [activities, statusFilter]);
+    }, [activities, statusFilter, typeFilter]);
 
     const handlePlayAudio = async (id: string, url: string) => {
         if (!url) {

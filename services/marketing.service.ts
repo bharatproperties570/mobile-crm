@@ -129,8 +129,11 @@ export const marketingService = {
    */
   importAudience: async (formData: any) => {
     try {
+      // 🧠 SENIOR PROFESSIONAL: Force-disable global JSON headers for binary data
       const { data } = await api.post("/marketing/import-audience", formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        }
       });
       return data;
     } catch (error) {

@@ -1,9 +1,11 @@
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, Switch } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useNavigation } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { memo, useState } from 'react';
 import { useTheme } from "@/context/ThemeContext";
+import { useAuth } from "@/context/AuthContext";
+import { useCallTracking } from "@/context/CallTrackingContext";
 
 const SettingsItem = memo(({ icon, label, sublabel, onPress, rightElement, color = "#64748B" }: any) => {
     const { theme } = useTheme();
@@ -27,15 +29,26 @@ const SectionHeader = memo(({ title }: { title: string }) => {
 });
 
 export default function SettingsScreen() {
+    const navigation = useNavigation();
     const router = useRouter();
     const { isDarkMode, toggleTheme, theme } = useTheme();
+    const { logout } = useAuth();
+    const { simulateIncomingCall } = useCallTracking();
     const [notifications, setNotifications] = useState(true);
     const [biometrics, setBiometrics] = useState(true);
+
+    const handleBack = () => {
+        if (navigation.canGoBack()) {
+            router.back();
+        } else {
+            router.replace("/(tabs)");
+        }
+    };
 
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
             <View style={[styles.header, { backgroundColor: theme.card, borderBottomColor: theme.border }]}>
-                <TouchableOpacity onPress={() => router.back()} style={[styles.backBtn, { backgroundColor: theme.border }]}>
+                <TouchableOpacity onPress={handleBack} style={[styles.backBtn, { backgroundColor: theme.border }]}>
                     <Ionicons name="arrow-back" size={24} color={theme.text} />
                 </TouchableOpacity>
                 <Text style={[styles.headerTitle, { color: theme.text }]}>Settings</Text>
@@ -105,8 +118,7 @@ export default function SettingsScreen() {
                         onPress={() => alert("Password reset initiated via email")}
                     />
                 </View>
-                {/* System Section */}
-                <SectionHeader title="System" />
+                <SectionHeader title="System & Debug" />
                 <View style={[styles.section, { backgroundColor: theme.card, borderColor: theme.border }]}>
                     <SettingsItem
                         icon="cloud-download-outline"
@@ -116,23 +128,30 @@ export default function SettingsScreen() {
                         onPress={() => alert("Data synchronization synchronized!")}
                     />
                     <SettingsItem
+                        icon="call-outline"
+                        label="Test Call Banner"
+                        sublabel="Simulate intelligence engine"
+                        color="#10B981"
+                        onPress={() => {
+                            try {
+                                simulateIncomingCall("9991333570");
+                            } catch (e) {
+                                alert("Simulation failed: Make sure Provider is active");
+                            }
+                        }}
+                    />
+                    <SettingsItem
                         icon="information-circle-outline"
                         label="About App"
                         sublabel="Version 3.0.5 (Enterprise)"
                         color="#64748B"
                         onPress={() => alert("Bharat Properties CRM v3.0.5\nStable Release")}
                     />
-                    <SettingsItem
-                        icon="bug-outline"
-                        label="Report a Bug"
-                        color="#EF4444"
-                        onPress={() => alert("Bug report form opened")}
-                    />
                 </View>
 
                 <TouchableOpacity 
                     style={[styles.logoutBtn, { backgroundColor: isDarkMode ? 'rgba(239, 68, 68, 0.15)' : '#FEF2F2' }]}
-                    onPress={() => alert("Logging out...")}
+                    onPress={logout}
                 >
                     <Ionicons name="log-out-outline" size={20} color="#EF4444" />
                     <Text style={styles.logoutText}>Log Out</Text>

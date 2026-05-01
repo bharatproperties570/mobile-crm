@@ -168,18 +168,26 @@ export default function AddDocumentScreen() {
 
     const uploadFile = async (fileResult: any, options: any = {}) => {
         const formData = new FormData();
-        const file = fileResult.assets[0];
+        const asset = fileResult.assets[0];
 
         if (Platform.OS === 'web') {
-            const response = await fetch(file.uri);
-            const blob = await response.blob();
-            formData.append('file', blob, file.name || `upload_${Date.now()}`);
+            // On Web, expo-document-picker provides the native File object in .file
+            const nativeFile = asset.file;
+            if (nativeFile) {
+                formData.append('file', nativeFile);
+            } else {
+                const response = await fetch(asset.uri);
+                const blob = await response.blob();
+                formData.append('file', blob, asset.name || `upload_${Date.now()}`);
+            }
         } else {
-            formData.append("file", {
-                uri: Platform.OS === "android" ? file.uri : file.uri.replace("file://", ""),
-                name: file.name,
-                type: file.mimeType || "application/octet-stream"
-            } as any);
+            // On Native (iOS/Android)
+            const fileConfig = {
+                uri: Platform.OS === "android" ? asset.uri : asset.uri.replace("file://", ""),
+                name: asset.name || `upload_${Date.now()}`,
+                type: asset.mimeType || "application/octet-stream"
+            };
+            formData.append("file", fileConfig as any);
         }
 
         if (options.entityType) formData.append("entityType", options.entityType);
@@ -187,18 +195,19 @@ export default function AddDocumentScreen() {
         if (options.docCategory) formData.append("docCategory", options.docCategory);
         if (options.docType) formData.append("docType", options.docType);
 
-        const res = await api.post("/upload", formData, {
-            headers: { "Content-Type": "multipart/form-data" }
-        });
+        const res = await api.post("/upload", formData);
         return res.data;
     };
 
     const handleSave = async () => {
+        if (saving) return;
+        if (!id) return Alert.alert("Error", "Entity ID is missing. Please go back and try again.");
         if (!selectedCategory) return Alert.alert("Error", "Select Document Category");
         if (!selectedType) return Alert.alert("Error", "Select Document Type");
         if (!docNumber) return Alert.alert("Error", "Provide Document Number");
         if (!selectedFile || selectedFile.canceled) return Alert.alert("Error", "Select a file");
 
+        console.log(`[AddDocument] Starting save for ${type} ID: ${id}`);
         setSaving(true);
         try {
             let fileUrl = "";
@@ -208,8 +217,13 @@ export default function AddDocumentScreen() {
                 docCategory: selectedCategory.lookup_value,
                 docType: selectedType.lookup_value
             });
-            if (uploadRes.success) fileUrl = uploadRes.url;
-            else throw new Error("Upload failed");
+            
+            console.log("[AddDocument] Upload Response:", uploadRes?.success);
+            if (uploadRes.success) {
+                fileUrl = uploadRes.url;
+            } else {
+                throw new Error(uploadRes.error || "Upload failed");
+            }
 
             const newDoc = {
                 documentCategory: selectedCategory._id,
@@ -220,8 +234,8 @@ export default function AddDocumentScreen() {
                 documentPicture: fileUrl,
                 url: fileUrl,
                 file: fileUrl,
-                name: selectedCategory.lookup_value, // For Deal model compatibility
-                type: selectedType.lookup_value, // For Deal model compatibility
+                name: selectedCategory.lookup_value,
+                type: selectedType.lookup_value,
                 projectName: type === "Contact" ? (linkToInventory ? (selectedProject?.name || "") : "") : (entityData?.projectName || ""),
                 block: type === "Contact" ? (linkToInventory ? (selectedBlock?.name || selectedBlock || "") : "") : (entityData?.block || ""),
                 unitNumber: type === "Contact" ? (linkToInventory ? (selectedUnit?.unitNumber || "") : "") : (entityData?.unitNumber || entityData?.unitNo || ""),
@@ -230,33 +244,31 @@ export default function AddDocumentScreen() {
             };
 
             const updatedDocs = [...existingDocs, newDoc];
+            console.log("[AddDocument] Updating entity with new document count:", updatedDocs.length);
 
             if (type === "Contact") {
-                await updateContact(id!, { documents: updatedDocs });
+                await updateContact(id, { documents: updatedDocs });
             } else if (type === "Lead") {
-                await updateLead(id!, { documents: updatedDocs });
+                await updateLead(id, { documents: updatedDocs });
             } else if (type === "Deal") {
                 await api.put(`/deals/${id}`, { documents: updatedDocs });
             } else if (type === "Project") {
-                await updateProject(id!, { projectDocuments: updatedDocs });
+                await updateProject(id, { projectDocuments: updatedDocs });
             } else {
-                await updateInventory(id!, { inventoryDocuments: updatedDocs });
-                if (type === "Inventory" && selectedContact?.id) {
-                    try {
-                        const contactRes = await getContactById(selectedContact.id);
-                        const contactData = contactRes?.data ?? contactRes;
-                        const contactDocs = [...(contactData.documents || []), newDoc];
-                        await updateContact(selectedContact.id, { documents: contactDocs });
-                    } catch (err) { console.error("Dual-save error:", err); }
-                }
+                await updateInventory(id, { inventoryDocuments: updatedDocs });
             }
 
-            Alert.alert("Success", "Document added successfully", [
-                { text: "OK", onPress: () => router.canGoBack() ? router.back() : router.replace("/(tabs)") }
+            console.log("[AddDocument] Save successful");
+            Alert.alert("Success", "Document saved successfully", [
+                { text: "OK", onPress: () => {
+                    if (router.canGoBack()) router.back();
+                    else router.replace("/(tabs)");
+                }}
             ]);
         } catch (error: any) {
-            console.error("Save error:", error);
-            Alert.alert("Error", error.response?.data?.error || "Failed to add document");
+            console.error("[AddDocument] Save error:", error);
+            const errorMsg = error.response?.data?.error || error.message || "Failed to add document";
+            Alert.alert("Error", errorMsg);
         } finally {
             setSaving(false);
         }
@@ -417,6 +429,16 @@ export default function AddDocumentScreen() {
 
                 {saving && <ActivityIndicator size="small" color={theme.primary} style={{ marginTop: 20 }} />}
             </ScrollView>
+
+            {saving && (
+                <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', zIndex: 999 }]}>
+                    <View style={{ backgroundColor: theme.card, padding: 30, borderRadius: 20, alignItems: 'center', gap: 15 }}>
+                        <ActivityIndicator size="large" color={theme.primary} />
+                        <Text style={{ color: theme.text, fontWeight: '700' }}>Saving Document...</Text>
+                        <Text style={{ color: theme.textLight, fontSize: 12 }}>Please do not close the app</Text>
+                    </View>
+                </View>
+            )}
 
             <Modal visible={modalConfig.visible} animationType="slide" transparent>
                 <View style={styles.modalOverlay}>

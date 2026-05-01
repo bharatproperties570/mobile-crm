@@ -288,9 +288,10 @@ export default function AddLead() {
         funding: "", timeline: "", furnishing: "", transactionType: "",
         searchLocation: "", locCity: "", locArea: "", locPinCode: "", locRange: 5,
         projectName: [], projectTowers: [], propertyNo: "", propertyNoEnd: "", unitSelectionMode: "Single",
+        project: "", location: "",
         sizeLabel: "", inventoryId: "",
         status: "", source: "", subSource: "", campaign: "", subCampaign: "",
-        owner: "", teams: [], team: "", visibleTo: "Everyone", stage: "", description: "", tags: [],
+        owner: "", teams: [], team: "", visibleTo: "Everyone", stage: "Incoming", description: "", tags: [],
     });
 
     const [units, setUnits] = useState<any[]>([]);
@@ -481,6 +482,8 @@ function SearchableDropdown({
                         locPinCode: l.locPinCode || "",
                         locRange: l.locRange || 5,
                         projectName: Array.isArray(l.projectName) ? l.projectName.map((v: any) => v?._id || v) : (l.projectName?._id ? [l.projectName._id] : []),
+                        project: l.project?._id || l.project || "",
+                        location: l.location?._id || l.location || "",
                         projectTowers: l.locBlock || [],
                         propertyNo: l.propertyNo || "",
                         propertyNoEnd: l.propertyNoEnd || "",
@@ -597,6 +600,8 @@ function SearchableDropdown({
                 subSource: getLookupId("SubSource", formData.subSource),
                 campaign: getLookupId("Campaign", formData.campaign),
                 subCampaign: getLookupId("Sub Campaign", formData.subCampaign),
+                location: formData.location || undefined,
+                project: formData.project || undefined,
                 locBlock: formData.projectTowers,
                 budgetMin: formData.budgetMin ? Number(formData.budgetMin) : undefined,
                 budgetMax: formData.budgetMax ? Number(formData.budgetMax) : undefined,
@@ -891,7 +896,8 @@ function SearchableDropdown({
                                                 const locObj = {
                                                     searchLocation: data.description,
                                                     locCity: details?.address_components?.find((c: any) => c.types.includes("locality"))?.long_name || "",
-                                                    locArea: details?.address_components?.find((c: any) => c.types.includes("sublocality"))?.long_name || ""
+                                                    locArea: details?.address_components?.find((c: any) => c.types.includes("sublocality"))?.long_name || "",
+                                                    location: details?.address_components?.find((c: any) => c.types.includes("sublocality"))?.long_name || details?.address_components?.find((c: any) => c.types.includes("locality"))?.long_name || ""
                                                 };
                                                 setFormData((prev: any) => ({ ...prev, ...locObj }));
                                             }
@@ -932,11 +938,11 @@ function SearchableDropdown({
                             <Field label="Shortlisted Projects">
                                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.projectScroll}>
                                     {Array.isArray(projects) && projects.map((p) => {
-                                        const active = formData.projectName.includes(p.name);
+                                        const active = formData.projectName.includes(p.name) || formData.project === p._id;
                                         return (
                                             <TouchableOpacity key={p._id} style={[styles.projectCard, { borderColor: theme.border, backgroundColor: theme.cardBg }, active && { borderColor: theme.primary, backgroundColor: theme.primary + '08' }]} onPress={() => {
                                                 const newList = active ? formData.projectName.filter((n: string) => n !== p.name) : [...formData.projectName, p.name];
-                                                setFormData({ ...formData, projectName: newList });
+                                                setFormData({ ...formData, projectName: newList, project: newList.length > 0 ? p._id : "" });
                                             }}>
                                                 <Text style={[styles.projectText, { color: theme.textPrimary }, active && { color: theme.primary }]}>{p.name}</Text>
                                                 <Text style={[styles.projectSub, { color: theme.textSecondary }]}>{p.address?.city || "Unknown City"}</Text>
@@ -1146,6 +1152,9 @@ function SearchableDropdown({
                                 
                                 <Text style={[styles.subLabel, { color: theme.textSecondary, marginTop: 16 }]}>Visibility Scope</Text>
                                 <SelectButton value={formData.visibleTo} options={[{ label: "Everyone", value: "Everyone" }, { label: "Team", value: "Team" }, { label: "Private", value: "Private" }]} onSelect={(v) => setFormData({ ...formData, visibleTo: v })} />
+                            </Field>
+                            <Field label="Stage" required>
+                                {renderSingleSelect("Stage", "stage")}
                             </Field>
                             <Input label="Internal Notes" multiline numberOfLines={4} value={formData.description} onChangeText={v => setFormData({ ...formData, description: v })} icon="create-outline" />
                         </View>

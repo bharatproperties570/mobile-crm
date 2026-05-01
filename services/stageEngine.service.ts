@@ -10,7 +10,7 @@ import api from "./api";
 // ── Stage & Outcome Maps (identical to web stageEngine) ────────────────────
 
 export const STAGE_COLORS: Record<string, string> = {
-    New: "#94a3b8",
+    "Incoming": "#94a3b8",
     Prospect: "#3b82f6",
     Qualified: "#8b5cf6",
     Opportunity: "#f59e0b",
@@ -56,7 +56,7 @@ export function computeLeadStage(
     result: string
 ): string {
     const key = result || outcomeStatus;
-    return OUTCOME_TO_STAGE[key] || currentStage || "New";
+    return OUTCOME_TO_STAGE[key] || currentStage || "Incoming";
 }
 
 // ── API Calls ──────────────────────────────────────────────────────────────

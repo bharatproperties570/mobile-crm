@@ -11,6 +11,7 @@ import { getMessagingStream, sendReply } from '@/services/activities.service';
 import { getEmails, getAiConversations, updateAiConversationStatus, getOAuthUrl } from '@/services/communication.service';
 import { safeApiCall } from '@/services/api.helpers';
 import * as Linking from 'expo-linking';
+import CallSyncService from '@/services/CallSyncService';
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -65,6 +66,11 @@ export default function CommunicationHub() {
         else setRefreshing(true);
 
         try {
+            // SYNC NATIVE CALL LOGS (Android Only)
+            if (isRefresh) {
+                await CallSyncService.syncLogs();
+            }
+
             const [msgRes, aiRes] = await Promise.all([
                 safeApiCall(() => getMessagingStream()),
                 safeApiCall(() => getAiConversations())
@@ -473,8 +479,8 @@ function InboxRow({ item, theme, isDark, onPress, onLongPress }: any) {
 
             <View style={styles.rowContent}>
                 <View style={styles.rowTop}>
-                    <Text style={[styles.rowName, { color: theme.text }]} numberOfLines={1}>{item.participant}</Text>
-                    <Text style={[styles.rowTime, { color: theme.textMuted }]}>{formatTimeAgo(item.date)}</Text>
+                    <Text style={[styles.rowName, { color: theme.primary }]} numberOfLines={1}>{item.participant}</Text>
+                    <Text style={[styles.rowTime, { color: '#64748B' }]}>{formatTimeAgo(item.date)}</Text>
                 </View>
                 <Text style={[styles.rowSubject, { color: theme.textSecondary }]} numberOfLines={1}>
                     {item.subject || '(No message content)'}

@@ -15,7 +15,7 @@ const BACKEND_PORT = "4000";
 
 const WEB_URL = `http://localhost:${BACKEND_PORT}/api`;
 const PROD_URL = "https://api.bharatproperties.co/api";
-const TUNNEL_URL = "https://bharat-crm-stable-api.loca.lt/api";
+const TUNNEL_URL = "https://bharat-properties-crm-v3.loca.lt/api";
 const LAN_URL = `http://${MACHINE_IP}:${BACKEND_PORT}/api`;
 
 const NATIVE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || TUNNEL_URL;

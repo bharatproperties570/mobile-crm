@@ -182,11 +182,11 @@ export default function TabsLayout() {
 const styles = StyleSheet.create({
     tabBarContainer: {
         position: 'absolute',
-        bottom: 25,
+        bottom: 15,
         left: 15,
         right: 15,
-        height: 88,
-        borderRadius: 35,
+        height: 65,
+        borderRadius: 25,
         elevation: 25,
         shadowColor: "#000",
         shadowOffset: { width: 0, height: 12 },
@@ -202,34 +202,34 @@ const styles = StyleSheet.create({
     tabItem: {
         alignItems: "center",
         justifyContent: "center",
-        width: 90,
+        width: 85,
         height: '100%',
     },
     tabItemActive: {
         // Subtle feedback for active tab
     },
     iconBox: {
-        width: 46,
-        height: 46,
-        borderRadius: 18,
+        width: 38,
+        height: 38,
+        borderRadius: 14,
         justifyContent: 'center',
         alignItems: 'center',
-        marginBottom: 5,
+        marginBottom: 2,
         backgroundColor: "transparent",
         borderColor: "transparent",
         borderWidth: 1.5,
     },
     tabLabel: {
-        fontSize: 10,
+        fontSize: 9,
         fontWeight: "700",
         letterSpacing: 0.3,
-        marginTop: 2
+        marginTop: 0
     },
     activeIndicator: {
         position: 'absolute',
-        bottom: 8,
-        width: 16,
-        height: 4,
+        bottom: 4,
+        width: 14,
+        height: 3,
         borderRadius: 2,
     }
 });

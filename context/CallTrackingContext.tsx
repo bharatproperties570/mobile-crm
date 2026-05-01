@@ -44,11 +44,25 @@ export function CallTrackingProvider({ children }: { children: React.ReactNode }
     }, [lastCall]);
 
     const handleIncomingCall = async (mobile: string) => {
-        const info = await lookupCallerInfo(mobile);
-        if (info) {
-            // Check for pending activities for this entity to show in banner
+        let info = await lookupCallerInfo(mobile);
+        
+        if (!info) {
+            // Fallback for unidentified numbers or testing
+            info = {
+                name: "Unidentified Caller",
+                mobile: mobile,
+                type: 'Anonymous',
+                entityId: 'anonymous',
+                intent: 'Incoming Inquiry',
+                status: 'Potential Lead',
+                contexts: {}
+            };
+        }
+
+        // Check for pending activities for this entity to show in banner
+        if (info.entityId !== 'anonymous') {
             const activityRes = await safeApiCall(() => getActivities({
-                entityId: info.entityId,
+                entityId: info!.entityId,
                 status: 'Pending',
                 limit: '1'
             }));
@@ -56,17 +70,20 @@ export function CallTrackingProvider({ children }: { children: React.ReactNode }
             if (pending.length > 0) {
                 info.activity = `Next: ${pending[0].title || pending[0].type}`;
             }
-            setActiveBanner(info);
-
-            // AUTO-LOG: Set lastCall so prompt appears on app return
-            setLastCall({
-                mobile,
-                entityId: info.entityId,
-                entityType: info.type,
-                entityName: info.name,
-                startTime: Date.now()
-            });
+        } else {
+            info.activity = "New Prospect Detection";
         }
+        
+        setActiveBanner(info);
+
+        // AUTO-LOG: Set lastCall so prompt appears on app return
+        setLastCall({
+            mobile,
+            entityId: info.entityId,
+            entityType: info.type,
+            entityName: info.name,
+            startTime: Date.now()
+        });
     };
 
     const simulateIncomingCall = (mobile: string) => {

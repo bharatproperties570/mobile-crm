@@ -164,42 +164,67 @@ export default function MarketingScreen() {
         fetchData();
     };
 
+    const [isImporting, setIsImporting] = useState(false);
+
     const handleFileUpload = async () => {
+        // Immediate UI feedback
+        setForm(prev => ({ ...prev, source: 'Excel' }));
+
         try {
             const res = await DocumentPicker.getDocumentAsync({
-                type: ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'text/csv', 'application/vnd.ms-excel'],
+                type: [
+                    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 
+                    'text/csv', 
+                    'application/vnd.ms-excel',
+                    'application/octet-stream',
+                    'text/comma-separated-values'
+                ],
+                copyToCacheDirectory: true
             });
 
             if (res.canceled) return;
+            setIsImporting(true);
 
             const file = res.assets[0];
             const formData = new FormData();
-            formData.append('file', {
-                uri: file.uri,
-                name: file.name,
-                type: file.mimeType || 'application/octet-stream',
-            } as any);
+            
+            // Standardize file attachment for React Native FormData
+            const fileToUpload = {
+                uri: Platform.OS === 'ios' ? file.uri.replace('file://', '') : file.uri,
+                name: file.name || (file.uri.split('/').pop()) || 'import.xlsx',
+                type: file.mimeType || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            };
+            
+            // Re-add file:// prefix for Android if missing
+            if (Platform.OS === 'android' && !fileToUpload.uri.startsWith('file://') && !fileToUpload.uri.startsWith('content://')) {
+                fileToUpload.uri = `file://${fileToUpload.uri}`;
+            }
+            
+            formData.append('file', fileToUpload as any);
 
-            Alert.alert("Parsing File", "Uploading and identifying professional contacts...");
             const result = await marketingService.importAudience(formData);
+            
             if (result.success) {
                 if (result.recipients && result.recipients.length > 0) {
                     const firstRow = result.recipients[0].context || {};
                     setImportHeaders(Object.keys(firstRow).filter(k => k !== 'originalType'));
                 }
-                setForm({
-                    ...form,
+                setForm(prev => ({
+                    ...prev,
                     source: 'Excel',
                     fileName: file.name,
                     tempCount: result.count,
                     tempRecipients: result.recipients
-                });
-                Alert.alert("Import Success", `Identified ${result.count} contacts.`);
+                }));
+                Alert.alert("Import Success", `Found ${result.count} valid contacts.`);
             } else {
-                Alert.alert("Import Failed", result.error || "Could not parse Excel file.");
+                Alert.alert("Import Failed", result.error || "Could not parse the selected file.");
             }
         } catch (error) {
-            Alert.alert("System Error", "Failed to process file upload.");
+            console.error("FileUpload Error:", error);
+            Alert.alert("System Error", "Failed to process the selected file.");
+        } finally {
+            setIsImporting(false);
         }
     };
 
@@ -554,8 +579,16 @@ export default function MarketingScreen() {
                                                         {form.tempCount ? `${form.tempCount} contacts identified` : 'Supports .csv, .xlsx, .xls'}
                                                     </Text>
                                                 </View>
-                                                <TouchableOpacity onPress={handleFileUpload} style={{ backgroundColor: theme.primary, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 10 }}>
-                                                    <Text style={{ color: '#fff', fontSize: 11, fontWeight: '900' }}>{form.fileName ? 'CHANGE' : 'BROWSE'}</Text>
+                                                <TouchableOpacity 
+                                                    onPress={handleFileUpload} 
+                                                    style={{ backgroundColor: theme.primary, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 10 }}
+                                                    disabled={isImporting}
+                                                >
+                                                    {isImporting ? (
+                                                        <ActivityIndicator size="small" color="#fff" />
+                                                    ) : (
+                                                        <Text style={{ color: '#fff', fontSize: 11, fontWeight: '900' }}>{form.fileName ? 'CHANGE' : 'BROWSE'}</Text>
+                                                    )}
                                                 </TouchableOpacity>
                                             </View>
 

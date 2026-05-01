@@ -356,7 +356,7 @@ const INITIAL: InventoryForm = {
 };
 
 export default function AddInventoryScreen() {
-    const { id } = useLocalSearchParams<{ id?: string }>();
+    const { id, step: initialStepParam } = useLocalSearchParams<{ id?: string, step?: string }>();
     const router = useRouter();
     const { theme } = useTheme();
     const { getLookupValue, getLookupsByType, propertyConfig } = useLookup();
@@ -369,7 +369,7 @@ export default function AddInventoryScreen() {
     const [projectModalVisible, setProjectModalVisible] = useState(false);
     const [selectedSizeId, setSelectedSizeId] = useState("");
     const [showDatePicker, setShowDatePicker] = useState(false);
-    const [step, setStep] = useState(0);
+    const [step, setStep] = useState(initialStepParam ? parseInt(initialStepParam) : 0);
     const shakeAnim = useRef(new Animated.Value(0)).current;
 
     const triggerShake = () => {

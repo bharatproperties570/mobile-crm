@@ -331,7 +331,7 @@ export default function LeadDetailScreen() {
                         <Text style={[styles.strategyLabel, { color: theme.textLight, textAlign: 'right' }]}>STAGE</Text>
                         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }}>
                             {(() => {
-                                const stageStr = lv(lead.stage) !== '' ? lv(lead.stage) : 'New';
+                                const stageStr = lv(lead.stage) !== '' ? lv(lead.stage) : 'Incoming';
                                 const stageColor = STAGE_COLORS[stageStr] || theme.primary;
                                 return (
                                     <View style={[styles.strategyValueRow]}>
@@ -357,7 +357,7 @@ export default function LeadDetailScreen() {
                             { id: 'negotiations', label: 'Negotiations', subStages: ['Negotiation', 'Booking', 'Booked'], icon: "home-outline", color: '#f97316' },
                             { id: 'closed', label: 'Closed', subStages: ['Closed Won', 'Won', 'Closed Lost', 'Lost', 'Unqualified', 'Stalled'], icon: "checkmark-circle-outline", color: '#10b981' }
                         ].map((ms, idx) => {
-                            const currentStageLabel = (lv(lead?.stage) || 'new').toLowerCase();
+                            const currentStageLabel = (lv(lead?.stage) || 'incoming lead').toLowerCase();
                             const isCurrent = ms.subStages.some(ss => ss.toLowerCase() === currentStageLabel);
                             
                             const stageActivities = Array.isArray(activities) ? activities.filter(a => {
@@ -373,7 +373,7 @@ export default function LeadDetailScreen() {
                             return (
                                 <TouchableOpacity 
                                     key={ms.id} 
-                                    onPress={() => router.push(`/change-stage?leadId=${id}&currentStage=${(lv(lead?.stage) || "new").toLowerCase()}`)}
+                                    onPress={() => router.push(`/change-stage?leadId=${id}&currentStage=${(lv(lead?.stage) || "incoming lead").toLowerCase()}`)}
                                     style={[
                                         styles.enterpriseArrow, 
                                         { backgroundColor: isCurrent ? ms.color + '15' : 'transparent', borderColor: isCurrent ? ms.color : theme.border },
@@ -488,7 +488,7 @@ export default function LeadDetailScreen() {
                             <InfoRow label="Project" value={lv(lead.project)} icon="business-outline" />
                             <InfoRow label="Budget" value={getLookupValue("Budget", lead.budget)} icon="wallet-outline" accent />
                             <InfoRow label="Min - Max" value={(lead.budgetMin || lead.budgetMax) ? `₹${lead.budgetMin || 0} - ₹${lead.budgetMax || 0}` : ""} icon="cash-outline" />
-                            <InfoRow label="Location Preference" value={[getLookupValue("City", lead.locCity), lead.locArea, getLookupValue("ProjectLocation", lead.location)].filter(v => v && v !== "—").join(", ")} icon="map-outline" />
+                            <InfoRow label="Location Preference" value={[getLookupValue("City", lead.locCity), lead.locArea, getLookupValue("Location", lead.location)].filter(v => v && v !== "—").join(", ")} icon="map-outline" />
                         </View>
 
                         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
@@ -727,7 +727,7 @@ export default function LeadDetailScreen() {
                                                         {act.description || act.details?.note}
                                                     </Text>
                                                 )}
-                                                {!!act.actor && <Text style={{ fontSize: 9, color: theme.textLight, marginTop: 4 }}>By {act.actor}</Text>}
+                                                {!!act.actor && <Text style={{ fontSize: 10, color: theme.primary, fontWeight: '700', marginTop: 4 }}>By {act.actor}</Text>}
                                                 {!isAudit && act.status !== 'Completed' && (
                                                     <TouchableOpacity
                                                         onPress={() => router.push({
