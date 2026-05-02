@@ -8,7 +8,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Audio } from 'expo-av';
 import { getActivities, Activity, deleteActivity, updateActivity } from "@/services/activities.service";
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import Swipeable from "react-native-gesture-handler/Swipeable";
+import { Swipeable } from "react-native-gesture-handler";
 import { useUsers } from "@/context/UserContext";
 import { useTheme } from "@/context/ThemeContext";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -51,8 +51,8 @@ const TYPE_TABS = ["All", "Call", "Meeting", "Site Visit", "Task"];
 const STATUS_TABS = ["Pending", "Today", "Overdue", "Completed", "All"];
 
 export default function ActivitiesScreen() {
-    const { theme } = useTheme();
-    const isDark = theme.background === '#0F172A';
+    const { theme, isDarkMode } = useTheme();
+    const isDark = isDarkMode;
     const insets = useSafeAreaInsets();
     const router = useRouter();
     const [activities, setActivities] = useState<Activity[]>([]);
@@ -220,8 +220,8 @@ export default function ActivitiesScreen() {
         onWhatsApp: (mobile: string) => void;
         findUser: (id: string) => any;
     }) => {
-        const { theme } = useTheme();
-        const isDark = theme.background === '#0F172A';
+        const { theme, isDarkMode } = useTheme();
+        const isDark = isDarkMode;
         const metaMap = isDark ? TYPE_META_DARK : TYPE_META_LIGHT;
         const meta = metaMap[item.type] || { color: isDark ? "#94A3B8" : "#64748B", icon: "list", emoji: "📌" };
         const statusStyle = isDark ? (STATUS_COLORS_DARK[item.status] || { bg: "#1E293B", text: "#94A3B8" }) : (STATUS_COLORS_LIGHT[item.status] || { bg: "#F1F5F9", text: "#64748B" });

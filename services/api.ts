@@ -109,16 +109,26 @@ api.interceptors.response.use(
         const cacheKey = `@offline_cache_${error.config.url}`;
         const cachedPayload = await AsyncStorage.getItem(cacheKey);
         if (cachedPayload) {
-          console.log(`[API] 📴 Network failure. Serving offline cache for ${error.config.url}`);
-          // Return simulated successful response containing cached static data
-          return Promise.resolve({
-            data: JSON.parse(cachedPayload),
-            status: 200,
-            statusText: 'OK (Offline Cache)',
-            headers: {},
-            config: error.config,
-            isOfflineVal: true
-          });
+          console.log(`[API] 📴 Network failure. Attempting to serve offline cache for ${error.config.url}`);
+          
+          let parsedData = null;
+          try {
+            parsedData = JSON.parse(cachedPayload);
+          } catch (e) {
+            console.error(`[API] Corrupted cache detected for ${error.config.url}. Clearing entry.`);
+            await AsyncStorage.removeItem(cacheKey);
+          }
+
+          if (parsedData) {
+            return Promise.resolve({
+              data: parsedData,
+              status: 200,
+              statusText: 'OK (Offline Cache)',
+              headers: {},
+              config: error.config,
+              isOfflineVal: true
+            });
+          }
         }
       } catch (err) {
         console.warn(`[API] Cache retrieval failed for ${error.config.url}`);

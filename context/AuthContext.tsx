@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useRouter, useSegments } from 'expo-router';
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { storage } from "@/services/storage";
-import api from "@/services/api";
+import api, { set401Callback } from "@/services/api";
 
 interface AuthContextType {
     token: string | null;
@@ -33,6 +33,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const checkAuth = async () => {
         setLoading(true);
         console.log("[AuthContext] Checking authentication...");
+        
+        // Safety timeout: Never let the app hang on loading for more than 10s
+        const timeout = setTimeout(() => {
+            if (loading) {
+                console.warn("[AuthContext] Auth check timed out. Forcing loading=false");
+                setLoading(false);
+            }
+        }, 10000);
+
         try {
             const savedToken = await storage.getItem("authToken");
             const savedUser = await storage.getItem("userData");
@@ -40,13 +49,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (savedToken) {
                 console.log("[AuthContext] Token found in storage");
                 setToken(savedToken);
-                if (savedUser) setUser(JSON.parse(savedUser));
+                if (savedUser) {
+                    try {
+                        setUser(JSON.parse(savedUser));
+                    } catch (e) {
+                        console.warn("[AuthContext] Failed to parse userData cache");
+                    }
+                }
             } else {
                 console.log("[AuthContext] No token found");
             }
         } catch (error) {
             console.error("[AuthContext] Auth check error:", error);
         } finally {
+            clearTimeout(timeout);
             setLoading(false);
         }
     };
@@ -60,42 +76,47 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     useEffect(() => {
-        const { set401Callback } = require("@/services/api");
-        set401Callback(() => {
-            console.warn('[AuthContext] 401 Unauthorized detected, logging out...');
-            setToken(null);
-            setUser(null);
-            clearCaches();
-        });
+        if (set401Callback) {
+            set401Callback(() => {
+                console.warn('[AuthContext] 401 Unauthorized detected, logging out...');
+                setToken(null);
+                setUser(null);
+                clearCaches();
+            });
+        }
         checkAuth();
+    }, []);
+
+    const [routerReady, setRouterReady] = useState(false);
+
+    useEffect(() => {
+        // Small delay to ensure router is fully mounted and segments are stable
+        const timer = setTimeout(() => setRouterReady(true), 500);
+        return () => clearTimeout(timer);
     }, []);
 
     // 🚀 Redirection Engine: Handles path-based access control
     useEffect(() => {
-        if (loading) return;
+        if (loading || !routerReady) return;
 
-        // segments[0] is the root group (e.g. "(auth)" or "(tabs)")
-        const group = segments[0];
+        const group = segments?.[0];
         const inAuthGroup = group === '(auth)';
         const inTabsGroup = group === '(tabs)';
+        const isAtRoot = !segments || segments.length === 0;
 
-        // SENIOR FIX: If we are at the root path (segments.length === 0), it's a redirection decision point
-        const isAtRoot = segments.length === 0;
-
+        // PREVENT REDIRECTION LOOPS: Check if we are ALREADY where we need to be
         if (!token) {
-            // Unauthenticated: Redirect to login if not already in auth flow
             if (!inAuthGroup) {
                 console.log("[AuthContext] Redirecting to login (unauthenticated)");
                 router.replace("/(auth)/login");
             }
         } else {
-            // Authenticated: Redirect to tabs if at root or in auth flow
             if (isAtRoot || inAuthGroup) {
                 console.log("[AuthContext] Redirecting to tabs (authenticated)");
                 router.replace("/(tabs)");
             }
         }
-    }, [token, segments, loading]);
+    }, [token, segments, loading, routerReady]);
 
     const login = async (newToken: string, userData: any) => {
         setToken(newToken);

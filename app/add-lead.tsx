@@ -51,7 +51,7 @@ const BUDGET_VALUES = [
     { value: 1000000000, label: "100 Crore" }
 ];
 
-const GOOGLE_API_KEY = "AIzaSyBd2gdMJVt5C_tgYqWoRbBiatzmevYdB9U";
+const GOOGLE_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
 const FORM_STEPS = ["Requirement", "Location", "Contact", "System"];
 
 // ─── Reusable Components ──────────────────────────────────────────────────────

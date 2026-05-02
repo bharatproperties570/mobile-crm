@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import {
     View, Text, StyleSheet, FlatList, TouchableOpacity,
-    TextInput, RefreshControl, ActivityIndicator, Linking, Animated, Modal, Pressable, Alert
+    TextInput, RefreshControl, ActivityIndicator, Linking, Animated, Modal, Pressable, Alert, Dimensions, ScrollView
 } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -166,8 +166,8 @@ const CompanyCard = ({ company, onPress, onMenuPress, idx }: { company: Company,
 };
 
 export default function CompaniesScreen() {
-    const { theme } = useTheme();
-    const isDark = theme.background === '#0F172A';
+    const { theme, isDarkMode } = useTheme();
+    const isDark = isDarkMode;
     const router = useRouter();
     const [companies, setCompanies] = useState<Company[]>([]);
     const [search, setSearch] = useState("");

@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useMemo, useRef, memo } from "react";
 import {
     View, Text, ScrollView, StyleSheet, TouchableOpacity,
-    RefreshControl, ActivityIndicator, Dimensions, Animated, Image
+    RefreshControl, ActivityIndicator, Dimensions, Animated, Image, Alert
 } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -91,14 +91,23 @@ function Counter({ value, style, prefix = "", suffix = "" }: { value: number; st
     const [displayValue, setDisplayValue] = useState(0);
     useEffect(() => {
         let start = 0;
-        const end = value;
-        if (start === end) return;
+        const end = Math.max(0, Math.floor(value || 0));
+        if (start === end) {
+            setDisplayValue(end);
+            return;
+        }
+        
         let totalMilisecInterval = 1000;
-        let stepTime = Math.abs(Math.floor(totalMilisecInterval / end));
+        let stepTime = Math.max(16, Math.floor(totalMilisecInterval / (end || 1)));
+        
         let timer = setInterval(() => {
-            start += 1;
-            setDisplayValue(start);
-            if (start === end) clearInterval(timer);
+            start += Math.ceil(end / 60); // Faster increment for large numbers
+            if (start >= end) {
+                setDisplayValue(end);
+                clearInterval(timer);
+            } else {
+                setDisplayValue(start);
+            }
         }, stepTime);
         return () => clearInterval(timer);
     }, [value]);

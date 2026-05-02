@@ -6,16 +6,17 @@ import {
 } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import Swipeable from "react-native-gesture-handler/Swipeable";
+import { Swipeable } from "react-native-gesture-handler";
 import {
     getContacts, contactFullName, contactPhone, contactEmail,
-    lookupVal, type Contact,
+    lookupVal, updateContact, type Contact,
 } from "@/services/contacts.service";
 import { safeApiCall } from "@/services/api.helpers";
 import { useCallTracking } from "@/context/CallTrackingContext";
 import { getOrCreateCallActivity } from "@/services/activities.service";
 import { useTheme } from "@/context/ThemeContext";
 import { useLookup } from "@/context/LookupContext";
+import { useUsers } from "@/context/UserContext";
 import FilterModal, { FilterField } from "@/components/FilterModal";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -63,7 +64,8 @@ const ContactCard = memo(({ contact, idx, onPress, onMenuPress }: { contact: Con
     const name = contactFullName(contact);
     const phone = contactPhone(contact);
     const email = contactEmail(contact);
-    const isDark = theme.background === '#0F172A';
+    const { isDarkMode } = useTheme();
+    const isDark = isDarkMode;
     const stage = (contact.stage || "new").toLowerCase();
     const stageColorMap = isDark ? STAGE_COLORS_DARK : STAGE_COLORS_LIGHT;
     const stageColor = stageColorMap[stage] ?? "#94A3B8";
@@ -110,7 +112,7 @@ const ContactCard = memo(({ contact, idx, onPress, onMenuPress }: { contact: Con
         <Swipeable renderRightActions={renderRightActions} renderLeftActions={renderLeftActions}>
             <Animated.View style={{ opacity: fadeAnim, transform: [{ scale: scaleValue }, { translateY: fadeAnim.interpolate({ inputRange: [0, 1], outputRange: [20, 0] }) }] }}>
                 <TouchableOpacity activeOpacity={1} onPressIn={onPressIn} onPressOut={onPressOut} onPress={onPress} style={[styles.card, { backgroundColor: theme.card, borderBottomColor: theme.border }]}>
-                    <View style={[styles.avatar, { backgroundColor: color + (theme.background === '#0F172A' ? "25" : "15") }]}>
+                    <View style={[styles.avatar, { backgroundColor: color + (isDarkMode ? "25" : "15") }]}>
                         <Text style={[styles.avatarText, { color }]}>{getInitials(contact)}</Text>
                     </View>
                     <View style={styles.cardContent}>
@@ -156,6 +158,7 @@ export default function ContactsScreen() {
     const insets = useSafeAreaInsets();
     const router = useRouter();
     const { getLookupValue, getLookupsByType } = useLookup();
+    const { users } = useUsers();
     const [contacts, setContacts] = useState<Contact[]>([]);
     const [search, setSearch] = useState("");
     const [loading, setLoading] = useState(true);
@@ -442,7 +445,7 @@ export default function ContactsScreen() {
                                     <Ionicons name="create" size={24} color={theme.textMuted} />
                                 </View>
                                 <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Edit</Text>
-                            </TouchableOpacity >
+                            </TouchableOpacity>
 
                             <TouchableOpacity style={styles.actionItem} onPress={() => {
                                 router.push(`/add-document?id=${selectedContact?._id}&type=Contact`); closeHub();
@@ -468,58 +471,6 @@ export default function ContactsScreen() {
                                 </View>
                                 <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Assign</Text>
                             </TouchableOpacity>
-                        </View>
-
-                        {showReassign && (
-                            <View style={{ backgroundColor: isDark ? 'rgba(124, 58, 237, 0.05)' : '#F5F3FF', padding: 20, marginTop: 10 }}>
-                                <Text style={{ fontSize: 14, fontWeight: '700', color: '#7C3AED', marginBottom: 12 }}>ASSIGN TO RM</Text>
-                                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12 }}>
-                                    {users.map((u) => {
-                                        const isAssigned = selectedContact?.owner === u._id || (typeof selectedContact?.owner === 'object' && selectedContact?.owner?._id === u._id);
-                                        return (
-                                            <TouchableOpacity
-                                                key={u._id}
-                                                style={{ 
-                                                    borderColor: isAssigned ? '#7C3AED' : theme.border, 
-                                                    backgroundColor: isAssigned ? '#7C3AED10' : theme.card,
-                                                    flexDirection: 'row',
-                                                    alignItems: 'center',
-                                                    gap: 8,
-                                                    paddingHorizontal: 12,
-                                                    paddingVertical: 8,
-                                                    borderRadius: 12,
-                                                    borderWidth: 1
-                                                }}
-                                                onPress={async () => {
-                                                    const res = await safeApiCall(() => updateContact(selectedContact!._id, { assignedTo: u._id, owner: u._id }));
-                                                    if (!res.error) {
-                                                        // Update the contact in the local list
-                                                        setContacts(prev => {
-                                                            const next = { ...prev };
-                                                            Object.keys(next).forEach(key => {
-                                                                next[key] = next[key].map((c: any) => 
-                                                                    c._id === selectedContact!._id ? { ...c, owner: u._id, assignedTo: u._id } : c
-                                                                );
-                                                            });
-                                                            return next;
-                                                        });
-                                                        closeHub();
-                                                        Vibration.vibrate(20);
-                                                        Alert.alert("Success", "Contact assigned successfully.");
-                                                    }
-                                                }}
-                                            >
-                                                <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: theme.primary + '15', justifyContent: 'center', alignItems: 'center' }}>
-                                                    <Text style={{ fontSize: 10, fontWeight: '800', color: theme.primary }}>{(u.fullName || u.name || "?")[0].toUpperCase()}</Text>
-                                                </View>
-                                                <Text style={{ color: isAssigned ? '#7C3AED' : theme.text, fontWeight: '600' }}>{u.fullName || u.name}</Text>
-                                                {isAssigned && <Ionicons name="checkmark-circle" size={16} color="#7C3AED" />}
-                                            </TouchableOpacity>
-                                        );
-                                    })}
-                                </ScrollView>
-                            </View>
-                        )}
 
                             <TouchableOpacity style={styles.actionItem} onPress={() => {
                                 router.push(`/add-lead?refContact=${selectedContact?._id}`); closeHub();
@@ -539,15 +490,6 @@ export default function ContactsScreen() {
                                 <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Activity</Text>
                             </TouchableOpacity>
 
-                             <TouchableOpacity style={styles.actionItem} onPress={() => {
-                                Alert.alert("Assign", "Assigning contact..."); closeHub();
-                            }}>
-                                <View style={[styles.actionIcon, { backgroundColor: '#F5F3FF' + (theme.background === '#0F172A' ? '20' : '') }]}>
-                                    <Ionicons name="people" size={24} color="#7C3AED" />
-                                </View>
-                                <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Assign</Text>
-                            </TouchableOpacity>
-
                             <TouchableOpacity style={styles.actionItem} onPress={async () => {
                                 if (!selectedContact) return;
                                 try {
@@ -560,15 +502,59 @@ export default function ContactsScreen() {
                                     Alert.alert("Error", "Failed to prepare call outcome");
                                 }
                             }}>
-                                <View style={[styles.actionIcon, { backgroundColor: "#ECFDF5" + (theme.background === '#0F172A' ? '20' : '') }]}>
+                                <View style={[styles.actionIcon, { backgroundColor: "#ECFDF5" + (isDarkMode ? '20' : '') }]}>
                                     <Ionicons name="checkmark-done-circle" size={24} color="#10B981" />
                                 </View>
                                 <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Outcome</Text>
                             </TouchableOpacity>
-                        </View >
-                    </Animated.View >
-                </Pressable >
-            </Modal >
+                        </View>
+
+                        {showReassign && users && users.length > 0 && (
+                            <View style={{ backgroundColor: isDark ? 'rgba(124, 58, 237, 0.05)' : '#F5F3FF', padding: 20, marginTop: 10, borderRadius: 16 }}>
+                                <Text style={{ fontSize: 14, fontWeight: '700', color: '#7C3AED', marginBottom: 12 }}>ASSIGN TO RELATIONSHIP MANAGER</Text>
+                                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12 }}>
+                                    {users.map((u) => {
+                                        const isAssigned = selectedContact?.owner === u._id || (typeof selectedContact?.owner === 'object' && (selectedContact?.owner as any)?._id === u._id);
+                                        return (
+                                            <TouchableOpacity
+                                                key={u._id}
+                                                style={{ 
+                                                    borderColor: isAssigned ? '#7C3AED' : theme.border, 
+                                                    backgroundColor: isAssigned ? '#7C3AED10' : theme.card,
+                                                    flexDirection: 'row',
+                                                    alignItems: 'center',
+                                                    gap: 8,
+                                                    paddingHorizontal: 12,
+                                                    paddingVertical: 8,
+                                                    borderRadius: 12,
+                                                    borderWidth: 1
+                                                }}
+                                                onPress={async () => {
+                                                    const res = await safeApiCall(() => updateContact(selectedContact!._id, { assignedTo: u._id, owner: u._id }));
+                                                    if (!res.error) {
+                                                        setContacts(prev => prev.map(c => 
+                                                            c._id === selectedContact!._id ? { ...c, owner: u._id } : c
+                                                        ));
+                                                        closeHub();
+                                                        Vibration.vibrate(20);
+                                                        Alert.alert("Success", "Contact assigned successfully.");
+                                                    }
+                                                }}
+                                            >
+                                                <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: theme.primary + '15', justifyContent: 'center', alignItems: 'center' }}>
+                                                    <Text style={{ fontSize: 10, fontWeight: '800', color: theme.primary }}>{(u.fullName || u.name || "?")[0].toUpperCase()}</Text>
+                                                </View>
+                                                <Text style={{ color: isAssigned ? '#7C3AED' : theme.text, fontWeight: '600' }}>{u.fullName || u.name}</Text>
+                                                {isAssigned && <Ionicons name="checkmark-circle" size={16} color="#7C3AED" />}
+                                            </TouchableOpacity>
+                                        );
+                                    })}
+                                </ScrollView>
+                            </View>
+                        )}
+                    </Animated.View>
+                </Pressable>
+            </Modal>
 
             <FilterModal
                 visible={showFilterModal}

@@ -6,7 +6,7 @@ import {
 } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import Swipeable from "react-native-gesture-handler/Swipeable";
+import { Swipeable } from "react-native-gesture-handler";
 import { getLeads, leadName, updateLead, deleteLead, type Lead } from "@/services/leads.service";
 import { safeApiCall } from "@/services/api.helpers";
 import { getLeadScores } from "@/services/stageEngine.service";

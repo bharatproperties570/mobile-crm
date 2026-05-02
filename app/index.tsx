@@ -9,8 +9,17 @@ export default function Index() {
 
     useEffect(() => {
         console.log(`[IndexPage] State: loading=${loading}, auth=${isAuthenticated}`);
-        // If auth state is resolved, the AuthContext should handle redirection.
-        // But if it hangs, the user can use the emergency bypass button below.
+        
+        // Safety: If stuck for 5 seconds on this screen, try to resolve
+        const timer = setTimeout(() => {
+            if (loading) {
+                console.log("[IndexPage] 5s timeout reached, attempting emergency redirect...");
+                if (isAuthenticated) router.replace("/(tabs)");
+                else router.replace("/(auth)/login");
+            }
+        }, 5000);
+
+        return () => clearTimeout(timer);
     }, [loading, isAuthenticated]);
 
     return (

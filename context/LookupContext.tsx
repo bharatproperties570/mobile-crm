@@ -46,21 +46,23 @@ export const LookupProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
                 if (cachedLookups) {
                     const parsed = JSON.parse(cachedLookups);
-                    setLookups(parsed);
-                    
-                    const newIdIndex = new Map<string, Lookup>();
-                    const newTypeIndex = new Map<string, Lookup[]>();
-                    parsed.forEach((item: Lookup) => {
-                        if (item && item.lookup_type) {
-                            newIdIndex.set(item._id, item);
-                            const type = item.lookup_type.toLowerCase();
-                            if (!newTypeIndex.has(type)) newTypeIndex.set(type, []);
-                            newTypeIndex.get(type)?.push(item);
-                        }
-                    });
-                    setIdIndex(newIdIndex);
-                    setTypeIndex(newTypeIndex);
-                    setLoading(false); // Stop block spinner early!
+                    if (Array.isArray(parsed)) {
+                        setLookups(parsed);
+                        
+                        const newIdIndex = new Map<string, Lookup>();
+                        const newTypeIndex = new Map<string, Lookup[]>();
+                        parsed.forEach((item: Lookup) => {
+                            if (item && item.lookup_type) {
+                                newIdIndex.set(item._id, item);
+                                const type = item.lookup_type.toLowerCase();
+                                if (!newTypeIndex.has(type)) newTypeIndex.set(type, []);
+                                newTypeIndex.get(type)?.push(item);
+                            }
+                        });
+                        setIdIndex(newIdIndex);
+                        setTypeIndex(newTypeIndex);
+                        setLoading(false); // Stop block spinner early!
+                    }
                 }
                 if (cachedConfig) setPropertyConfig(JSON.parse(cachedConfig));
                 if (cachedLeadFields) setLeadMasterFields(JSON.parse(cachedLeadFields));
