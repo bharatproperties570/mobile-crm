@@ -11,6 +11,9 @@ import { lookupVal, safeApiCall } from "@/services/api.helpers";
 import { useTheme } from "@/context/ThemeContext";
 import { useLookup } from "@/context/LookupContext";
 import { useCallTracking } from "@/context/CallTrackingContext";
+import { useUsers } from "@/context/UserContext";
+import { Vibration } from "react-native";
+import { updateCompany } from "@/services/companies.service";
 import FilterModal, { FilterField } from "@/components/FilterModal";
 
 const COMPANY_FILTER_FIELDS: FilterField[] = [
@@ -180,7 +183,9 @@ export default function CompaniesScreen() {
     // Action Hub State
     const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
     const [hubVisible, setHubVisible] = useState(false);
-    const slideAnim = useRef(new Animated.Value(350)).current;
+    const [showReassign, setShowReassign] = useState(false);
+    const slideAnim = useRef(new Animated.Value(Dimensions.get('window').height)).current;
+    const { users } = useUsers();
 
     const openHub = (company: Company) => {
         setSelectedCompany(company);
@@ -195,12 +200,13 @@ export default function CompaniesScreen() {
 
     const closeHub = () => {
         Animated.timing(slideAnim, {
-            toValue: 350,
+            toValue: Dimensions.get('window').height,
             duration: 200,
             useNativeDriver: true
         }).start(() => {
             setHubVisible(false);
             setSelectedCompany(null);
+            setShowReassign(false);
         });
     };
 
@@ -395,9 +401,7 @@ export default function CompaniesScreen() {
                                 <Text style={[styles.actionLabel, { color: theme.textLight }]}>Add Employee</Text>
                             </TouchableOpacity>
 
-                            <TouchableOpacity style={styles.actionItem} onPress={() => {
-                                Alert.alert("Assign", "Assigning company..."); closeHub();
-                            }}>
+                            <TouchableOpacity style={styles.actionItem} onPress={() => setShowReassign(!showReassign)}>
                                 <View style={[styles.actionIcon, { backgroundColor: isDark ? 'rgba(124, 58, 237, 0.15)' : "#F5F3FF" }]}>
                                     <Ionicons name="person-add" size={24} color={isDark ? '#A78BFA' : "#7C3AED"} />
                                 </View>
@@ -421,8 +425,52 @@ export default function CompaniesScreen() {
                                 </View>
                                 <Text style={[styles.actionLabel, { color: theme.textLight }]}>Tag</Text>
                             </TouchableOpacity>
-                        </View >
-                    </Animated.View >
+                            </View >
+
+                            {showReassign && (
+                                <View style={{ backgroundColor: isDark ? 'rgba(124, 58, 237, 0.05)' : '#F5F3FF', padding: 20, marginTop: 10 }}>
+                                    <Text style={{ fontSize: 14, fontWeight: '700', color: '#7C3AED', marginBottom: 12 }}>ASSIGN TO RM</Text>
+                                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12 }}>
+                                        {users.map((u) => {
+                                            const isAssigned = selectedCompany?.owner === u._id || (typeof selectedCompany?.owner === 'object' && selectedCompany?.owner?._id === u._id);
+                                            return (
+                                                <TouchableOpacity
+                                                    key={u._id}
+                                                    style={{ 
+                                                        borderColor: isAssigned ? '#7C3AED' : theme.border, 
+                                                        backgroundColor: isAssigned ? '#7C3AED10' : theme.card,
+                                                        flexDirection: 'row',
+                                                        alignItems: 'center',
+                                                        gap: 8,
+                                                        paddingHorizontal: 12,
+                                                        paddingVertical: 8,
+                                                        borderRadius: 12,
+                                                        borderWidth: 1
+                                                    }}
+                                                    onPress={async () => {
+                                                        const res = await safeApiCall(() => updateCompany(selectedCompany!._id, { owner: u._id }));
+                                                        if (!res.error) {
+                                                            setCompanies(prev => prev.map(c => 
+                                                                c._id === selectedCompany!._id ? { ...c, owner: u._id } : c
+                                                            ));
+                                                            closeHub();
+                                                            Vibration.vibrate(20);
+                                                            Alert.alert("Success", "Company assigned successfully.");
+                                                        }
+                                                    }}
+                                                >
+                                                    <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: theme.primary + '15', justifyContent: 'center', alignItems: 'center' }}>
+                                                        <Text style={{ fontSize: 10, fontWeight: '800', color: theme.primary }}>{(u.fullName || u.name || "?")[0].toUpperCase()}</Text>
+                                                    </View>
+                                                    <Text style={{ color: isAssigned ? '#7C3AED' : theme.text, fontWeight: '600' }}>{u.fullName || u.name}</Text>
+                                                    {isAssigned && <Ionicons name="checkmark-circle" size={16} color="#7C3AED" />}
+                                                </TouchableOpacity>
+                                            );
+                                        })}
+                                    </ScrollView>
+                                </View>
+                            )}
+                        </Animated.View >
                 </Pressable >
             </Modal >
 

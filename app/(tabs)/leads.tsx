@@ -321,13 +321,22 @@ const ActionSheet = memo(({ visible, onClose, lead, onUpdate, statuses, users }:
 
 
                         {activeSection === 'assign' && (
-                            <View style={[styles.subSection, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.03)' : '#F8FAFC' }]}>
-                                <Text style={[styles.sectionTitle, { color: theme.text }]}>Assign to Team Member</Text>
-                                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12 }}>
+                            <View style={[styles.subSection, { backgroundColor: isDarkMode ? 'rgba(124, 58, 237, 0.05)' : '#F5F3FF' }]}>
+                                <Text style={[styles.sectionTitle, { color: '#7C3AED' }]}>Assign to Team Member</Text>
+                                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingVertical: 10 }}>
                                     {users.map((u: any) => (
-                                        <TouchableOpacity key={u._id} style={styles.userChip} onPress={() => handleAction({ owner: u._id })}>
+                                        <TouchableOpacity 
+                                            key={u._id} 
+                                            style={[styles.userChip, { borderColor: lead.owner === u._id || lead.assignment?.assignedTo === u._id ? '#7C3AED' : theme.border }]} 
+                                            onPress={() => handleAction({ assignedTo: u._id, owner: u._id })}
+                                        >
                                             <View style={[styles.userAvatar, { backgroundColor: theme.primary + '15' }]}><Text style={{ color: theme.primary, fontWeight: 'bold' }}>{String((u.fullName || u.name || "?")[0])}</Text></View>
                                             <Text style={[styles.userChipText, { color: theme.textSecondary }]}>{String(u.fullName || u.name)}</Text>
+                                            {(lead.owner === u._id || lead.assignment?.assignedTo === u._id) && (
+                                                <View style={{ position: 'absolute', top: -5, right: -5 }}>
+                                                    <Ionicons name="checkmark-circle" size={16} color="#7C3AED" />
+                                                </View>
+                                            )}
                                         </TouchableOpacity>
                                     ))}
                                 </ScrollView>

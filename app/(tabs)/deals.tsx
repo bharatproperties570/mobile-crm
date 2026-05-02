@@ -1313,31 +1313,43 @@ export default function DealsScreen() {
                                     />
 
                                     <View style={styles.chipList}>
-                                        {users.map((u) => (
-                                            <TouchableOpacity
-                                                key={u._id}
-                                                style={[styles.actionChip, { borderColor: theme.border, backgroundColor: theme.card }]}
-                                                onPress={async () => {
-                                                    const res = await safeApiCall(() => updateDeal(selectedDeal!._id, { 
-                                                        assignedTo: u._id, 
-                                                        assignmentNote: newTag.trim() || 'Direct transfer' 
-                                                    }));
-                                                    if (!res.error) {
-                                                        setNewTag("");
-                                                        fetchDeals();
-                                                        closeHub();
-                                                        Alert.alert("Success", "Deal reassigned professionally.");
-                                                    }
-                                                }}
-                                            >
-                                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                                                    <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: theme.primary + '15', justifyContent: 'center', alignItems: 'center' }}>
-                                                        <Text style={{ fontSize: 10, fontWeight: '800', color: theme.primary }}>{(u.fullName || u.name || "?")[0].toUpperCase()}</Text>
+                                        {users.map((u) => {
+                                            const isAssigned = selectedDeal?.assignedTo === u._id || selectedDeal?.owner === u._id;
+                                            return (
+                                                <TouchableOpacity
+                                                    key={u._id}
+                                                    style={[
+                                                        styles.actionChip, 
+                                                        { 
+                                                            borderColor: isAssigned ? '#7C3AED' : theme.border, 
+                                                            backgroundColor: isAssigned ? '#7C3AED10' : theme.card 
+                                                        }
+                                                    ]}
+                                                    onPress={async () => {
+                                                        const res = await safeApiCall(() => updateDeal(selectedDeal!._id, { 
+                                                            assignedTo: u._id, 
+                                                            owner: u._id,
+                                                            assignmentNote: newTag.trim() || 'Direct transfer' 
+                                                        }));
+                                                        if (!res.error) {
+                                                            setNewTag("");
+                                                            fetchDeals();
+                                                            closeHub();
+                                                            Vibration.vibrate(20);
+                                                            Alert.alert("Success", "Deal reassigned professionally.");
+                                                        }
+                                                    }}
+                                                >
+                                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                                        <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: theme.primary + '15', justifyContent: 'center', alignItems: 'center' }}>
+                                                            <Text style={{ fontSize: 10, fontWeight: '800', color: theme.primary }}>{(u.fullName || u.name || "?")[0].toUpperCase()}</Text>
+                                                        </View>
+                                                        <Text style={[styles.actionChipText, { color: isAssigned ? '#7C3AED' : theme.text }]}>{u.fullName || u.name}</Text>
+                                                        {isAssigned && <Ionicons name="checkmark-circle" size={16} color="#7C3AED" />}
                                                     </View>
-                                                    <Text style={[styles.actionChipText, { color: theme.text }]}>{u.fullName || u.name}</Text>
-                                                </View>
-                                            </TouchableOpacity>
-                                        ))}
+                                                </TouchableOpacity>
+                                            );
+                                        })}
                                     </View>
                                 </View>
                             )}
