@@ -2,14 +2,39 @@ import api from "./api";
 
 export interface Booking {
     _id: string;
+    type?: 'Sale' | 'Rent' | 'Lease';
     applicationNo?: string;
     bookingDate: string;
     status: 'Pending' | 'Booked' | 'Agreement' | 'Registry' | 'Cancelled';
-    lead?: string | { _id: string; name: string };
-    deal?: string | { _id: string; name: string };
-    inventory?: string | { _id: string; unitNo: string; projectName: string };
+    lead?: string | any;
+    deal?: string | any;
+    project?: string | any;
+    property?: string | any; // Inventory reference
+    unitNumber?: string;
+    
+    // Financials
     totalDealAmount?: number;
     tokenAmount?: number;
+    agreementAmount?: number;
+    agreementDate?: string;
+    isPartPaymentEnabled?: boolean;
+    partPayments?: Array<{ amount: string; date: string }>;
+    finalPaymentDate?: string;
+    
+    // Stakeholders
+    salesAgent?: string | any;
+    executiveIncentivePercent?: number;
+    executiveIncentiveAmount?: number;
+    isChannelPartnerEnabled?: boolean;
+    channelPartner?: string | any;
+    partnerSide?: 'Buyer Side' | 'Seller Side';
+    
+    // Commissions
+    sellerBrokeragePercent?: number;
+    sellerBrokerageAmount?: number;
+    buyerBrokeragePercent?: number;
+    buyerBrokerageAmount?: number;
+    
     remarks?: string;
     createdAt?: string;
 }

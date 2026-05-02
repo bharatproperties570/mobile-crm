@@ -13,6 +13,15 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 export default function MarketingScreen() {
     const { theme, isDarkMode } = useTheme();
+    
+    // 🧠 SENIOR PROFESSIONAL: Universal Alert for Web & Native
+    const universalAlert = (title: string, message: string) => {
+        if (Platform.OS === 'web') {
+            alert(`${title}\n\n${message}`);
+        } else {
+            Alert.alert(title, message);
+        }
+    };
     const isDark = isDarkMode;
     const fadeAnim = useRef(new Animated.Value(0)).current;
 
@@ -67,12 +76,14 @@ export default function MarketingScreen() {
         isScheduled: false,
         scheduledAt: new Date(),
         repeatMode: 'none',
-        // Import specific
+        // Import specific metadata
         fileName: '',
         tempCount: 0,
-        tempRecipients: [],
         mapping: { name: '', mobile: '', email: '' }
     });
+
+    // 🧠 SENIOR PROFESSIONAL: Decouple heavy arrays from form state to prevent re-render jank
+    const [tempRecipients, setTempRecipients] = useState<any[]>([]);
 
     const [showDatePicker, setShowDatePicker] = useState(false);
 
@@ -145,17 +156,17 @@ export default function MarketingScreen() {
             }
             setIsCounting(true);
             try {
-                // In production, this hits marketingService.getAudienceCount(form)
-                // Using a small delay to simulate network call
-                const res = await marketingService.getStats();
-                setAudienceCount(res?.totalCaptured || 0); 
+                // 🧠 SENIOR PROFESSIONAL: Use the real filter-aware count API
+                const res = await marketingService.getAudienceCount(form);
+                setAudienceCount(res?.count || 0); 
             } catch (e) {
+                console.error("[Marketing] Audience Count Failed:", e);
                 setAudienceCount(0);
             } finally {
                 setIsCounting(false);
             }
         };
-        const timer = setTimeout(fetchCount, 500);
+        const timer = setTimeout(fetchCount, 600);
         return () => clearTimeout(timer);
     }, [form.source, form.filters, showForm, form.tempCount]);
 
@@ -228,67 +239,84 @@ export default function MarketingScreen() {
                     const firstRow = result.recipients[0].context || {};
                     setImportHeaders(Object.keys(firstRow).filter(k => k !== 'originalType'));
                 }
+                setTempRecipients(result.recipients || []);
                 setForm(prev => ({
                     ...prev,
                     source: 'Excel',
                     fileName: file.name,
-                    tempCount: result.count,
-                    tempRecipients: result.recipients
+                    tempCount: result.count
                 }));
-                Alert.alert("Import Success", `Found ${result.count} valid contacts.`);
+                universalAlert("Import Success", `Found ${result.count} valid contacts.`);
             } else {
-                Alert.alert("Import Failed", result.error || "Could not parse the selected file.");
+                universalAlert("Import Failed", result.error || "Could not parse the selected file.");
             }
         } catch (error) {
             console.error("FileUpload Error:", error);
-            Alert.alert("System Error", "Failed to process the selected file.");
+            universalAlert("System Error", "Failed to process the selected file.");
         } finally {
             setIsImporting(false);
         }
     };
 
-    const handleRunCampaign = async () => {
+    const handleLaunchCampaign = async () => {
+        console.log("[Marketing] Initiating Launch:", { name: form.name, channel: form.channel, audience: audienceCount });
+
         if (!form.name || (!form.content && !form.templateId)) {
-            Alert.alert("Incomplete Data", "Campaign name and content/template are required.");
+            universalAlert("Incomplete Data", "Campaign name and content/template are required.");
+            return;
+        }
+
+        if (audienceCount === 0) {
+            universalAlert("Zero Audience", "Your current filters result in 0 recipients. Please adjust filters or check your audience source before launching.");
             return;
         }
 
         setIsSending(true);
         try {
-            const res = await marketingService.sendCampaign({
+            // Resolve template metadata for the backend
+            const selectedTemplate = templates.find(t => (t.id || t.name) === form.templateId);
+            console.log("[Marketing] Selected Template:", selectedTemplate?.name);
+
+            const payload = {
                 name: form.name,
                 channel: form.channel,
                 audienceConfig: { 
                     source: form.source, 
                     filters: form.filters,
-                    tempRecipients: form.tempRecipients,
+                    tempRecipients: tempRecipients,
                     tempCount: form.tempCount,
                     mapping: form.mapping
                 },
                 subject: form.subject,
                 content: form.content,
                 templateId: form.templateId,
+                templateName: selectedTemplate?.name,
                 isScheduled: form.isScheduled,
                 scheduledAt: form.isScheduled ? form.scheduledAt.toISOString() : undefined,
                 repeatMode: form.repeatMode
-            });
+            };
+
+            const res = await marketingService.sendCampaign(payload);
+            console.log("[Marketing] Dispatch Response:", res);
 
             if (res.success) {
-                Alert.alert("Campaign Dispatched", `Successfully orchestrated ${res.leadCount || audienceCount} communications via ${form.channel}.`);
+                universalAlert("Campaign Dispatched", `Successfully orchestrated ${res.leadCount || audienceCount} communications via ${form.channel}.`);
                 setShowForm(false);
+                setTempRecipients([]);
                 setForm({ 
                     name: '', channel: 'WhatsApp', source: 'Lead', 
                     filters: { status: 'all', project: 'all', recency: '' }, 
                     subject: '', content: '', templateId: '', 
                     isScheduled: false, scheduledAt: new Date(), repeatMode: 'none',
-                    fileName: '', tempCount: 0, tempRecipients: [], mapping: { name: '', mobile: '', email: '' }
+                    fileName: '', tempCount: 0, mapping: { name: '', mobile: '', email: '' }
                 });
                 fetchData();
             } else {
-                Alert.alert("Launch Failed", res.error || "System error during orchestration.");
+                universalAlert("Launch Failed", res.error || "System error during orchestration.");
             }
-        } catch (error) {
-            Alert.alert("System Error", "Failed to reach the Marketing Engine.");
+        } catch (error: any) {
+            console.error("[Marketing] Launch Exception:", error);
+            universalAlert("System Error", `Failed to reach the Marketing Engine: ${error.message}`);
         } finally {
             setIsSending(false);
         }
@@ -772,7 +800,7 @@ export default function MarketingScreen() {
 
                                 <TouchableOpacity 
                                     style={[styles.submitBtn, { backgroundColor: theme.primary }]}
-                                    onPress={handleRunCampaign}
+                                    onPress={handleLaunchCampaign}
                                     disabled={isSending}
                                 >
                                     {isSending ? (

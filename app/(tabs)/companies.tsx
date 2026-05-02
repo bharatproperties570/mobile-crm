@@ -174,6 +174,8 @@ export default function CompaniesScreen() {
     const [hasMore, setHasMore] = useState(true);
     const [showFilterModal, setShowFilterModal] = useState(false);
     const [filters, setFilters] = useState<any>({});
+    const [sortVisible, setSortVisible] = useState(false);
+    const [sortConfig, setSortConfig] = useState({ label: 'Newest First', by: 'createdAt', order: -1, icon: 'time-outline' });
 
     // Action Hub State
     const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
@@ -204,7 +206,12 @@ export default function CompaniesScreen() {
 
     const fetchCompanies = useCallback(async (pageNum = 1, shouldAppend = false) => {
         setLoading(true);
-        const result = await safeApiCall<any>(() => getCompanies({ page: String(pageNum), limit: "50" }));
+        const result = await safeApiCall<any>(() => getCompanies({ 
+            page: String(pageNum), 
+            limit: "50",
+            sortBy: sortConfig.by,
+            sortOrder: String(sortConfig.order)
+        }));
 
         if (!result.error && result.data) {
             const dataObj = result.data as any;
@@ -231,7 +238,7 @@ export default function CompaniesScreen() {
     useFocusEffect(
         useCallback(() => {
             fetchCompanies(1, false);
-        }, [fetchCompanies])
+        }, [fetchCompanies, sortConfig])
     );
 
     const onRefresh = useCallback(() => {
@@ -288,6 +295,9 @@ export default function CompaniesScreen() {
                     value={search}
                     onChangeText={setSearch}
                 />
+                <TouchableOpacity onPress={() => setSortVisible(true)} style={styles.sortBtn}>
+                    <Ionicons name="swap-vertical" size={18} color={theme.primary} />
+                </TouchableOpacity>
                 <TouchableOpacity onPress={() => setShowFilterModal(true)} style={styles.filterBtn}>
                     <Ionicons name="filter" size={20} color={Object.keys(filters).length > 0 ? theme.primary : theme.textLight} />
                 </TouchableOpacity>
@@ -320,6 +330,41 @@ export default function CompaniesScreen() {
                     }
                 />
             )}
+
+            {/* Sort Modal */}
+            <Modal visible={sortVisible} transparent animationType="fade">
+                <Pressable style={styles.modalOverlay} onPress={() => setSortVisible(false)}>
+                    <View style={[styles.sheetContainer, { backgroundColor: theme.card }]}>
+                        <View style={styles.sheetHandle} />
+                        <View style={styles.sheetHeader}>
+                            <Text style={[styles.sheetTitle, { color: theme.text, textAlign: 'center', flex: 1 }]}>SORT COMPANIES</Text>
+                        </View>
+                        <View style={{ padding: 20, gap: 10 }}>
+                            {[
+                                { label: 'Newest First', by: 'createdAt', order: -1, icon: 'time-outline' },
+                                { label: 'Oldest First', by: 'createdAt', order: 1, icon: 'hourglass-outline' },
+                                { label: 'Name (A-Z)', by: 'name', order: 1, icon: 'text-outline' },
+                            ].map((opt: any) => (
+                                <TouchableOpacity 
+                                    key={opt.label}
+                                    onPress={() => {
+                                        setSortConfig(opt);
+                                        setSortVisible(false);
+                                    }}
+                                    style={[
+                                        styles.sortItem, 
+                                        sortConfig.label === opt.label && { backgroundColor: theme.primary + '15', borderColor: theme.primary }
+                                    ]}
+                                >
+                                    <Ionicons name={opt.icon as any} size={20} color={sortConfig.label === opt.label ? theme.primary : theme.textMuted} />
+                                    <Text style={{ flex: 1, color: sortConfig.label === opt.label ? theme.primary : theme.text, fontWeight: '700' }}>{opt.label}</Text>
+                                    {sortConfig.label === opt.label && <Ionicons name="checkmark-circle" size={20} color={theme.primary} />}
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+                    </View>
+                </Pressable>
+            </Modal>
 
             {/* Action Hub Modal */}
             <Modal transparent visible={hubVisible} animationType="none" onRequestClose={closeHub}>
@@ -442,4 +487,6 @@ const styles = StyleSheet.create({
     actionItem: { width: "22%", alignItems: "center", marginBottom: 16 },
     actionIcon: { width: 56, height: 56, borderRadius: 20, justifyContent: "center", alignItems: "center", marginBottom: 8, shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 5, shadowOffset: { width: 0, height: 2 } },
     actionLabel: { fontSize: 10, fontWeight: "800", color: "#475569", textAlign: "center" },
+    sortBtn: { padding: 4, marginLeft: 8 },
+    sortItem: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, borderRadius: 12, borderWidth: 1, borderColor: 'transparent' },
 });

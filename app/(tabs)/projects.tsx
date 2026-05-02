@@ -92,6 +92,8 @@ export default function ProjectsScreen() {
     const [hasMore, setHasMore] = useState(true);
     const [filters, setFilters] = useState<any>({});
     const [showFilterModal, setShowFilterModal] = useState(false);
+    const [sortVisible, setSortVisible] = useState(false);
+    const [sortConfig, setSortConfig] = useState({ label: 'Newest First', by: 'createdAt', order: -1, icon: 'time-outline' });
     const [isPublishing, setIsPublishing] = useState(false);
 
     // Action Hub State
@@ -216,7 +218,12 @@ export default function ProjectsScreen() {
 
     const fetchProjects = useCallback(async (pageNum = 1, shouldAppend = false) => {
         setLoading(true);
-        const result = await safeApiCall<any>(() => getProjects({ page: String(pageNum), limit: "50" }));
+        const result = await safeApiCall<any>(() => getProjects({ 
+            page: String(pageNum), 
+            limit: "50",
+            sortBy: sortConfig.by,
+            sortOrder: String(sortConfig.order)
+        }));
 
         if (!result.error && result.data) {
             const newRecords = result.data;
@@ -245,7 +252,7 @@ export default function ProjectsScreen() {
     useFocusEffect(
         useCallback(() => {
             fetchProjects(1, false);
-        }, [fetchProjects])
+        }, [fetchProjects, sortConfig])
     );
 
     const onRefresh = useCallback(() => {
@@ -316,6 +323,9 @@ export default function ProjectsScreen() {
                     value={search}
                     onChangeText={setSearch}
                 />
+                <TouchableOpacity onPress={() => setSortVisible(true)} style={styles.sortBtn}>
+                    <Ionicons name="swap-vertical" size={20} color={theme.primary} />
+                </TouchableOpacity>
                 <TouchableOpacity onPress={() => setShowFilterModal(true)} style={styles.filterBtn}>
                     <Ionicons name="filter" size={20} color={Object.keys(filters).length > 0 ? theme.primary : theme.textLight} />
                     {Object.keys(filters).length > 0 && <View style={styles.filterBadge} />}
@@ -357,6 +367,41 @@ export default function ProjectsScreen() {
                     }
                 />
             )}
+
+            {/* Sort Modal */}
+            <Modal visible={sortVisible} transparent animationType="fade">
+                <Pressable style={actionHubStyles.modalOverlay} onPress={() => setSortVisible(false)}>
+                    <View style={[actionHubStyles.sheetContainer, { backgroundColor: theme.card }]}>
+                        <View style={actionHubStyles.sheetHandle} />
+                        <View style={actionHubStyles.sheetHeader}>
+                            <Text style={[actionHubStyles.sheetTitle, { color: theme.text, textAlign: 'center', flex: 1 }]}>SORT PROJECTS</Text>
+                        </View>
+                        <View style={{ padding: 20, gap: 10 }}>
+                            {[
+                                { label: 'Newest First', by: 'createdAt', order: -1, icon: 'time-outline' },
+                                { label: 'Oldest First', by: 'createdAt', order: 1, icon: 'hourglass-outline' },
+                                { label: 'Project Name (A-Z)', by: 'name', order: 1, icon: 'business-outline' },
+                            ].map((opt: any) => (
+                                <TouchableOpacity 
+                                    key={opt.label}
+                                    onPress={() => {
+                                        setSortConfig(opt);
+                                        setSortVisible(false);
+                                    }}
+                                    style={[
+                                        styles.sortItem, 
+                                        sortConfig.label === opt.label && { backgroundColor: theme.primary + '15', borderColor: theme.primary }
+                                    ]}
+                                >
+                                    <Ionicons name={opt.icon as any} size={20} color={sortConfig.label === opt.label ? theme.primary : theme.textMuted} />
+                                    <Text style={{ flex: 1, color: sortConfig.label === opt.label ? theme.primary : theme.text, fontWeight: '700' }}>{opt.label}</Text>
+                                    {sortConfig.label === opt.label && <Ionicons name="checkmark-circle" size={20} color={theme.primary} />}
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+                    </View>
+                </Pressable>
+            </Modal>
 
             {/* Action Hub Modal */}
             <Modal transparent visible={hubVisible} animationType="none" onRequestClose={closeHub}>
@@ -528,6 +573,8 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.2, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }
     },
     menuTrigger: { padding: 8, marginRight: -8 },
+    sortBtn: { padding: 4, marginLeft: 8 },
+    sortItem: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, borderRadius: 12, borderWidth: 1, borderColor: 'transparent' },
 });
 
 const actionHubStyles = StyleSheet.create({

@@ -168,34 +168,59 @@ export default function AddDocumentScreen() {
 
     const uploadFile = async (fileResult: any, options: any = {}) => {
         const formData = new FormData();
-        const asset = fileResult.assets[0];
+        const asset = fileResult.assets?.[0];
+
+        if (!asset) {
+            console.error("[AddDocument] No asset found in file picker result", fileResult);
+            throw new Error("No file selected or file access denied");
+        }
+
+        console.log(`[AddDocument] Preparing upload for: ${asset.name} (${asset.mimeType})`);
 
         if (Platform.OS === 'web') {
-            // On Web, expo-document-picker provides the native File object in .file
-            const nativeFile = asset.file;
+            const nativeFile = (asset as any).file;
             if (nativeFile) {
                 formData.append('file', nativeFile);
             } else {
-                const response = await fetch(asset.uri);
-                const blob = await response.blob();
-                formData.append('file', blob, asset.name || `upload_${Date.now()}`);
+                try {
+                    const response = await fetch(asset.uri);
+                    const blob = await response.blob();
+                    formData.append('file', blob, asset.name || `upload_${Date.now()}`);
+                } catch (err) {
+                    console.error("[AddDocument] Web Blob Fetch failed:", err);
+                    formData.append('file', {
+                        uri: asset.uri,
+                        name: asset.name,
+                        type: asset.mimeType || 'application/octet-stream'
+                    } as any);
+                }
             }
         } else {
             // On Native (iOS/Android)
-            const fileConfig = {
-                uri: Platform.OS === "android" ? asset.uri : asset.uri.replace("file://", ""),
+            const fileToUpload = {
+                uri: asset.uri,
                 name: asset.name || `upload_${Date.now()}`,
                 type: asset.mimeType || "application/octet-stream"
             };
-            formData.append("file", fileConfig as any);
+            formData.append("file", fileToUpload as any);
         }
 
-        if (options.entityType) formData.append("entityType", options.entityType);
-        if (options.entityName) formData.append("entityName", options.entityName);
-        if (options.docCategory) formData.append("docCategory", options.docCategory);
-        if (options.docType) formData.append("docType", options.docType);
+        if (options.entityType) formData.append("entityType", String(options.entityType));
+        if (options.entityName) formData.append("entityName", String(options.entityName));
+        if (options.docCategory) formData.append("docCategory", String(options.docCategory));
+        if (options.docType) formData.append("docType", String(options.docType));
 
-        const res = await api.post("/upload", formData);
+        console.log(`[AddDocument] Dispatching FormData upload...`);
+        
+        // IMPORTANT: In React Native, do NOT manually set the Content-Type header for FormData
+        // because it needs to automatically include the boundary string.
+        const res = await api.post("/upload", formData, {
+            headers: {
+                'Accept': 'application/json',
+                // 'Content-Type': 'multipart/form-data', // REMOVED: Let boundary be set automatically
+            },
+            transformRequest: (data) => data, 
+        });
         return res.data;
     };
 

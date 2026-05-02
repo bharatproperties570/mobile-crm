@@ -293,6 +293,8 @@ export default function InventoryScreen() {
     const [loadingMore, setLoadingMore] = useState(false);
     const lastFetchTime = useRef<number>(0);
     const [activeQuickFilter, setActiveQuickFilter] = useState<'active' | 'inactive' | null>(null);
+    const [sortVisible, setSortVisible] = useState(false);
+    const [sortConfig, setSortConfig] = useState({ label: 'Newest First', by: 'createdAt', order: -1, icon: 'time-outline' });
     const { getLookupsByType, getLookupValue } = useLookup();
     const { projects } = useProjects();
 
@@ -383,7 +385,9 @@ export default function InventoryScreen() {
         const result = await safeApiCall<any>(() => getInventory({ 
             ...apiFilters, 
             page: String(pageNum), 
-            limit: "50" 
+            limit: "50",
+            sortBy: sortConfig.by,
+            sortOrder: String(sortConfig.order)
         }));
 
         if (!result.error && result.data) {
@@ -443,7 +447,7 @@ export default function InventoryScreen() {
     // FIX: Refetch when filters change!
     useEffect(() => {
         fetchInventory(1, false);
-    }, [filters]);
+    }, [filters, sortConfig]);
 
     const filtered = useMemo(() => {
         const q = search.toLowerCase();
@@ -665,6 +669,13 @@ export default function InventoryScreen() {
                     />
                     <View style={styles.searchRight}>
                         <TouchableOpacity 
+                            onPress={() => setSortVisible(true)} 
+                            style={[styles.filterBtn, { backgroundColor: theme.card, marginRight: 8 }]}
+                        >
+                            <Ionicons name="swap-vertical" size={20} color={theme.primary} />
+                        </TouchableOpacity>
+
+                        <TouchableOpacity 
                             style={[styles.filterBtn, { backgroundColor: theme.card }, filtersCount > 0 && { backgroundColor: theme.primary + '15' }]} 
                             onPress={() => setShowFilterModal(true)}
                         >
@@ -718,6 +729,42 @@ export default function InventoryScreen() {
                     }
                 />
             )}
+
+            {/* Sort Modal */}
+            <Modal visible={sortVisible} transparent animationType="fade">
+                <Pressable style={styles.modalOverlay} onPress={() => setSortVisible(false)}>
+                    <View style={[styles.sheetContainer, { backgroundColor: theme.card }]}>
+                        <View style={styles.sheetHandle} />
+                        <View style={styles.sheetHeader}>
+                            <Text style={[styles.sheetTitle, { color: theme.text, textAlign: 'center', flex: 1 }]}>SORT INVENTORY</Text>
+                        </View>
+                        <View style={{ padding: 20, gap: 10 }}>
+                            {[
+                                { label: 'Newest First', by: 'createdAt', order: -1, icon: 'time-outline' },
+                                { label: 'Oldest First', by: 'createdAt', order: 1, icon: 'hourglass-outline' },
+                                { label: 'Project Name (A-Z)', by: 'projectName', order: 1, icon: 'business-outline' },
+                                { label: 'Unit Number (1-99)', by: 'unitNo', order: 1, icon: 'grid-outline' },
+                            ].map((opt: any) => (
+                                <TouchableOpacity 
+                                    key={opt.label}
+                                    onPress={() => {
+                                        setSortConfig(opt);
+                                        setSortVisible(false);
+                                    }}
+                                    style={[
+                                        styles.sortItem, 
+                                        sortConfig.label === opt.label && { backgroundColor: theme.primary + '15', borderColor: theme.primary }
+                                    ]}
+                                >
+                                    <Ionicons name={opt.icon as any} size={20} color={sortConfig.label === opt.label ? theme.primary : theme.textMuted} />
+                                    <Text style={{ flex: 1, color: sortConfig.label === opt.label ? theme.primary : theme.text, fontWeight: '700' }}>{opt.label}</Text>
+                                    {sortConfig.label === opt.label && <Ionicons name="checkmark-circle" size={20} color={theme.primary} />}
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+                    </View>
+                </Pressable>
+            </Modal>
 
             {/* Contact Picker Modal */}
             <Modal transparent visible={contactPickerVisible} animationType="fade" onRequestClose={() => setContactPickerVisible(false)}>
@@ -1024,4 +1071,6 @@ const styles = StyleSheet.create({
     contactRole: { fontSize: 11, fontWeight: '600', marginTop: 2 },
     inactiveSelected: { borderWidth: 2 },
     activeSelected: { borderWidth: 2, borderColor: '#22C55E' },
+    emptyText: { marginTop: 16, fontSize: 16, fontWeight: "700", textAlign: 'center' },
+    sortItem: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, borderRadius: 12, borderWidth: 1, borderColor: 'transparent' },
 });

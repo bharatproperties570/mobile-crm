@@ -321,6 +321,7 @@ const DealCard = memo(({
     const stageColorMap = isDark ? STAGE_COLORS_DARK : STAGE_COLORS_LIGHT;
     const color = stageColorMap[stageStr] ?? (isDark ? "#94A3B8" : "#6366F1");
     const amount = deal.price || deal.amount || 0;
+    const userName = resolveName(deal.assignedTo, getLookupValue, findUser);
 
     const renderRightActions = () => (
         <View style={styles.rightActions}>
@@ -465,54 +466,34 @@ const DealCard = memo(({
                     )}
 
                     <View style={[styles.cardFooter, { borderTopColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.03)' }]}>
-                        {/* Owner/Associate Data - Row Based (Professional) */}
+                        {/* Owner/Associate Data */}
                         <View style={{ flex: 1, gap: 2 }}>
-                             {/* Owner */}
-                             <View style={styles.listMeta}>
-                                <Ionicons name="home-outline" size={13} color={theme.success} />
-                                <Text style={[styles.listMetaText, { color: theme.text }]} numberOfLines={1}>
+                            <View style={styles.listMeta}>
+                                <Ionicons name="home-outline" size={12} color={theme.success} />
+                                <Text style={[styles.listMetaText, { color: theme.textSecondary }]} numberOfLines={1}>
                                     {(() => {
                                         const owner = resolveName(deal.owner, getLookupValue, findUser);
                                         return owner && owner !== "—" ? `Owner: ${owner}` : "No Owner";
                                     })()}
                                 </Text>
                             </View>
-                            {/* Associate */}
                             <View style={styles.listMeta}>
-                                <Ionicons name="people-outline" size={13} color={isDark ? '#818CF8' : theme.primary} />
-                                <Text style={[styles.listMetaText, { color: theme.text }]} numberOfLines={1}>
+                                <Ionicons name="people-outline" size={12} color={theme.primary} />
+                                <Text style={[styles.listMetaText, { color: theme.textSecondary }]} numberOfLines={1}>
                                     {(() => {
                                         const associate = resolveName(deal.associatedContact, getLookupValue, findUser);
                                         return associate && associate !== "—" ? `Associate: ${associate}` : "No Associate";
-                                    })()}
+                                     })()}
                                 </Text>
-                            </View>
-                            {/* Assigned To & Team Badge */}
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
-                                <View style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#F1F5F9', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4 }}>
-                                    <Text style={{ fontSize: 9, color: theme.textSecondary, fontWeight: '700' }}>
-                                        {resolveName(deal.assignedTo, getLookupValue, findUser)}
-                                    </Text>
-                                </View>
-                                {(() => {
-                                    const team = resolveName(deal.team || deal.assignment?.team, getLookupValue, findUser);
-                                    if (team && team !== "—") {
-                                        return (
-                                            <View style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#F1F5F9', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4 }}>
-                                                <Text style={{ fontSize: 9, color: theme.textSecondary, fontWeight: '700' }}>{team}</Text>
-                                            </View>
-                                        );
-                                    }
-                                    return null;
-                                })()}
                             </View>
                         </View>
 
                         <View style={{ alignItems: 'flex-end', gap: 2 }}>
                             <Text style={[styles.dealAmount, { color: color }]}>{formatAmount(amount)}</Text>
-                            {deal.createdAt && (
-                                <Text style={styles.dateText}>{new Date(deal.createdAt).toLocaleDateString("en-IN")}</Text>
-                            )}
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                <Text style={[styles.ownerText, { color: theme.primary, fontWeight: '700', fontSize: 11 }]}>{userName}</Text>
+                                <Text style={[styles.timeText, { color: '#64748B', fontSize: 10, fontWeight: '600' }]}>{deal.createdAt ? new Date(deal.createdAt).toLocaleDateString("en-IN") : ""}</Text>
+                            </View>
                         </View>
                     </View>
                 </View>
@@ -533,6 +514,8 @@ export default function DealsScreen() {
     const [deals, setDeals] = useState<Deal[]>([]);
     const [search, setSearch] = useState("");
     const [showFilterModal, setShowFilterModal] = useState(false);
+    const [showSortModal, setShowSortModal] = useState(false);
+    const [sortBy, setSortBy] = useState("newest");
     const [filters, setFilters] = useState<any>({});
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -600,7 +583,12 @@ export default function DealsScreen() {
         // 2. Only show main spinner if we have NO deals at all
         if (deals.length === 0) setLoading(true);
         
-        const result = await safeApiCall<any>(() => getDeals({ page: String(pageNum), limit: "50" }));
+        const result = await safeApiCall<any>(() => getDeals({ 
+            page: String(pageNum), 
+            limit: "50",
+            sortBy: sortBy === 'newest' ? 'createdAt' : (sortBy === 'oldest' ? 'createdAt' : sortBy),
+            sortOrder: sortBy === 'newest' ? '-1' : (sortBy === 'oldest' ? '1' : '1')
+        }));
 
         if (result.error) {
             if (deals.length === 0) { // Only alert if we have nothing at all
@@ -668,7 +656,7 @@ export default function DealsScreen() {
     );
 
     const filteredDeals = useMemo(() => {
-        return deals.filter(deal => {
+        let result = deals.filter(deal => {
             // Search filter
             if (search && !getDealTitle(deal, getLookupValue, findUser).toLowerCase().includes(search.toLowerCase())) return false;
             // Stage filter
@@ -691,7 +679,17 @@ export default function DealsScreen() {
 
             return true;
         });
-    }, [deals, search, filters, activePipelineStage, findUser]);
+
+        // Apply Sorting
+        return [...result].sort((a, b) => {
+            if (sortBy === "newest") return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
+            if (sortBy === "oldest") return new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime();
+            if (sortBy === "amount-high") return (b.price || 0) - (a.price || 0);
+            if (sortBy === "amount-low") return (a.price || 0) - (b.price || 0);
+            if (sortBy === "stage") return String(a.stage || "").localeCompare(String(b.stage || ""));
+            return 0;
+        });
+    }, [deals, search, filters, activePipelineStage, findUser, sortBy]);
 
     const filtersCount = Object.keys(filters).filter(k => filters[k] && (Array.isArray(filters[k]) ? filters[k].length > 0 : true)).length;
 
@@ -709,9 +707,11 @@ export default function DealsScreen() {
                     <Text style={[styles.headerTitle, { color: theme.text }]}>Deals</Text>
                     <Text style={[styles.headerSubtitle, { color: theme.textLight }]}>{filteredDeals.length} active opportunities</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={[styles.addBtn, { backgroundColor: theme.primary }]} onPress={() => router.push("/add-deal")}>
-                    <Ionicons name="add" size={26} color="#fff" />
-                </TouchableOpacity>
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                    <TouchableOpacity style={[styles.addBtn, { backgroundColor: theme.primary }]} onPress={() => router.push("/add-deal")}>
+                        <Ionicons name="add" size={26} color="#fff" />
+                    </TouchableOpacity>
+                </View>
             </View>
 
             {pipelineStats.length > 0 && (
@@ -731,6 +731,11 @@ export default function DealsScreen() {
                     value={search}
                     onChangeText={handleSearch}
                 />
+                
+                <TouchableOpacity onPress={() => setShowSortModal(true)} style={{ marginRight: 8 }}>
+                    <Ionicons name="swap-vertical" size={20} color={theme.primary} />
+                </TouchableOpacity>
+
                 <TouchableOpacity onPress={() => setShowFilterModal(true)} style={[styles.filterBtn, filtersCount > 0 && { backgroundColor: theme.primary + '15' }]}>
                     <Ionicons name="filter" size={22} color={filtersCount > 0 ? theme.primary : theme.textLight} />
                     {filtersCount > 0 && <View style={[styles.filterBadge, { backgroundColor: theme.primary }]}><Text style={styles.filterBadgeText}>{filtersCount}</Text></View>}
@@ -1099,6 +1104,37 @@ export default function DealsScreen() {
                                         </View>
                                     </View>
                                     <Ionicons name="chevron-forward" size={18} color="#CBD5E1" />
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+                    </View>
+                </Pressable>
+            </Modal>
+
+            {/* Sort Modal */}
+            <Modal transparent visible={showSortModal} animationType="slide" onRequestClose={() => setShowSortModal(false)}>
+                <Pressable style={styles.modalOverlay} onPress={() => setShowSortModal(false)}>
+                    <View style={[styles.contactPickerSheet, { backgroundColor: theme.card }]}>
+                        <View style={styles.sheetHandle} />
+                        <Text style={[styles.sheetTitle, { color: theme.text }]}>Sort Deals</Text>
+                        <Text style={[styles.sheetSub, { color: theme.textLight }]}>Arrange by specific metric</Text>
+                        
+                        <View style={{ marginTop: 10 }}>
+                            {[
+                                { id: 'newest', label: 'Newest First', icon: 'time' },
+                                { id: 'oldest', label: 'Oldest First', icon: 'hourglass' },
+                                { id: 'amount-high', label: 'Amount: High to Low', icon: 'trending-up' },
+                                { id: 'amount-low', label: 'Amount: Low to High', icon: 'trending-down' },
+                                { id: 'stage', label: 'By Current Stage', icon: 'layers' },
+                            ].map(option => (
+                                <TouchableOpacity 
+                                    key={option.id} 
+                                    style={[styles.sortItem, { borderColor: sortBy === option.id ? theme.primary : theme.border, marginBottom: 8 }]} 
+                                    onPress={() => { setSortBy(option.id); setShowSortModal(false); }}
+                                >
+                                    <Ionicons name={option.icon as any} size={20} color={sortBy === option.id ? theme.primary : theme.textLight} />
+                                    <Text style={{ fontSize: 14, fontWeight: '700', color: sortBy === option.id ? theme.primary : theme.text, marginLeft: 12 }}>{option.label}</Text>
+                                    {sortBy === option.id && <Ionicons name="checkmark-circle" size={20} color={theme.primary} style={{ marginLeft: 'auto' }} />}
                                 </TouchableOpacity>
                             ))}
                         </View>
@@ -1543,6 +1579,7 @@ const styles = StyleSheet.create({
     },
 
     contactPickerSheet: { borderTopLeftRadius: 32, borderTopRightRadius: 32, paddingHorizontal: 20, paddingBottom: 60, width: '100%' },
+    sortItem: { flexDirection: 'row', alignItems: 'center', padding: 16, borderRadius: 16, borderWidth: 1, borderColor: 'transparent', gap: 12 },
     contactItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 14, borderBottomWidth: 1 },
     contactInfo: { flexDirection: 'row', alignItems: 'center', gap: 12 },
     contactAvatar: { width: 40, height: 40, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },

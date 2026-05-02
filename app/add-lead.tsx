@@ -299,8 +299,8 @@ export default function AddLead() {
     const [activeDropdown, setActiveDropdown] = useState<'unit' | 'teams' | null>(null);
 
     const allowedSubCategoryNames = useMemo(() => {
-        if (!propertyConfig || formData.propertyType.length === 0) return [];
-        const selectedCategoryNames = formData.propertyType.map((id: string) => getLookupValue("Category", id));
+        if (!propertyConfig || !formData.propertyType || formData.propertyType.length === 0) return [];
+        const selectedCategoryNames = (formData.propertyType || []).map((id: string) => getLookupValue("Category", id));
         let names: string[] = [];
         selectedCategoryNames.forEach((catName: string) => {
             const catKey = Object.keys(propertyConfig).find(k => k === catName || catName.includes(k) || k.includes(catName));
@@ -405,8 +405,8 @@ function SearchableDropdown({
     };
 
     const allowedUnitTypeNames = useMemo(() => {
-        if (!propertyConfig || formData.subType.length === 0) return [];
-        const selectedSubCategoryNames = formData.subType.map((id: string) => getLookupValue("SubCategory", id));
+        if (!propertyConfig || !formData.subType || formData.subType.length === 0) return [];
+        const selectedSubCategoryNames = (formData.subType || []).map((id: string) => getLookupValue("SubCategory", id));
         let names: string[] = [];
         Object.values(propertyConfig).forEach((catConfig: any) => {
             if (catConfig?.subCategories) {
@@ -1102,7 +1102,7 @@ function SearchableDropdown({
                                 {leadMasterFields?.campaigns && formData.campaign ? (
                                     <SelectButton
                                         value={formData.source}
-                                        options={(leadMasterFields.campaigns.find((c: any) => c.name === formData.campaign)?.sources || []).map((s: any) => ({ label: s.name, value: s.name }))}
+                                        options={(leadMasterFields?.campaigns?.find((c: any) => c.name === formData.campaign)?.sources || []).map((s: any) => ({ label: s.name, value: s.name }))}
                                         onSelect={(val) => setFormData({ ...formData, source: val, subSource: "" })}
                                     />
                                 ) : renderSingleSelect("Source", "source", formData.campaign)}
@@ -1112,7 +1112,7 @@ function SearchableDropdown({
                                 {leadMasterFields?.campaigns && formData.campaign && formData.source ? (
                                     <SelectButton
                                         value={formData.subSource}
-                                        options={(leadMasterFields.campaigns.find((c: any) => c.name === formData.campaign)?.sources.find((s: any) => s.name === formData.source)?.mediums || []).map((m: any) => ({ label: m, value: m }))}
+                                        options={(leadMasterFields?.campaigns?.find((c: any) => c.name === formData.campaign)?.sources?.find((s: any) => s.name === formData.source)?.mediums || []).map((m: any) => ({ label: m, value: m }))}
                                         onSelect={(val) => setFormData({ ...formData, subSource: val })}
                                     />
                                 ) : (formData.source ? renderSingleSelect("SubSource", "subSource", formData.source) : null)}

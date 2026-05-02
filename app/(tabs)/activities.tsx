@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, memo, useMemo } from "react";
 import {
     View, Text, StyleSheet, FlatList, TouchableOpacity,
-    ActivityIndicator, RefreshControl, TextInput, Alert, Vibration, Linking
+    ActivityIndicator, RefreshControl, TextInput, Alert, Vibration, Linking, Modal, Pressable
 } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -61,6 +61,8 @@ export default function ActivitiesScreen() {
     const [search, setSearch] = useState("");
     const [typeFilter, setTypeFilter] = useState("All");
     const [statusFilter, setStatusFilter] = useState("All");
+    const [sortVisible, setSortVisible] = useState(false);
+    const [sortConfig, setSortConfig] = useState({ label: 'Newest First', by: 'createdAt', order: -1, icon: 'time-outline' });
     const { findUser } = useUsers();
 
     // Audio Playback State
@@ -74,7 +76,9 @@ export default function ActivitiesScreen() {
             const params: any = { 
                 search, 
                 limit: 500,
-                includeCommunications: 'false' // Strict exclusion of WhatsApp/SMS/Email campaigns
+                includeCommunications: 'false', // Strict exclusion of WhatsApp/SMS/Email campaigns
+                sortBy: sortConfig.by,
+                sortOrder: String(sortConfig.order)
             };
 
             // If "All" is selected, we let the backend use its $nin communication filter.
@@ -102,7 +106,7 @@ export default function ActivitiesScreen() {
     useFocusEffect(
         React.useCallback(() => {
             fetchActivities();
-        }, [search, typeFilter, statusFilter])
+        }, [search, typeFilter, statusFilter, sortConfig])
     );
 
     const handleReschedule = async (item: Activity, timeframe: 'tomorrow' | 'nextWeek') => {
@@ -413,6 +417,9 @@ export default function ActivitiesScreen() {
                     value={search}
                     onChangeText={setSearch}
                 />
+                <TouchableOpacity onPress={() => setSortVisible(true)} style={styles.sortBtn}>
+                    <Ionicons name="swap-vertical" size={20} color={theme.primary} />
+                </TouchableOpacity>
             </View>
 
             <View style={styles.filterTray}>
@@ -533,6 +540,42 @@ export default function ActivitiesScreen() {
                     }
                 />
             )}
+
+            {/* Sort Modal */}
+            <Modal visible={sortVisible} transparent animationType="fade">
+                <Pressable style={styles.modalOverlay} onPress={() => setSortVisible(false)}>
+                    <View style={[styles.sheetContainer, { backgroundColor: theme.card }]}>
+                        <View style={styles.sheetHandle} />
+                        <View style={styles.sheetHeader}>
+                            <Text style={[styles.sheetTitle, { color: theme.text, textAlign: 'center', flex: 1 }]}>SORT ACTIVITIES</Text>
+                        </View>
+                        <View style={{ padding: 20, gap: 10 }}>
+                            {[
+                                { label: 'Newest First', by: 'createdAt', order: -1, icon: 'time-outline' },
+                                { label: 'Oldest First', by: 'createdAt', order: 1, icon: 'hourglass-outline' },
+                                { label: 'Due Date', by: 'dueDate', order: 1, icon: 'calendar-outline' },
+                                { label: 'Priority', by: 'priority', order: 1, icon: 'alert-circle-outline' },
+                            ].map((opt: any) => (
+                                <TouchableOpacity 
+                                    key={opt.label}
+                                    onPress={() => {
+                                        setSortConfig(opt);
+                                        setSortVisible(false);
+                                    }}
+                                    style={[
+                                        styles.sortItem, 
+                                        sortConfig.label === opt.label && { backgroundColor: theme.primary + '15', borderColor: theme.primary }
+                                    ]}
+                                >
+                                    <Ionicons name={opt.icon as any} size={20} color={sortConfig.label === opt.label ? theme.primary : theme.textMuted} />
+                                    <Text style={{ flex: 1, color: sortConfig.label === opt.label ? theme.primary : theme.text, fontWeight: '700' }}>{opt.label}</Text>
+                                    {sortConfig.label === opt.label && <Ionicons name="checkmark-circle" size={20} color={theme.primary} />}
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+                    </View>
+                </Pressable>
+            </Modal>
         </View>
     );
 }
@@ -619,4 +662,12 @@ const styles = StyleSheet.create({
     playBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
     playBadgeActive: { backgroundColor: '#2563EB' },
     playBadgeText: { fontSize: 9, fontWeight: '900', color: '#2563EB' },
+
+    sortBtn: { marginLeft: 8 },
+    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+    sheetContainer: { borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: 40 },
+    sheetHandle: { width: 40, height: 4, backgroundColor: '#cbd5e1', borderRadius: 2, alignSelf: 'center', marginVertical: 12 },
+    sheetHeader: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, marginBottom: 10 },
+    sheetTitle: { fontSize: 18, fontWeight: '900', letterSpacing: -0.5 },
+    sortItem: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, borderRadius: 12, borderWidth: 1, borderColor: 'transparent' },
 });

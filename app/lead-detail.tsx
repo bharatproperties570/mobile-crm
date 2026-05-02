@@ -436,6 +436,11 @@ export default function LeadDetailScreen() {
                             }} 
                         />
                         <RibbonButton 
+                            icon="flash" 
+                            color="#F59E0B" 
+                            onPress={() => onTabPress(4)} 
+                        />
+                        <RibbonButton 
                             icon="people" 
                             color={isDark ? '#818CF8' : '#6366F1'} 
                             onPress={() => onTabPress(3)} 
@@ -768,7 +773,7 @@ export default function LeadDetailScreen() {
                     </ScrollView>
                 </View>
 
-                {/* 4. Match */}
+                {/* 5. Match */}
                 <View style={styles.tabContent}>
                     <ScrollView contentContainerStyle={styles.innerScroll}>
                         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
@@ -796,73 +801,106 @@ export default function LeadDetailScreen() {
                                     else if (score >= 40) scoreColor = '#F59E0B';
 
                                     return (
-                                        <TouchableOpacity 
-                                            key={i} 
-                                            style={[styles.matchItem, { borderBottomColor: theme.border }, isSelected && { backgroundColor: theme.primary + '05' }]} 
-                                            onPress={() => router.push(`/deal-detail?id=${deal._id}`)}
-                                        >
-                                            <TouchableOpacity 
-                                                style={{ marginRight: 15, justifyContent: 'center' }}
-                                                onPress={() => {
-                                                    if (isSelected) {
-                                                        setSelectedDealIds(selectedDealIds.filter(id => id !== deal._id));
-                                                    } else {
-                                                        setSelectedDealIds([...selectedDealIds, deal._id]);
-                                                    }
-                                                }}
-                                            >
-                                                <Ionicons 
-                                                    name={isSelected ? "checkbox" : "square-outline"} 
-                                                    size={22} 
-                                                    color={isSelected ? theme.primary : theme.textLight} 
-                                                />
-                                            </TouchableOpacity>
+                                        <View key={i} style={[styles.matchItem, { borderBottomColor: theme.border }, isSelected && { backgroundColor: theme.primary + '05' }]}>
+                                             <TouchableOpacity 
+                                                 style={{ marginRight: 15, justifyContent: 'center' }}
+                                                 onPress={() => {
+                                                     if (isSelected) {
+                                                         setSelectedDealIds(selectedDealIds.filter(id => id !== deal._id));
+                                                     } else {
+                                                         setSelectedDealIds([...selectedDealIds, deal._id]);
+                                                     }
+                                                 }}
+                                             >
+                                                 <Ionicons 
+                                                     name={isSelected ? "checkbox" : "square-outline"} 
+                                                     size={22} 
+                                                     color={isSelected ? theme.primary : theme.textLight} 
+                                                 />
+                                             </TouchableOpacity>
 
-                                            <View style={styles.matchLeft}>
-                                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                                                    <View style={[styles.scorePill, { backgroundColor: isDark ? scoreColor + '25' : scoreColor + '15', borderColor: isDark ? scoreColor + '40' : scoreColor + '30' }]}>
-                                                        <Text style={[styles.scorePillText, { color: isDark ? (score >= 70 ? '#34D399' : (score >= 40 ? '#FBBF24' : '#F87171')) : scoreColor }]}>{score}% Match</Text>
-                                                    </View>
-                                                    <Text style={[styles.matchUnit, { color: theme.text }]}>{deal.unitNo || "Matched Item"}</Text>
-                                                </View>
-                                                
-                                                <Text style={[styles.matchProject, { color: theme.textLight }]}>{lv(deal.projectName)} • {lv(deal.block)}</Text>
-                                                
-                                                <View style={styles.matchDetailTags}>
-                                                    {deal.matchDetails?.matchedTags?.slice(0, 3).map((tag: string, idx: number) => {
-                                                        let tagBg = theme.primary + '08';
-                                                        let tagColor = theme.primary;
-                                                        if (tag.includes("Budget")) { tagBg = '#DCFCE7'; tagColor = '#15803D'; }
-                                                        if (tag.includes("Orientation")) { tagBg = '#FEF3C7'; tagColor = '#92400E'; }
-                                                        if (tag.includes("Unit") || tag.includes("Category")) { tagBg = '#E0F2FE'; tagColor = '#0369A1'; }
-                                                        if (tag.includes("Location") || tag.includes("Project") || tag.includes("Sector") || tag.includes("City")) { tagBg = "#F3E8FF"; tagColor = "#7E22CE"; }
-                                                        return (
-                                                            <View key={idx} style={[styles.matchDetailTag, { backgroundColor: tagBg }]}>
-                                                                 <Text style={[styles.matchDetailTagText, { color: tagColor }]}>{tag}</Text>
-                                                            </View>
-                                                        );
-                                                    })}
-                                                </View>
+                                             <TouchableOpacity 
+                                                 style={styles.matchLeft}
+                                                 onPress={() => router.push(`/deal-detail?id=${deal._id}`)}
+                                             >
+                                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                                                     <View style={[styles.scorePill, { backgroundColor: isDark ? scoreColor + '25' : scoreColor + '15', borderColor: isDark ? scoreColor + '40' : scoreColor + '30' }]}>
+                                                         <Text style={[styles.scorePillText, { color: isDark ? (score >= 70 ? '#34D399' : (score >= 40 ? '#FBBF24' : '#F87171')) : scoreColor }]}>{score}% Match</Text>
+                                                     </View>
+                                                     <Text style={[styles.matchUnit, { color: theme.text }]}>{deal.unitNo || deal.unitNumber || "Matched Item"}</Text>
+                                                 </View>
+                                                 
+                                                 <Text style={[styles.matchProject, { color: theme.textLight }]}>{lv(deal.projectName)} • {lv(deal.block)}</Text>
+                                                 
+                                                 <View style={styles.matchDetailTags}>
+                                                     {(deal.matchDetails || []).slice(0, 3).map((tag: string, idx: number) => {
+                                                         let tagBg = theme.primary + '08';
+                                                         let tagColor = theme.primary;
+                                                         if (tag.includes("Budget")) { tagBg = '#DCFCE7'; tagColor = '#15803D'; }
+                                                         if (tag.includes("Orientation")) { tagBg = '#FEF3C7'; tagColor = '#92400E'; }
+                                                         if (tag.includes("Unit") || tag.includes("Category")) { tagBg = '#E0F2FE'; tagColor = '#0369A1'; }
+                                                         if (tag.includes("Location") || tag.includes("Project") || tag.includes("Sector") || tag.includes("City")) { tagBg = "#F3E8FF"; tagColor = "#7E22CE"; }
+                                                         return (
+                                                             <View key={idx} style={[styles.matchDetailTag, { backgroundColor: tagBg }]}>
+                                                                  <Text style={[styles.matchDetailTagText, { color: tagColor }]}>{tag}</Text>
+                                                                 </View>
+                                                         );
+                                                     })}
+                                                 </View>
 
-                                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 }}>
-                                                    {deal.lastDispatch && (
-                                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, backgroundColor: '#10B98115', borderColor: '#10B98130', borderWidth: 1 }}>
-                                                            <Ionicons name="checkmark-done-circle" size={14} color="#10B981" />
-                                                            <Text style={{ fontSize: 9, fontWeight: '800', color: '#10B981' }}>
-                                                                DISPATCHED {new Date(deal.lastDispatch.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }).toUpperCase()}
-                                                            </Text>
-                                                        </View>
-                                                    )}
-                                                </View>
-                                            </View>
+                                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10 }}>
+                                                     <TouchableOpacity 
+                                                        style={[styles.miniActionBtn, { backgroundColor: '#25D36615' }]} 
+                                                        onPress={() => {
+                                                            setSelectedDealIds([deal._id]);
+                                                            setSelectedChannels(['whatsapp']);
+                                                            setIsSendModalVisible(true);
+                                                        }}
+                                                     >
+                                                         <Ionicons name="logo-whatsapp" size={14} color="#25D366" />
+                                                         <Text style={{ fontSize: 10, fontWeight: '700', color: '#25D366' }}>WA</Text>
+                                                     </TouchableOpacity>
+                                                     <TouchableOpacity 
+                                                        style={[styles.miniActionBtn, { backgroundColor: '#3B82F615' }]}
+                                                        onPress={() => {
+                                                            setSelectedDealIds([deal._id]);
+                                                            setSelectedChannels(['sms']);
+                                                            setIsSendModalVisible(true);
+                                                        }}
+                                                     >
+                                                         <Ionicons name="chatbubble-ellipses" size={14} color="#3B82F6" />
+                                                         <Text style={{ fontSize: 10, fontWeight: '700', color: '#3B82F6' }}>SMS</Text>
+                                                     </TouchableOpacity>
+                                                     <TouchableOpacity 
+                                                        style={[styles.miniActionBtn, { backgroundColor: '#8B5CF615' }]}
+                                                        onPress={() => {
+                                                            setSelectedDealIds([deal._id]);
+                                                            setSelectedChannels(['email']);
+                                                            setIsSendModalVisible(true);
+                                                        }}
+                                                     >
+                                                         <Ionicons name="mail" size={14} color="#8B5CF6" />
+                                                         <Text style={{ fontSize: 10, fontWeight: '700', color: '#8B5CF6' }}>Email</Text>
+                                                     </TouchableOpacity>
 
-                                            <View style={styles.matchRight}>
-                                                <Text style={[styles.matchPrice, { color: theme.primary }]}>₹{deal.price || deal.quotePrice || 0}</Text>
-                                                <View style={[styles.statusBadge, { backgroundColor: '#10B981' + '10' }]}>
-                                                    <Text style={[styles.statusBadgeText, { color: '#10B981' }]}>{lv(deal.stage) || 'Active'}</Text>
-                                                </View>
-                                            </View>
-                                        </TouchableOpacity>
+                                                     {deal.lastDispatch && (
+                                                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, backgroundColor: '#10B98115', borderColor: '#10B98130', borderWidth: 1 }}>
+                                                             <Ionicons name="checkmark-done-circle" size={12} color="#10B981" />
+                                                             <Text style={{ fontSize: 8, fontWeight: '800', color: '#10B981' }}>
+                                                                 {new Date(deal.lastDispatch.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }).toUpperCase()}
+                                                             </Text>
+                                                         </View>
+                                                     )}
+                                                 </View>
+                                             </TouchableOpacity>
+
+                                             <View style={styles.matchRight}>
+                                                 <Text style={[styles.matchPrice, { color: theme.primary }]}>₹{deal.price || deal.quotePrice || 0}</Text>
+                                                 <View style={[styles.statusBadge, { backgroundColor: '#10B981' + '10' }]}>
+                                                     <Text style={[styles.statusBadgeText, { color: '#10B981' }]}>{lv(deal.stage) || 'Active'}</Text>
+                                                 </View>
+                                             </View>
+                                        </View>
                                     );
                                 })
                             )}
@@ -870,7 +908,7 @@ export default function LeadDetailScreen() {
                     </ScrollView>
                 </View>
 
-                {/* 5. Inventory */}
+                {/* 6. Inventory */}
                 <View style={styles.tabContent}>
                     <ScrollView contentContainerStyle={styles.innerScroll}>
                         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
@@ -1108,19 +1146,22 @@ const styles = StyleSheet.create({
     timelineSubject: { fontSize: 13, fontWeight: '700' },
     timelineNote: { fontSize: 11, marginTop: 4 },
 
-    matchItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1 },
+    matchItem: { flexDirection: 'row', paddingVertical: 18, borderBottomWidth: 1 },
     matchLeft: { flex: 1 },
     matchUnit: { fontSize: 14, fontWeight: '800' },
-    matchProject: { fontSize: 11 },
-    matchRight: { alignItems: 'flex-end' },
-    matchPrice: { fontSize: 13, fontWeight: '700' },
-    matchStatus: { fontSize: 10, fontWeight: '800', marginTop: 2 },
-    relationBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
-    scorePill: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 12, borderWidth: 1 },
-    scorePillText: { fontSize: 10, fontWeight: '800' },
-    matchDetailTag: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, marginRight: 4 },
-    matchDetailTagText: { fontSize: 10, fontWeight: '600' },
-    statusBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, marginTop: 4 },
+    matchProject: { fontSize: 12, fontWeight: '600', marginTop: 2 },
+    matchDetailTags: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 },
+    matchDetailTag: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
+    matchDetailTagText: { fontSize: 9, fontWeight: '800' },
+    
+    scorePill: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, borderWidth: 1 },
+    scorePillText: { fontSize: 10, fontWeight: '900' },
+
+    miniActionBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
+    
+    matchRight: { alignItems: 'flex-end', justifyContent: 'center', marginLeft: 10, gap: 8 },
+    matchPrice: { fontSize: 15, fontWeight: '900' },
+    statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
     statusBadgeText: { fontSize: 10, fontWeight: '800' },
     fab: {
         position: 'absolute',

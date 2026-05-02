@@ -135,8 +135,7 @@ export const LookupProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             }
         } catch (error: any) {
             if (error?.response?.status === 401) {
-                // Do not retry on 401s
-                console.warn('[LookupContext] Unauthorized fetch skipped (unauthenticated state)');
+                console.warn('[LookupContext] Session expired or unauthorized. Global handler will manage logout.');
             } else if (retryCount > 0 && isAuthenticated) {
                 setTimeout(() => refreshLookups(retryCount - 1), 2000);
             }

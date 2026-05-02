@@ -1,3 +1,4 @@
+// v1.0.2 - Fixed 401 handling
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import api from "@/services/api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -70,7 +71,11 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 setProjectIndex(index);
             }
         } catch (error: any) {
-            console.error('[ProjectContext] Failed to fetch projects:', error);
+            if (error?.response?.status === 401) {
+                console.warn('[ProjectContext] Session expired or unauthorized. Global handler will manage logout.');
+            } else {
+                console.error('[ProjectContext] Failed to fetch projects:', error.message || error);
+            }
         } finally {
             setLoading(false);
         }

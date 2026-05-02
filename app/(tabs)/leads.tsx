@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useMemo, useRef, memo } from "react";
 import {
     View, Text, StyleSheet, FlatList, TouchableOpacity,
     TextInput, RefreshControl, ActivityIndicator, Alert, Linking,
-    Modal, Animated, Dimensions, Pressable, ScrollView, Vibration, Platform
+    Modal, Animated, Dimensions, Pressable, ScrollView, Vibration, Platform, SectionList
 } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -610,6 +610,7 @@ export default function LeadsScreen() {
     const [advFilters, setAdvFilters] = useState<any>({});
     const [sortVisible, setSortVisible] = useState(false);
     const [sortConfig, setSortConfig] = useState({ by: 'createdAt', order: -1, label: 'Newest First' });
+    const sectionListRef = useRef<any>(null);
 
     const fetchLeads = useCallback(async (pageNum = 1, shouldAppend = false, isRefresh = false) => {
         if (!isAuthenticated) return;
@@ -791,13 +792,89 @@ export default function LeadsScreen() {
         </View>
     );
 
+    const sections = useMemo(() => {
+        const q = search.toLowerCase();
+        let filtered = leads.filter((item) => {
+            const name = leadName(item).toLowerCase();
+            const phone = String(item.mobile || "").toLowerCase();
+            const matchesSearch = name.includes(q) || phone.includes(q);
+            return matchesSearch;
+        });
+
+        // Group by first letter for Alphabetical sort or "All" tab
+        const groups: Record<string, any[]> = {};
+        filtered.forEach(item => {
+            const name = leadName(item);
+            let firstChar = name.charAt(0).toUpperCase();
+            if (!/[A-Z]/.test(firstChar)) firstChar = "#";
+            if (!groups[firstChar]) groups[firstChar] = [];
+            groups[firstChar].push(item);
+        });
+
+        return Object.keys(groups)
+            .sort((a, b) => (a === "#" ? 1 : b === "#" ? -1 : a.localeCompare(b)))
+            .map(letter => ({
+                title: letter,
+                data: groups[letter]
+            }));
+    }, [leads, search]);
+
+    const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ#".split("");
+
+    const scrollToIndex = (letter: string) => {
+        const index = sections.findIndex(s => s.title === letter);
+        if (index !== -1) {
+            sectionListRef.current?.scrollToLocation({
+                sectionIndex: index,
+                itemIndex: 0,
+                animated: true
+            });
+            Vibration.vibrate(10);
+        }
+    };
+
+    const renderAlphabetIndex = () => (
+        <View style={styles.alphabetIndex}>
+            {alphabet.map((letter) => {
+                const hasData = sections.some(s => s.title === letter);
+                return (
+                    <TouchableOpacity
+                        key={letter}
+                        onPress={() => scrollToIndex(letter)}
+                        style={styles.alphabetLetter}
+                        disabled={!hasData}
+                    >
+                        <Text style={[styles.alphabetText, { color: hasData ? theme.primary : theme.textMuted, opacity: hasData ? 1 : 0.3 }]}>{letter}</Text>
+                    </TouchableOpacity>
+                );
+            })}
+        </View>
+    );
+
     return (
         <View style={[styles.container, { backgroundColor: theme.background }]}>
-            <FlatList
-                data={leads}
+            <SectionList
+                ref={sectionListRef}
+                sections={sections}
                 keyExtractor={(item) => String(item._id)}
                 ListHeaderComponent={renderHeader()}
-                renderItem={({ item, index }) => <View style={{ paddingHorizontal: 16, marginTop: 12 }}><LeadCard lead={item} index={index} liveScore={liveScores[item._id]} onPress={() => router.push(`/lead-detail?id=${item._id}`)} onMore={() => { setSelectedLead(item); setSheetVisible(true); }} onDeleteSuccess={() => fetchLeads(1, false)} /></View>}
+                renderItem={({ item, index }) => (
+                    <View style={{ paddingHorizontal: 16, marginTop: 2 }}>
+                        <LeadCard 
+                            lead={item} 
+                            index={index} 
+                            liveScore={liveScores[item._id]} 
+                            onPress={() => router.push(`/lead-detail?id=${item._id}`)} 
+                            onMore={() => { setSelectedLead(item); setSheetVisible(true); }} 
+                            onDeleteSuccess={() => fetchLeads(1, false)} 
+                        />
+                    </View>
+                )}
+                renderSectionHeader={({ section: { title } }) => (
+                    <View style={[styles.sectionHeader, { backgroundColor: theme.card, borderBottomColor: theme.border, paddingHorizontal: 16, paddingVertical: 4, borderBottomWidth: 1 }]}>
+                        <Text style={{ fontSize: 14, fontWeight: '900', color: theme.primary }}>{title}</Text>
+                    </View>
+                )}
                 onEndReached={loadMore}
                 onEndReachedThreshold={0.5}
                 initialNumToRender={20}
@@ -811,6 +888,14 @@ export default function LeadsScreen() {
                     </View>
                 ) : null}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => fetchLeads(1, false, true)} tintColor={theme.primary} />}
+                onScrollToIndexFailed={(info) => {
+                    console.warn("[Leads] Scroll to index failed, retrying...", info);
+                    sectionListRef.current?.scrollToLocation({
+                        sectionIndex: info.index,
+                        itemIndex: 0,
+                        animated: false
+                    });
+                }}
                 ListEmptyComponent={!loading ? (
                     <View style={{ padding: 40, alignItems: 'center' }}>
                         <Ionicons name="filter-outline" size={48} color={theme.textMuted} />
@@ -818,6 +903,7 @@ export default function LeadsScreen() {
                     </View>
                 ) : null}
             />
+            {renderAlphabetIndex()}
             {loading && (
                 <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(255,255,255,0.4)', justifyContent: 'center', alignItems: 'center', zIndex: 9999 }]}>
                     <ActivityIndicator size="large" color={theme.primary} />
@@ -911,7 +997,7 @@ const styles = StyleSheet.create({
         alignItems: 'center'
     },
     tabText: { fontSize: 11, fontWeight: '800' },
-    card: { padding: 12, borderRadius: 20, borderWidth: 1, marginBottom: 4 },
+    card: { padding: 10, borderRadius: 16, borderWidth: 1, marginBottom: 2 },
     cardInner: { flexDirection: 'row', alignItems: 'center' },
     cardContent: { flex: 1, marginLeft: 12 },
     cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
@@ -958,5 +1044,22 @@ const styles = StyleSheet.create({
     fieldLabel: { fontSize: 13, fontWeight: '700' },
     applyBtn: { height: 56, borderRadius: 18, justifyContent: 'center', alignItems: 'center' },
     applyBtnText: { color: '#fff', fontSize: 16, fontWeight: '800' },
-    sheetHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16 }
+    sheetHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16 },
+    alphabetIndex: {
+        position: 'absolute',
+        right: 4,
+        top: 200,
+        bottom: 100,
+        justifyContent: 'center',
+        alignItems: 'center',
+        width: 20,
+        zIndex: 100
+    },
+    alphabetLetter: {
+        paddingVertical: 1,
+    },
+    alphabetText: {
+        fontSize: 10,
+        fontWeight: '900',
+    }
 });
