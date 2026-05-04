@@ -9,6 +9,9 @@ import CallBanner from "@/components/CallBanner";
 interface CallTrackingContextType {
     trackCall: (mobile: string, entityId: string, entityType: string, entityName: string) => void;
     simulateIncomingCall: (mobile: string) => void;
+    activeBanner: CallerInfo | null;
+    closeBanner: () => void;
+    initiateDial: (mobile: string) => void;
 }
 
 const CallTrackingContext = createContext<CallTrackingContextType | undefined>(undefined);
@@ -161,11 +164,15 @@ export function CallTrackingProvider({ children }: { children: React.ReactNode }
         }
     };
 
+    const initiateDial = (mobile: string) => {
+        Linking.openURL(`tel:${mobile}`);
+    };
+
     const trackCall = (mobile: string, entityId: string, entityType: string, entityName: string) => {
-        // Show banner for outgoing call as well
+        // 1. First, lookup info and show banner (Briefing Mode)
         handleIncomingCall(mobile);
 
-        // Prepare for outcome prompt on return
+        // 2. Prepare for outcome prompt on return
         setLastCall({
             mobile,
             entityId,
@@ -174,14 +181,24 @@ export function CallTrackingProvider({ children }: { children: React.ReactNode }
             startTime: Date.now()
         });
         
-        // Open Dialer
-        Linking.openURL(`tel:${mobile}`);
+        // Note: We don't call Linking.openURL here anymore. 
+        // The CallBanner will now have a "Call" button to initiate the dial.
     };
 
     return (
-        <CallTrackingContext.Provider value={{ trackCall, simulateIncomingCall }}>
+        <CallTrackingContext.Provider value={{ 
+            trackCall, 
+            simulateIncomingCall, 
+            activeBanner, 
+            closeBanner: () => setActiveBanner(null),
+            initiateDial
+        }}>
             {children}
-            <CallBanner info={activeBanner} onClose={() => setActiveBanner(null)} />
+            <CallBanner 
+                info={activeBanner} 
+                onClose={() => setActiveBanner(null)} 
+                onDial={initiateDial}
+            />
         </CallTrackingContext.Provider>
     );
 }

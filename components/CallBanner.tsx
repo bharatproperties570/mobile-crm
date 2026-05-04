@@ -10,6 +10,7 @@ const { width } = Dimensions.get('window');
 interface Props {
     info: CallerInfo | null;
     onClose: () => void;
+    onDial?: (mobile: string) => void;
 }
 
 type TabType = 'Lead' | 'Deal' | 'Inventory' | 'Activity';
@@ -19,6 +20,8 @@ export default function CallBanner({ info, onClose }: Props) {
     const router = useRouter();
     const slideAnim = useRef(new Animated.Value(-500)).current;
     const [activeTab, setActiveTab] = useState<TabType>('Lead');
+    const [countdown, setCountdown] = useState<number | null>(null);
+    const timerRef = useRef<NodeJS.Timeout | null>(null);
 
     useEffect(() => {
         if (info) {
@@ -38,14 +41,50 @@ export default function CallBanner({ info, onClose }: Props) {
                 tension: 40,
                 friction: 8
             }).start();
+
+            // Auto-Dial logic: If this is a fresh briefing, start countdown
+            if (onDial && !info.isIncoming) {
+                setCountdown(3);
+                if (timerRef.current) clearInterval(timerRef.current);
+                timerRef.current = setInterval(() => {
+                    setCountdown(prev => {
+                        if (prev === 1) {
+                            clearInterval(timerRef.current!);
+                            handleStartCall();
+                            return null;
+                        }
+                        return prev ? prev - 1 : null;
+                    });
+                }, 1000);
+            }
         } else {
+            setCountdown(null);
+            if (timerRef.current) clearInterval(timerRef.current);
             Animated.timing(slideAnim, {
                 toValue: -500,
                 duration: 300,
                 useNativeDriver: true
             }).start();
         }
+
+        return () => {
+            if (timerRef.current) clearInterval(timerRef.current);
+        };
     }, [info]);
+
+    const handleStartCall = () => {
+        if (info && onDial) {
+            setCountdown(null);
+            if (timerRef.current) clearInterval(timerRef.current);
+            onDial(info.mobile);
+            onClose();
+        }
+    };
+
+    const cancelAutoDial = () => {
+        setCountdown(null);
+        if (timerRef.current) clearInterval(timerRef.current);
+    };
 
     if (!info) return null;
 
@@ -165,34 +204,46 @@ export default function CallBanner({ info, onClose }: Props) {
 
                 {/* 3. Action Control Hub */}
                 <View style={styles.actionHub}>
-                    <TouchableOpacity 
-                        style={[styles.secondaryBtn, { borderColor: theme.border }]} 
-                        onPress={handlePressProfile}
-                    >
-                        <Ionicons name="open-outline" size={18} color={theme.text} />
-                        <Text style={[styles.secondaryBtnText, { color: theme.text }]}>View Full</Text>
-                    </TouchableOpacity>
+                    {countdown !== null ? (
+                        <TouchableOpacity 
+                            style={[styles.primaryBtn, { backgroundColor: '#EF4444' }]}
+                            onPress={cancelAutoDial}
+                        >
+                            <Ionicons name="stop-circle" size={20} color="#fff" />
+                            <Text style={styles.primaryBtnText}>Cancel Auto-Dial ({countdown}s)</Text>
+                        </TouchableOpacity>
+                    ) : (
+                        <>
+                            <TouchableOpacity 
+                                style={[styles.secondaryBtn, { borderColor: theme.border }]} 
+                                onPress={handlePressProfile}
+                            >
+                                <Ionicons name="open-outline" size={18} color={theme.text} />
+                                <Text style={[styles.secondaryBtnText, { color: theme.text }]}>View Full</Text>
+                            </TouchableOpacity>
 
-                    <TouchableOpacity 
-                        style={[styles.primaryBtn, { backgroundColor: theme.primary }]}
-                        onPress={() => {
-                            onClose();
-                            router.push({
-                                pathname: "/outcome",
-                                params: {
-                                    id: 'new',
-                                    entityId: currentData?.entityId || info.entityId,
-                                    entityType: activeTab === 'Contact' ? 'Lead' : activeTab,
-                                    entityName: currentData?.name || info.name,
-                                    actType: 'Call',
-                                    mobile: info.mobile
-                                }
-                            });
-                        }}
-                    >
-                        <Ionicons name="checkmark-done" size={20} color="#fff" />
-                        <Text style={styles.primaryBtnText}>Log Result</Text>
-                    </TouchableOpacity>
+                            <TouchableOpacity 
+                                style={[styles.primaryBtn, { backgroundColor: onDial ? '#22C55E' : theme.primary }]}
+                                onPress={onDial ? handleStartCall : () => {
+                                    onClose();
+                                    router.push({
+                                        pathname: "/outcome",
+                                        params: {
+                                            id: 'new',
+                                            entityId: currentData?.entityId || info.entityId,
+                                            entityType: activeTab === 'Contact' ? 'Lead' : activeTab,
+                                            entityName: currentData?.name || info.name,
+                                            actType: 'Call',
+                                            mobile: info.mobile
+                                        }
+                                    });
+                                }}
+                            >
+                                <Ionicons name={onDial ? "call" : "checkmark-done"} size={20} color="#fff" />
+                                <Text style={styles.primaryBtnText}>{onDial ? "Call Now" : "Log Result"}</Text>
+                            </TouchableOpacity>
+                        </>
+                    )}
                 </View>
 
                 <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
