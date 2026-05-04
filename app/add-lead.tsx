@@ -51,8 +51,7 @@ const BUDGET_VALUES = [
     { value: 1000000000, label: "100 Crore" }
 ];
 
-const GOOGLE_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
-const FORM_STEPS = ["Requirement", "Location", "Contact", "Profile", "System"];
+const FORM_STEPS = ["Requirement", "Location", "Contact", "System"];
 
 // ─── Reusable Components ──────────────────────────────────────────────────────
 
@@ -1100,44 +1099,9 @@ function SearchableDropdown({
                         </View>
                     </FadeInView>
                 );
-            case 3: // Profile
+            case 3: // System
                 return (
                     <FadeInView key="step3">
-                        <SectionHeader title="Bio & Professional" icon="💼" subtitle="Personal and professional background" />
-                        <View style={[styles.card, { backgroundColor: theme.cardBg, borderColor: theme.border }]}>
-                            <Text style={[styles.subLabel, { color: theme.textSecondary }]}>Personal Details</Text>
-                            <Input label="Father's Name" value={formData.fatherName} onChangeText={v => setFormData({ ...formData, fatherName: v })} icon="people-outline" />
-                            <View style={styles.row}>
-                                <View style={{ flex: 1 }}>
-                                    <Field label="Gender">
-                                        <SelectButton value={formData.gender} options={["Male", "Female", "Other"].map(v => ({ label: v, value: v }))} onSelect={(v) => setFormData({ ...formData, gender: v })} />
-                                    </Field>
-                                </View>
-                            </View>
-                            <View style={styles.row}>
-                                <View style={{ flex: 1 }}>
-                                    <Field label="Marital Status">
-                                        <SelectButton value={formData.maritalStatus} options={["Single", "Married", "Divorced", "Widowed"].map(v => ({ label: v, value: v }))} onSelect={(v) => setFormData({ ...formData, maritalStatus: v })} />
-                                    </Field>
-                                </View>
-                            </View>
-                            <Input label="Date of Birth (YYYY-MM-DD)" value={formData.birthDate} onChangeText={v => setFormData({ ...formData, birthDate: v })} icon="calendar-outline" />
-                            <Input label="Anniversary (YYYY-MM-DD)" value={formData.anniversaryDate} onChangeText={v => setFormData({ ...formData, anniversaryDate: v })} icon="heart-outline" />
-
-                            <View style={[styles.divider, { marginVertical: 20 }]} />
-                            
-                            <Text style={[styles.subLabel, { color: theme.textSecondary }]}>Professional Profile</Text>
-                            <Field label="Category">{renderSingleSelect("ProfessionalCategory", "professionCategory")}</Field>
-                            <Field label="Sub Category">{renderDependentMultiSelect("ProfessionalSubCategory", "professionSubCategory", [formData.professionCategory])}</Field>
-                            <Input label="Designation" value={formData.designation} onChangeText={v => setFormData({ ...formData, designation: v })} icon="briefcase-outline" />
-                            <Input label="Company Name" value={formData.company} onChangeText={v => setFormData({ ...formData, company: v })} icon="business-outline" />
-                            <Input label="Work Office Address" value={formData.workOffice} onChangeText={v => setFormData({ ...formData, workOffice: v })} icon="location-outline" />
-                        </View>
-                    </FadeInView>
-                );
-            case 4: // System
-                return (
-                    <FadeInView key="step4">
                         <SectionHeader title="System & Assignment" icon="⚙️" subtitle="Back-office routing and status" />
                         <View style={[styles.card, { backgroundColor: theme.cardBg, borderColor: theme.border }]}>
 
