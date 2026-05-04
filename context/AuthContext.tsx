@@ -6,10 +6,11 @@ import api, { set401Callback } from "@/services/api";
 
 interface AuthContextType {
     token: string | null;
+    refreshToken: string | null;
     user: any | null;
     isAuthenticated: boolean;
     loading: boolean;
-    login: (token: string, user: any) => Promise<void>;
+    login: (token: string, refreshToken: string, user: any) => Promise<void>;
     logout: () => Promise<void>;
     checkAuth: () => Promise<void>;
 }
@@ -18,6 +19,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [token, setToken] = useState<string | null>(null);
+    const [refreshToken, setRefreshToken] = useState<string | null>(null);
     const [user, setUser] = useState<any | null>(null);
     const [loading, setLoading] = useState(true);
     const router = useRouter();
@@ -44,11 +46,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         try {
             const savedToken = await storage.getItem("authToken");
+            const savedRefreshToken = await storage.getItem("refreshToken");
             const savedUser = await storage.getItem("userData");
             
             if (savedToken) {
                 console.log("[AuthContext] Token found in storage");
                 setToken(savedToken);
+                setRefreshToken(savedRefreshToken);
                 if (savedUser) {
                     try {
                         setUser(JSON.parse(savedUser));
@@ -77,11 +81,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     useEffect(() => {
         if (set401Callback) {
-            set401Callback(() => {
-                console.warn('[AuthContext] 401 Unauthorized detected, logging out...');
-                setToken(null);
-                setUser(null);
-                clearCaches();
+            set401Callback(async () => {
+                console.warn('[AuthContext] 401 Unauthorized detected, performing full logout...');
+                await logout();
             });
         }
         checkAuth();
@@ -118,17 +120,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
     }, [token, segments, loading, routerReady]);
 
-    const login = async (newToken: string, userData: any) => {
+    const login = async (newToken: string, newRefreshToken: string, userData: any) => {
         setToken(newToken);
+        setRefreshToken(newRefreshToken);
         setUser(userData);
         await storage.setItem("authToken", newToken);
+        await storage.setItem("refreshToken", newRefreshToken);
         await storage.setItem("userData", JSON.stringify(userData));
     };
 
     const logout = async () => {
         setToken(null);
+        setRefreshToken(null);
         setUser(null);
         await storage.deleteItem("authToken");
+        await storage.deleteItem("refreshToken");
         await storage.deleteItem("userData");
         await clearCaches();
     };
@@ -136,6 +142,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return (
         <AuthContext.Provider value={{ 
             token, 
+            refreshToken,
             user, 
             isAuthenticated: !!token, 
             loading, 

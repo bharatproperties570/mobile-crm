@@ -386,10 +386,10 @@ const styles = StyleSheet.create({
     selectionCount: { fontSize: 14, fontWeight: "800", color: "#1E3A8A" },
     actionButtons: { flexDirection: "row", gap: 10 },
     actionBtn: {
-        paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10,
-        backgroundColor: "#F1F5F9", flexDirection: "row", alignItems: "center", gap: 6
+        paddingHorizontal: 16, paddingVertical: 12, borderRadius: 14,
+        backgroundColor: "#F1F5F9", flexDirection: "row", alignItems: "center", gap: 8
     },
-    actionBtnText: { fontSize: 12, fontWeight: "700", color: "#1E3A8A" },
+    actionBtnText: { fontSize: 13, fontWeight: "700", color: "#1E3A8A" },
     primaryBtn: { backgroundColor: "#1E3A8A" },
     primaryBtnText: { color: "#fff", fontSize: 12, fontWeight: "700" }
 });

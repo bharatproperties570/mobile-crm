@@ -7,7 +7,7 @@ import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Swipeable } from "react-native-gesture-handler";
 import { getCompanies, type Company } from "@/services/companies.service";
-import { lookupVal, safeApiCall } from "@/services/api.helpers";
+import { lookupVal, safeApiCall, extractList } from "@/services/api.helpers";
 import { useTheme } from "@/context/ThemeContext";
 import { useLookup } from "@/context/LookupContext";
 import { useCallTracking } from "@/context/CallTrackingContext";
@@ -51,7 +51,16 @@ const CompanyCard = ({ company, onPress, onMenuPress, idx }: { company: Company,
     const email = company.emails?.[0]?.address;
 
     const fadeAnim = useRef(new Animated.Value(0)).current;
-    const scaleValue = useRef(new Animated.Value(1)).current;
+    const scaleAnim = useRef(new Animated.Value(1)).current;
+
+    const animatePress = (toValue: number) => {
+        Animated.spring(scaleAnim, {
+            toValue,
+            useNativeDriver: true,
+            tension: 100,
+            friction: 5
+        }).start();
+    };
 
     useEffect(() => {
         Animated.timing(fadeAnim, {
@@ -94,13 +103,17 @@ const CompanyCard = ({ company, onPress, onMenuPress, idx }: { company: Company,
         </View>
     );
 
-    const onPressIn = () => Animated.spring(scaleValue, { toValue: 0.98, useNativeDriver: true }).start();
-    const onPressOut = () => Animated.spring(scaleValue, { toValue: 1, useNativeDriver: true }).start();
-
     return (
         <Swipeable renderRightActions={renderRightActions} renderLeftActions={renderLeftActions}>
-            <Animated.View style={{ opacity: fadeAnim, transform: [{ scale: scaleValue }, { translateY: fadeAnim.interpolate({ inputRange: [0, 1], outputRange: [20, 0] }) }] }}>
-                <TouchableOpacity activeOpacity={1} onPressIn={onPressIn} onPressOut={onPressOut} onPress={onPress} style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+            <Pressable 
+                onPressIn={() => animatePress(0.97)}
+                onPressOut={() => animatePress(1)}
+                onPress={onPress}
+            >
+                <Animated.View style={[
+                    { opacity: fadeAnim, transform: [{ scale: scaleAnim }, { translateY: fadeAnim.interpolate({ inputRange: [0, 1], outputRange: [20, 0] }) }] }
+                ]}>
+                    <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
                     <View style={styles.cardHeader}>
                         <Text style={[styles.companyName, { color: theme.text, flex: 1, marginRight: 8 }]} numberOfLines={1}>{company.name}</Text>
                         <TouchableOpacity style={styles.menuTrigger} onPress={(e) => { e.stopPropagation(); onMenuPress(); }}>
@@ -159,8 +172,9 @@ const CompanyCard = ({ company, onPress, onMenuPress, idx }: { company: Company,
                             })()}
                         </View>
                     </View>
-                </TouchableOpacity>
-            </Animated.View>
+                    </View>
+                </Animated.View>
+            </Pressable>
         </Swipeable>
     );
 };
@@ -220,8 +234,7 @@ export default function CompaniesScreen() {
         }));
 
         if (!result.error && result.data) {
-            const dataObj = result.data as any;
-            const newRecords = dataObj.data || dataObj.records || (Array.isArray(dataObj) ? dataObj : []);
+            const newRecords = extractList(result.data);
             
             setCompanies(prev => {
                 const combined = shouldAppend ? [...prev, ...newRecords] : newRecords;
@@ -239,7 +252,7 @@ export default function CompaniesScreen() {
         }
         setLoading(false);
         setRefreshing(false);
-    }, []);
+    }, [sortConfig.by, sortConfig.order, safeApiCall]);
 
     useFocusEffect(
         useCallback(() => {

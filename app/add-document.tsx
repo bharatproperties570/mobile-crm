@@ -17,7 +17,7 @@ import api from "@/services/api";
 
 export default function AddDocumentScreen() {
     const router = useRouter();
-    const { id, type } = useLocalSearchParams<{ id: string; type: string }>();
+    const { id, type, mode } = useLocalSearchParams<{ id: string; type: string; mode?: string }>();
     const { theme } = useTheme();
 
     const [loading, setLoading] = useState(true);
@@ -117,6 +117,15 @@ export default function AddDocumentScreen() {
             Alert.alert("Error", "Failed to load initial data. Check your network.");
         } finally {
             setLoading(false);
+            const cats = (catRes?.data || []);
+            if (mode === "upload" && cats.length > 0) {
+                const mediaCat = cats.find((c: any) => c.lookup_value === "Media");
+                if (mediaCat) {
+                    setSelectedCategory(mediaCat);
+                    const imageType = (mediaCat.subCategories || []).find((s: any) => s.lookup_value === "Images" || s.lookup_value === "Image");
+                    if (imageType) setSelectedType(imageType);
+                }
+            }
         }
     };
 
@@ -271,7 +280,30 @@ export default function AddDocumentScreen() {
             const updatedDocs = [...existingDocs, newDoc];
             console.log("[AddDocument] Updating entity with new document count:", updatedDocs.length);
 
-            if (type === "Contact") {
+            const isMedia = selectedCategory.lookup_value === "Media" || mode === "upload";
+            const isImage = isMedia && (selectedType.lookup_value === "Images" || selectedType.lookup_value === "Image");
+            const isVideo = isMedia && (selectedType.lookup_value === "Videos" || selectedType.lookup_value === "Video");
+
+            if (type === "Inventory" && (isImage || isVideo)) {
+                const mediaItem = isImage ? {
+                    title: docNumber || selectedFile.assets[0].name || "Image",
+                    category: "Main",
+                    url: fileUrl
+                } : {
+                    title: docNumber || selectedFile.assets[0].name || "Video",
+                    type: "Upload",
+                    url: fileUrl
+                };
+
+                const currentImages = entityData.inventoryImages || [];
+                const currentVideos = entityData.inventoryVideos || [];
+
+                if (isImage) {
+                    await updateInventory(id, { inventoryImages: [...currentImages, mediaItem] });
+                } else {
+                    await updateInventory(id, { inventoryVideos: [...currentVideos, mediaItem] });
+                }
+            } else if (type === "Contact") {
                 await updateContact(id, { documents: updatedDocs });
             } else if (type === "Lead") {
                 await updateLead(id, { documents: updatedDocs });

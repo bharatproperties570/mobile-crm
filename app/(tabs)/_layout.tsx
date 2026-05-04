@@ -16,7 +16,7 @@ const TABS_CONFIG = [
     { name: 'contacts', label: 'Contacts', icon: 'person-circle-outline', iconActive: 'person-circle' },
     { name: 'companies', label: 'Company', icon: 'business-outline', iconActive: 'business' },
     { name: 'inventory', label: 'Inventory', icon: 'grid-outline', iconActive: 'grid' },
-    { name: 'projects', label: 'Projects', icon: 'construct-outline', iconActive: 'construct' },
+    { name: 'projects', label: 'Projects', icon: 'layers-outline', iconActive: 'layers' },
     { name: 'marketing', label: 'Marketing', icon: 'megaphone-outline', iconActive: 'megaphone' },
     { name: 'intake', label: 'Intake', icon: 'scan-outline', iconActive: 'scan' },
 ];

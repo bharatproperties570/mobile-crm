@@ -176,7 +176,10 @@ api.interceptors.response.use(
         const res = await axios.post(`${BASE_URL}/auth/refresh`, {
           refreshToken: savedRefreshToken
         }, {
-          headers: { "Content-Type": "application/json" }
+          headers: { 
+            "Content-Type": "application/json",
+            "Bypass-Tunnel-Reminder": "true"
+          }
         });
 
         if (res.data.success && res.data.token) {

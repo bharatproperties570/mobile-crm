@@ -11,15 +11,15 @@ import api from "./api";
 
 export const STAGE_COLORS: Record<string, string> = {
     "Incoming": "#94a3b8",
-    Prospect: "#3b82f6",
-    Qualified: "#8b5cf6",
-    Opportunity: "#f59e0b",
-    Negotiation: "#f97316",
-    Booked: "#10b981",
-    "Closed Won": "#22c55e",
+    "Prospect": "#3b82f6",
+    "Qualified": "#8b5cf6",
+    "Opportunity": "#f59e0b",
+    "Negotiation": "#f97316",
+    "Booked": "#10b981",
+    "Closed Won": "#059669",
     "Closed Lost": "#ef4444",
-    Stalled: "#78716c",
-    Dormant: "#64748b",
+    "Stalled": "#78716c",
+    "Dormant": "#64748b",
 };
 
 const OUTCOME_TO_STAGE: Record<string, string> = {

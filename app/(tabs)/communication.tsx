@@ -464,12 +464,28 @@ function InboxRow({ item, theme, isDark, onPress, onLongPress }: any) {
     const ch = CHANNELS.find(c => c.id === item.via) || CHANNELS[0];
     const outcomeColor = OUTCOME_COLOR[item.outcome] || theme.textMuted;
 
+    const scaleAnim = useRef(new Animated.Value(1)).current;
+
+    const animatePress = (toValue: number) => {
+        Animated.spring(scaleAnim, {
+            toValue,
+            useNativeDriver: true,
+            tension: 100,
+            friction: 5
+        }).start();
+    };
+
     return (
-        <TouchableOpacity 
+        <Pressable 
+            onPressIn={() => animatePress(0.97)}
+            onPressOut={() => animatePress(1)}
             onPress={onPress}
             onLongPress={onLongPress}
-            style={[styles.inboxRow, { backgroundColor: theme.card, borderColor: theme.border }]}
         >
+            <Animated.View style={[
+                styles.inboxRow, 
+                { backgroundColor: theme.card, borderColor: theme.border, transform: [{ scale: scaleAnim }] }
+            ]}>
             <View style={[styles.avatar, { backgroundColor: ch.color + '15', borderColor: ch.color + '30' }]}>
                 <Text style={[styles.avatarText, { color: ch.color }]}>{getInitials(item.participant)}</Text>
                 <View style={[styles.channelIconSmall, { backgroundColor: ch.color }]}>
@@ -498,7 +514,8 @@ function InboxRow({ item, theme, isDark, onPress, onLongPress }: any) {
                 </View>
             </View>
             <Ionicons name="chevron-forward" size={14} color={theme.textMuted} style={styles.chevron} />
-        </TouchableOpacity>
+            </Animated.View>
+        </Pressable>
     );
 }
 
@@ -526,8 +543,8 @@ const styles = StyleSheet.create({
     searchBox: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, height: 32, borderRadius: 10, borderWidth: 1, width: 120 },
     searchInput: { flex: 1, fontSize: 12, fontWeight: '600', padding: 0, marginLeft: 6 },
 
-    listContent: { padding: 18, paddingBottom: 100 },
-    inboxRow: { flexDirection: 'row', padding: 15, borderRadius: 20, borderWidth: 1, marginBottom: 12, alignItems: 'center' },
+    listContent: { paddingHorizontal: 0, paddingVertical: 18, paddingBottom: 100 },
+    inboxRow: { flexDirection: 'row', padding: 15, borderRadius: 20, borderWidth: 1, marginBottom: 6, alignItems: 'center', marginHorizontal: 10 },
     avatar: { width: 48, height: 48, borderRadius: 14, borderWidth: 1, justifyContent: 'center', alignItems: 'center' },
     avatarText: { fontSize: 18, fontWeight: '800' },
     channelIconSmall: { position: 'absolute', bottom: -4, right: -4, width: 16, height: 16, borderRadius: 8, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#fff' },

@@ -262,7 +262,7 @@ function KPIItem({ label, value, icon, color, delay = 0, trend }: { label: strin
     );
 }
 
-const IntelligenceTile = memo(({ count, label, icon, color, delay = 0 }: any) => {
+const IntelligenceTile = memo(({ count, label, icon, color, delay = 0, onPress }: any) => {
     const { theme } = useTheme();
     const router = useRouter();
     const isDark = theme.background === '#0F172A';
@@ -281,7 +281,9 @@ const IntelligenceTile = memo(({ count, label, icon, color, delay = 0 }: any) =>
             <TouchableOpacity 
                 style={[styles.intelTile, { backgroundColor: theme.card, borderColor: isDark ? color + '40' : color + '20' }]}
                 onPress={() => {
-                    if (label.toLowerCase().includes('future')) {
+                    if (onPress) {
+                        onPress();
+                    } else if (label.toLowerCase().includes('future')) {
                         router.push({ pathname: "/(tabs)/leads", params: { filter: 'NFA' } });
                     } else if (label.toLowerCase().includes('engaged')) {
                         router.push({ pathname: "/(tabs)/leads", params: { filter: 'revived' } });
@@ -312,9 +314,7 @@ const IntelligencePulse = memo(({ revived, nfa, onNfaPress }: { revived: number;
             </View>
             <View style={styles.intelGrid}>
                 <IntelligenceTile count={revived} label="Leads Re-engaged" icon="refresh-circle" color="#10B981" delay={0} />
-                <TouchableOpacity style={{ flex: 1 }} onPress={onNfaPress}>
-                   <IntelligenceTile count={nfa} label="No Future Actions" icon="alert-circle" color="#EF4444" delay={100} />
-                </TouchableOpacity>
+                <IntelligenceTile count={nfa} label="No Future Actions" icon="alert-circle" color="#EF4444" delay={100} onPress={onNfaPress} />
             </View>
         </View>
     );
@@ -570,25 +570,37 @@ export default function MissionControlScreen() {
                 <View style={styles.alertHubContainer}>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12 }}>
                         {dashboardData.aiAlertHub?.followupFailure && dashboardData.aiAlertHub.followupFailure.length > 0 && dashboardData.aiAlertHub.followupFailure.map((alert: any) => (
-                            <TouchableOpacity key={alert.id} style={[styles.alertCard, { borderColor: theme.error, backgroundColor: isDark ? 'rgba(239, 68, 68, 0.05)' : '#FEE2E2' }]}>
+                            <TouchableOpacity 
+                                key={alert.id} 
+                                style={[styles.alertCard, { borderColor: theme.error, backgroundColor: isDark ? 'rgba(239, 68, 68, 0.08)' : '#FEF2F2' }]}
+                                onPress={() => router.push({ pathname: "/(tabs)/leads", params: { filter: 'NFA' } })}
+                                activeOpacity={0.7}
+                            >
                                 <View style={[styles.alertIcon, { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.2)' : '#FEE2E2' }]}>
-                                    <Ionicons name="warning" size={16} color={theme.error} />
+                                    <Ionicons name="warning" size={18} color={theme.error} />
                                 </View>
-                                <View>
-                                    <Text style={[styles.alertTitle, { color: theme.text }]}>{alert.title}</Text>
-                                    <Text style={[styles.alertMsg, { color: theme.textSecondary }]} numberOfLines={1}>{alert.message}</Text>
+                                <View style={{ flex: 1, paddingRight: 4 }}>
+                                    <Text style={[styles.alertTitle, { color: theme.text }]} numberOfLines={1}>{alert.title}</Text>
+                                    <Text style={[styles.alertMsg, { color: theme.textSecondary }]} numberOfLines={3}>{alert.message}</Text>
                                 </View>
+                                <Ionicons name="chevron-forward" size={14} color={theme.textMuted} />
                             </TouchableOpacity>
                         ))}
                         {dashboardData.aiAlertHub?.hotLeads && dashboardData.aiAlertHub.hotLeads.length > 0 && dashboardData.aiAlertHub.hotLeads.map((alert: any) => (
-                            <TouchableOpacity key={alert.id} style={[styles.alertCard, { borderColor: '#F59E0B', backgroundColor: isDark ? 'rgba(245, 158, 11, 0.05)' : '#FEF3C7' }]}>
+                            <TouchableOpacity 
+                                key={alert.id} 
+                                style={[styles.alertCard, { borderColor: '#F59E0B', backgroundColor: isDark ? 'rgba(245, 158, 11, 0.08)' : '#FFFBEB' }]}
+                                onPress={() => router.push({ pathname: "/(tabs)/leads", params: { filter: 'hot' } })}
+                                activeOpacity={0.7}
+                            >
                                 <View style={[styles.alertIcon, { backgroundColor: isDark ? 'rgba(245, 158, 11, 0.2)' : '#FEF3C7' }]}>
-                                    <Ionicons name="flame" size={16} color="#F59E0B" />
+                                    <Ionicons name="flame" size={18} color="#F59E0B" />
                                 </View>
-                                <View>
-                                    <Text style={[styles.alertTitle, { color: theme.text }]}>{alert.title}</Text>
-                                    <Text style={[styles.alertMsg, { color: theme.textSecondary }]} numberOfLines={1}>{alert.message}</Text>
+                                <View style={{ flex: 1, paddingRight: 4 }}>
+                                    <Text style={[styles.alertTitle, { color: theme.text }]} numberOfLines={1}>{alert.title}</Text>
+                                    <Text style={[styles.alertMsg, { color: theme.textSecondary }]} numberOfLines={3}>{alert.message}</Text>
                                 </View>
+                                <Ionicons name="chevron-forward" size={14} color={theme.textMuted} />
                             </TouchableOpacity>
                         ))}
                     </ScrollView>
@@ -1245,13 +1257,15 @@ const styles = StyleSheet.create({
 
     alertHubContainer: { marginBottom: 24 },
     alertCard: {
-        width: 200, padding: 12, borderRadius: 16, borderLeftWidth: 4,
-        flexDirection: 'row', alignItems: 'center', gap: 10,
-        elevation: 2, shadowOpacity: 0.03, shadowRadius: 8
+        width: SCREEN_WIDTH - 80, padding: 16, borderRadius: 20, borderLeftWidth: 5,
+        flexDirection: 'row', alignItems: 'center', gap: 12,
+        elevation: 4, shadowOpacity: 0.08, shadowRadius: 12, shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        overflow: 'hidden'
     },
-    alertIcon: { width: 32, height: 32, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
-    alertTitle: { fontSize: 12, fontWeight: '800' },
-    alertMsg: { fontSize: 10, fontWeight: '600', marginTop: 2 },
+    alertIcon: { width: 36, height: 36, borderRadius: 10, justifyContent: 'center', alignItems: 'center', flexShrink: 0 },
+    alertTitle: { fontSize: 14, fontWeight: '900', marginBottom: 2 },
+    alertMsg: { fontSize: 12, fontWeight: '600', lineHeight: 16 },
 
     sectionHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
     liveIndicator: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },

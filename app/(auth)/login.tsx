@@ -27,8 +27,9 @@ export default function LoginScreen() {
         try {
             const response = await api.post("/auth/login", { email, password });
             const token = response.data?.token || response.data?.accessToken;
+            const refreshToken = response.data?.refreshToken;
             if (token) {
-                await login(token, response.data?.user);
+                await login(token, refreshToken, response.data?.user);
                 // AuthContext handles redirection to (tabs)
             } else {
                 Alert.alert("Security Check", "We couldn't verify those credentials. Please try again.");

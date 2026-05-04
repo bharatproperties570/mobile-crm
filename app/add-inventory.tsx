@@ -336,7 +336,7 @@ interface InventoryForm {
     category: string; subCategory: string; unitNo: string; unitType: string; unitConfig: string; projectName: string; projectId: string; block: string; size: string;
     direction: string; facing: string; roadWidth: string; ownership: string; builtupDetail: string; builtupType: string; builtupDetails: BuiltupRow[];
     occupationDate: string; ageOfConstruction: string; possessionStatus: string; furnishType: string; furnishedItems: string; locationSearch: string;
-    address: { country: string; state: string; city: string; location: string; tehsil: string; postOffice: string; pinCode: string; hNo: string; street: string; area: string; };
+    address: { country: string; state: string; city: string; location: string; tehsil: string; postOffice: string; pincode: string; hNo: string; street: string; area: string; };
     owners: OwnerLink[]; userId?: string; assignment?: string; assignedTo: string; team: string; teams: string[]; status: string; intent: string; visibleTo: string;
     sizeLabel?: string;
 }
@@ -349,7 +349,7 @@ const INITIAL: InventoryForm = {
     builtupDetails: [{ floor: "Ground Floor", cluster: "", length: "", width: "", totalArea: "" }],
     occupationDate: "", ageOfConstruction: "", possessionStatus: "", furnishType: "", furnishedItems: "",
     locationSearch: "",
-    address: { country: "", state: "", city: "", location: "", tehsil: "", postOffice: "", pinCode: "", hNo: "", street: "", area: "" },
+    address: { country: "", state: "", city: "", location: "", tehsil: "", postOffice: "", pincode: "", hNo: "", street: "", area: "" },
     owners: [],
     assignedTo: "", team: "", teams: [], status: "Available", intent: "Sell", visibleTo: "Everyone",
     sizeLabel: "",
@@ -493,7 +493,7 @@ export default function AddInventoryScreen() {
                                 location: inv.address?.location || "",
                                 tehsil: inv.address?.tehsil || "",
                                 postOffice: inv.address?.postOffice || "",
-                                pinCode: inv.address?.pinCode || "",
+                                pincode: inv.address?.pincode || inv.address?.pinCode || "",
                                 hNo: inv.address?.hNo || "",
                                 street: inv.address?.street || "",
                                 area: inv.address?.area || "",
@@ -782,6 +782,7 @@ export default function AddInventoryScreen() {
                         <Field label="Location"><TouchableOpacity activeOpacity={0.7} style={[styles.selector, { backgroundColor: theme.inputBg, borderColor: theme.border }]} onPress={() => form.address.city && setActiveLocDropdown('location')}><Text style={[styles.selectorText, { color: theme.textPrimary }, !form.address.location && { color: theme.textMuted }]}>{locations.find(l => l._id === form.address.location)?.lookup_value || "Select Location"}</Text><Ionicons name="chevron-down" size={18} color={theme.textSecondary} /></TouchableOpacity></Field>
                         <Field label="House / Plot No."><Input label="House No." value={form.address.hNo} onChangeText={setAddress("hNo")} placeholder="e.g. 12-A" icon="home-outline" /></Field>
                         <Field label="Area / Sector"><Input label="Area" value={form.address.area} onChangeText={setAddress("area")} placeholder="e.g. Sector 82" icon="map-outline" /></Field>
+                        <Field label="Pincode"><Input label="Pincode" value={form.address.pincode} onChangeText={setAddress("pincode")} placeholder="e.g. 122018" keyboardType="numeric" icon="pin-outline" /></Field>
                     </View>
                 </FadeInView>
             );

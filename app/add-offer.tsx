@@ -124,7 +124,7 @@ export default function AddOffer() {
                 stage: deal.stage === 'Closed' || deal.stage === 'Lost' ? deal.stage : 'Negotiation'
             };
 
-            const res = await api.patch(`/deals/${dealId}`, payload);
+            const res = await api.put(`/deals/${dealId}`, payload);
             
             if (res.data && (res.data.success || res.status === 200)) {
                 Alert.alert("Success", "Offer recorded and deal updated.");

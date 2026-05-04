@@ -87,7 +87,8 @@ export default function UploadMediaScreen() {
                 console.log("[DEBUG] Uploading file:", asset.name, "Type:", asset.mimeType);
 
                 const res = await api.post("/upload", formData, {
-                    headers: { "Content-Type": "multipart/form-data" }
+                    headers: { 'Accept': 'application/json' },
+                    transformRequest: (data) => data, 
                 });
 
                 console.log("[DEBUG] Upload Response:", res.status, res.data?.success);

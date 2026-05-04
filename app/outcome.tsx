@@ -87,6 +87,9 @@ export default function OutcomeScreen() {
             const setRes = await safeApiCallSingle(() => getSystemSettingsByKey("activity_master_fields"));
             if ((setRes as any)?.data) setMasterSettings((setRes as any).data.value);
 
+            let targetType = pActType || "Call";
+            let targetEntityId = pEntityId;
+
             if (id === 'new') {
                 const now = new Date();
                 const newAct = {
@@ -116,6 +119,8 @@ export default function OutcomeScreen() {
                 if ((actRes as any)?.data) {
                     const act = (actRes as any).data;
                     setActivity(act);
+                    targetType = act.type;
+                    targetEntityId = act.entityId;
                     if (act.type === "Call") {
                         setOutcomeStatus("Answered / Connected");
                         if (Platform.OS === 'android') checkAndScanRecording();
@@ -124,11 +129,45 @@ export default function OutcomeScreen() {
                     }
                 }
             }
+
+            // 🌟 Senior Logic: If this is a Call, try to auto-detect latest log from server
+
+            if (targetType === "Call" && targetEntityId) {
+                try {
+                    const latestCallRes = await api.get("/activities", { 
+                        params: { 
+                            entityId: targetEntityId, 
+                            type: "Call", 
+                            limit: "1", 
+                            includeCommunications: "true" 
+                        } 
+                    });
+                    const logs = latestCallRes.data?.data || latestCallRes.data || [];
+                    const latestLog = Array.isArray(logs) ? logs.find((l: any) => l.details?.sid || l.details?.callSid) : null;
+
+                    if (latestLog && latestLog.details?.duration) {
+                        setResult(latestLog.details.outcome || "");
+                        setFeedback(`Auto-matched with call at ${new Date(latestLog.createdAt).toLocaleTimeString()}`);
+                        if (latestLog.details.duration) {
+                            setFeedback(prev => `${prev}\nDuration: ${latestLog.details.duration}s`);
+                        }
+                        // Set completion time to the log's time
+                        const logDate = new Date(latestLog.createdAt);
+                        setCompletionDate(logDate);
+                        setCompletionTime(logDate);
+                        setAutoFetched(true);
+                        Vibration.vibrate(100);
+                    }
+                } catch (err) {
+                    console.error("[Outcome] Call log detection failed:", err);
+                }
+            }
         } catch (e) {
             console.error("Load outcome data error:", e);
         } finally {
             setLoading(false);
         }
+
     };
 
     const getDynamicOutcomes = () => {

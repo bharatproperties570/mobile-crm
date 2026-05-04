@@ -6,7 +6,7 @@ import {
 import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { getProjects, updateProject, type Project } from "@/services/projects.service";
-import { lookupVal, safeApiCall } from "@/services/api.helpers";
+import { lookupVal, safeApiCall, extractList } from "@/services/api.helpers";
 import api from "@/services/api";
 import { useTheme } from "@/context/ThemeContext";
 import { useLookup } from "@/context/LookupContext";
@@ -38,12 +38,27 @@ const ProjectCard = memo(({ project, onPress, onMenuPress }: { project: Project;
     const categories = getLookupValue('Category', project.category);
     const location = project.locationSearch || project.address?.location || project.address?.city || "No Location";
 
+    const scaleAnim = useRef(new Animated.Value(1)).current;
+
+    const animatePress = (toValue: number) => {
+        Animated.spring(scaleAnim, {
+            toValue,
+            useNativeDriver: true,
+            tension: 100,
+            friction: 5
+        }).start();
+    };
+
     return (
-        <TouchableOpacity
-            style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}
+        <Pressable 
+            onPressIn={() => animatePress(0.97)}
+            onPressOut={() => animatePress(1)}
             onPress={onPress}
-            activeOpacity={0.9}
         >
+            <Animated.View style={[
+                styles.card, 
+                { backgroundColor: theme.card, borderColor: theme.border, transform: [{ scale: scaleAnim }] }
+            ]}>
             <View style={[styles.cardAccent, { backgroundColor: progress.color }]} />
             <View style={styles.cardMain}>
                 <View style={styles.cardHeader}>
@@ -78,7 +93,8 @@ const ProjectCard = memo(({ project, onPress, onMenuPress }: { project: Project;
                     </View>
                 </View>
             </View>
-        </TouchableOpacity>
+            </Animated.View>
+        </Pressable>
     );
 });
 
@@ -231,7 +247,7 @@ export default function ProjectsScreen() {
         }));
 
         if (!result.error && result.data) {
-            const newRecords = result.data;
+            const newRecords = extractList(result.data);
             
             setProjects(prev => {
                 const combined = shouldAppend ? [...prev, ...newRecords] : newRecords;
@@ -252,7 +268,7 @@ export default function ProjectsScreen() {
         }
         setLoading(false);
         setRefreshing(false);
-    }, []);
+    }, [sortConfig.by, sortConfig.order, safeApiCall]);
 
     useFocusEffect(
         useCallback(() => {
@@ -592,7 +608,7 @@ const styles = StyleSheet.create({
 
     // Modern Project Card
     card: {
-        flexDirection: "row", backgroundColor: "#fff", marginHorizontal: 16, marginBottom: 12,
+        flexDirection: "row", backgroundColor: "#fff", marginHorizontal: 0, marginBottom: 6,
         borderRadius: 24, overflow: "hidden", borderWidth: 1, borderColor: "#F1F5F9",
         shadowColor: "#000", shadowOpacity: 0.03, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }
     },

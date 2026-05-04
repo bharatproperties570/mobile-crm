@@ -383,8 +383,9 @@ export default function InventoryDetailScreen() {
                                     <Ionicons name="create-outline" size={18} color={theme.primary} />
                                 </TouchableOpacity>
                             </View>
-                            <InfoRow label="City" value={lv(inv.city || inv.address?.city)} icon="business-outline" />
-                            <InfoRow label="Sector/Locality" value={lv(inv.sector || inv.address?.locality)} icon="map-outline" />
+                            <InfoRow label="City" value={lv(inv.address?.city || inv.city, getLookupValue)} icon="business-outline" />
+                            <InfoRow label="Sector/Locality" value={lv(inv.address?.locality || inv.sector || inv.locArea, getLookupValue)} icon="map-outline" />
+                            <InfoRow label="Pin Code" value={lv(inv.address?.pincode || inv.pincode, getLookupValue)} icon="pin-outline" />
                             <InfoRow label="Address" value={lv(inv.address?.street || inv.address?.hNo)} icon="location-outline" />
                         </View>
 

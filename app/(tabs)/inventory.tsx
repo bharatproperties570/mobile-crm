@@ -7,7 +7,7 @@ import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Swipeable } from 'react-native-gesture-handler';
 import { getInventory, type Inventory } from "@/services/inventory.service";
-import { lookupVal, safeApiCall } from "@/services/api.helpers";
+import { lookupVal, safeApiCall, extractList } from "@/services/api.helpers";
 import { useCallTracking } from "@/context/CallTrackingContext";
 import { useLookup } from "@/context/LookupContext";
 import { useUsers } from "@/context/UserContext";
@@ -108,6 +108,17 @@ const InventoryCard = memo(({ item, onPress, onCall, onWhatsApp, onSMS, onEmail,
     const { findUser } = useUsers();
     const isDark = isDarkMode;
 
+    const scaleAnim = useRef(new Animated.Value(1)).current;
+
+    const animatePress = (toValue: number) => {
+        Animated.spring(scaleAnim, {
+            toValue,
+            useNativeDriver: true,
+            tension: 100,
+            friction: 5
+        }).start();
+    };
+
     const statusColors = isDark ? STATUS_COLORS_DARK : STATUS_COLORS_LIGHT;
 
     const statusInfo = useMemo(() => {
@@ -171,11 +182,19 @@ const InventoryCard = memo(({ item, onPress, onCall, onWhatsApp, onSMS, onEmail,
 
     if (viewMode === 'grid') {
         return (
-            <TouchableOpacity style={[styles.gridCard, { backgroundColor: theme.card, borderColor: theme.border }]} onPress={onPress} activeOpacity={0.8}>
+            <Pressable 
+                onPressIn={() => animatePress(0.97)}
+                onPressOut={() => animatePress(1)}
+                onPress={onPress}
+            >
+                <Animated.View style={[
+                    styles.gridCard, 
+                    { backgroundColor: theme.card, borderColor: theme.border, transform: [{ scale: scaleAnim }] }
+                ]}>
                 <View style={[styles.gridMediaSlot, { backgroundColor: statusColor + (isDark ? '20' : '10') }]}>
                     <Ionicons name={iconName as any} size={32} color={statusColor} />
                     <View style={[styles.gridStatusDot, { backgroundColor: statusColor }]} />
-                    <TouchableOpacity style={styles.gridMenuTrigger} onPress={(e) => { e.stopPropagation(); onMenuPress(); }}>
+                    <TouchableOpacity style={styles.gridMenuTrigger} onPress={onMenuPress}>
                         <Ionicons name="ellipsis-horizontal" size={18} color={statusColor} />
                     </TouchableOpacity>
                 </View>
@@ -183,13 +202,22 @@ const InventoryCard = memo(({ item, onPress, onCall, onWhatsApp, onSMS, onEmail,
                     <Text style={[styles.gridProject, { color: theme.text }]} numberOfLines={1}>{item.projectName}</Text>
                     <Text style={[styles.gridUnit, { color: theme.textSecondary }]}>{item.block} • {item.unitNumber || item.unitNo}</Text>
                 </View>
-            </TouchableOpacity>
+            </Animated.View>
+        </Pressable>
         );
     }
 
     return (
         <Swipeable renderRightActions={renderRightActions} renderLeftActions={renderLeftActions} friction={2}>
-            <TouchableOpacity style={[styles.listCard, { backgroundColor: theme.card, borderColor: theme.border }]} onPress={onPress} activeOpacity={0.8}>
+            <Pressable 
+                onPressIn={() => animatePress(0.97)}
+                onPressOut={() => animatePress(1)}
+                onPress={onPress}
+            >
+                <Animated.View style={[
+                    styles.listCard, 
+                    { backgroundColor: theme.card, borderColor: theme.border, transform: [{ scale: scaleAnim }] }
+                ]}>
                 <View style={[styles.cardAccent, { backgroundColor: statusColor }]} />
                 <View style={styles.listMain}>
                     <View style={styles.listHeader}>
@@ -267,8 +295,9 @@ const InventoryCard = memo(({ item, onPress, onCall, onWhatsApp, onSMS, onEmail,
                             </View>
                         ) : null}
                     </View>
-                </View>
-            </TouchableOpacity>
+                    </View>
+                </Animated.View>
+            </Pressable>
         </Swipeable >
     );
 });
@@ -1011,7 +1040,7 @@ const styles = StyleSheet.create({
     filterBadge: { position: 'absolute', top: -4, right: -4, width: 14, height: 14, borderRadius: 7, justifyContent: 'center', alignItems: 'center' },
     filterBadgeText: { color: '#fff', fontSize: 8, fontWeight: '900' },
     list: { paddingBottom: 100 },
-    listCard: { flexDirection: "row", marginHorizontal: 16, marginBottom: 8, borderRadius: 18, overflow: "hidden", borderWidth: 1, elevation: 1, shadowOpacity: 0.02, shadowRadius: 10, shadowOffset: { width: 0, height: 5 } },
+    listCard: { flexDirection: "row", marginHorizontal: 0, marginBottom: 8, borderRadius: 18, overflow: "hidden", borderWidth: 1, elevation: 1, shadowOpacity: 0.02, shadowRadius: 10, shadowOffset: { width: 0, height: 5 } },
     container: { flex: 1 },
     safeArea: { flex: 1 },
     headerContainer: { paddingBottom: 16 },
@@ -1051,7 +1080,7 @@ const styles = StyleSheet.create({
 
     list: { paddingBottom: 100 },
     listCard: {
-        flexDirection: "row", marginHorizontal: 16, marginBottom: 8, borderRadius: 18,
+        flexDirection: "row", marginHorizontal: 10, marginBottom: 8, borderRadius: 18,
         overflow: "hidden", borderWidth: 1, elevation: 1, shadowOpacity: 0.02, shadowRadius: 10, shadowOffset: { width: 0, height: 5 }
     },
     cardAccent: { width: 5 },

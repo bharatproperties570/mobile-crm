@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState, useRef } from "react";
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
     ActivityIndicator, Linking, Alert, Dimensions,
-    Animated, FlatList, Modal
+    Animated, FlatList, Modal, Share
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
@@ -314,7 +314,7 @@ export default function LeadDetailScreen() {
                         <View style={[styles.strategyValueRow, { justifyContent: 'center' }]}>
                             <Ionicons name="link-outline" size={12} color="#10B981" />
                             <Text style={[styles.strategyValue, { color: theme.text, fontSize: 11 }]} numberOfLines={1}>
-                                {lead.contactDetails?.firstName ? `${lv(lead.contactDetails.salutation)} ${lead.contactDetails.firstName}` : "Independent"}
+                                {lead.contactDetails?.firstName ? `${lv(lead.contactDetails.salutation)} ${lead.contactDetails.firstName}` : (lead.firstName || "Independent")}
                             </Text>
                         </View>
                         {!!lead.contactDetails?.companyName && (
@@ -448,7 +448,11 @@ export default function LeadDetailScreen() {
                         <RibbonButton 
                             icon="share-social" 
                             color="#64748B" 
-                            onPress={() => Alert.alert("Share", `Sharing ${name}'s requirements...`)} 
+                            onPress={() => {
+                                const phone = resolvePhoneFromObject(lead);
+                                const text = `Lead Details: ${name}\nPhone: ${phone}\nRequirement: ${lv(lead.requirement)}\nBudget: ${lv(lead.budget)}`;
+                                Share.share({ message: text }).catch(() => Alert.alert("Error", "Could not share lead"));
+                            }} 
                         />
                     </ScrollView>
                 </View>
@@ -549,37 +553,43 @@ export default function LeadDetailScreen() {
 
                         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
                             <Text style={[styles.cardTitle, { color: theme.text, marginBottom: 12 }]}>Professional Profile</Text>
-                            {(lv(lead.contactDetails?.designation) || lead.contactDetails?.company) ? (
+                            {(lv(lead.contactDetails?.designation) !== "—" || lv(lead.contactDetails?.company) !== "—" || lv(lead.designation) !== "—" || lv(lead.company) !== "—") ? (
                                 <View style={{ marginBottom: 16 }}>
                                     <Text style={{ fontSize: 18, fontWeight: '800', color: theme.primary }}>
-                                        {getLookupValue("ProfessionalDesignation", lead.contactDetails?.designation) !== "—" ? getLookupValue("ProfessionalDesignation", lead.contactDetails?.designation) : "Professionals"}
+                                        {getLookupValue("ProfessionalDesignation", lead.contactDetails?.designation || lead.designation) !== "—" 
+                                            ? getLookupValue("ProfessionalDesignation", lead.contactDetails?.designation || lead.designation) 
+                                            : "Professional"}
                                     </Text>
 
                                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
                                         <Ionicons name="business-outline" size={14} color={theme.textLight} />
                                         <Text style={{ fontSize: 15, fontWeight: '700', color: theme.text }}>
-                                            {lead.contactDetails?.company || "Organization"}
+                                            {lead.contactDetails?.company || lead.company || "Organization"}
                                         </Text>
                                     </View>
                                 </View>
                             ) : null}
 
                             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 }}>
-                                {getLookupValue("ProfessionalCategory", lead.contactDetails?.professionCategory) !== "—" && (
+                                {getLookupValue("ProfessionalCategory", lead.contactDetails?.professionCategory || lead.professionCategory) !== "—" && (
                                     <View style={{ backgroundColor: theme.border + '30', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 }}>
-                                        <Text style={{ fontSize: 11, fontWeight: '800', color: theme.textLight }}>{String(getLookupValue("ProfessionalCategory", lead.contactDetails?.professionCategory) || "").toUpperCase()}</Text>
+                                        <Text style={{ fontSize: 11, fontWeight: '800', color: theme.textLight }}>
+                                            {String(getLookupValue("ProfessionalCategory", lead.contactDetails?.professionCategory || lead.professionCategory) || "").toUpperCase()}
+                                        </Text>
                                     </View>
                                 )}
-                                {getLookupValue("ProfessionalSubCategory", lead.contactDetails?.professionSubCategory) !== "—" && (
+                                {getLookupValue("ProfessionalSubCategory", lead.contactDetails?.professionSubCategory || lead.professionSubCategory) !== "—" && (
                                     <View style={[styles.miniBadge, { backgroundColor: isDark ? 'rgba(37, 99, 235, 0.15)' : theme.primary + '10' }]}>
-                                        <Text style={{ fontSize: 11, fontWeight: '700', color: isDark ? '#60A5FA' : theme.primary }}>{getLookupValue("ProfessionalSubCategory", lead.contactDetails?.professionSubCategory)}</Text>
+                                        <Text style={{ fontSize: 11, fontWeight: '700', color: isDark ? '#60A5FA' : theme.primary }}>
+                                            {getLookupValue("ProfessionalSubCategory", lead.contactDetails?.professionSubCategory || lead.professionSubCategory)}
+                                        </Text>
                                     </View>
                                 )}
                             </View>
 
 
                             <View style={{ marginTop: 12 }}>
-                                <InfoRow label="Work Office" value={lead.contactDetails?.workOffice} icon="location-outline" />
+                                <InfoRow label="Work Office" value={lead.contactDetails?.workOffice || lead.workOffice} icon="location-outline" />
                             </View>
                         </View>
 

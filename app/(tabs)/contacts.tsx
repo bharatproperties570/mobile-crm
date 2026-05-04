@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useMemo, useRef, memo } from "react";
 import {
     View, Text, StyleSheet, SectionList, TextInput,
     RefreshControl, ActivityIndicator, Linking, TouchableOpacity, Alert,
-    Animated, Dimensions, Vibration, ScrollView, SafeAreaView, Modal, Pressable
+    Animated, Dimensions, Vibration, ScrollView, SafeAreaView, Modal, Pressable, Platform
 } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -11,7 +11,7 @@ import {
     getContacts, contactFullName, contactPhone, contactEmail,
     lookupVal, updateContact, type Contact,
 } from "@/services/contacts.service";
-import { safeApiCall } from "@/services/api.helpers";
+import { safeApiCall, extractList } from "@/services/api.helpers";
 import { useCallTracking } from "@/context/CallTrackingContext";
 import { getOrCreateCallActivity } from "@/services/activities.service";
 import { useTheme } from "@/context/ThemeContext";
@@ -19,6 +19,7 @@ import { useLookup } from "@/context/LookupContext";
 import { useUsers } from "@/context/UserContext";
 import FilterModal, { FilterField } from "@/components/FilterModal";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useAuth } from "@/context/AuthContext";
 
 const CONTACT_FILTER_FIELDS: FilterField[] = [
     { key: "stage", label: "Stage", type: "lookup", lookupType: "Stage" },
@@ -76,8 +77,16 @@ const ContactCard = memo(({ contact, idx, onPress, onMenuPress }: { contact: Con
         Animated.timing(fadeAnim, { toValue: 1, duration: 400, delay: idx * 30, useNativeDriver: true }).start();
     }, [idx]);
 
-    const onPressIn = () => Animated.spring(scaleValue, { toValue: 0.98, useNativeDriver: true }).start();
-    const onPressOut = () => Animated.spring(scaleValue, { toValue: 1, useNativeDriver: true }).start();
+    const scaleAnim = useRef(new Animated.Value(1)).current;
+
+    const animatePress = (toValue: number) => {
+        Animated.spring(scaleAnim, {
+            toValue,
+            useNativeDriver: true,
+            tension: 100,
+            friction: 5
+        }).start();
+    };
 
     const renderRightActions = () => (
         <View style={styles.rightActions}>
@@ -110,8 +119,15 @@ const ContactCard = memo(({ contact, idx, onPress, onMenuPress }: { contact: Con
 
     return (
         <Swipeable renderRightActions={renderRightActions} renderLeftActions={renderLeftActions}>
-            <Animated.View style={{ opacity: fadeAnim, transform: [{ scale: scaleValue }, { translateY: fadeAnim.interpolate({ inputRange: [0, 1], outputRange: [20, 0] }) }] }}>
-                <TouchableOpacity activeOpacity={1} onPressIn={onPressIn} onPressOut={onPressOut} onPress={onPress} style={[styles.card, { backgroundColor: theme.card, borderBottomColor: theme.border }]}>
+            <Pressable 
+                onPressIn={() => animatePress(0.97)}
+                onPressOut={() => animatePress(1)}
+                onPress={onPress}
+            >
+                <Animated.View style={[
+                    { opacity: fadeAnim, transform: [{ scale: scaleAnim }, { translateY: fadeAnim.interpolate({ inputRange: [0, 1], outputRange: [20, 0] }) }] }
+                ]}>
+                    <View style={[styles.card, { backgroundColor: theme.card, borderBottomColor: theme.border }]}>
                     <View style={[styles.avatar, { backgroundColor: color + (isDarkMode ? "25" : "15") }]}>
                         <Text style={[styles.avatarText, { color }]}>{getInitials(contact)}</Text>
                     </View>
@@ -146,8 +162,9 @@ const ContactCard = memo(({ contact, idx, onPress, onMenuPress }: { contact: Con
                     <TouchableOpacity style={styles.menuTrigger} onPress={(e) => { e.stopPropagation(); onMenuPress(); }}>
                         <Ionicons name="ellipsis-vertical" size={18} color={theme.textMuted} />
                     </TouchableOpacity>
-                </TouchableOpacity>
-            </Animated.View>
+                    </View>
+                </Animated.View>
+            </Pressable>
         </Swipeable>
     );
 });
@@ -157,6 +174,7 @@ export default function ContactsScreen() {
     const isDark = isDarkMode;
     const insets = useSafeAreaInsets();
     const router = useRouter();
+    const { isAuthenticated } = useAuth();
     const { getLookupValue, getLookupsByType } = useLookup();
     const { users } = useUsers();
     const [contacts, setContacts] = useState<Contact[]>([]);
@@ -202,6 +220,11 @@ export default function ContactsScreen() {
     };
 
     const fetchContacts = useCallback(async (pageNum = 1, shouldAppend = false) => {
+        if (!isAuthenticated) {
+            setLoading(false);
+            setRefreshing(false);
+            return;
+        }
         setLoading(true);
         const result = await safeApiCall<Contact>(() => getContacts({ 
             page: String(pageNum), 
@@ -211,7 +234,7 @@ export default function ContactsScreen() {
         }));
 
         if (!result.error && result.data) {
-            const newContacts = result.data;
+            const newContacts = extractList(result.data);
             
             setContacts(prev => {
                 const combined = shouldAppend ? [...prev, ...newContacts] : newContacts;
@@ -230,7 +253,7 @@ export default function ContactsScreen() {
         }
         setLoading(false);
         setRefreshing(false);
-    }, []);
+    }, [isAuthenticated, sortConfig.by, sortConfig.order, safeApiCall]);
 
     const onRefresh = useCallback(() => {
         setRefreshing(true);
@@ -238,10 +261,10 @@ export default function ContactsScreen() {
     }, [fetchContacts]);
 
     const loadMore = useCallback(() => {
-        if (!loading && hasMore) {
+        if (!loading && hasMore && contacts.length >= 50) {
             fetchContacts(page + 1, true);
         }
-    }, [loading, hasMore, page, fetchContacts]);
+    }, [loading, hasMore, page, fetchContacts, contacts.length]);
 
     useFocusEffect(
         useCallback(() => {
@@ -292,13 +315,23 @@ export default function ContactsScreen() {
     const scrollToIndex = (letter: string) => {
         const index = sections.findIndex(s => s.title === letter);
         if (index !== -1) {
-            // SectionList ref is not defined in the original file, I should define it
-            (sectionListRef.current as any)?.scrollToLocation({
-                sectionIndex: index,
-                itemIndex: 0,
-                animated: true
-            });
-            Vibration.vibrate(10);
+            try {
+                sectionListRef.current?.scrollToLocation({
+                    sectionIndex: index,
+                    itemIndex: 0,
+                    viewOffset: 0,
+                    animated: true
+                });
+                Vibration.vibrate(10);
+            } catch (err) {
+                console.warn("[Contacts] Scroll error:", err);
+                // Fallback for when section is not yet rendered
+                sectionListRef.current?.scrollToLocation({
+                    sectionIndex: index,
+                    itemIndex: 0,
+                    animated: false
+                });
+            }
         }
     };
 
@@ -383,7 +416,7 @@ export default function ContactsScreen() {
                     <SectionList
                         ref={sectionListRef}
                         sections={sections}
-                        contentContainerStyle={{ paddingBottom: 140, paddingHorizontal: 16 }}
+                        contentContainerStyle={{ paddingBottom: 140, paddingLeft: 16, paddingRight: 40 }}
                         stickySectionHeadersEnabled={true}
                         keyExtractor={(item) => item._id}
                         ListHeaderComponent={renderHeader}
@@ -403,7 +436,7 @@ export default function ContactsScreen() {
                         initialNumToRender={15}
                         maxToRenderPerBatch={20}
                         windowSize={10}
-                        removeClippedSubviews={true}
+                        removeClippedSubviews={Platform.OS === 'android'}
                         onEndReached={loadMore}
                         onEndReachedThreshold={0.5}
                         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />}
@@ -627,16 +660,29 @@ const styles = StyleSheet.create({
     sectionTitle: { fontSize: 14, fontWeight: "800", color: "#2563EB" },
 
     card: {
-        flexDirection: "row", alignItems: "center", paddingHorizontal: 20, paddingVertical: 10,
-        backgroundColor: "#fff", borderBottomWidth: 1, borderBottomColor: "#F1F5F9"
+        flexDirection: "row", 
+        alignItems: "center", 
+        paddingLeft: 16, 
+        paddingRight: 28, 
+        paddingVertical: 14,
+        backgroundColor: "#fff", 
+        borderRadius: 16,
+        marginLeft: 0,
+        marginRight: 0,
+        marginBottom: 10,
+        elevation: 2,
+        shadowColor: "#000",
+        shadowOpacity: 0.05,
+        shadowRadius: 8,
+        shadowOffset: { width: 0, height: 4 }
     },
-    avatar: { width: 48, height: 48, borderRadius: 24, justifyContent: "center", alignItems: "center", marginRight: 16 },
-    avatarText: { fontSize: 16, fontWeight: "800" },
+    avatar: { width: 44, height: 44, borderRadius: 22, justifyContent: "center", alignItems: "center", marginRight: 12 },
+    avatarText: { fontSize: 14, fontWeight: "800" },
     cardContent: { flex: 1 },
     cardMain: { flexDirection: "row", alignItems: "center" },
-    cardName: { fontSize: 16, fontWeight: "700", color: "#334155", marginRight: 8 },
-    stageDot: { width: 8, height: 8, borderRadius: 4 },
-    cardSubtitle: { fontSize: 13, color: "#94A3B8", marginTop: 2, fontWeight: "500" },
+    cardName: { fontSize: 15, fontWeight: "700", color: "#334155", marginRight: 6 },
+    stageDot: { width: 6, height: 6, borderRadius: 3 },
+    cardSubtitle: { fontSize: 12, color: "#64748B", marginTop: 1, fontWeight: "500" },
 
     rightActions: { flexDirection: 'row', gap: 0, paddingLeft: 10 },
     leftActions: { flexDirection: 'row', gap: 0, paddingRight: 10 },
@@ -660,19 +706,28 @@ const styles = StyleSheet.create({
     actionLabel: { fontSize: 10, fontWeight: "800", color: "#475569", textAlign: "center" },
     alphabetIndex: {
         position: 'absolute',
-        right: 4,
-        top: 200,
-        bottom: 100,
+        right: 0,
+        top: 140,
+        bottom: 60,
         justifyContent: 'center',
         alignItems: 'center',
-        width: 20,
-        zIndex: 100
+        width: 32,
+        zIndex: 1000,
+        backgroundColor: 'rgba(255,255,255,0.85)',
+        borderTopLeftRadius: 16,
+        borderBottomLeftRadius: 16,
+        borderWidth: 1,
+        borderColor: 'rgba(0,0,0,0.08)',
     },
     alphabetLetter: {
-        paddingVertical: 1,
+        flex: 1,
+        width: '100%',
+        alignItems: 'center',
+        justifyContent: 'center',
+        minHeight: 14,
     },
     alphabetText: {
-        fontSize: 10,
+        fontSize: 11,
         fontWeight: '900',
     },
     sortItem: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, borderRadius: 12, borderWidth: 1, borderColor: 'transparent' },

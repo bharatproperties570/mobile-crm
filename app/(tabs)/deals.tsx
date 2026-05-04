@@ -8,7 +8,7 @@ import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Swipeable, GestureHandlerRootView } from 'react-native-gesture-handler';
 import { getDeals, type Deal, updateDeal } from "@/services/deals.service";
-import { safeApiCall, safeApiCallSingle } from "@/services/api.helpers";
+import { safeApiCall, safeApiCallSingle, extractList } from "@/services/api.helpers";
 import api from "@/services/api";
 import { useCallTracking } from "@/context/CallTrackingContext";
 import { useLookup } from "@/context/LookupContext";
@@ -355,9 +355,29 @@ const DealCard = memo(({
         </View>
     );
 
+    const scaleAnim = useRef(new Animated.Value(1)).current;
+
+    const animatePress = (toValue: number) => {
+        Animated.spring(scaleAnim, {
+            toValue,
+            useNativeDriver: true,
+            tension: 100,
+            friction: 5
+        }).start();
+    };
+
     return (
         <Swipeable renderRightActions={renderRightActions} renderLeftActions={renderLeftActions} friction={2}>
-            <TouchableOpacity style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]} onPress={onPress} onLongPress={onLongPress} activeOpacity={0.9}>
+            <Pressable 
+                onPressIn={() => animatePress(0.97)}
+                onPressOut={() => animatePress(1)}
+                onPress={onPress}
+                onLongPress={onLongPress}
+            >
+                <Animated.View style={[
+                    styles.card, 
+                    { backgroundColor: theme.card, borderColor: theme.border, transform: [{ scale: scaleAnim }] }
+                ]}>
                 <View style={[styles.cardAccent, { backgroundColor: color }]} />
                 <View style={styles.cardMain}>
                     <View style={styles.cardHeader}>
@@ -420,6 +440,18 @@ const DealCard = memo(({
                                             <Ionicons name="expand-outline" size={10} color={theme.textSecondary} />
                                             <Text style={{ fontSize: 11, color: theme.textSecondary, fontWeight: '700' }} numberOfLines={1}>
                                                 {finalLabel}
+                                            </Text>
+                                        </View>
+                                    );
+                                })()}
+                                {(() => {
+                                    const location = resolveName(deal.location, getLookupValue) || deal.locArea || deal.locCity;
+                                    if (!location || location === "—") return null;
+                                    return (
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#F1F5F9', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                                            <Ionicons name="location-outline" size={10} color={theme.textSecondary} />
+                                            <Text style={{ fontSize: 11, color: theme.textSecondary, fontWeight: '700' }} numberOfLines={1}>
+                                                {location}
                                             </Text>
                                         </View>
                                     );
@@ -497,7 +529,8 @@ const DealCard = memo(({
                         </View>
                     </View>
                 </View>
-            </TouchableOpacity>
+            </Animated.View>
+        </Pressable>
         </Swipeable>
     );
 });
@@ -1146,7 +1179,7 @@ export default function DealsScreen() {
             <Modal transparent visible={hubVisible} animationType="none" onRequestClose={closeHub}>
                 <Pressable style={styles.modalOverlay} onPress={closeHub}>
                     <Animated.View style={[styles.sheetContainer, { backgroundColor: isDark ? '#000000' : '#FFFFFF', transform: [{ translateY: slideAnim }] }]}>
-                        <Pressable onPress={(e) => e.stopPropagation()} style={{ flex: 1 }}>
+                        <Pressable onPress={() => {}} style={{ flex: 1 }}>
                         <View style={styles.sheetHandle} />
                         <ScrollView 
                             showsVerticalScrollIndicator={false}
@@ -1427,7 +1460,7 @@ const styles = StyleSheet.create({
     statValue: { fontSize: 13, fontWeight: "800" },
 
     commandBar: {
-        flexDirection: "row", alignItems: "center", marginHorizontal: 20, marginBottom: 8,
+        flexDirection: "row", alignItems: "center", marginHorizontal: 8, marginBottom: 8,
         paddingHorizontal: 16, height: 48,
         borderRadius: 12, borderWidth: 1
     },
@@ -1436,9 +1469,9 @@ const styles = StyleSheet.create({
     list: { paddingBottom: 100 },
 
     card: {
-        flexDirection: "row", marginHorizontal: 16, marginBottom: 6,
-        borderRadius: 14, overflow: "hidden", borderWidth: 1,
-        elevation: 1, shadowOpacity: 0.02, shadowRadius: 10, shadowOffset: { width: 0, height: 5 }
+        flexDirection: "row", backgroundColor: "#fff", marginHorizontal: 10, marginBottom: 6,
+        borderRadius: 24, overflow: "hidden", borderWidth: 1, borderColor: "#F1F5F9",
+        shadowColor: "#000", shadowOpacity: 0.03, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }
     },
     cardAccent: { width: 4 },
     cardMain: { flex: 1, paddingHorizontal: 10, paddingVertical: 2 },
@@ -1477,7 +1510,7 @@ const styles = StyleSheet.create({
     pipelineChipActive: { },
     pipelineChipText: { fontSize: 11, fontWeight: '800' },
     pipelineChipTextActive: { },
-    horizontalPipelineWrapper: { marginHorizontal: 16, marginBottom: 12 },
+    horizontalPipelineWrapper: { marginHorizontal: 8, marginBottom: 12 },
     chevronContainer: {
         flexDirection: 'row',
         height: 64,

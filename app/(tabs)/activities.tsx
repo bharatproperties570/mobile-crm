@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useCallback, memo, useMemo } from "react";
+import React, { useState, useEffect, useCallback, memo, useMemo, useRef } from "react";
 import {
     View, Text, StyleSheet, FlatList, TouchableOpacity,
-    ActivityIndicator, RefreshControl, TextInput, Alert, Vibration, Linking, Modal, Pressable
+    ActivityIndicator, RefreshControl, TextInput, Alert, Vibration, Linking, Modal, Pressable, Animated
 } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -47,7 +47,7 @@ const PRIORITY_ICONS: Record<string, string> = {
     "High": "🔴", "Normal": "🟡", "Low": "🟢"
 };
 
-const TYPE_TABS = ["All", "Call", "Meeting", "Site Visit", "Task"];
+const TYPE_TABS = ["All", "Call", "Email", "Meeting", "Site Visit", "Task"];
 const STATUS_TABS = ["Pending", "Today", "Overdue", "Completed", "All"];
 
 export default function ActivitiesScreen() {
@@ -139,9 +139,13 @@ export default function ActivitiesScreen() {
 
     const filteredActivities = useMemo(() => {
         return activities.filter(a => {
-            // Filter out automated/omnichannel logs and marketing campaigns from the main timeline
-            const isOmni = ["SMS", "WhatsApp", "Email", "Conversation", "Messaging", "RCS", "Chat", "Marketing", "Campaign", "Bulk"].includes(a.type);
-            if (isOmni && typeFilter === "All") return false;
+            const isExcludedType = ["SMS", "WhatsApp", "Conversation", "Messaging", "RCS", "Chat", "Marketing", "Campaign", "Bulk"].includes(a.type);
+            if (isExcludedType) return false;
+            
+            // Differentiate Manual vs Automated Call/Email
+            const isManual = !a.details?.sid && !a.details?.callSid && !a.details?.isAutomated;
+            if ((a.type === "Call" || a.type === "Email") && !isManual) return false;
+
 
             if (statusFilter === "Pending") return ["Pending", "In Progress", "Overdue"].includes(a.status);
             if (statusFilter === "Completed") return a.status === "Completed";
@@ -222,6 +226,17 @@ export default function ActivitiesScreen() {
     }) => {
         const { theme, isDarkMode } = useTheme();
         const isDark = isDarkMode;
+
+        const scaleAnim = useRef(new Animated.Value(1)).current;
+
+        const animatePress = (toValue: number) => {
+            Animated.spring(scaleAnim, {
+                toValue,
+                useNativeDriver: true,
+                tension: 100,
+                friction: 5
+            }).start();
+        };
         const metaMap = isDark ? TYPE_META_DARK : TYPE_META_LIGHT;
         const meta = metaMap[item.type] || { color: isDark ? "#94A3B8" : "#64748B", icon: "list", emoji: "📌" };
         const statusStyle = isDark ? (STATUS_COLORS_DARK[item.status] || { bg: "#1E293B", text: "#94A3B8" }) : (STATUS_COLORS_LIGHT[item.status] || { bg: "#F1F5F9", text: "#64748B" });
@@ -294,11 +309,17 @@ export default function ActivitiesScreen() {
 
         return (
             <Swipeable renderLeftActions={renderLeftActions} renderRightActions={renderRightActions} overshootLeft={false} overshootRight={false}>
-                <TouchableOpacity
-                    style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }, isOverdue && styles.cardOverdue, isOverdue && isDark && { borderColor: '#EF444430', backgroundColor: '#EF444410' }]}
-                    activeOpacity={0.9}
+                <Pressable 
+                    onPressIn={() => animatePress(0.97)}
+                    onPressOut={() => animatePress(1)}
                     onPress={onPress}
                 >
+                    <Animated.View style={[
+                        styles.card, 
+                        { backgroundColor: theme.card, borderColor: theme.border, transform: [{ scale: scaleAnim }] },
+                        isOverdue && styles.cardOverdue, 
+                        isOverdue && isDark && { borderColor: '#EF444430', backgroundColor: '#EF444410' }
+                    ]}>
                     <View style={[styles.cardAccent, { backgroundColor: meta.color }]} />
                     <View style={styles.cardMain}>
                         <View style={styles.cardHeader}>
@@ -376,8 +397,9 @@ export default function ActivitiesScreen() {
                             </View>
                         </View>
                     </View>
-                </TouchableOpacity>
-            </Swipeable>
+                </Animated.View>
+            </Pressable>
+        </Swipeable>
         );
     });
 
@@ -527,8 +549,8 @@ export default function ActivitiesScreen() {
                     windowSize={5}
                     removeClippedSubviews={true}
                     getItemLayout={(data, index) => ({
-                        length: 135,
-                        offset: 135 * index,
+                        length: 129,
+                        offset: 129 * index,
                         index,
                     })}
                     refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchActivities(); }} tintColor={theme.primary} />}
@@ -614,9 +636,9 @@ const styles = StyleSheet.create({
     dockItem: { paddingVertical: 12, marginRight: 24, borderBottomWidth: 2, borderBottomColor: 'transparent' },
     dockText: { fontSize: 14, fontWeight: "700" },
 
-    list: { paddingHorizontal: 20, paddingBottom: 100 },
+    list: { paddingHorizontal: 0, paddingBottom: 100 },
     card: {
-        flexDirection: "row", marginBottom: 12,
+        flexDirection: "row", marginBottom: 6, marginHorizontal: 10,
         borderRadius: 20, overflow: "hidden", borderWidth: 1,
         elevation: 2, shadowColor: "#000", shadowOpacity: 0.03, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }
     },

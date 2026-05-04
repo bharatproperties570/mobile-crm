@@ -2,25 +2,24 @@ import { useEffect, useState, useCallback, useMemo, useRef, memo } from "react";
 import {
     View, Text, StyleSheet, FlatList, TouchableOpacity,
     TextInput, RefreshControl, ActivityIndicator, Alert, Linking,
-    Modal, Animated, Dimensions, Pressable, ScrollView, Vibration, Platform, SectionList
+    Modal, Animated, Dimensions, Pressable, ScrollView, Vibration, Platform, SectionList, Share
 } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Swipeable } from "react-native-gesture-handler";
-import { getLeads, leadName, updateLead, deleteLead, type Lead } from "@/services/leads.service";
-import { safeApiCall } from "@/services/api.helpers";
+import { getLeads, leadName, updateLead, deleteLead } from "@/services/leads.service";
 import { getLeadScores } from "@/services/stageEngine.service";
-import { useCallTracking } from "@/context/CallTrackingContext";
+import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
 import { useLookup } from "@/context/LookupContext";
 import { useUsers } from "@/context/UserContext";
 import { useProjects } from "@/context/ProjectContext";
-import { useAuth } from "@/context/AuthContext";
+import { useCallTracking } from "@/context/CallTrackingContext";
+import { extractList, extractTotal, safeApiCall } from "@/services/api.helpers";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
-// --- ENTERPRISE STAGE ALIGNMENT (WEB CRM PARITY) ---
 const STAGE_CONFIG: Record<string, { color: string; icon: any }> = {
     "Incoming": { color: "#6366f1", icon: "flash" },
     "Prospect": { color: "#8b5cf6", icon: "people" },
@@ -30,18 +29,17 @@ const STAGE_CONFIG: Record<string, { color: string; icon: any }> = {
     "default": { color: "#94A3B8", icon: "help-circle" }
 };
 
-const STAGE_ORDER = ["Incoming", "Prospect", "Opportunity", "Negotiation", "Closed"];
-const CLOSED_SUB_STAGES = ["Won", "Lost", "Stalled", "Dormant"];
+const DEFAULT_TABS = [
+    { id: 'all', label: 'All', icon: 'list' },
+    { id: 'incoming', label: 'Incoming', icon: 'star' },
+    { id: 'prospect', label: 'Prospect', icon: 'people' },
+    { id: 'opportunity', label: 'Opportunity', icon: 'trending-up' },
+    { id: 'negotiation', label: 'Negotiation', icon: 'chatbubbles' },
+    { id: 'closed', label: 'Closed', icon: 'checkmark-circle' },
+];
 
-// Map UI labels to actual DB lookup values for precise filtering
-const STAGE_VALUE_MAP: Record<string, string> = {
-    "Won": "Closed Won",
-    "Lost": "Closed Lost",
-    "Stalled": "Stalled",
-    "Dormant": "Dormant"
-};
+const TERMINAL_STAGES = ['won', 'lost', 'unqualified', 'dormant', 'stalled', 'closed won', 'closed lost', 'not interested'];
 
-// --- UTILS ---
 const formatAmount = (amount?: any) => {
     if (amount == null) return "-";
     const val = Number(amount);
@@ -75,17 +73,8 @@ function resolveName(field: any, getLookupValue: any, findUser: any) {
     return String(field);
 }
 
-// --- COMPONENTS ---
 const KPIItem = memo(({ label, value, color, icon, theme }: any) => (
-    <View style={[styles.kpiItem, { backgroundColor: theme.card, borderColor: theme.border }]}>
-        <View style={[styles.kpiIcon, { backgroundColor: color + '15' }]}>
-            <Ionicons name={icon} size={14} color={color} />
-        </View>
-        <View>
-            <Text style={[styles.kpiValue, { color }]}>{String(value || 0)}</Text>
-            <Text style={[styles.kpiLabel, { color: theme.textMuted }]}>{String(label)}</Text>
-        </View>
-    </View>
+<View style={[styles.kpiItem, { backgroundColor: theme.card, borderColor: theme.border }]}><View style={[styles.kpiIcon, { backgroundColor: color + '15' }]}><Ionicons name={icon} size={14} color={color} /></View><View><Text style={[styles.kpiValue, { color }]}>{String(value || 0)}</Text><Text style={[styles.kpiLabel, { color: theme.textMuted }]}>{String(label)}</Text></View></View>
 ));
 
 const LeadScoreRing = memo(({ score, color, size = 44 }: any) => {
@@ -226,7 +215,7 @@ const AdvancedFilterModal = memo(({ visible, onClose, filters, setFilters, users
     );
 });
 
-const ActionSheet = memo(({ visible, onClose, lead, onUpdate, statuses, users }: any) => {
+const ActionSheet = memo(({ visible, onClose, lead, onUpdate, users }: any) => {
     const router = useRouter();
     const { theme, isDarkMode } = useTheme();
     const { getLookupsByType } = useLookup();
@@ -240,14 +229,25 @@ const ActionSheet = memo(({ visible, onClose, lead, onUpdate, statuses, users }:
 
     const handleAction = async (updateData: any) => {
         setUpdating(true);
-        const res = await safeApiCall(() => updateLead(lead._id, updateData));
+        const payload = { ...updateData };
+        if (updateData.assignedTo) {
+            payload.assignment = {
+                assignedTo: updateData.assignedTo,
+                visibleTo: lead.assignment?.visibleTo || "Everyone",
+                team: lead.assignment?.team || []
+            };
+            payload.owner = updateData.assignedTo;
+            delete payload.assignedTo;
+        }
+
+        const res = await safeApiCall(() => updateLead(lead._id, payload));
         setUpdating(false);
         if (!res.error) {
             Vibration.vibrate(20);
             onUpdate();
             onClose();
         } else {
-            Alert.alert("Error", "Failed to update lead");
+            Alert.alert("Error", "Failed to update lead: " + (res.error || "Unknown error"));
         }
     };
 
@@ -291,18 +291,28 @@ const ActionSheet = memo(({ visible, onClose, lead, onUpdate, statuses, users }:
                                 <View style={[styles.actionIcon, { backgroundColor: '#F9731615' }]}><Ionicons name="checkmark-done-circle" size={24} color="#F97316" /></View>
                                 <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Outcome</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity style={styles.actionItem} onPress={() => { router.push(`/documents?id=${lead._id}&type=Lead`); onClose(); }}>
-                                <View style={[styles.actionIcon, { backgroundColor: '#3B82F615' }]}><Ionicons name="document-attach" size={24} color="#3B82F6" /></View>
+                            <TouchableOpacity style={styles.actionItem} onPress={() => {
+                                const phone = lead.mobile;
+                                const name = leadName(lead);
+                                const text = `Lead Details:\nName: ${name}\nPhone: ${phone}\nRequirement: ${lead.requirement?.lookup_value || lead.requirement || 'N/A'}`;
+                                Share.share({ message: text }).catch(() => Alert.alert("Error", "Could not share lead details"));
+                            }}>
+                                <View style={[styles.actionIcon, { backgroundColor: '#F0F9FF' }]}>
+                                    <Ionicons name="share-social-outline" size={24} color="#0EA5E9" />
+                                </View>
+                                <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Share</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.actionItem} onPress={() => {
+                                if (lead._id) {
+                                    onClose();
+                                    router.push({ pathname: "/documents", params: { id: lead._id, type: "Lead" } });
+                                }
+                            }}>
+                                <View style={[styles.actionIcon, { backgroundColor: '#F0F9FF' }]}>
+                                    <Ionicons name="document-attach-outline" size={24} color="#0EA5E9" />
+                                </View>
                                 <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Docs</Text>
                             </TouchableOpacity>
-                            {(String(lead.stage?.lookup_value || lead.stage).includes("Dormant") || 
-                              String(lead.stage?.lookup_value || lead.stage).includes("Stalled") || 
-                              String(lead.stage?.lookup_value || lead.stage).includes("Closed")) && (
-                                <TouchableOpacity style={styles.actionItem} onPress={() => { router.push(`/revive-lead?id=${lead._id}`); onClose(); }}>
-                                    <View style={[styles.actionIcon, { backgroundColor: '#0EA5E915' }]}><Ionicons name="flash" size={24} color="#0EA5E9" /></View>
-                                    <Text style={[styles.actionLabel, { color: theme.textSecondary, fontWeight: '900' }]}>Revive</Text>
-                                </TouchableOpacity>
-                            )}
                             <TouchableOpacity style={styles.actionItem} onPress={() => setActiveSection(activeSection === 'sequence' ? null : 'sequence')}>
                                 <View style={[styles.actionIcon, { backgroundColor: '#8B5CF615' }]}><Ionicons name="list" size={24} color="#8B5CF6" /></View>
                                 <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Sequence</Text>
@@ -318,8 +328,6 @@ const ActionSheet = memo(({ visible, onClose, lead, onUpdate, statuses, users }:
                             </TouchableOpacity>
                         </View>
 
-
-
                         {activeSection === 'assign' && (
                             <View style={[styles.subSection, { backgroundColor: isDarkMode ? 'rgba(124, 58, 237, 0.05)' : '#F5F3FF' }]}>
                                 <Text style={[styles.sectionTitle, { color: '#7C3AED' }]}>Assign to Team Member</Text>
@@ -332,11 +340,6 @@ const ActionSheet = memo(({ visible, onClose, lead, onUpdate, statuses, users }:
                                         >
                                             <View style={[styles.userAvatar, { backgroundColor: theme.primary + '15' }]}><Text style={{ color: theme.primary, fontWeight: 'bold' }}>{String((u.fullName || u.name || "?")[0])}</Text></View>
                                             <Text style={[styles.userChipText, { color: theme.textSecondary }]}>{String(u.fullName || u.name)}</Text>
-                                            {(lead.owner === u._id || lead.assignment?.assignedTo === u._id) && (
-                                                <View style={{ position: 'absolute', top: -5, right: -5 }}>
-                                                    <Ionicons name="checkmark-circle" size={16} color="#7C3AED" />
-                                                </View>
-                                            )}
                                         </TouchableOpacity>
                                     ))}
                                 </ScrollView>
@@ -372,16 +375,10 @@ const ActionSheet = memo(({ visible, onClose, lead, onUpdate, statuses, users }:
                                         return (
                                             <TouchableOpacity 
                                                 key={s._id} 
-                                                style={[
-                                                    styles.dropdownItem, 
-                                                    { backgroundColor: theme.card, borderColor: isCurrent ? '#7C3AED' : theme.border, borderWidth: 1 }
-                                                ]} 
+                                                style={[styles.dropdownItem, { backgroundColor: theme.card, borderColor: isCurrent ? '#7C3AED' : theme.border, borderWidth: 1 }]} 
                                                 onPress={() => handleAction({ sequence: s._id })}
                                             >
-                                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                                                    <Ionicons name="mail-open-outline" size={18} color={isCurrent ? '#7C3AED' : theme.textMuted} />
-                                                    <Text style={{ fontSize: 13, fontWeight: '700', color: isCurrent ? '#7C3AED' : theme.text }}>{String(s.lookup_value)}</Text>
-                                                </View>
+                                                <Text style={{ fontSize: 13, fontWeight: '700', color: isCurrent ? '#7C3AED' : theme.text }}>{String(s.lookup_value)}</Text>
                                                 {isCurrent && <Ionicons name="checkmark-circle" size={20} color="#7C3AED" />}
                                             </TouchableOpacity>
                                         );
@@ -397,12 +394,11 @@ const ActionSheet = memo(({ visible, onClose, lead, onUpdate, statuses, users }:
     );
 });
 
-const LeadCard = memo(({ lead, index, onPress, onMore, liveScore, onDeleteSuccess }: any) => {
-    const { theme, isDarkMode } = useTheme();
+const LeadCard = memo(({ lead, index, onPress, onMore, liveScore }: any) => {
+    const { theme } = useTheme();
     const { getLookupValue } = useLookup();
     const { findUser } = useUsers();
     const { trackCall } = useCallTracking();
-    const router = useRouter();
 
     const handleWhatsApp = (phone: string) => {
         if (!phone) return Alert.alert("No Number", "No mobile number available.");
@@ -419,6 +415,7 @@ const LeadCard = memo(({ lead, index, onPress, onMore, liveScore, onDeleteSucces
         if (!email) return Alert.alert("No Email", "No email address available.");
         Linking.openURL(`mailto:${email}`);
     };
+
     const name = String(leadName(lead) || "Unnamed");
     const scoreVal = liveScore?.score || lead.intent_index || 30;
     const scoreColor = liveScore?.color || (scoreVal > 70 ? "#10B981" : scoreVal > 40 ? "#F59E0B" : "#3B82F6");
@@ -430,8 +427,6 @@ const LeadCard = memo(({ lead, index, onPress, onMore, liveScore, onDeleteSucces
     const searchLocation = lead.locArea || lead.searchLocation || "";
     const cityVal = getLookupValue("City", lead.locCity);
     
-    // 🚀 [STRATEGIC FIX] Priority: Shortlisted Projects > Select Location > Search Location
-    // User wants project names to dominate if they exist.
     const projects = Array.isArray(lead.projectName) && lead.projectName.length > 0 
         ? lead.projectName.join(", ") 
         : (typeof lead.project === 'object' ? lead.project?.name : getLookupValue("Project", lead.project));
@@ -447,11 +442,9 @@ const LeadCard = memo(({ lead, index, onPress, onMore, liveScore, onDeleteSucces
 
     let combinedLocation = primaryLocation;
     if (cityVal && cityVal !== "-" && cityVal !== "—") {
-        if (combinedLocation) {
-            if (!combinedLocation.toLowerCase().includes(cityVal.toLowerCase())) {
-                combinedLocation = `${combinedLocation}, ${cityVal}`;
-            }
-        } else {
+        if (combinedLocation && !combinedLocation.toLowerCase().includes(cityVal.toLowerCase())) {
+            combinedLocation = `${combinedLocation}, ${cityVal}`;
+        } else if (!combinedLocation) {
             combinedLocation = cityVal;
         }
     }
@@ -460,7 +453,6 @@ const LeadCard = memo(({ lead, index, onPress, onMore, liveScore, onDeleteSucces
 
     const budgetText = lead.budgetMax ? `₹${formatAmount(lead.budgetMax)}` : (lead.budgetMin ? `₹${formatAmount(lead.budgetMin)}` : null);
     
-    // Support both single ID and array of IDs for lookups (Lead model uses arrays for these)
     const resolveLookupArr = (type: string, val: any) => {
         if (!val) return "";
         if (Array.isArray(val)) return val.map(v => getLookupValue(type, v)).filter(Boolean).join(", ");
@@ -475,102 +467,28 @@ const LeadCard = memo(({ lead, index, onPress, onMore, liveScore, onDeleteSucces
 
     const renderRightActions = () => (
         <View style={styles.swipeActions}>
-            <TouchableOpacity 
-                style={[styles.swipeBtn, { backgroundColor: theme.primary }]} 
-                onPress={() => trackCall(lead.mobile || "", lead._id, "Lead", name)}
-            >
-                <Ionicons name="call" size={20} color="#fff" />
-                <Text style={styles.swipeLabel}>Call</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-                style={[styles.swipeBtn, { backgroundColor: '#25D366' }]} 
-                onPress={() => handleWhatsApp(lead.mobile || "")}
-            >
-                <Ionicons name="logo-whatsapp" size={20} color="#fff" />
-                <Text style={styles.swipeLabel}>Chat</Text>
-            </TouchableOpacity>
+            <TouchableOpacity style={[styles.swipeBtn, { backgroundColor: theme.primary }]} onPress={() => trackCall(lead.mobile || "", lead._id, "Lead", name)}><View style={{ alignItems: 'center' }}><Ionicons name="call" size={20} color="#fff" /><Text style={styles.swipeLabel}>Call</Text></View></TouchableOpacity>
+            <TouchableOpacity style={[styles.swipeBtn, { backgroundColor: '#25D366' }]} onPress={() => handleWhatsApp(lead.mobile || "")}><View style={{ alignItems: 'center' }}><Ionicons name="logo-whatsapp" size={20} color="#fff" /><Text style={styles.swipeLabel}>Chat</Text></View></TouchableOpacity>
         </View>
     );
 
     const renderLeftActions = () => (
         <View style={styles.swipeActions}>
-            <TouchableOpacity 
-                style={[styles.swipeBtn, { backgroundColor: '#3B82F6' }]} 
-                onPress={() => handleSMS(lead.mobile || "")}
-            >
-                <Ionicons name="chatbubble-ellipses" size={20} color="#fff" />
-                <Text style={styles.swipeLabel}>SMS</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-                style={[styles.swipeBtn, { backgroundColor: '#F59E0B' }]} 
-                onPress={() => handleEmail(lead.email || "")}
-            >
-                <Ionicons name="mail" size={20} color="#fff" />
-                <Text style={styles.swipeLabel}>Email</Text>
-            </TouchableOpacity>
+            <TouchableOpacity style={[styles.swipeBtn, { backgroundColor: '#3B82F6' }]} onPress={() => handleSMS(lead.mobile || "")}><View style={{ alignItems: 'center' }}><Ionicons name="chatbubble-ellipses" size={20} color="#fff" /><Text style={styles.swipeLabel}>SMS</Text></View></TouchableOpacity>
+            <TouchableOpacity style={[styles.swipeBtn, { backgroundColor: '#F59E0B' }]} onPress={() => handleEmail(lead.email || "")}><View style={{ alignItems: 'center' }}><Ionicons name="mail" size={20} color="#fff" /><Text style={styles.swipeLabel}>Email</Text></View></TouchableOpacity>
         </View>
     );
 
     return (
         <Swipeable renderRightActions={renderRightActions} renderLeftActions={renderLeftActions}>
-            <TouchableOpacity activeOpacity={0.9} onPress={onPress} style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-                <View style={styles.cardInner}>
-                    <View style={{ alignItems: 'center', width: 55, gap: 6 }}>
-                        <LeadScoreRing score={scoreVal} color={scoreColor} />
-                        <View style={[styles.ownerBadge, { backgroundColor: stageCfg.color + '15', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 4, paddingVertical: 2, borderRadius: 4, width: '100%', justifyContent: 'center' }]}>
-                            <Text style={[styles.ownerText, { color: stageCfg.color, fontSize: 8, fontWeight: '900' }]}>{stageLabel.toUpperCase()}</Text>
+            <TouchableOpacity onPress={onPress}>
+                <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+<View style={styles.cardInner}>
+                        <View style={{ alignItems: 'center', width: 55, gap: 6 }}>
+                            <LeadScoreRing score={scoreVal} color={scoreColor} />
+                            <View style={[styles.ownerBadge, { backgroundColor: stageCfg.color + '15' }]}><Text style={[styles.ownerText, { color: stageCfg.color, fontSize: 8, fontWeight: '900' }]}>{stageLabel.toUpperCase()}</Text></View>
                         </View>
-                    </View>
-                    <View style={styles.cardContent}>
-                        <View style={styles.cardHeader}>
-                            <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
-                                <Text style={[styles.cardName, { color: theme.text }]} numberOfLines={1}>{name}</Text>
-                            </View>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                                {lead.source && (
-                                    <View style={{ 
-                                        backgroundColor: isDarkMode ? 'rgba(255,255,255,0.1)' : '#f1f5f9', 
-                                        paddingHorizontal: 6, 
-                                        paddingVertical: 2, 
-                                        borderRadius: 4, 
-                                        borderWidth: 1, 
-                                        borderColor: isDarkMode ? 'rgba(255,255,255,0.2)' : '#e2e8f0' 
-                                    }}>
-                                        <Text style={{ fontSize: 9, color: isDarkMode ? '#cbd5e1' : '#64748b', fontWeight: '900' }}>{String(getLookupValue("Source", lead.source)).toUpperCase()}</Text>
-                                    </View>
-                                )}
-                                <TouchableOpacity onPress={onMore} style={styles.moreBtn}><Ionicons name="ellipsis-vertical" size={18} color={theme.textMuted} /></TouchableOpacity>
-                            </View>
-                        </View>
-                        <View style={styles.metaRow}>
-                            <Ionicons name="call-outline" size={12} color={theme.textMuted} />
-                            <Text style={{ fontSize: 12, color: theme.textSecondary, fontWeight: '600', marginLeft: 4 }}>{String(lead.mobile)}</Text>
-                            {budgetText && (
-                                <>
-                                    <Text style={{ color: theme.textMuted, marginHorizontal: 6 }}>|</Text>
-                                    <Ionicons name="pricetag-outline" size={12} color="#10B981" />
-                                    <Text style={{ fontSize: 12, color: '#10B981', fontWeight: '800', marginLeft: 4 }}>{budgetText}</Text>
-                                </>
-                            )}
-                        </View>
-                        <View style={styles.requirementRow}>
-                            {sizeTypeText ? (
-                                <View style={[styles.sizeBadge, { backgroundColor: theme.primary + '10' }]}>
-                                    <Text style={[styles.sizeText, { color: theme.primary }]}>{sizeTypeText}</Text>
-                                </View>
-                            ) : null}
-                            <Text style={{ fontSize: 11, color: theme.textMuted, marginLeft: sizeTypeText ? 8 : 0 }} numberOfLines={1}>{categoryText}</Text>
-                        </View>
-                        <View style={styles.footerRow}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                                <Ionicons name="location-outline" size={10} color={theme.textMuted} />
-                                <Text style={{ fontSize: 11, color: theme.textSecondary, fontWeight: '700', marginLeft: 4, flex: 1 }} numberOfLines={1}>{combinedLocation}</Text>
-                            </View>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end' }}>
-                                <Text style={[styles.ownerText, { color: theme.primary, fontWeight: '700', marginRight: 8 }]}>{resolveName(lead.owner, getLookupValue, findUser)}</Text>
-                                <Text style={[styles.timeText, { color: '#64748B', fontSize: 10, fontWeight: '600' }]}>{formatTimeAgo(lead.createdAt)}</Text>
-                            </View>
-                        </View>
+<View style={styles.cardContent}><View style={styles.cardHeader}><Text style={[styles.cardName, { color: theme.text }]} numberOfLines={1}>{name}</Text><View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>{!!lead.source && <View style={styles.sourceBadge}><Text style={styles.sourceText}>{String(getLookupValue("Source", lead.source)).toUpperCase()}</Text></View>}<TouchableOpacity onPress={onMore} style={styles.moreBtn}><Ionicons name="ellipsis-vertical" size={18} color={theme.textMuted} /></TouchableOpacity></View></View><View style={styles.metaRow}><Ionicons name="call-outline" size={12} color={theme.textMuted} /><Text style={{ fontSize: 12, color: theme.textSecondary, fontWeight: '600', marginLeft: 4 }}>{String(lead.mobile)}</Text>{!!budgetText && <View style={{ flexDirection: 'row', alignItems: 'center' }}><Text style={{ color: theme.textMuted, marginHorizontal: 6 }}>|</Text><Ionicons name="pricetag-outline" size={12} color="#10B981" /><Text style={{ fontSize: 12, color: '#10B981', fontWeight: '800', marginLeft: 4 }}>{budgetText}</Text></View>}</View><View style={styles.requirementRow}>{!!sizeTypeText && <View style={[styles.sizeBadge, { backgroundColor: theme.primary + '10' }]}><Text style={[styles.sizeText, { color: theme.primary }]}>{sizeTypeText}</Text></View>}<Text style={{ fontSize: 11, color: theme.textMuted, marginLeft: sizeTypeText ? 8 : 0 }} numberOfLines={1}>{categoryText}</Text></View><View style={styles.footerRow}><View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}><Ionicons name="location-outline" size={10} color={theme.textMuted} /><Text style={{ fontSize: 11, color: theme.textSecondary, fontWeight: '700', marginLeft: 4, flex: 1 }} numberOfLines={1}>{combinedLocation}</Text></View><View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end' }}><Text style={[styles.ownerText, { color: theme.primary, fontWeight: '700', marginRight: 8 }]}>{resolveName(lead.owner, getLookupValue, findUser)}</Text><Text style={styles.timeText}>{formatTimeAgo(lead.createdAt)}</Text></View></View></View>
                     </View>
                 </View>
             </TouchableOpacity>
@@ -580,495 +498,269 @@ const LeadCard = memo(({ lead, index, onPress, onMore, liveScore, onDeleteSucces
 
 export default function LeadsScreen() {
     const router = useRouter();
-    const { theme } = useTheme();
+    const { theme, isDarkMode } = useTheme();
+    const isDark = isDarkMode;
     const { isAuthenticated } = useAuth();
     const insets = useSafeAreaInsets();
-    const { getLookupsByType } = useLookup();
-    const { users } = useUsers();
+    const { getLookupValue, getLookupsByType } = useLookup();
+    const { findUser, users } = useUsers();
     const { projects } = useProjects();
-    
-    const allStagesFromDB = useMemo(() => getLookupsByType("Stage"), [getLookupsByType]);
 
-    const stages = useMemo(() => {
-        // Map STAGE_ORDER labels to their actual DB IDs for fast backend lookups
-        return STAGE_ORDER.map(label => {
-            const match = allStagesFromDB.find(s => String(s.lookup_value).toLowerCase() === label.toLowerCase());
-            return {
-                id: match?._id || label.toLowerCase(),
-                label: label,
-                isFolder: label === 'Closed'
-            };
+    const dynamicTabs = useMemo(() => {
+        const statuses = getLookupsByType('Lead Status');
+        if (!statuses || statuses.length === 0) return DEFAULT_TABS;
+        
+        const activeTabs = [{ id: 'all', label: 'All' }];
+        statuses.forEach(l => {
+            activeTabs.push({ id: l._id, label: l.lookup_value });
         });
-    }, [allStagesFromDB]);
 
-    const [isClosedDropdownOpen, setIsClosedDropdownOpen] = useState(false);
-    const [dropdownAnchor, setDropdownAnchor] = useState({ x: 0, y: 0 });
-    
+        return activeTabs;
+    }, [getLookupsByType]);
+
+    const terminalIds = useMemo(() => {
+        const statuses = getLookupsByType('Lead Status');
+        return statuses
+            .filter(l => TERMINAL_STAGES.includes(l.lookup_value.toLowerCase()))
+            .map(l => l._id);
+    }, [getLookupsByType]);
+
+    const [closedSheetVisible, setClosedSheetVisible] = useState(false);
+    const [terminalOptions, setTerminalOptions] = useState<any[]>([]);
+
     const [leads, setLeads] = useState<any[]>([]);
-    const [stats, setStats] = useState<any>({ total: 0, hot: 0, today: 0, fresh: 0 });
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
+    const [search, setSearch] = useState("");
     const [page, setPage] = useState(1);
     const [hasMore, setHasMore] = useState(true);
-    const [search, setSearch] = useState("");
     const [activeTab, setActiveTab] = useState("all");
-    const [liveScores, setLiveScores] = useState<any>({});
+    const [stats, setStats] = useState({ total: 0, hot: 0, today: 0, fresh: 0 });
     const [selectedLead, setSelectedLead] = useState<any | null>(null);
     const [sheetVisible, setSheetVisible] = useState(false);
     const [filterVisible, setFilterVisible] = useState(false);
-    const [advFilters, setAdvFilters] = useState<any>({});
     const [sortVisible, setSortVisible] = useState(false);
-    const [sortConfig, setSortConfig] = useState({ by: 'createdAt', order: -1, label: 'Newest First' });
-    const sectionListRef = useRef<any>(null);
+    const [sortConfig, setSortConfig] = useState({ label: 'Newest First', by: 'createdAt', order: -1 });
+    const [advFilters, setAdvFilters] = useState<any>({});
+    const [liveScores, setLiveScores] = useState<any>({});
 
-    const fetchLeads = useCallback(async (pageNum = 1, shouldAppend = false, isRefresh = false) => {
-        if (!isAuthenticated) return;
-        if (!shouldAppend && !isRefresh) setLoading(true);
-        if (isRefresh) setRefreshing(true);
-        const limit = 50;
-        const params: any = { 
-            page: String(pageNum), 
-            limit: String(limit), 
-            sortBy: sortConfig.by,
-            sortOrder: String(sortConfig.order),
-            ...advFilters 
-        };
-        if (search) params.search = search;
-        if (activeTab !== "all") params.stage = activeTab;
-
-        const result = await safeApiCall<any>(() => getLeads(params));
-        
-        if (!result.error && result.data) {
-            const newRecords = result.data;
-            setLeads(prev => shouldAppend ? [...prev, ...newRecords] : newRecords);
-            setHasMore(newRecords.length >= limit);
-            setPage(pageNum);
-            if (result.stats) setStats(result.stats);
-        } else if (result.error) {
-            console.warn(`[LeadsView] Fetch failed:`, result.error);
-            if (!shouldAppend) {
-                Alert.alert("Network Error", result.error);
+    const fetchLeads = async (pageNum = 1, shouldAppend = false, isRefresh = false) => {
+        if (isRefresh) setRefreshing(true); else if (!shouldAppend) setLoading(true);
+        try {
+            const limit = 20;
+            const params: any = { page: String(pageNum), limit: String(limit), sortBy: sortConfig.by, sortOrder: String(sortConfig.order), ...advFilters };
+            if (search) params.search = search;
+            
+            // Sync with Web CRM logic: activeTab is the Status ID or Value
+            if (activeTab !== "all") {
+                if (/^[0-9a-fA-F]{24}$/.test(activeTab)) {
+                    // It's an ObjectId — pipeline stages in backend are primarily queried via 'stage' field
+                    params.stage = activeTab;
+                } else {
+                    // It's a keyword (e.g. 'incoming', 'prospect') — backend maps these via 'status' param
+                    params.status = activeTab;
+                }
+            } else if (advFilters.status) {
+                params.status = advFilters.status;
             }
+            
+            if (advFilters.stage) params.stage = advFilters.stage;
+
+            const res = await getLeads(params);
+            const newLeads = extractList(res);
+            
+            if (pageNum === 1 && res?.stats) setStats(res.stats);
+            
+            setLeads(prev => shouldAppend ? [...prev, ...newLeads] : newLeads);
+            setHasMore(newLeads.length > 0 && newLeads.length === limit);
+            setPage(pageNum);
+            
+            if (newLeads.length > 0) {
+                const ids = newLeads.map((l: any) => l._id);
+                getLeadScores(ids).then(scores => { if (scores) setLiveScores((prev: any) => ({ ...prev, ...scores })); }).catch(() => {});
+            }
+        } catch (err) { 
+            console.error("FetchLeads Error:", err); 
+        } finally { 
+            setLoading(false); 
+            setRefreshing(false); 
         }
-        setLoading(false);
-        setRefreshing(false);
-    }, [isAuthenticated, activeTab, search, advFilters]);
+    };
 
-    useEffect(() => {
-        const timer = setTimeout(() => fetchLeads(1, false), 300);
-        return () => clearTimeout(timer);
-    }, [search, activeTab, advFilters, sortConfig]);
+    useEffect(() => { fetchLeads(1, false); }, [search, activeTab, sortConfig, advFilters]);
 
+    const onRefresh = () => fetchLeads(1, false, true);
     const loadMore = () => { if (!loading && hasMore) fetchLeads(page + 1, true); };
 
-    const renderHeader = () => (
-        <View style={[styles.header, { paddingTop: Math.max(insets.top, 20), backgroundColor: theme.card }]}>
-            <View style={styles.headerTop}>
-                <View><Text style={[styles.headerTitle, { color: theme.text }]}>SALES PIPELINE</Text><Text style={[styles.headerSub, { color: theme.textMuted }]}>{stats.total} Total Records</Text></View>
-                <TouchableOpacity onPress={() => router.push("/add-lead")}><Ionicons name="add-circle" size={32} color={theme.primary} /></TouchableOpacity>
-            </View>
-            <View style={styles.kpiRow}>
-                <KPIItem label="Hot" value={stats.hot} color="#EF4444" icon="flame" theme={theme} />
-                <KPIItem label="Today" value={stats.today} color="#10B981" icon="calendar" theme={theme} />
-                <KPIItem label="Fresh" value={stats.fresh} color="#8B5CF6" icon="leaf" theme={theme} />
-            </View>
-            <View style={styles.searchBarRow}>
-                <View style={[styles.searchBar, { backgroundColor: theme.background, borderColor: theme.border }]}>
-                    <Ionicons name="search" size={18} color={theme.textMuted} />
-                    <TextInput style={[styles.searchInput, { color: theme.text }]} placeholder="Search leads..." placeholderTextColor={theme.textMuted} value={search} onChangeText={setSearch} />
-                    
-                    <TouchableOpacity onPress={() => setSortVisible(true)} style={[styles.filterBtn, { marginRight: 8 }]}>
-                        <Ionicons name="swap-vertical" size={18} color={theme.primary} />
-                    </TouchableOpacity>
+    const getStageIcon = (label: string) => {
+        const l = label.toLowerCase();
+        if (l.includes('incoming')) return 'mail-unread';
+        if (l.includes('prospect')) return 'search';
+        if (l.includes('opportunity')) return 'bulb';
+        if (l.includes('negotiation')) return 'handshake';
+        if (l.includes('all')) return 'apps';
+        return 'archive';
+    };
 
-                    <TouchableOpacity onPress={() => setFilterVisible(true)} style={[styles.filterBtn, Object.keys(advFilters).length > 0 && { backgroundColor: theme.primary }]}>
-                        <Ionicons name="options" size={18} color={Object.keys(advFilters).length > 0 ? "#fff" : theme.textMuted} />
-                    </TouchableOpacity>
-                </View>
-            </View>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabsScroll}>
-                <TouchableOpacity 
-                    onPress={() => setActiveTab("all")} 
-                    style={[
-                        styles.arrowTab, 
-                        { backgroundColor: activeTab === "all" ? theme.primary : theme.card, borderTopLeftRadius: 12, borderBottomLeftRadius: 12, paddingLeft: 16 },
-                        activeTab === "all" && styles.activeArrowTab
-                    ]}
-                >
-                    <Text style={[styles.tabText, { color: activeTab === "all" ? "#fff" : theme.textSecondary }]}>ALL</Text>
-                    <View style={[styles.arrowRight, { borderLeftColor: activeTab === "all" ? theme.primary : theme.card }]} />
-                </TouchableOpacity>
-
-                {stages.map((s, idx) => {
-                    const isActive = activeTab === s.id;
-                    const isLast = idx === stages.length - 1;
-                    const cfg = STAGE_CONFIG[s.label] || STAGE_CONFIG.default;
-                    
-                    return (
-                        <View key={s.id} style={{ flexDirection: 'row', alignItems: 'center' }}>
-                            <TouchableOpacity 
-                                onPress={(e) => {
-                                    if (s.isFolder) {
-                                        // Capture position for dropdown
-                                        setIsClosedDropdownOpen(!isClosedDropdownOpen);
-                                    } else {
-                                        setActiveTab(s.id);
-                                        setIsClosedDropdownOpen(false);
-                                    }
-                                }} 
-                                style={[
-                                    styles.arrowTab, 
-                                    { backgroundColor: isActive ? cfg.color : theme.card, paddingLeft: 20 },
-                                    isActive && styles.activeArrowTab,
-                                    isLast && { borderTopRightRadius: 12, borderBottomRightRadius: 12, paddingRight: 16 }
-                                ]}
-                            >
-                                <View style={[styles.arrowLeft, { borderLeftColor: theme.background }]} />
-                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                                    <Text style={[styles.tabText, { color: isActive ? "#fff" : theme.textSecondary }]}>{s.label.toUpperCase()}</Text>
-                                    {s.isFolder && <Ionicons name={isClosedDropdownOpen ? "chevron-up" : "chevron-down"} size={10} color={isActive ? "#fff" : theme.textMuted} />}
-                                </View>
-                                {!isLast && <View style={[styles.arrowRight, { borderLeftColor: isActive ? cfg.color : theme.card }]} />}
-                            </TouchableOpacity>
-                        </View>
-                    );
-                })}
-            </ScrollView>
-
-            {/* ROBUST MODAL DROPDOWN FOR CLOSED STAGES */}
-            <Modal visible={isClosedDropdownOpen} transparent animationType="fade" onRequestClose={() => setIsClosedDropdownOpen(false)}>
-                <Pressable style={styles.modalOverlay} onPress={() => setIsClosedDropdownOpen(false)}>
-                    <View style={[styles.closedDropdownModal, { backgroundColor: theme.card, borderColor: theme.border, top: insets.top + 160 }]}>
-                        <Text style={{ fontSize: 10, fontWeight: '900', color: theme.textMuted, marginBottom: 12, paddingHorizontal: 12 }}>SELECT OUTCOME</Text>
-                        {CLOSED_SUB_STAGES.map(sub => {
-                            const dbLabel = STAGE_VALUE_MAP[sub] || sub;
-                            const dbMatch = allStagesFromDB.find(s => String(s.lookup_value).toLowerCase() === dbLabel.toLowerCase());
-                            const subId = dbMatch?._id || sub.toLowerCase();
-                            const isCurrent = activeTab === subId;
-                            
-                            return (
+    const renderTabs = () => (
+        <View style={[styles.aeroContainer, { borderBottomColor: theme.border, backgroundColor: theme.card }]}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingVertical: 14 }}>
+                <View style={[styles.aeroRow, { paddingHorizontal: 16 }]}>
+                    {dynamicTabs.map((tab, idx) => {
+                        const isActive = activeTab === tab.id;
+                        const isFirst = idx === 0;
+                        const isLast = idx === dynamicTabs.length - 1;
+                        
+                        return (
+                            <View key={tab.id} style={[styles.arrowWrapper, !isFirst && { marginLeft: -10 }]}>
                                 <TouchableOpacity 
-                                    key={sub} 
-                                    style={[styles.dropdownItem, isCurrent && { backgroundColor: theme.primary + '10' }]}
+                                    style={[
+                                        styles.arrowBody, 
+                                        { backgroundColor: isActive ? theme.primary : (isDark ? '#1A1A1A' : '#F8FAFC'), borderColor: theme.border },
+                                        isFirst && { borderTopLeftRadius: 6, borderBottomLeftRadius: 6 }
+                                    ]}
                                     onPress={() => {
-                                        setActiveTab(subId);
-                                        setIsClosedDropdownOpen(false);
+                                        Vibration.vibrate(10);
+                                        setActiveTab(tab.id);
+                                        setPage(1);
                                     }}
                                 >
-                                    <Text style={{ fontSize: 11, fontWeight: '800', color: isCurrent ? theme.primary : theme.textSecondary }}>{sub.toUpperCase()}</Text>
-                                    {isCurrent && <Ionicons name="checkmark" size={14} color={theme.primary} />}
+                                    <Text style={[styles.aeroText, { color: isActive ? '#fff' : theme.textSecondary }]}>
+                                        {tab.label.toUpperCase()}
+                                    </Text>
                                 </TouchableOpacity>
-                            );
-                        })}
-                    </View>
-                </Pressable>
-            </Modal>
-            <Modal visible={sortVisible} transparent animationType="fade">
-                <Pressable style={styles.modalOverlay} onPress={() => setSortVisible(false)}>
+                                
+                                {!isLast && (
+                                    <View style={styles.arrowHeadContainer}>
+                                        <View style={[styles.triangle, { borderLeftColor: theme.border }]} />
+                                        <View style={[styles.triangleInner, { borderLeftColor: isActive ? theme.primary : (isDark ? '#1A1A1A' : '#F8FAFC') }]} />
+                                    </View>
+                                )}
+                                
+                                {isLast && (
+                                    <View style={[styles.arrowEnd, { backgroundColor: isActive ? theme.primary : (isDark ? '#1A1A1A' : '#F8FAFC'), borderColor: theme.border }]} />
+                                )}
+                            </View>
+                        );
+                    })}
+                </View>
+            </ScrollView>
+        </View>
+    );
+
+const renderHeader = () => (<View style={[styles.header, { paddingTop: Math.max(insets.top, 20), backgroundColor: theme.card }]}><View style={styles.headerTop}><View><Text style={[styles.headerTitle, { color: theme.text }]}>SALES PIPELINE</Text><Text style={[styles.headerSub, { color: theme.textMuted }]}>{stats.total} Total Records</Text></View><TouchableOpacity onPress={() => router.push("/add-lead")}><Ionicons name="add-circle" size={32} color={theme.primary} /></TouchableOpacity></View><View style={styles.kpiRow}><KPIItem label="Hot" value={stats.hot} color="#EF4444" icon="flame" theme={theme} /><KPIItem label="Today" value={stats.today} color="#10B981" icon="calendar" theme={theme} /><KPIItem label="Fresh" value={stats.fresh} color="#8B5CF6" icon="leaf" theme={theme} /></View><View style={styles.searchBarRow}><View style={[styles.searchBar, { backgroundColor: theme.background, borderColor: theme.border }]}><Ionicons name="search" size={18} color={theme.textMuted} /><TextInput style={[styles.searchInput, { color: theme.text }]} placeholder="Search leads..." placeholderTextColor={theme.textMuted} value={search} onChangeText={setSearch} /><TouchableOpacity onPress={() => setSortVisible(true)} style={[styles.filterBtn, { marginRight: 8 }]}><Ionicons name="swap-vertical" size={18} color={theme.primary} /></TouchableOpacity><TouchableOpacity onPress={() => setFilterVisible(true)} style={[styles.filterBtn, Object.keys(advFilters).length > 0 && { backgroundColor: theme.primary }]}><Ionicons name="options" size={18} color={Object.keys(advFilters).length > 0 ? "#fff" : theme.textMuted} /></TouchableOpacity></View></View>{renderTabs()}</View>);
+
+    return (
+        <View style={[styles.container, { backgroundColor: theme.background }]}>
+            <FlatList data={leads} renderItem={({ item, index }) => (<LeadCard lead={item} index={index} liveScore={liveScores[item._id]} onPress={() => router.push(`/lead-detail?id=${item._id}`)} onMore={() => { setSelectedLead(item); setSheetVisible(true); }} />)} keyExtractor={(item) => item._id} ListHeaderComponent={renderHeader} onEndReached={loadMore} onEndReachedThreshold={0.5} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />} contentContainerStyle={{ paddingBottom: 100 }} ListEmptyComponent={!!(!loading) ? <View style={styles.empty}><Ionicons name="person-outline" size={64} color="#CBD5E1" /><Text style={styles.emptyText}>No leads found matching criteria.</Text></View> : null} />
+            {!!loading && <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(255,255,255,0.4)', justifyContent: 'center', alignItems: 'center', zIndex: 9999 }]}><ActivityIndicator size="large" color={theme.primary} /></View>}
+            <ActionSheet visible={sheetVisible} onClose={() => setSheetVisible(false)} lead={selectedLead} onUpdate={() => fetchLeads(1, false)} users={users} />
+            <AdvancedFilterModal visible={filterVisible} onClose={() => setFilterVisible(false)} filters={advFilters} setFilters={setAdvFilters} users={users} projects={projects} />
+            <Modal visible={closedSheetVisible} transparent animationType="slide">
+                <Pressable style={styles.modalOverlay} onPress={() => setClosedSheetVisible(false)}>
                     <View style={[styles.sheetContainer, { backgroundColor: theme.card }]}>
                         <View style={styles.sheetHandle} />
-                        <View style={styles.sheetHeader}>
-                            <Text style={[styles.sheetTitle, { color: theme.text, textAlign: 'center', flex: 1 }]}>SORT LEADS</Text>
-                        </View>
-                        <View style={{ padding: 20, gap: 10 }}>
-                            {[
-                                { label: 'Newest First', by: 'createdAt', order: -1, icon: 'time-outline' },
-                                { label: 'Oldest First', by: 'createdAt', order: 1, icon: 'hourglass-outline' },
-                                { label: 'Alphabetical', by: 'firstName', order: 1, icon: 'text-outline' },
-                                { label: 'Last Activity', by: 'updatedAt', order: -1, icon: 'flash-outline' },
-                                { label: 'High Intent Score', by: 'intent_index', order: -1, icon: 'trending-up-outline' },
-                            ].map((opt: any) => (
+                        <Text style={[styles.sectionTitle, { color: theme.text, textAlign: 'center' }]}>Closed / Terminal Stages</Text>
+                        <View style={{ gap: 8, marginTop: 20 }}>
+                            {terminalOptions.map(opt => (
                                 <TouchableOpacity 
-                                    key={opt.label}
+                                    key={opt.id} 
+                                    style={[styles.dropdownItem, { backgroundColor: activeTab === opt.id ? theme.primary + '15' : theme.background }]}
                                     onPress={() => {
-                                        setSortConfig(opt);
-                                        setSortVisible(false);
+                                        setActiveTab(opt.id);
+                                        setPage(1);
+                                        setClosedSheetVisible(false);
                                     }}
-                                    style={[
-                                        styles.sortItem, 
-                                        sortConfig.label === opt.label && { backgroundColor: theme.primary + '15', borderColor: theme.primary }
-                                    ]}
                                 >
-                                    <Ionicons name={opt.icon as any} size={20} color={sortConfig.label === opt.label ? theme.primary : theme.textMuted} />
-                                    <Text style={{ flex: 1, color: sortConfig.label === opt.label ? theme.primary : theme.text, fontWeight: '700' }}>{opt.label}</Text>
-                                    {sortConfig.label === opt.label && <Ionicons name="checkmark-circle" size={20} color={theme.primary} />}
+                                    <Text style={{ color: activeTab === opt.id ? theme.primary : theme.text, fontWeight: '700' }}>{opt.label}</Text>
+                                    {activeTab === opt.id && <Ionicons name="checkmark-circle" size={18} color={theme.primary} />}
                                 </TouchableOpacity>
                             ))}
                         </View>
                     </View>
                 </Pressable>
             </Modal>
-        </View>
-    );
-
-    const sections = useMemo(() => {
-        const q = search.toLowerCase();
-        let filtered = leads.filter((item) => {
-            const name = leadName(item).toLowerCase();
-            const phone = String(item.mobile || "").toLowerCase();
-            const matchesSearch = name.includes(q) || phone.includes(q);
-            return matchesSearch;
-        });
-
-        // Group by first letter for Alphabetical sort or "All" tab
-        const groups: Record<string, any[]> = {};
-        filtered.forEach(item => {
-            const name = leadName(item);
-            let firstChar = name.charAt(0).toUpperCase();
-            if (!/[A-Z]/.test(firstChar)) firstChar = "#";
-            if (!groups[firstChar]) groups[firstChar] = [];
-            groups[firstChar].push(item);
-        });
-
-        return Object.keys(groups)
-            .sort((a, b) => (a === "#" ? 1 : b === "#" ? -1 : a.localeCompare(b)))
-            .map(letter => ({
-                title: letter,
-                data: groups[letter]
-            }));
-    }, [leads, search]);
-
-    const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ#".split("");
-
-    const scrollToIndex = (letter: string) => {
-        const index = sections.findIndex(s => s.title === letter);
-        if (index !== -1) {
-            sectionListRef.current?.scrollToLocation({
-                sectionIndex: index,
-                itemIndex: 0,
-                animated: true
-            });
-            Vibration.vibrate(10);
-        }
-    };
-
-    const renderAlphabetIndex = () => (
-        <View style={styles.alphabetIndex}>
-            {alphabet.map((letter) => {
-                const hasData = sections.some(s => s.title === letter);
-                return (
-                    <TouchableOpacity
-                        key={letter}
-                        onPress={() => scrollToIndex(letter)}
-                        style={styles.alphabetLetter}
-                        disabled={!hasData}
-                    >
-                        <Text style={[styles.alphabetText, { color: hasData ? theme.primary : theme.textMuted, opacity: hasData ? 1 : 0.3 }]}>{letter}</Text>
-                    </TouchableOpacity>
-                );
-            })}
-        </View>
-    );
-
-    return (
-        <View style={[styles.container, { backgroundColor: theme.background }]}>
-            <SectionList
-                ref={sectionListRef}
-                sections={sections}
-                keyExtractor={(item) => String(item._id)}
-                ListHeaderComponent={renderHeader()}
-                renderItem={({ item, index }) => (
-                    <View style={{ paddingHorizontal: 16, marginTop: 2 }}>
-                        <LeadCard 
-                            lead={item} 
-                            index={index} 
-                            liveScore={liveScores[item._id]} 
-                            onPress={() => router.push(`/lead-detail?id=${item._id}`)} 
-                            onMore={() => { setSelectedLead(item); setSheetVisible(true); }} 
-                            onDeleteSuccess={() => fetchLeads(1, false)} 
-                        />
-                    </View>
-                )}
-                renderSectionHeader={({ section: { title } }) => (
-                    <View style={[styles.sectionHeader, { backgroundColor: theme.card, borderBottomColor: theme.border, paddingHorizontal: 16, paddingVertical: 4, borderBottomWidth: 1 }]}>
-                        <Text style={{ fontSize: 14, fontWeight: '900', color: theme.primary }}>{title}</Text>
-                    </View>
-                )}
-                onEndReached={loadMore}
-                onEndReachedThreshold={0.5}
-                initialNumToRender={20}
-                maxToRenderPerBatch={20}
-                windowSize={10}
-                removeClippedSubviews={Platform.OS === 'android'}
-                ListFooterComponent={hasMore && leads.length > 0 ? (
-                    <View style={{ paddingVertical: 20, alignItems: 'center' }}>
-                        <ActivityIndicator size="small" color={theme.primary} />
-                        <Text style={{ fontSize: 10, color: theme.textMuted, marginTop: 8 }}>LOADING MORE RECORDS...</Text>
-                    </View>
-                ) : null}
-                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => fetchLeads(1, false, true)} tintColor={theme.primary} />}
-                onScrollToIndexFailed={(info) => {
-                    console.warn("[Leads] Scroll to index failed, retrying...", info);
-                    sectionListRef.current?.scrollToLocation({
-                        sectionIndex: info.index,
-                        itemIndex: 0,
-                        animated: false
-                    });
-                }}
-                ListEmptyComponent={!loading ? (
-                    <View style={{ padding: 40, alignItems: 'center' }}>
-                        <Ionicons name="filter-outline" size={48} color={theme.textMuted} />
-                        <Text style={{ color: theme.textMuted, marginTop: 12, fontWeight: '600' }}>No leads found for this stage</Text>
-                    </View>
-                ) : null}
-            />
-            {renderAlphabetIndex()}
-            {loading && (
-                <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(255,255,255,0.4)', justifyContent: 'center', alignItems: 'center', zIndex: 9999 }]}>
-                    <ActivityIndicator size="large" color={theme.primary} />
-                </View>
-            )}
-            <ActionSheet visible={sheetVisible} onClose={() => { setSheetVisible(false); setSelectedLead(null); }} lead={selectedLead} onUpdate={() => fetchLeads(1, false)} statuses={stages} users={users} />
-            <AdvancedFilterModal visible={filterVisible} onClose={() => setFilterVisible(false)} filters={advFilters} setFilters={setAdvFilters} users={users} projects={projects} />
+            <Modal visible={sortVisible} transparent animationType="fade"><Pressable style={styles.modalOverlay} onPress={() => setSortVisible(false)}><View style={[styles.sheetContainer, { backgroundColor: theme.card }]}><View style={styles.sheetHandle} /><View style={styles.sheetHeader}><Text style={[styles.sheetTitle, { color: theme.text, textAlign: 'center', flex: 1 }]}>SORT LEADS</Text></View><View style={{ padding: 20, gap: 10 }}>{[ { label: 'Newest First', by: 'createdAt', order: -1, icon: 'time-outline' }, { label: 'Oldest First', by: 'createdAt', order: 1, icon: 'hourglass-outline' }, { label: 'Alphabetical', by: 'firstName', order: 1, icon: 'text-outline' }, { label: 'Last Activity', by: 'updatedAt', order: -1, icon: 'flash-outline' }, { label: 'High Intent Score', by: 'intent_index', order: -1, icon: 'trending-up-outline' } ].map((opt: any) => (<TouchableOpacity key={opt.label} onPress={() => { setSortConfig(opt); setSortVisible(false); }} style={[styles.sortItem, sortConfig.label === opt.label && { backgroundColor: theme.primary + '15', borderColor: theme.primary }]}><Ionicons name={opt.icon as any} size={20} color={sortConfig.label === opt.label ? theme.primary : theme.textMuted} /><Text style={{ flex: 1, color: sortConfig.label === opt.label ? theme.primary : theme.text, fontWeight: '700' }}>{opt.label}</Text>{sortConfig.label === opt.label && <Ionicons name="checkmark-circle" size={20} color={theme.primary} />}</TouchableOpacity>))}</View></View></Pressable></Modal>
         </View>
     );
 }
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
-    header: { paddingHorizontal: 16, borderBottomWidth: 1, paddingBottom: 12 },
-    headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-    headerTitle: { fontSize: 22, fontWeight: '900', letterSpacing: -0.5 },
-    headerSub: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase' },
-    kpiRow: { flexDirection: 'row', gap: 10, marginBottom: 16 },
-    kpiItem: { flex: 1, padding: 12, borderRadius: 16, borderWidth: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
-    kpiIcon: { width: 30, height: 30, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
-    kpiValue: { fontSize: 16, fontWeight: '800' },
-    kpiLabel: { fontSize: 9, fontWeight: '700', textTransform: 'uppercase' },
-    searchBarRow: { marginBottom: 12 },
+    header: { paddingBottom: 0 },
+    headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 12, marginBottom: 20 },
+    headerTitle: { fontSize: 24, fontWeight: '900', letterSpacing: -1 },
+    headerSub: { fontSize: 12, fontWeight: '700', marginTop: 2 },
+    kpiRow: { flexDirection: 'row', paddingHorizontal: 12, gap: 12, marginBottom: 20 },
+    kpiItem: { flex: 1, padding: 12, borderRadius: 16, borderWidth: 1, flexDirection: 'row', alignItems: 'center', gap: 10 },
+    kpiIcon: { width: 32, height: 32, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
+    kpiValue: { fontSize: 16, fontWeight: '900' },
+    kpiLabel: { fontSize: 10, fontWeight: '800', textTransform: 'uppercase' },
+    searchBarRow: { paddingHorizontal: 12, marginBottom: 15 },
     searchBar: { height: 44, borderRadius: 12, borderWidth: 1, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12 },
     searchInput: { flex: 1, marginLeft: 8, fontSize: 14, fontWeight: '600' },
     filterBtn: { padding: 8, borderRadius: 8, marginLeft: 8 },
-    sortItem: { flexDirection: 'row', alignItems: 'center', padding: 16, borderRadius: 16, borderWidth: 1, borderColor: 'transparent', gap: 12 },
-    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-    tabsScroll: { gap: 8, paddingHorizontal: 2 },
-    tab: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 10, borderWidth: 1 },
-    arrowTab: {
-        height: 36,
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginRight: 4,
-        position: 'relative',
-    },
-    activeArrowTab: {
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 3,
-    },
-    arrowRight: {
-        position: 'absolute',
-        right: -10,
-        top: 0,
-        width: 0,
-        height: 0,
-        borderTopWidth: 18,
-        borderBottomWidth: 18,
-        borderLeftWidth: 10,
-        borderTopColor: 'transparent',
-        borderBottomColor: 'transparent',
-        zIndex: 10,
-    },
-    arrowLeft: {
-        position: 'absolute',
-        left: 0,
-        top: 0,
-        width: 0,
-        height: 0,
-        borderTopWidth: 18,
-        borderBottomWidth: 18,
-        borderLeftWidth: 10,
-        borderTopColor: 'transparent',
-        borderBottomColor: 'transparent',
-        zIndex: 1,
-    },
-    closedDropdownModal: {
-        position: 'absolute',
-        right: 16,
-        width: 160,
-        borderRadius: 16,
-        borderWidth: 1,
-        padding: 8,
-        zIndex: 1000,
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.15,
-        shadowRadius: 20,
-        elevation: 10,
-    },
-    dropdownItem: {
-        paddingVertical: 12,
-        paddingHorizontal: 12,
-        borderRadius: 10,
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center'
-    },
+    tabBar: { borderBottomWidth: 1, height: 48, justifyContent: 'center' },
+    aeroContainer: { borderBottomWidth: 1, backgroundColor: 'rgba(255,255,255,0.9)' },
+    aeroRow: { flexDirection: 'row', alignItems: 'center' },
+    arrowWrapper: { flexDirection: 'row', alignItems: 'center' },
+    arrowBody: { height: 32, paddingLeft: 20, paddingRight: 10, justifyContent: 'center', alignItems: 'center', borderTopWidth: 1, borderBottomWidth: 1, borderLeftWidth: 1, flexDirection: 'row' },
+    arrowHeadContainer: { width: 12, height: 32, justifyContent: 'center' },
+    triangle: { width: 0, height: 0, backgroundColor: 'transparent', borderStyle: 'solid', borderTopWidth: 16, borderBottomWidth: 16, borderLeftWidth: 12, borderTopColor: 'transparent', borderBottomColor: 'transparent', position: 'absolute', left: 0 },
+    triangleInner: { width: 0, height: 0, backgroundColor: 'transparent', borderStyle: 'solid', borderTopWidth: 15, borderBottomWidth: 15, borderLeftWidth: 11, borderTopColor: 'transparent', borderBottomColor: 'transparent', position: 'absolute', left: 0, zIndex: 1 },
+    arrowEnd: { width: 10, height: 32, borderTopWidth: 1, borderBottomWidth: 1, borderRightWidth: 1, borderTopRightRadius: 6, borderBottomRightRadius: 6 },
+    aeroText: { fontSize: 9, fontWeight: '900', letterSpacing: 0.5 },
+    tabItem: { paddingHorizontal: 4, justifyContent: 'center', alignItems: 'center', borderBottomWidth: 3, borderBottomColor: 'transparent', marginRight: 10 },
     tabText: { fontSize: 11, fontWeight: '800' },
-    card: { padding: 10, borderRadius: 16, borderWidth: 1, marginBottom: 2 },
+    card: { padding: 14, borderRadius: 20, borderWidth: 1, marginBottom: 10, elevation: 3, shadowOpacity: 0.06, shadowRadius: 12, shadowOffset: { width: 0, height: 6 }, overflow: 'hidden', marginHorizontal: 10 },
     cardInner: { flexDirection: 'row', alignItems: 'center' },
     cardContent: { flex: 1, marginLeft: 12 },
-    cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-    cardName: { fontSize: 15, fontWeight: '800', flex: 1 },
+    cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
+    cardName: { fontSize: 16, fontWeight: '800', flex: 1 },
     moreBtn: { padding: 4 },
-    metaRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
-    requirementRow: { flexDirection: 'row', alignItems: 'center', marginTop: 8 },
-    sizeBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
-    sizeText: { fontSize: 11, fontWeight: '800' },
-    footerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 },
-    ownerBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
-    ownerText: { fontSize: 10, fontWeight: '700' },
-    timeText: { fontSize: 10, fontWeight: '600' },
-    swipeActions: { flexDirection: 'row', paddingHorizontal: 12 },
-    swipeBtn: { width: 60, height: '100%', borderRadius: 16, justifyContent: 'center', alignItems: 'center' },
+    metaRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
+    requirementRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
+    sizeBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
+    sizeText: { fontSize: 10, fontWeight: '800' },
+    footerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 4, paddingTop: 8, borderTopWidth: 1, borderTopColor: 'rgba(0,0,0,0.03)' },
+    ownerText: { fontSize: 10, textTransform: 'uppercase' },
+    timeText: { fontSize: 9, fontWeight: '700', color: '#94A3B8' },
+    ownerBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, marginTop: 4 },
+    sourceBadge: { backgroundColor: '#F1F5F9', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+    sourceText: { fontSize: 8, fontWeight: '900', color: '#64748B' },
+    swipeActions: { flexDirection: 'row', width: 140, height: '100%', marginBottom: 10 },
+    swipeBtn: { flex: 1, justifyContent: 'center', alignItems: 'center' },
     swipeLabel: { color: '#fff', fontSize: 10, fontWeight: '800', marginTop: 4 },
-    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-    sheetContainer: { padding: 24, borderTopLeftRadius: 32, borderTopRightRadius: 32, paddingBottom: 40, maxHeight: '85%' },
-    sheetHandle: { width: 40, height: 4, borderRadius: 2, backgroundColor: '#E2E8F0', alignSelf: 'center', marginBottom: 20 },
-    sheetTitle: { fontSize: 18, fontWeight: '800' },
-    actionGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 16, justifyContent: 'center', marginBottom: 24 },
-    actionItem: { width: '21%', alignItems: 'center', gap: 8 },
-    actionIcon: { width: 48, height: 48, borderRadius: 24, justifyContent: 'center', alignItems: 'center' },
-    actionLabel: { fontSize: 11, fontWeight: '700' },
-    subSection: { padding: 16, borderRadius: 16, marginBottom: 16 },
-    sectionTitle: { fontSize: 12, fontWeight: '800', textTransform: 'uppercase', marginBottom: 12 },
-    stageGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-    stageChip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, borderWidth: 1 },
-    stageChipText: { fontSize: 10, fontWeight: '800' },
-    userChip: { alignItems: 'center', gap: 6, width: 70 },
-    userAvatar: { width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center' },
-    userChipText: { fontSize: 10, fontWeight: '700', textAlign: 'center' },
-    tagInputRow: { flexDirection: 'row', gap: 10, marginBottom: 12 },
-    tagInput: { flex: 1, height: 44, borderRadius: 12, paddingHorizontal: 16, borderWidth: 1, fontSize: 14 },
+    empty: { alignItems: 'center', marginTop: 100 },
+    emptyText: { marginTop: 12, fontSize: 15, fontWeight: '600', color: '#94A3B8' },
+    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+    sheetContainer: { borderTopLeftRadius: 32, borderTopRightRadius: 32, padding: 24, paddingBottom: 40, maxHeight: '85%' },
+    sheetHandle: { width: 40, height: 4, backgroundColor: '#E2E8F0', borderRadius: 2, alignSelf: 'center', marginBottom: 20 },
+    sheetHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20 },
+    sheetTitle: { fontSize: 18, fontWeight: '900' },
+    actionGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, justifyContent: 'center' },
+    actionItem: { width: '22%', alignItems: 'center', marginBottom: 16 },
+    actionIcon: { width: 56, height: 56, borderRadius: 16, justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
+    actionLabel: { fontSize: 10, fontWeight: '800', textAlign: 'center' },
+    subSection: { padding: 20, borderRadius: 20, marginTop: 10 },
+    sectionTitle: { fontSize: 12, fontWeight: '900', textTransform: 'uppercase', marginBottom: 15, letterSpacing: 1 },
+    userChip: { flexDirection: 'row', alignItems: 'center', padding: 10, borderRadius: 12, borderWidth: 1, gap: 10 },
+    userAvatar: { width: 28, height: 28, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
+    userChipText: { fontSize: 13, fontWeight: '700' },
+    tagInputRow: { flexDirection: 'row', gap: 10, marginBottom: 15 },
+    tagInput: { flex: 1, height: 44, borderRadius: 12, borderWidth: 1, paddingHorizontal: 15, fontWeight: '700' },
     addTagBtn: { width: 44, height: 44, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
     tagList: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
     tagBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
     tagText: { fontSize: 12, fontWeight: '700' },
-    filterSection: { marginBottom: 24 },
-    filterSectionTitle: { fontSize: 11, fontWeight: '900', letterSpacing: 1, marginBottom: 12, textTransform: 'uppercase' },
-    filterChip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 12, borderWidth: 1, borderColor: '#e2e8f0' },
-    filterInput: { height: 48, borderRadius: 12, paddingHorizontal: 16, fontSize: 14, fontWeight: '600', borderWidth: 1, borderColor: '#e2e8f0' },
-    filterFooter: { padding: 20, paddingTop: 10 },
-    fieldLabel: { fontSize: 13, fontWeight: '700' },
+    dropdownItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 15, borderRadius: 12, marginBottom: 8 },
+    filterSection: { marginBottom: 25 },
+    filterSectionTitle: { fontSize: 11, fontWeight: '900', textTransform: 'uppercase', marginBottom: 10, letterSpacing: 1 },
+    filterChip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: '#E2E8F0' },
+    filterInput: { height: 48, borderRadius: 12, borderWidth: 1, paddingHorizontal: 16, fontSize: 14, fontWeight: '700' },
+    filterFooter: { padding: 20 },
     applyBtn: { height: 56, borderRadius: 18, justifyContent: 'center', alignItems: 'center' },
-    applyBtnText: { color: '#fff', fontSize: 16, fontWeight: '800' },
-    sheetHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16 },
-    alphabetIndex: {
-        position: 'absolute',
-        right: 4,
-        top: 200,
-        bottom: 100,
-        justifyContent: 'center',
-        alignItems: 'center',
-        width: 20,
-        zIndex: 100
-    },
-    alphabetLetter: {
-        paddingVertical: 1,
-    },
-    alphabetText: {
-        fontSize: 10,
-        fontWeight: '900',
-    }
+    applyBtnText: { color: '#fff', fontSize: 16, fontWeight: '900' },
+    fieldLabel: { fontSize: 12, fontWeight: '700' },
+    sortItem: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, borderRadius: 12, borderWidth: 1, borderColor: 'transparent' },
 });

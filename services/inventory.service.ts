@@ -57,3 +57,9 @@ export const getInventoryHistoryByContact = async (contactId: string) => {
     const res = await api.get("/inventory", { params: { contactId, history: "true", limit: "100" } });
     return res.data;
 };
+
+export const deleteInventory = async (id: string) => {
+    const res = await api.delete(`/inventory/${id}`);
+    return res.data;
+};
+

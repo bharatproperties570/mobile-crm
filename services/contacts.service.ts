@@ -1,4 +1,5 @@
 import api from "./api";
+import { extractList } from "./api.helpers";
 
 export interface Contact {
     _id: string;
@@ -111,10 +112,10 @@ export const lookupCallerInfo = async (phoneNumber: string): Promise<CallerInfo 
         // Performance: Concurrent parallel lookups for zero-latency identification
         const [leadsRes, dealsRes, invRes, contactsRes, actsRes] = await Promise.allSettled([
             api.get("/leads", { params: { mobile: cleanedPhone } }),
-            api.get("/deals", { params: { "partyStructure.buyer.phone": cleanedPhone } }),
+            api.get("/deals", { params: { contactPhone: cleanedPhone } }),
             api.get("/inventory", { params: { ownerPhone: cleanedPhone } }),
             getContacts({ phone: cleanedPhone }),
-            api.get("/activities", { params: { "relatedTo.mobile": cleanedPhone, limit: "1" } })
+            api.get("/activities", { params: { contactPhone: cleanedPhone, limit: "1" } })
         ]);
 
         const contexts: any = {};
@@ -222,8 +223,3 @@ export const lookupCallerInfo = async (phoneNumber: string): Promise<CallerInfo 
     }
 };
 
-const extractList = (data: any): any[] => {
-    if (Array.isArray(data)) return data;
-    if (data?.docs && Array.isArray(data.docs)) return data.docs;
-    return [];
-};

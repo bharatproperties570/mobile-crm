@@ -9,6 +9,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/context/ThemeContext";
 import { useCallTracking } from "@/context/CallTrackingContext";
 import api from "@/services/api";
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
 import { getUnifiedTimeline } from "@/services/activities.service";
 import { getMatchingLeads } from "@/services/leads.service";
 import { getDealById, type Deal } from "@/services/deals.service";
@@ -231,6 +233,96 @@ export default function DealDetailScreen() {
     const contentScrollViewRef = useRef<ScrollView>(null);
     const fadeAnim = useRef(new Animated.Value(0)).current;
     const [stageHistory, setStageHistory] = useState<any[]>([]);
+    const [generatingPdf, setGeneratingPdf] = useState(false);
+
+    const handleGeneratePDF = async () => {
+        if (!deal || !valuation) {
+            Alert.alert("Incomplete Data", "Valuation data is required to generate a cost sheet.");
+            return;
+        }
+
+        setGeneratingPdf(true);
+        try {
+            const html = `
+                <html>
+                <head>
+                    <style>
+                        body { font-family: 'Helvetica', sans-serif; padding: 40px; color: #1e293b; }
+                        .header { border-bottom: 2px solid #6366f1; padding-bottom: 20px; margin-bottom: 30px; display: flex; justify-content: space-between; }
+                        .logo { font-size: 24px; font-weight: 900; color: #6366f1; }
+                        .title { font-size: 28px; font-weight: 800; text-align: center; margin-bottom: 40px; text-transform: uppercase; letter-spacing: 2px; }
+                        .section { margin-bottom: 30px; }
+                        .section-title { font-size: 14px; font-weight: 800; color: #64748b; margin-bottom: 15px; border-bottom: 1px solid #e2e8f0; padding-bottom: 5px; text-transform: uppercase; }
+                        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+                        .item { margin-bottom: 10px; }
+                        .label { font-size: 10px; font-weight: 700; color: #94a3b8; text-transform: uppercase; }
+                        .value { font-size: 14px; font-weight: 600; color: #1e293b; }
+                        .cost-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+                        .cost-table th { text-align: left; background: #f8fafc; padding: 12px; font-size: 12px; color: #64748b; }
+                        .cost-table td { padding: 12px; border-bottom: 1px solid #f1f5f9; font-size: 14px; }
+                        .total-row { background: #6366f1; color: white; font-weight: 800; }
+                        .total-row td { border: none; padding: 15px; font-size: 18px; }
+                        .footer { margin-top: 60px; font-size: 10px; color: #94a3b8; text-align: center; }
+                    </style>
+                </head>
+                <body>
+                    <div class="header">
+                        <div class="logo">BHARAT PROPERTIES</div>
+                        <div style="text-align: right">
+                            <div style="font-size: 12px; font-weight: 700">DATE: ${new Date().toLocaleDateString('en-IN')}</div>
+                            <div style="font-size: 12px; color: #64748b">REF: ${deal.dealId || id?.slice(-6).toUpperCase()}</div>
+                        </div>
+                    </div>
+                    
+                    <div class="title">Net Landed Cost Sheet</div>
+                    
+                    <div class="section">
+                        <div class="section-title">Property Details</div>
+                        <div class="grid">
+                            <div class="item"><div class="label">Project</div><div class="value">${projectName}</div></div>
+                            <div class="item"><div class="label">Unit Number</div><div class="value">${unitNo}</div></div>
+                            <div class="item"><div class="label">Type</div><div class="value">${unitType}</div></div>
+                            <div class="item"><div class="label">Area</div><div class="value">${getSizeLabel(deal, getLookupValue) || "—"}</div></div>
+                        </div>
+                    </div>
+                    
+                    <div class="section">
+                        <div class="section-title">Financial Breakdown</div>
+                        <table class="cost-table">
+                            <tr><th>Description</th><th style="text-align: right">Amount</th></tr>
+                            <tr><td>Base Property Value</td><td style="text-align: right">${fmt(deal.price)}</td></tr>
+                            <tr><td>Stamp Duty</td><td style="text-align: right">${fmt(valuation?.stampDutyAmount)}</td></tr>
+                            <tr><td>Registration Charges</td><td style="text-align: right">${fmt(valuation?.registrationAmount)}</td></tr>
+                            <tr><td>Transfer Fees</td><td style="text-align: right">${fmt(valuation?.valuationData?.transferFees)}</td></tr>
+                            ${valuation?.otherCharges ? `<tr><td>Other Charges</td><td style="text-align: right">${fmt(valuation.otherCharges)}</td></tr>` : ''}
+                            <tr class="total-row"><td>TOTAL LANDED COST</td><td style="text-align: right">${fmt(valuation?.grandTotal || (deal.price + (valuation?.totalGovtCharges || 0)))}</td></tr>
+                        </table>
+                    </div>
+
+                    <div class="section" style="margin-top: 50px;">
+                        <div class="section-title">Ownership & Allocation</div>
+                        <div class="grid">
+                            <div class="item"><div class="label">Primary Party</div><div class="value">${buyer}</div></div>
+                            <div class="item"><div class="label">Assigned Executive</div><div class="value">${assignedTo}</div></div>
+                        </div>
+                    </div>
+
+                    <div class="footer">
+                        This is a computer generated cost sheet from Bharat Properties CRM. Values are indicative and subject to final confirmation.
+                    </div>
+                </body>
+                </html>
+            `;
+
+            const { uri } = await Print.printToFileAsync({ html });
+            await Sharing.shareAsync(uri, { UTI: '.pdf', mimeType: 'application/pdf' });
+        } catch (error) {
+            console.error("PDF Generation Error:", error);
+            Alert.alert("Generation Failed", "Could not create PDF cost sheet.");
+        } finally {
+            setGeneratingPdf(false);
+        }
+    };
 
     const fetchData = useCallback(async (isRefresh = false) => {
         if (!id) return;
@@ -649,8 +741,66 @@ export default function DealDetailScreen() {
                                 <InfoRow label="Transfer Fees" value={fmt(valuation?.valuationData?.transferFees)} />
                                 <View style={[styles.divider, { backgroundColor: theme.border }]} />
                                 <InfoRow label="NET LANDED COST" value={fmt(valuation?.grandTotal || (deal.price + (valuation?.totalGovtCharges || 0)))} accent />
+                                <TouchableOpacity 
+                                    style={[styles.sharePdfInline, { backgroundColor: theme.primary + '10', borderColor: theme.primary }]}
+                                    onPress={handleGeneratePDF}
+                                    disabled={generatingPdf}
+                                >
+                                    {generatingPdf ? (
+                                        <ActivityIndicator size="small" color={theme.primary} />
+                                    ) : (
+                                        <>
+                                            <Ionicons name="share-outline" size={16} color={theme.primary} />
+                                            <Text style={[styles.sharePdfInlineText, { color: theme.primary }]}>Share Cost Sheet as PDF</Text>
+                                        </>
+                                    )}
+                                </TouchableOpacity>
                             </View>
                         )}
+
+                        {/* Negotiation Rounds History */}
+                        <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border, marginTop: 20 }]}>
+                            <View style={styles.sectionHeader}>
+                                <Text style={[styles.cardTitle, { color: theme.text, marginBottom: 0 }]}>Negotiation History</Text>
+                                <TouchableOpacity onPress={() => router.push(`/add-offer?id=${id}`)}>
+                                    <Text style={{ color: theme.primary, fontWeight: '700' }}>+ New Offer</Text>
+                                </TouchableOpacity>
+                            </View>
+                            
+                            {(!deal.negotiationRounds || deal.negotiationRounds.length === 0) ? (
+                                <Text style={styles.emptyText}>No offers recorded yet.</Text>
+                            ) : (
+                                deal.negotiationRounds.map((round: any, i: number) => (
+                                    <View key={i} style={[styles.offerRound, { borderBottomColor: theme.border }]}>
+                                        <View style={styles.offerHeader}>
+                                            <Text style={[styles.offerRoundLabel, { color: theme.primary }]}>ROUND {round.round || (i + 1)}</Text>
+                                            <Text style={[styles.offerDate, { color: theme.textLight }]}>{new Date(round.date).toLocaleDateString()}</Text>
+                                        </View>
+                                        <View style={styles.offerDataRow}>
+                                            <View>
+                                                <Text style={[styles.offerLabel, { color: theme.textMuted }]}>PROSPECT OFFER</Text>
+                                                <Text style={[styles.offerValue, { color: theme.text }]}>{fmt(round.buyerOffer)}</Text>
+                                            </View>
+                                            <View style={{ alignItems: 'flex-end' }}>
+                                                <Text style={[styles.offerLabel, { color: theme.textMuted }]}>COUNTER OFFER</Text>
+                                                <Text style={[styles.offerValue, { color: theme.text }]}>{fmt(round.ownerCounter)}</Text>
+                                            </View>
+                                        </View>
+                                        <View style={{ marginTop: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <View style={{ paddingHorizontal: 8, paddingVertical: 2, borderRadius: 4, backgroundColor: round.status === 'Accepted' ? '#10B98120' : '#F59E0B20' }}>
+                                                <Text style={{ fontSize: 9, fontWeight: '900', color: round.status === 'Accepted' ? '#10B981' : '#F59E0B' }}>{String(round.status || "PENDING").toUpperCase()}</Text>
+                                            </View>
+                                            <Text style={{ fontSize: 11, color: theme.textMuted, fontStyle: 'italic' }}>By: {round.offerBy || "Prospect"}</Text>
+                                        </View>
+                                        {round.notes && (
+                                            <Text style={{ fontSize: 12, color: theme.textSecondary, marginTop: 8, padding: 8, backgroundColor: theme.background, borderRadius: 8 }}>
+                                                {round.notes}
+                                            </Text>
+                                        )}
+                                    </View>
+                                ))
+                            )}
+                        </View>
                     </ScrollView>
                 </View>
 
@@ -677,8 +827,9 @@ export default function DealDetailScreen() {
                     <ScrollView contentContainerStyle={styles.innerScroll}>
                         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
                             <Text style={[styles.cardTitle, { color: theme.text }]}>Regional Geography</Text>
-                            <InfoRow label="City" value={lv(deal.city || deal.inventoryId?.city, getLookupValue, users)} icon="business-outline" />
-                            <InfoRow label="Sector/Locality" value={lv(deal.sector || deal.inventoryId?.sector, getLookupValue, users)} icon="map-outline" />
+                            <InfoRow label="City" value={lv(deal.city || deal.inventoryId?.city, getLookupValue, findUser)} icon="business-outline" />
+                            <InfoRow label="Sector/Locality" value={lv(deal.sector || deal.inventoryId?.sector, getLookupValue, findUser)} icon="map-outline" />
+                            <InfoRow label="Location" value={lv(deal.location || deal.inventoryId?.location, getLookupValue, findUser)} icon="navigate-outline" />
                         </View>
 
                         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
@@ -913,6 +1064,22 @@ export default function DealDetailScreen() {
                                 color="#EF4444" 
                                 onPress={() => { setIsActionModalVisible(false); router.push(`/geography?dealId=${id}`); }} 
                             />
+                            <ActionItem 
+                                icon="swap-horizontal-outline" 
+                                label="Update Stage" 
+                                color="#F59E0B" 
+                                onPress={() => { setIsActionModalVisible(false); router.push(`/change-stage?dealId=${id}&currentStage=${(lv(deal?.stage) || "open").toLowerCase()}`); }} 
+                            />
+                            <ActionItem 
+                                icon="document-text-outline" 
+                                label="Gen Quote" 
+                                color="#10B981" 
+                                onPress={() => { 
+                                    setIsActionModalVisible(false); 
+                                    handleGeneratePDF();
+                                }} 
+                                loading={generatingPdf}
+                            />
                         </View>
                         
                         <TouchableOpacity 
@@ -1101,6 +1268,21 @@ const styles = StyleSheet.create({
         borderWidth: 1, 
         position: 'relative',
         overflow: 'hidden'
+    },
+    sharePdfInline: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        marginTop: 15,
+        paddingVertical: 12,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderStyle: 'dashed'
+    },
+    sharePdfInlineText: {
+        fontSize: 13,
+        fontWeight: '800'
     },
     pulseDot: { 
         position: 'absolute', 

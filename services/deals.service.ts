@@ -106,3 +106,9 @@ export const getMatchingDeals = async (leadId: string) => {
     const res = await api.get("/deals/match", { params: { leadId } });
     return res.data;
 };
+
+export const deleteDeal = async (id: string) => {
+    const res = await api.delete(`/deals/${id}`);
+    return res.data;
+};
+
