@@ -614,21 +614,6 @@ function SearchableDropdown({
                     assignedTo: formData.owner || undefined,
                     team: formData.teams.length > 0 ? formData.teams : (formData.team ? [formData.team] : []),
                     visibleTo: formData.visibleTo || "Everyone"
-                },
-                contactDetails: {
-                    fatherName: formData.fatherName,
-                    gender: formData.gender,
-                    maritalStatus: formData.maritalStatus,
-                    birthDate: formData.birthDate,
-                    anniversaryDate: formData.anniversaryDate,
-                    professionCategory: formData.professionCategory,
-                    professionSubCategory: formData.professionSubCategory,
-                    designation: formData.designation,
-                    company: formData.company,
-                    workOffice: formData.workOffice,
-                    salutation: formData.salutation,
-                    firstName: formData.firstName,
-                    lastName: formData.lastName
                 }
             };
             delete (payload as any).projectTowers;
