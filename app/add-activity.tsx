@@ -32,6 +32,9 @@ import { useAuth } from "@/context/AuthContext";
 import { useLookup } from "@/context/LookupContext";
 import { useProjects } from "@/context/ProjectContext";
 
+import GooglePlacesAutocomplete from "@/components/GooglePlacesAutocompleteFixed";
+
+const GOOGLE_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
 const TYPES = ["Call", "Meeting", "Site Visit", "Task", "Email"];
 const PRIORITIES = ["Low", "Normal", "High"];
 const STATUSES = ["Pending", "In Progress", "Completed", "Deferred"];
@@ -339,8 +342,9 @@ export default function AddActivityScreen() {
         if (!formData.subject) return Alert.alert("Error", "Please enter a subject");
         if (!selectedEntity) return Alert.alert("Error", "Please select a related entity");
 
-        if (formData.type === "Call" && !formData.details.purpose) {
-            return Alert.alert("Required", "Please select a Call Purpose");
+        if (["Call", "Meeting", "Site Visit", "Email", "Task"].includes(formData.type) && !formData.details.purpose) {
+            const label = formData.type === 'Meeting' ? 'Agenda' : formData.type === 'Site Visit' ? 'Visit Type' : 'Purpose';
+            return Alert.alert("Required", `Please select a ${formData.type} ${label}`);
         }
 
         setSaving(true);
@@ -415,7 +419,13 @@ export default function AddActivityScreen() {
         }));
     };
 
-
+    const updatePropertyResult = (index: number, result: string) => {
+        setSelectedProjects(prev => {
+            const newList = [...prev];
+            newList[index] = { ...newList[index], result };
+            return newList;
+        });
+    };
 
     if (loading) {
         return (
@@ -456,7 +466,12 @@ export default function AddActivityScreen() {
                 </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+            <ScrollView 
+                style={styles.content} 
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                nestedScrollEnabled={true}
+            >
                 {/* 1. Entity Connection */}
                 <Section title="Related To">
                     <TouchableOpacity style={styles.entitySelector} onPress={() => setIsSearching(true)}>
@@ -517,6 +532,27 @@ export default function AddActivityScreen() {
                         placeholder="e.g. Schedule Site Visit"
                     />
 
+                    {/* Unified Purpose Field - Moved here to match Web CRM */}
+                    {["Call", "Meeting", "Site Visit", "Email", "Task"].includes(formData.type) && (
+                        <View style={{ marginBottom: 16 }}>
+                            <Text style={styles.label}>
+                                {formData.type === 'Call' ? 'Call Purpose' : 
+                                 formData.type === 'Meeting' ? 'Agenda' : 
+                                 formData.type === 'Site Visit' ? 'Visit Type' :
+                                 formData.type === 'Email' ? 'Email Purpose' : 'Task Purpose'}
+                            </Text>
+                            <TouchableOpacity
+                                style={styles.input}
+                                onPress={() => setIsPurposeModalVisible(true)}
+                            >
+                                <Text style={[styles.inputText, !formData.details.purpose && { color: "#94A3B8" }]}>
+                                    {formData.details.purpose || `Select ${formData.type === 'Meeting' ? 'Agenda' : formData.type === 'Site Visit' ? 'Type' : 'Purpose'}`}
+                                </Text>
+                                <Ionicons name="chevron-down" size={20} color="#64748B" />
+                            </TouchableOpacity>
+                        </View>
+                    )}
+
                     <View style={styles.row}>
                         <View style={{ flex: 1, marginRight: 8 }}>
                             <Text style={styles.label}>Due Date</Text>
@@ -549,17 +585,7 @@ export default function AddActivityScreen() {
                 {/* 3. Dynamic Type-Specific Section */}
                 {formData.type === "Call" && (
                     <Section title="Call Specifics">
-                        {/* 1. Call Purpose (Dynamic Dropdown from Web Settings) */}
-                        <Text style={styles.label}>Purpose / Agenda</Text>
-                        <TouchableOpacity
-                            style={styles.input}
-                            onPress={() => setIsPurposeModalVisible(true)}
-                        >
-                            <Text style={[styles.inputText, !formData.details.purpose && { color: "#94A3B8" }]}>
-                                {formData.details.purpose || "Select Purpose"}
-                            </Text>
-                            <Ionicons name="chevron-down" size={20} color="#64748B" />
-                        </TouchableOpacity>
+
 
                         {/* 2. Priority Selector */}
                         <Text style={[styles.label, { marginTop: 12 }]}>Priority</Text>
@@ -676,38 +702,77 @@ export default function AddActivityScreen() {
 
                 {formData.type === "Meeting" && (
                     <Section title="Meeting Workspace">
-                        <Text style={styles.label}>Purpose / Agenda</Text>
-                        <TouchableOpacity
-                            style={styles.input}
-                            onPress={() => setIsPurposeModalVisible(true)}
-                        >
-                            <Text style={[styles.inputText, !formData.details.purpose && { color: "#94A3B8" }]}>
-                                {formData.details.purpose || "Select Purpose"}
-                            </Text>
-                            <Ionicons name="chevron-down" size={20} color="#64748B" />
-                        </TouchableOpacity>
 
-                        <Text style={[styles.label, { marginTop: 12 }]}>Meeting Type</Text>
-                        <View style={styles.chipGrid}>
-                            {MEETING_TYPES.map((mt: string) => (
+
+                        <Text style={[styles.label, { marginTop: 12 }]}>Meeting Location</Text>
+                        <View style={styles.chipRow}>
+                            {MEETING_TYPES.map(mt => (
                                 <TouchableOpacity
                                     key={mt}
                                     style={[styles.chip, formData.details.meetingType === mt && styles.activeChip]}
-                                    onPress={() => setFormData(prev => ({ ...prev, details: { ...prev.details, meetingType: mt } }))}
+                                    onPress={() => {
+                                        setFormData(prev => ({ ...prev, details: { ...prev.details, meetingType: mt } }));
+                                        // Reset location when switching to virtual to avoid confusion
+                                        if (mt === "Virtual") {
+                                            setFormData(p => ({ ...p, details: { ...p.details, meetingLocation: "" } }));
+                                        }
+                                    }}
                                 >
                                     <Text style={[styles.chipText, formData.details.meetingType === mt && styles.activeChipText]}>{mt}</Text>
                                 </TouchableOpacity>
                             ))}
                         </View>
+
                         <Text style={[styles.label, { marginTop: 16 }]}>
-                            {formData.details.meetingType === "Virtual" ? "Meeting Link" : "Location"}
+                            {formData.details.meetingType === "Virtual" ? "Meeting Link (Zoom/Meet)" : "Search Address / Venue"}
                         </Text>
-                        <TextInput
-                            style={styles.input}
-                            value={formData.details.meetingLocation}
-                            onChangeText={t => setFormData(p => ({ ...p, details: { ...p.details, meetingLocation: t } }))}
-                            placeholder={formData.details.meetingType === "Virtual" ? "Zoom/Meet Link" : "Office Address"}
-                        />
+
+                        {formData.details.meetingType === "Virtual" ? (
+                            <TextInput
+                                style={styles.input}
+                                value={formData.details.meetingLocation}
+                                onChangeText={t => setFormData(p => ({ ...p, details: { ...p.details, meetingLocation: t } }))}
+                                placeholder="Paste meeting link here..."
+                            />
+                        ) : (
+                            <View style={{ marginBottom: 12, zIndex: 1000 }}>
+                                <GooglePlacesAutocomplete
+                                    placeholder="Search for address or venue..."
+                                    onPress={(data, details = null) => {
+                                        setFormData(p => ({ ...p, details: { ...p.details, meetingLocation: data.description } }));
+                                    }}
+                                    query={{
+                                        key: GOOGLE_API_KEY,
+                                        language: 'en',
+                                        components: 'country:in',
+                                    }}
+                                    onFail={(error) => console.log('GooglePlaces Error:', error)}
+                                    fetchDetails={false}
+                                    enablePoweredByContainer={false}
+                                    minLength={2}
+                                    debounce={400}
+                                    styles={{
+                                        container: { flex: 0 },
+                                        textInput: [styles.input, { marginTop: 0 }],
+                                        listView: { 
+                                            backgroundColor: 'white', 
+                                            borderRadius: 12, 
+                                            elevation: 5, 
+                                            shadowColor: '#000', 
+                                            shadowOpacity: 0.2, 
+                                            shadowRadius: 8,
+                                            borderWidth: 1,
+                                            borderColor: '#E2E8F0',
+                                            marginTop: 5,
+                                            maxHeight: 200
+                                        },
+                                        row: { padding: 13, height: 48 },
+                                        description: { fontSize: 14, color: '#1E293B' },
+                                        separator: { height: 1, backgroundColor: '#F1F5F9' }
+                                    }}
+                                />
+                            </View>
+                        )}
 
                         {/* Complete Meeting Toggle */}
                         <View style={[styles.row, { marginTop: 24, justifyContent: "space-between", alignItems: "center" }]}>
@@ -723,12 +788,12 @@ export default function AddActivityScreen() {
                             />
                         </View>
 
-                        {/* Conditional Meeting Completion Fields */}
+                        {/* Conditional Meeting Completion Fields - Standardized with Web CRM */}
                         {formData.status === "Completed" && (
                             <View style={{ marginTop: 16, backgroundColor: "#FDF4FF", padding: 12, borderRadius: 12, borderWidth: 1, borderColor: "#F5D0FE" }}>
                                 <View style={styles.row}>
                                     <View style={{ flex: 1, marginRight: 8 }}>
-                                        <Text style={styles.label}>Status</Text>
+                                        <Text style={styles.label}>Meeting Status</Text>
                                         <View style={styles.chipGrid}>
                                             {["Conducted", "Rescheduled", "Cancelled", "No Show"].map(s => (
                                                 <TouchableOpacity
@@ -743,26 +808,45 @@ export default function AddActivityScreen() {
                                     </View>
                                 </View>
 
-                                {formData.details.meetingOutcomeStatus === "Conducted" && (
+                                {(formData.details.meetingOutcomeStatus === 'Cancelled' || formData.details.meetingOutcomeStatus === 'No Show' || formData.details.meetingOutcomeStatus === 'Rescheduled') && (
                                     <View style={{ marginTop: 12 }}>
-                                        <Text style={styles.label}>Result / Outcome</Text>
-                                        <View style={styles.chipGrid}>
-                                            {dynamicResults.map((r: any) => (
-                                                <TouchableOpacity
-                                                    key={r.label}
-                                                    style={[styles.chip, formData.details.completionResult === r.label && styles.activeChip]}
-                                                    onPress={() => setFormData(prev => ({ ...prev, details: { ...prev.details, completionResult: r.label } }))}
-                                                >
-                                                    <Text style={[styles.chipText, formData.details.completionResult === r.label && styles.activeChipText]}>{r.label}</Text>
-                                                </TouchableOpacity>
-                                            ))}
-                                        </View>
+                                        <Text style={styles.label}>Reason / Remarks</Text>
+                                        <TextInput
+                                            style={[styles.input, { height: 60, textAlignVertical: "top" }]}
+                                            multiline
+                                            value={formData.details.completionResult}
+                                            onChangeText={t => setFormData(p => ({ ...p, details: { ...p.details, completionResult: t } }))}
+                                            placeholder="Enter reason for status change..."
+                                        />
+                                    </View>
+                                )}
+
+                                {formData.details.meetingOutcomeStatus === "Conducted" && (
+                                    <View style={{ marginTop: 16 }}>
+                                        <Text style={styles.label}>Meeting Result (Outcome)</Text>
+                                        {dynamicResults.length > 0 ? (
+                                            <View style={styles.chipGrid}>
+                                                {dynamicResults.map((r: any) => (
+                                                    <TouchableOpacity
+                                                        key={r.label}
+                                                        style={[styles.chip, formData.details.completionResult === r.label && styles.activeChip]}
+                                                        onPress={() => setFormData(prev => ({ ...prev, details: { ...prev.details, completionResult: r.label } }))}
+                                                    >
+                                                        <Text style={[styles.chipText, formData.details.completionResult === r.label && styles.activeChipText]}>{r.label}</Text>
+                                                    </TouchableOpacity>
+                                                ))}
+                                            </View>
+                                        ) : (
+                                            <Text style={{ fontSize: 12, color: "#94A3B8", fontStyle: "italic" }}>
+                                                {formData.details.purpose ? "No outcomes configured for this agenda." : "Please select a Meeting Agenda first to see results."}
+                                            </Text>
+                                        )}
                                     </View>
                                 )}
 
                                 <View style={[styles.row, { marginTop: 12 }]}>
                                     <View style={{ flex: 1, marginRight: 8 }}>
-                                        <Text style={styles.label}>Date</Text>
+                                        <Text style={styles.label}>Actual Date</Text>
                                         <TouchableOpacity style={styles.input} onPress={() => {
                                             setPickerDate(new Date(formData.details.completionDate));
                                             setActivePickerField("completion");
@@ -772,7 +856,7 @@ export default function AddActivityScreen() {
                                         </TouchableOpacity>
                                     </View>
                                     <View style={{ flex: 1, marginLeft: 8 }}>
-                                        <Text style={styles.label}>Time</Text>
+                                        <Text style={styles.label}>Actual Time</Text>
                                         <TouchableOpacity style={styles.input} onPress={() => {
                                             const [h, m] = formData.details.completionTime.split(':');
                                             const d = new Date(); d.setHours(parseInt(h), parseInt(m));
@@ -785,7 +869,7 @@ export default function AddActivityScreen() {
                                     </View>
                                 </View>
 
-                                <Text style={[styles.label, { marginTop: 12 }]}>Feedback / Notes</Text>
+                                <Text style={[styles.label, { marginTop: 12 }]}>Meeting Feedback / Notes</Text>
                                 <TextInput
                                     style={[styles.input, { height: 80, textAlignVertical: "top", backgroundColor: "#FFF" }]}
                                     multiline
@@ -819,17 +903,6 @@ export default function AddActivityScreen() {
                             </TouchableOpacity>
                         </View>
 
-                        <Text style={[styles.label, { marginTop: 16 }]}>Purpose / Agenda</Text>
-                        <TouchableOpacity
-                            style={styles.input}
-                            onPress={() => setIsPurposeModalVisible(true)}
-                        >
-                            <Text style={[styles.inputText, !formData.details.purpose && { color: "#94A3B8" }]}>
-                                {formData.details.purpose || "Select Purpose"}
-                            </Text>
-                            <Ionicons name="chevron-down" size={20} color="#64748B" />
-                        </TouchableOpacity>
-
                         {/* Complete Site Visit Toggle */}
                         <View style={[styles.row, { marginTop: 24, justifyContent: "space-between", alignItems: "center" }]}>
                             <View>
@@ -844,12 +917,12 @@ export default function AddActivityScreen() {
                             />
                         </View>
 
-                        {/* Conditional Site Visit Completion Fields */}
+                        {/* Conditional Site Visit Completion Fields - Standardized with Web CRM */}
                         {formData.status === "Completed" && (
                             <View style={{ marginTop: 16, backgroundColor: "#F0FDF4", padding: 12, borderRadius: 12, borderWidth: 1, borderColor: "#DCFCE7" }}>
                                 <View style={styles.row}>
                                     <View style={{ flex: 1, marginRight: 8 }}>
-                                        <Text style={styles.label}>Status</Text>
+                                        <Text style={styles.label}>General Status</Text>
                                         <View style={styles.chipGrid}>
                                             {["Conducted", "Rescheduled", "Cancelled", "Did Not Visit"].map(s => (
                                                 <TouchableOpacity
@@ -864,20 +937,40 @@ export default function AddActivityScreen() {
                                     </View>
                                 </View>
 
-                                {formData.details.meetingOutcomeStatus === "Conducted" && (
+                                {(formData.details.meetingOutcomeStatus === 'Cancelled' || formData.details.meetingOutcomeStatus === 'Did Not Visit') && (
                                     <View style={{ marginTop: 12 }}>
-                                        <Text style={styles.label}>Overall Result</Text>
-                                        <View style={styles.chipGrid}>
-                                            {dynamicResults.map((r: any) => (
-                                                <TouchableOpacity
-                                                    key={r.label}
-                                                    style={[styles.chip, formData.details.completionResult === r.label && styles.activeChip]}
-                                                    onPress={() => setFormData(prev => ({ ...prev, details: { ...prev.details, completionResult: r.label } }))}
-                                                >
-                                                    <Text style={[styles.chipText, formData.details.completionResult === r.label && styles.activeChipText]}>{r.label}</Text>
-                                                </TouchableOpacity>
-                                            ))}
-                                        </View>
+                                        <Text style={styles.label}>Reason</Text>
+                                        <TextInput
+                                            style={[styles.input, { height: 60, textAlignVertical: "top" }]}
+                                            multiline
+                                            value={formData.details.completionResult}
+                                            onChangeText={t => setFormData(p => ({ ...p, details: { ...p.details, completionResult: t } }))}
+                                            placeholder="Why was this visit cancelled?"
+                                        />
+                                    </View>
+                                )}
+
+                                {formData.details.meetingOutcomeStatus === "Conducted" && (
+                                    <View style={{ marginTop: 16 }}>
+                                        <Text style={[styles.label, { textTransform: 'uppercase', fontSize: 11, color: '#047857' }]}>Property Outcomes</Text>
+                                        {selectedProjects.map((row, index) => (
+                                            <View key={index} style={{ marginBottom: 12, padding: 10, backgroundColor: '#FFF', borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                                                <Text style={{ fontWeight: '700', fontSize: 13, color: '#1E293B', marginBottom: 8 }}>
+                                                    {row.project} - {row.unitNo}
+                                                </Text>
+                                                <View style={styles.chipGrid}>
+                                                    {dynamicResults.map((r: any) => (
+                                                        <TouchableOpacity
+                                                            key={r.label}
+                                                            style={[styles.chip, row.result === r.label && styles.activeChip, { paddingVertical: 6, paddingHorizontal: 12 }]}
+                                                            onPress={() => updatePropertyResult(index, r.label)}
+                                                        >
+                                                            <Text style={[styles.chipText, row.result === r.label && styles.activeChipText, { fontSize: 11 }]}>{r.label}</Text>
+                                                        </TouchableOpacity>
+                                                    ))}
+                                                </View>
+                                            </View>
+                                        ))}
                                     </View>
                                 )}
 
@@ -918,7 +1011,69 @@ export default function AddActivityScreen() {
                         )}
                     </Section>
                 )}
+                {formData.type === "Email" && (
+                    <Section title="Email Context">
+                        <Text style={styles.label}>Direction</Text>
+                        <View style={styles.toggleRow}>
+                            {["Outgoing", "Incoming"].map(d => (
+                                <TouchableOpacity
+                                    key={d}
+                                    style={[styles.toggleBtn, formData.details.direction === d && styles.activeToggle]}
+                                    onPress={() => setFormData(p => ({ ...p, details: { ...p.details, direction: d } }))}
+                                >
+                                    <Text style={[styles.toggleText, formData.details.direction === d && styles.activeToggleText]}>{d}</Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
 
+                        <View style={[styles.row, { marginTop: 20, justifyContent: "space-between", alignItems: "center" }]}>
+                            <View>
+                                <Text style={[styles.label, { marginBottom: 2 }]}>Logged as Completed</Text>
+                                <Text style={{ fontSize: 12, color: "#64748B" }}>Log mail status and results</Text>
+                            </View>
+                            <Switch
+                                value={formData.status === "Completed"}
+                                onValueChange={(val) => setFormData(p => ({ ...p, status: val ? "Completed" : "Pending" }))}
+                                trackColor={{ false: "#CBD5E1", true: "#FED7AA" }}
+                                thumbColor={formData.status === "Completed" ? "#C2410C" : "#F4F4F5"}
+                            />
+                        </View>
+
+                        {formData.status === "Completed" && (
+                            <View style={{ marginTop: 16, backgroundColor: "#FFF7ED", padding: 12, borderRadius: 12, borderWidth: 1, borderColor: "#FED7AA" }}>
+                                <Text style={styles.label}>Mail Status</Text>
+                                <View style={styles.chipGrid}>
+                                    {['Sent', 'Delivered', 'Read', 'Replied', 'Bounced'].map(s => (
+                                        <TouchableOpacity
+                                            key={s}
+                                            style={[styles.chip, formData.details.meetingOutcomeStatus === s && styles.activeChip]}
+                                            onPress={() => setFormData(p => ({ ...p, details: { ...p.details, meetingOutcomeStatus: s } }))}
+                                        >
+                                            <Text style={[styles.chipText, formData.details.meetingOutcomeStatus === s && styles.activeChipText]}>{s}</Text>
+                                        </TouchableOpacity>
+                                    ))}
+                                </View>
+
+                                {formData.details.purpose && (
+                                    <>
+                                        <Text style={[styles.label, { marginTop: 16 }]}>Email Result</Text>
+                                        <View style={styles.chipGrid}>
+                                            {dynamicResults.map((r: any) => (
+                                                <TouchableOpacity
+                                                    key={r.label}
+                                                    style={[styles.chip, formData.details.completionResult === r.label && styles.activeChip]}
+                                                    onPress={() => setFormData(prev => ({ ...prev, details: { ...prev.details, completionResult: r.label } }))}
+                                                >
+                                                    <Text style={[styles.chipText, formData.details.completionResult === r.label && styles.activeChipText]}>{r.label}</Text>
+                                                </TouchableOpacity>
+                                            ))}
+                                        </View>
+                                    </>
+                                )}
+                            </View>
+                        )}
+                    </Section>
+                )}
                 {formData.type === "Task" && (
                     <Section title="Task Details & Reminders">
                         {formData.details.tasks.map((task: any, index: number) => (

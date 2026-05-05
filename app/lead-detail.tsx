@@ -131,6 +131,38 @@ export default function LeadDetailScreen() {
     const fadeAnim = useRef(new Animated.Value(0)).current;
 
     const [stageHistory, setStageHistory] = useState<any[]>([]);
+    const [deleting, setDeleting] = useState(false);
+
+    const handleDelete = () => {
+        Alert.alert(
+            "Delete Lead",
+            "Are you sure you want to permanently delete this lead? This action cannot be undone.",
+            [
+                { text: "Cancel", style: "cancel" },
+                { 
+                    text: "Delete", 
+                    style: "destructive", 
+                    onPress: async () => {
+                        setDeleting(true);
+                        try {
+                            const res = await api.delete(`/leads/${id}`);
+                            if (res.status === 200 || res.status === 204) {
+                                Alert.alert("Success", "Lead deleted successfully.");
+                                router.replace("/(tabs)/leads");
+                            } else {
+                                throw new Error("Failed to delete");
+                            }
+                        } catch (err) {
+                            console.error("Delete Error:", err);
+                            Alert.alert("Error", "Could not delete lead. Please try again.");
+                        } finally {
+                            setDeleting(false);
+                        }
+                    }
+                }
+            ]
+        );
+    };
 
     const fetchData = useCallback(async (isRefresh = false) => {
         if (!id) {
@@ -453,6 +485,11 @@ export default function LeadDetailScreen() {
                                 const text = `Lead Details: ${name}\nPhone: ${phone}\nRequirement: ${lv(lead.requirement)}\nBudget: ${lv(lead.budget)}`;
                                 Share.share({ message: text }).catch(() => Alert.alert("Error", "Could not share lead"));
                             }} 
+                        />
+                        <RibbonButton 
+                            icon="trash" 
+                            color="#EF4444" 
+                            onPress={handleDelete} 
                         />
                     </ScrollView>
                 </View>

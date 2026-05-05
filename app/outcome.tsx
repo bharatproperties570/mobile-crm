@@ -51,6 +51,7 @@ export default function OutcomeScreen() {
     const [masterSettings, setMasterSettings] = useState<any>(null);
 
     const [outcomeStatus, setOutcomeStatus] = useState("");
+    const [callDirection, setCallDirection] = useState("Outgoing Call");
     const [result, setResult] = useState("");
     const [feedback, setFeedback] = useState("");
 
@@ -92,6 +93,7 @@ export default function OutcomeScreen() {
 
             if (id === 'new') {
                 const now = new Date();
+                const pDirection = params.direction as string;
                 const newAct = {
                     type: pActType || "Call",
                     subject: `${pActType || "Call"} with ${pEntityName || "Client"}`,
@@ -108,6 +110,7 @@ export default function OutcomeScreen() {
                     status: "Pending"
                 };
                 setActivity(newAct);
+                if (pDirection) setCallDirection(pDirection);
                 if (newAct.type === "Call") {
                     setOutcomeStatus("Answered / Connected");
                     if (Platform.OS === 'android') checkAndScanRecording();
@@ -118,9 +121,11 @@ export default function OutcomeScreen() {
                 const actRes = await safeApiCallSingle(() => getActivityById(id as string));
                 if ((actRes as any)?.data) {
                     const act = (actRes as any).data;
+                    const pDirection = params.direction as string;
                     setActivity(act);
                     targetType = act.type;
                     targetEntityId = act.entityId;
+                    if (pDirection) setCallDirection(pDirection);
                     if (act.type === "Call") {
                         setOutcomeStatus("Answered / Connected");
                         if (Platform.OS === 'android') checkAndScanRecording();
@@ -323,6 +328,7 @@ export default function OutcomeScreen() {
                 details: {
                     ...activity.details,
                     meetingOutcomeStatus: outcomeStatus,
+                    callDirection: activity.type === "Call" ? callDirection : undefined,
                     completionResult: result,
                     clientFeedback: feedback,
                     completionDate: completionDate.toISOString().split('T')[0],
@@ -416,6 +422,23 @@ export default function OutcomeScreen() {
                     <Text style={styles.subject}>{activity.subject}</Text>
                     <Text style={styles.subInfo}>{(activity as any).relatedTo?.[0]?.name || "General Client"}</Text>
                 </View>
+
+                {activity.type === "Call" && (
+                    <View style={styles.section}>
+                        <Text style={styles.label}>Call Direction</Text>
+                        <View style={styles.chipGrid}>
+                            {["Outgoing Call", "Incoming Call"].map(d => (
+                                <TouchableOpacity
+                                    key={d}
+                                    style={[styles.chip, callDirection === d && styles.chipActive]}
+                                    onPress={() => setCallDirection(d)}
+                                >
+                                    <Text style={[styles.chipText, callDirection === d && styles.chipTextActive]}>{d}</Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+                    </View>
+                )}
 
                 <View style={styles.section}>
                     <Text style={styles.label}>Outcome Status</Text>

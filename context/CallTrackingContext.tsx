@@ -25,6 +25,7 @@ export function CallTrackingProvider({ children }: { children: React.ReactNode }
         entityType: string;
         entityName: string;
         startTime: number;
+        direction: string;
     } | null>(null);
 
     const appState = useRef(AppState.currentState);
@@ -85,7 +86,8 @@ export function CallTrackingProvider({ children }: { children: React.ReactNode }
             entityId: info.entityId,
             entityType: info.type,
             entityName: info.name,
-            startTime: Date.now()
+            startTime: Date.now(),
+            direction: 'Incoming Call'
         });
     };
 
@@ -125,7 +127,8 @@ export function CallTrackingProvider({ children }: { children: React.ReactNode }
                                         entityType: lastCall.entityType,
                                         entityName: lastCall.entityName,
                                         actType: 'Call',
-                                        mobile: lastCall.mobile
+                                        mobile: lastCall.mobile,
+                                        direction: lastCall.direction
                                     }
                                 });
                             }
@@ -151,7 +154,8 @@ export function CallTrackingProvider({ children }: { children: React.ReactNode }
                                         entityName: lastCall.entityName,
                                         actType: 'Call',
                                         status: 'Completed',
-                                        mobile: lastCall.mobile
+                                        mobile: lastCall.mobile,
+                                        direction: lastCall.direction
                                     }
                                 });
                             }
@@ -178,7 +182,8 @@ export function CallTrackingProvider({ children }: { children: React.ReactNode }
             entityId,
             entityType,
             entityName,
-            startTime: Date.now()
+            startTime: Date.now(),
+            direction: 'Outgoing Call'
         });
         
         // Note: We don't call Linking.openURL here anymore. 

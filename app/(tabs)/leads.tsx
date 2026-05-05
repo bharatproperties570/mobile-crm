@@ -318,9 +318,30 @@ const ActionSheet = memo(({ visible, onClose, lead, onUpdate, users }: any) => {
                                 <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Sequence</Text>
                             </TouchableOpacity>
                             <TouchableOpacity style={styles.actionItem} onPress={() => {
-                                Alert.alert("Delete?", "Remove lead permanently?", [
-                                    { text: "Cancel" },
-                                    { text: "Delete", style: "destructive", onPress: async () => { await deleteLead(lead._id); onUpdate(); onClose(); } }
+                                Alert.alert("Delete Lead", "Are you sure you want to permanently remove this lead?", [
+                                    { text: "Cancel", style: "cancel" },
+                                    { 
+                                        text: "Delete", 
+                                        style: "destructive", 
+                                        onPress: async () => {
+                                            if (!lead?._id) return Alert.alert("Error", "Lead ID missing");
+                                            try {
+                                                console.log("[LeadsList] Deleting lead:", lead._id);
+                                                const res = await api.delete(`/leads/${lead._id}`);
+                                                if (res.status === 200 || res.status === 204) {
+                                                    Vibration.vibrate(50);
+                                                    Alert.alert("Success", "Lead removed successfully.");
+                                                    onUpdate(); 
+                                                    onClose();
+                                                } else {
+                                                    throw new Error("Invalid response from server");
+                                                }
+                                            } catch (err) {
+                                                console.error("Delete Lead Error:", err);
+                                                Alert.alert("Error", "Failed to delete lead. Please check your internet connection.");
+                                            }
+                                        } 
+                                    }
                                 ]);
                             }}>
                                 <View style={[styles.actionIcon, { backgroundColor: '#EF444415' }]}><Ionicons name="trash" size={24} color="#EF4444" /></View>
@@ -723,7 +744,7 @@ const styles = StyleSheet.create({
     sizeBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
     sizeText: { fontSize: 10, fontWeight: '800' },
     footerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 4, paddingTop: 8, borderTopWidth: 1, borderTopColor: 'rgba(0,0,0,0.03)' },
-    ownerText: { fontSize: 10, textTransform: 'uppercase' },
+    ownerText: { fontSize: 10 },
     timeText: { fontSize: 9, fontWeight: '700', color: '#94A3B8' },
     ownerBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, marginTop: 4 },
     sourceBadge: { backgroundColor: '#F1F5F9', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
