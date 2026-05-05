@@ -8,6 +8,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/context/ThemeContext";
+import { useAuth } from "@/context/AuthContext";
 import { updateLeadStage, updateDealStage, STAGE_COLORS } from "@/services/stageEngine.service";
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -15,8 +16,15 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 export default function ChangeStageScreen() {
     const { theme } = useTheme();
     const isDark = theme.background === '#0F172A';
+    const { user } = useAuth();
     const params = useLocalSearchParams();
     const router = useRouter();
+
+    // ── Admin-only guard ────────────────────────────────────────────
+    const isAdmin = user?.role === 'admin' || 
+                    user?.role === 'Admin' || 
+                    user?.department === 'Management' ||
+                    user?.isAdmin === true;
 
     const leadId = params.leadId as string;
     const dealId = params.dealId as string;
@@ -28,12 +36,21 @@ export default function ChangeStageScreen() {
     const fadeAnim = useState(new Animated.Value(0))[0];
 
     useEffect(() => {
+        // Admin guard: show alert and go back if not admin
+        if (!isAdmin) {
+            Alert.alert(
+                "Permission Restricted",
+                "Stage can only be changed via Activity outcomes.\n\nContact your Admin for a manual override.",
+                [{ text: "OK", style: "cancel", onPress: () => router.back() }]
+            );
+            return;
+        }
         Animated.timing(fadeAnim, {
             toValue: 1,
             duration: 400,
             useNativeDriver: true
         }).start();
-    }, []);
+    }, [isAdmin]);
 
     const handleSave = async () => {
         if (!selectedStage) return Alert.alert("Required", "Please select a new stage.");

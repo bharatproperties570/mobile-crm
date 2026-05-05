@@ -2,8 +2,9 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from "react"
 import {
     View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity,
     ActivityIndicator, Alert, Switch, Modal, FlatList, SafeAreaView, Platform,
-    Animated, Pressable
+    Animated, Pressable, Vibration
 } from "react-native";
+
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import api from "@/services/api";
@@ -11,12 +12,16 @@ import GooglePlacesAutocomplete from "@/components/GooglePlacesAutocompleteFixed
 import { getTeams, getTeamMembers } from "@/services/teams.service";
 import { getContactById } from "@/services/contacts.service";
 import { getLeadById, addLead, updateLead, checkDuplicates } from "@/services/leads.service";
+import { validateWithFieldRules } from "@/services/field-rules.service";
 import { useLookup } from "@/context/LookupContext";
 import { useUsers } from "@/context/UserContext";
 import { useProjects } from "@/context/ProjectContext";
 import { useTheme, SPACING } from "@/context/ThemeContext";
 import { MultiSearchableDropdown } from "@/components/MultiSearchableDropdown";
 import { safeApiCall, safeApiCallSingle } from "@/services/api.helpers";
+import { DistributionToast } from "@/components/DistributionToast";
+
+
 
 const LEAD_LOOKUP_TYPES = [
     "Requirement", "Category", "SubCategory", "UnitType",
@@ -275,6 +280,13 @@ export default function AddLead() {
     const [step, setStep] = useState(0);
     const [loading, setLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
+    const [distributionToast, setDistributionToast] = useState<{
+        visible: boolean;
+        agentName: string;
+        ruleName?: string;
+        leadId?: string;
+    }>({ visible: false, agentName: "", ruleName: undefined, leadId: undefined });
+
 
     const shakeAnim = useRef(new Animated.Value(0)).current;
     const googlePlacesRef = useRef<any>(null);
@@ -577,6 +589,7 @@ function SearchableDropdown({
     };
 
     const handleSave = async () => {
+        // ── Layer 1: Fast local check (no network needed) ───────────────────
         if (!formData.firstName || !formData.mobile) {
             Alert.alert("Required", "First Name and Mobile are mandatory.");
             return;
@@ -618,15 +631,57 @@ function SearchableDropdown({
             };
             delete (payload as any).projectTowers;
 
+            // ── Layer 2: Enterprise Field Rules Validation (Backend Rules) ──
+            // Fetches admin-configured mandatory/validation rules from backend.
+            // Cached for 5 minutes — no extra latency on repeated form opens.
+            const validationResult = await validateWithFieldRules('lead', payload);
+            if (!validationResult.isValid) {
+                const errorMessages = Object.entries(validationResult.errors)
+                    .map(([field, msg]) => `• ${field}: ${msg}`)
+                    .join('\n');
+                Alert.alert(
+                    '❌ Validation Failed',
+                    `Please fix the following fields before saving:\n\n${errorMessages}`,
+                    [{ text: 'Review', style: 'cancel' }]
+                );
+                setIsSaving(false);
+                return;
+            }
+
             console.log('[DEBUG-LEAD] Submitting Payload:', JSON.stringify(payload, null, 2));
 
-            const res = id 
-                ? await safeApiCall(() => updateLead(id, payload)) 
+            const res = id
+                ? await safeApiCall(() => updateLead(id, payload))
                 : await safeApiCall(() => addLead(payload));
 
             if (!res.error) {
-                Alert.alert("✅ Success", `Lead ${id ? "updated" : "created"} successfully!`);
-                router.replace("/(tabs)/leads");
+                const responseData = (res.data || res) as any;
+                const assignedAgent = responseData?.assignedAgent;
+                const createdLead = responseData?.data;
+
+
+                if (assignedAgent && assignedAgent.userId && !id) {
+                    // ── Distribution Engine fired: show assignment toast ───────────
+                    // Resolve agent name from users list (populate if needed)
+                    const agentUser = users.find((u: any) =>
+                        (u._id || u.id) === (assignedAgent.userId?._id || assignedAgent.userId)
+                    );
+                    const agentName = agentUser?.fullName || agentUser?.name ||
+                        assignedAgent.userId?.fullName || assignedAgent.userId?.name ||
+                        "Assigned Agent";
+
+                    setDistributionToast({
+                        visible: true,
+                        agentName,
+                        ruleName: assignedAgent.ruleName,
+                        leadId: createdLead?._id,
+                    });
+                    // Navigation happens on toast dismiss (via onDismiss)
+                } else {
+                    Alert.alert("✅ Success", `Lead ${id ? "updated" : "created"} successfully!`);
+                    router.replace("/(tabs)/leads");
+                }
+
             } else {
                 throw new Error(res.error || "Save failed");
             }
@@ -1222,6 +1277,19 @@ function SearchableDropdown({
                     </TouchableOpacity>
                 )}
             </View>
+
+            {/* ── Distribution Engine Feedback Toast ─────────────────────────── */}
+            <DistributionToast
+                visible={distributionToast.visible}
+                agentName={distributionToast.agentName}
+                ruleName={distributionToast.ruleName}
+                isAutoAssigned={true}
+                onDismiss={() => {
+                    setDistributionToast(prev => ({ ...prev, visible: false }));
+                    router.replace("/(tabs)/leads");
+                }}
+                duration={4500}
+            />
         </SafeAreaView>
     );
 }

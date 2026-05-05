@@ -6,16 +6,25 @@
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "bharatproperties",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#121212",
+    "splash": {
+      "backgroundColor": "#121212",
+      "resizeMode": "contain"
+    },
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.bharatproperties.crm",
+      "backgroundColor": "#121212",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "UIUserInterfaceStyle": "Dark"
       }
     },
     "android": {
       "package": "com.bharatproperties.crm",
+      "backgroundColor": "#121212",
+      "softwareKeyboardLayoutMode": "resize",
       "permissions": [
         "READ_CALL_LOG",
         "READ_PHONE_STATE",
@@ -25,7 +34,7 @@
       ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundColor": "#1E40AF"
+        "backgroundColor": "#121212"
       }
     },
     "web": {

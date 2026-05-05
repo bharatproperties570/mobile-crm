@@ -1,8 +1,9 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { useRouter, useSegments } from 'expo-router';
+import React, { createContext, useContext, useState, useEffect } from "react";
+import { useRouter, useSegments } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { storage } from "@/services/storage";
 import api, { set401Callback } from "@/services/api";
+import * as SplashScreen from "expo-splash-screen";
 
 interface AuthContextType {
     token: string | null;
@@ -21,135 +22,164 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const [token, setToken] = useState<string | null>(null);
     const [refreshToken, setRefreshToken] = useState<string | null>(null);
     const [user, setUser] = useState<any | null>(null);
+
+    // loading=true on mount — prevents redirect engine from firing before auth check
     const [loading, setLoading] = useState(true);
+
     const router = useRouter();
-    
-    // Safety check for segments
+
+    // Safety: useSegments can throw if router isn't mounted yet
     let segments: string[] = [];
     try {
         segments = useSegments();
-    } catch (e) {
-        console.warn("[AuthContext] useSegments hook failed (router might not be ready)");
+    } catch {
+        // Router not ready — will retry on next render
     }
 
+    // ── Auth Check ─────────────────────────────────────────────────────────────
+    // CRITICAL: SplashScreen.hideAsync() is called INSIDE this function's finally
+    // block. This guarantees the splash ONLY hides after auth state is resolved,
+    // meaning the correct destination screen is rendered BEFORE the splash goes away.
+    // This eliminates the white flash window entirely.
     const checkAuth = async () => {
         setLoading(true);
-        console.log("[AuthContext] Checking authentication...");
-        
-        // Safety timeout: Never let the app hang on loading for more than 10s
+        console.log("[AuthContext] Starting auth check...");
+
+        // Failsafe ref: prevents stale-closure double-fire bug
+        const done = { value: false };
+
         const timeout = setTimeout(() => {
-            if (loading) {
-                console.warn("[AuthContext] Auth check timed out. Forcing loading=false");
+            if (!done.value) {
+                done.value = true;
+                console.warn("[AuthContext] Auth check timed out (8s). Forcing resolution.");
                 setLoading(false);
+                SplashScreen.hideAsync().catch(() => {});
             }
-        }, 10000);
+        }, 8000);
 
         try {
-            const savedToken = await storage.getItem("authToken");
-            const savedRefreshToken = await storage.getItem("refreshToken");
-            const savedUser = await storage.getItem("userData");
-            
+            const [savedToken, savedRefreshToken, savedUser] = await Promise.all([
+                storage.getItem("authToken"),
+                storage.getItem("refreshToken"),
+                storage.getItem("userData"),
+            ]);
+
             if (savedToken) {
-                console.log("[AuthContext] Token found in storage");
+                console.log("[AuthContext] ✅ Token found — restoring session");
                 setToken(savedToken);
                 setRefreshToken(savedRefreshToken);
                 if (savedUser) {
                     try {
                         setUser(JSON.parse(savedUser));
-                    } catch (e) {
-                        console.warn("[AuthContext] Failed to parse userData cache");
+                    } catch {
+                        console.warn("[AuthContext] userData parse failed — ignoring cached user");
                     }
                 }
             } else {
-                console.log("[AuthContext] No token found");
+                console.log("[AuthContext] No token — user must log in");
             }
         } catch (error) {
             console.error("[AuthContext] Auth check error:", error);
         } finally {
-            clearTimeout(timeout);
-            setLoading(false);
+            if (!done.value) {
+                done.value = true;
+                clearTimeout(timeout);
+                setLoading(false);
+
+                // ── The ONE place splash screen hides ─────────────────────────
+                // At this point:
+                //   • loading will become false (triggering redirect effect)
+                //   • router.replace() will have the correct destination
+                //   • the screen behind the splash is already dark (#121212)
+                // So when splash lifts: user sees correct dark screen immediately.
+                SplashScreen.hideAsync().catch(() => {});
+                console.log("[AuthContext] ✅ Auth resolved — splash hiding now");
+            }
         }
     };
 
-    const clearCaches = async () => {
-        try {
-            const keys = await AsyncStorage.getAllKeys();
-            const cacheKeys = keys.filter(k => k.startsWith("@cache_") || k.startsWith("@offline_cache_"));
-            if (cacheKeys.length > 0) await AsyncStorage.multiRemove(cacheKeys);
-        } catch (e) {}
-    }
-
+    // ── Mount: register 401 handler + run auth check ────────────────────────
     useEffect(() => {
         if (set401Callback) {
             set401Callback(async () => {
-                console.warn('[AuthContext] 401 Unauthorized detected, performing full logout...');
+                console.warn("[AuthContext] 401 detected → logout");
                 await logout();
             });
         }
         checkAuth();
     }, []);
 
-    const [routerReady, setRouterReady] = useState(false);
-
+    // ── Redirect Engine ────────────────────────────────────────────────────────
+    // Fires whenever loading or token changes.
+    // loading=true → skip (auth not resolved yet)
+    // loading=false + token → go to tabs
+    // loading=false + no token → go to login
     useEffect(() => {
-        // Small delay to ensure router is fully mounted and segments are stable
-        const timer = setTimeout(() => setRouterReady(true), 500);
-        return () => clearTimeout(timer);
-    }, []);
-
-    // 🚀 Redirection Engine: Handles path-based access control
-    useEffect(() => {
-        if (loading || !routerReady) return;
+        if (loading) return; // Wait for auth check to complete
 
         const group = segments?.[0];
-        const inAuthGroup = group === '(auth)';
-        const inTabsGroup = group === '(tabs)';
+        const inAuthGroup = group === "(auth)";
         const isAtRoot = !segments || segments.length === 0;
 
-        // PREVENT REDIRECTION LOOPS: Check if we are ALREADY where we need to be
         if (!token) {
             if (!inAuthGroup) {
-                console.log("[AuthContext] Redirecting to login (unauthenticated)");
+                console.log("[AuthContext] Redirect → /(auth)/login");
                 router.replace("/(auth)/login");
             }
         } else {
             if (isAtRoot || inAuthGroup) {
-                console.log("[AuthContext] Redirecting to tabs (authenticated)");
+                console.log("[AuthContext] Redirect → /(tabs)");
                 router.replace("/(tabs)");
             }
         }
-    }, [token, segments, loading, routerReady]);
+    }, [token, loading]);
+    // NOTE: Intentionally NOT including `segments` in deps — it causes loop
+    // when navigating. token+loading is the correct minimal dependency set.
 
+    // ── Auth Actions ───────────────────────────────────────────────────────────
     const login = async (newToken: string, newRefreshToken: string, userData: any) => {
         setToken(newToken);
         setRefreshToken(newRefreshToken);
         setUser(userData);
-        await storage.setItem("authToken", newToken);
-        await storage.setItem("refreshToken", newRefreshToken);
-        await storage.setItem("userData", JSON.stringify(userData));
+        await Promise.all([
+            storage.setItem("authToken", newToken),
+            storage.setItem("refreshToken", newRefreshToken),
+            storage.setItem("userData", JSON.stringify(userData)),
+        ]);
     };
 
     const logout = async () => {
         setToken(null);
         setRefreshToken(null);
         setUser(null);
-        await storage.deleteItem("authToken");
-        await storage.deleteItem("refreshToken");
-        await storage.deleteItem("userData");
-        await clearCaches();
+        await Promise.all([
+            storage.deleteItem("authToken"),
+            storage.deleteItem("refreshToken"),
+            storage.deleteItem("userData"),
+        ]);
+        // Clear all caches
+        try {
+            const keys = await AsyncStorage.getAllKeys();
+            const cacheKeys = keys.filter(
+                (k) => k.startsWith("@cache_") || k.startsWith("@offline_cache_")
+            );
+            if (cacheKeys.length > 0) await AsyncStorage.multiRemove(cacheKeys);
+        } catch {}
     };
 
     return (
-        <AuthContext.Provider value={{ 
-            token, 
-            refreshToken,
-            user, 
-            isAuthenticated: !!token, 
-            loading, 
-            login, 
-            logout, 
-            checkAuth 
-        }}>
+        <AuthContext.Provider
+            value={{
+                token,
+                refreshToken,
+                user,
+                isAuthenticated: !!token,
+                loading,
+                login,
+                logout,
+                checkAuth,
+            }}
+        >
             {children}
         </AuthContext.Provider>
     );
@@ -157,6 +187,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
 export const useAuth = () => {
     const context = useContext(AuthContext);
-    if (!context) throw new Error('useAuth must be used within an AuthProvider');
+    if (!context) throw new Error("useAuth must be used within an AuthProvider");
     return context;
 };

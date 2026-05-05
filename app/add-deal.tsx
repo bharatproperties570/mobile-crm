@@ -6,6 +6,8 @@ import {
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { getDealById, addDeal, updateDeal, type Deal } from "@/services/deals.service";
+import { validateWithFieldRules } from "@/services/field-rules.service";
+
 import { useTheme, SPACING } from "@/context/ThemeContext";
 import { useLookup } from "@/context/LookupContext";
 import { useUsers } from "@/context/UserContext";
@@ -462,13 +464,31 @@ export default function AddDealScreen() {
                 payload.inventoryId = selectedUnit._id;
             }
 
-            // ━━ DEBUG LOGGING (Senior Professional) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            // ── Enterprise Field Rules Validation (Backend Rules) ──────────
+            // Admin-configured mandatory/pattern rules from backend.
+            // Cached 5 min — no extra latency on repeated form opens.
+            const validationResult = await validateWithFieldRules('deal', payload);
+            if (!validationResult.isValid) {
+                const errorMessages = Object.entries(validationResult.errors)
+                    .map(([field, msg]) => `• ${field}: ${msg}`)
+                    .join('\n');
+                Alert.alert(
+                    '❌ Validation Failed',
+                    `Please fix the following fields before saving:\n\n${errorMessages}`,
+                    [{ text: 'Review', style: 'cancel' }]
+                );
+                setIsSaving(false);
+                return;
+            }
+
+            // ── DEBUG LOGGING (Senior Professional) ───────────────────────
             console.log('[DEBUG-DEAL] Starting Save Workflow...');
             console.log('[DEBUG-DEAL] Payload:', JSON.stringify(payload, null, 2));
 
-            const res = id 
-                ? await safeApiCall(() => api.put(`/deals/${id}`, payload)) 
+            const res = id
+                ? await safeApiCall(() => api.put(`/deals/${id}`, payload))
                 : await safeApiCall(() => api.post('/deals', payload));
+
             
             if (!res.error) {
                 Alert.alert("✅ Success", `Deal ${id ? "updated" : "created"} successfully!`);

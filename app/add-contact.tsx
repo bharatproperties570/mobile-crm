@@ -12,6 +12,8 @@ import { MultiSearchableDropdown } from "@/components/MultiSearchableDropdown";
 import { getTeams } from "@/services/teams.service";
 import { safeApiCall } from "@/services/api.helpers";
 import { useUsers } from "@/context/UserContext";
+import { validateWithFieldRules } from "@/services/field-rules.service";
+
 
 // ─── Reusable Components ──────────────────────────────────────────────────────
 
@@ -404,9 +406,25 @@ export default function AddContactScreen() {
                 anniversaryDate: form.anniversaryDate || undefined,
             };
 
-            const res = id 
-                ? await safeApiCall(() => api.put(`/contacts/${id}`, payload)) 
+            // ── Enterprise Field Rules Validation (Backend Rules) ──────────
+            const validationResult = await validateWithFieldRules('contact', payload);
+            if (!validationResult.isValid) {
+                const errorMessages = Object.entries(validationResult.errors)
+                    .map(([field, msg]) => `• ${field}: ${msg}`)
+                    .join('\n');
+                Alert.alert(
+                    '❌ Validation Failed',
+                    `Please fix the following before saving:\n\n${errorMessages}`,
+                    [{ text: 'Review', style: 'cancel' }]
+                );
+                setSaving(false);
+                return;
+            }
+
+            const res = id
+                ? await safeApiCall(() => api.put(`/contacts/${id}`, payload))
                 : await safeApiCall(() => api.post("/contacts", payload));
+
 
             if (!res.error) {
                 if (dealId && !id) {

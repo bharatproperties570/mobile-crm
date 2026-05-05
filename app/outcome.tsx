@@ -13,7 +13,7 @@ import api from "@/services/api";
 import { getActivityById, updateActivity } from "@/services/activities.service";
 import { getSystemSettingsByKey } from "@/services/system-settings.service";
 import { safeApiCallSingle } from "@/services/api.helpers";
-import { computeLeadStage, updateLeadStage, syncDealStage } from "@/services/stageEngine.service";
+import { syncDealStage } from "@/services/stageEngine.service";
 import { getAuthorizedFolder, requestFolderPermission, findLatestRecording } from "@/services/storage.service";
 
 // Standard Outcome Data (Fallback)
@@ -346,33 +346,25 @@ export default function OutcomeScreen() {
                 savedActivity = activity;
             }
 
-            // ── Stage Engine: trigger lead stage update ──────────────────────────
-            // Resolve the lead/deal linked to this activity
-            const entityId = savedActivity.entityId || savedActivity.relatedTo?.[0]?.id;
-            const entityType = (savedActivity.entityType || savedActivity.relatedTo?.[0]?.entityType || "Lead").toLowerCase();
-            const dealId = savedActivity.dealId || savedActivity.relatedTo?.find((r: any) => r.entityType?.toLowerCase() === "deal")?.id;
+            // ── Stage Engine: backend rules-driven stage update ─────────────────
+            // When activity is saved with status:'Completed', the backend's
+            // activity controller fires autoTriggerStageChange() which calls
+            // StageTransitionEngine.evaluateAndTransition() with the outcome details.
+            // The engine reads admin-configured rules from SystemSetting and
+            // automatically updates the lead stage. No extra API call needed here.
+            //
+            // We only need to sync the Deal stage if there's a linked deal.
+            const entityId = savedActivity?.entityId || savedActivity?.relatedTo?.[0]?.id;
+            const entityType = (savedActivity?.entityType || savedActivity?.relatedTo?.[0]?.entityType || "Lead").toLowerCase();
+            const dealId = savedActivity?.relatedTo?.find((r: any) => r.model?.toLowerCase() === "deal" || r.entityType?.toLowerCase() === "deal")?.id;
 
-            if (entityId && entityType === "lead") {
-                const currentStage = (activity.leadStage as string) || "New";
-                const newStage = computeLeadStage(currentStage, outcomeStatus, result);
-
-                // Fire and forget — don't block the success alert
-                updateLeadStage(entityId, newStage, {
-                    activityType: activity.type,
-                    outcome: result || outcomeStatus,
-                    activityId: id as string,
-                    reason: `${activity.type} outcome: ${outcomeStatus}${result ? ` — ${result}` : ""}`,
-                }).then(stageRes => {
-                    if (stageRes?.success) {
-                        console.info(`[StageEngine] Lead ${entityId} → ${newStage}`);
-                        // If there's a linked deal, sync it too
-                        if (dealId) {
-                            syncDealStage(dealId, [newStage], {
-                                reason: `Lead stage updated to ${newStage} via ${activity.type} outcome`
-                            });
-                        }
-                    }
-                }).catch(e => console.warn("[StageEngine] stage update failed", e));
+            if (entityId && entityType === "lead" && dealId) {
+                // Sync deal stage after a short delay to let backend process the stage change first
+                setTimeout(() => {
+                    syncDealStage(dealId, [outcomeStatus], {
+                        reason: `Lead activity completed: ${activity.type} — ${result || outcomeStatus}`
+                    }).catch(e => console.warn("[StageEngine] deal sync failed", e));
+                }, 1500);
             }
             // ────────────────────────────────────────────────────────────────────
 
