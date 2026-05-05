@@ -326,19 +326,17 @@ const ActionSheet = memo(({ visible, onClose, lead, onUpdate, users }: any) => {
                                         onPress: async () => {
                                             if (!lead?._id) return Alert.alert("Error", "Lead ID missing");
                                             try {
-                                                console.log("[LeadsList] Deleting lead:", lead._id);
-                                                const res = await api.delete(`/leads/${lead._id}`);
-                                                if (res.status === 200 || res.status === 204) {
-                                                    Vibration.vibrate(50);
-                                                    Alert.alert("Success", "Lead removed successfully.");
-                                                    onUpdate(); 
-                                                    onClose();
-                                                } else {
-                                                    throw new Error("Invalid response from server");
-                                                }
-                                            } catch (err) {
+                                                console.log("[LeadsList] Attempting to delete lead:", lead._id);
+                                                const res = await deleteLead(lead._id);
+                                                
+                                                Vibration.vibrate(50);
+                                                Alert.alert("Success", "Lead removed successfully.");
+                                                onUpdate(); 
+                                                onClose();
+                                            } catch (err: any) {
                                                 console.error("Delete Lead Error:", err);
-                                                Alert.alert("Error", "Failed to delete lead. Please check your internet connection.");
+                                                const errorMsg = err.response?.data?.message || err.message || "Unknown error occurred";
+                                                Alert.alert("Failed to Delete", errorMsg);
                                             }
                                         } 
                                     }
