@@ -261,6 +261,27 @@ export default function LeadDetailScreen() {
         }, [fetchData])
     );
 
+    // Global Sync Listener
+    useEffect(() => {
+        const { DeviceEventEmitter } = require('react-native');
+        const { SyncEvents } = require("@/utils/sync-events");
+        
+        const handleSync = (detail: any) => {
+            console.log("[LeadDetail] Sync event received, forcing refresh:", detail);
+            fetchData(true); // Force refresh bypassing the 2-minute cache
+        };
+
+        const sub1 = DeviceEventEmitter.addListener(SyncEvents.ACTIVITY_COMPLETED, handleSync);
+        const sub2 = DeviceEventEmitter.addListener(SyncEvents.LEAD_UPDATED, handleSync);
+        const sub3 = DeviceEventEmitter.addListener(SyncEvents.NOTE_ADDED, handleSync);
+
+        return () => {
+            sub1.remove();
+            sub2.remove();
+            sub3.remove();
+        };
+    }, [fetchData]);
+
     const onTabPress = (index: number) => {
         setActiveTab(index);
         contentScrollViewRef.current?.scrollTo({ x: index * SCREEN_WIDTH, animated: true });

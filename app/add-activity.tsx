@@ -375,6 +375,11 @@ export default function AddActivityScreen() {
             const res = await safeApiCall(() => addActivity(payload));
 
             if (!res.error) {
+                // Global Sync Dispatch
+                const { emitSyncEvent, SyncEvents } = require("@/utils/sync-events");
+                emitSyncEvent(SyncEvents.ACTIVITY_COMPLETED, { id: res.data?._id, entityId: selectedEntity.id });
+                emitSyncEvent(SyncEvents.LEAD_UPDATED, { id: selectedEntity.id });
+
                 Alert.alert("Success", "Activity logged successfully", [
                     { text: "OK", onPress: () => router.canGoBack() ? router.back() : router.replace("/(tabs)/activities") }
                 ]);

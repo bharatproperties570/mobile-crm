@@ -491,6 +491,10 @@ export default function AddDealScreen() {
 
             
             if (!res.error) {
+                // Global Sync Dispatch
+                const { emitSyncEvent, SyncEvents } = require("@/utils/sync-events");
+                emitSyncEvent(SyncEvents.DEAL_UPDATED, { id: id || res.data?._id });
+
                 Alert.alert("✅ Success", `Deal ${id ? "updated" : "created"} successfully!`);
                 router.dismissAll();
                 router.replace("/(tabs)/deals");

@@ -678,6 +678,10 @@ function SearchableDropdown({
                     });
                     // Navigation happens on toast dismiss (via onDismiss)
                 } else {
+                    // Global Sync Dispatch
+                    const { emitSyncEvent, SyncEvents } = require("@/utils/sync-events");
+                    emitSyncEvent(SyncEvents.LEAD_UPDATED, { id: createdLead?._id || id });
+
                     Alert.alert("✅ Success", `Lead ${id ? "updated" : "created"} successfully!`);
                     router.replace("/(tabs)/leads");
                 }

@@ -526,6 +526,28 @@ export default function MissionControlScreen() {
         }, [fetchData])
     );
 
+    // Global Sync Listener
+    useEffect(() => {
+        const { DeviceEventEmitter } = require('react-native');
+        const { emitSyncEvent, SyncEvents } = require("@/utils/sync-events");
+        
+        const handleSync = (detail: any) => {
+            console.log("[Dashboard] Sync event received, refreshing stats:", detail);
+            fetchData(); 
+        };
+
+        const subs = [
+            DeviceEventEmitter.addListener(SyncEvents.ACTIVITY_COMPLETED, handleSync),
+            DeviceEventEmitter.addListener(SyncEvents.LEAD_UPDATED, handleSync),
+            DeviceEventEmitter.addListener(SyncEvents.DEAL_UPDATED, handleSync),
+            DeviceEventEmitter.addListener(SyncEvents.INVENTORY_UPDATED, handleSync)
+        ];
+
+        return () => {
+            subs.forEach(s => s.remove());
+        };
+    }, [fetchData]);
+
     const getFilterLabel = () => {
         if (selectedFilter === 'all') return "Enterprise Analytics";
         const team = teams.find(t => t._id === selectedFilter || t.id === selectedFilter);

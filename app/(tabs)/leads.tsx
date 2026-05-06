@@ -609,6 +609,27 @@ export default function LeadsScreen() {
     useEffect(() => { fetchLeads(1, false); }, [search, activeTab, sortConfig, advFilters]);
 
     const onRefresh = () => fetchLeads(1, false, true);
+
+    // Global Sync Listener
+    useEffect(() => {
+        const { DeviceEventEmitter } = require('react-native');
+        const { SyncEvents } = require("@/utils/sync-events");
+        
+        const handleSync = (detail: any) => {
+            console.log("[LeadsList] Sync event received, refreshing list:", detail);
+            fetchLeads(1, false); 
+        };
+
+        const subs = [
+            DeviceEventEmitter.addListener(SyncEvents.LEAD_UPDATED, handleSync),
+            DeviceEventEmitter.addListener(SyncEvents.ACTIVITY_COMPLETED, handleSync)
+        ];
+
+        return () => {
+            subs.forEach(s => s.remove());
+        };
+    }, []);
+
     const loadMore = () => { if (!loading && hasMore) fetchLeads(page + 1, true); };
 
     const getStageIcon = (label: string) => {
