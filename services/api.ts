@@ -18,15 +18,14 @@ const PROD_URL = "https://api.bharatproperties.co/api";
 const TUNNEL_URL = "https://bharat-properties-crm-v3.loca.lt/api";
 const LAN_URL = `http://${MACHINE_IP}:${BACKEND_PORT}/api`;
 
-const NATIVE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || TUNNEL_URL;
+const NATIVE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || PROD_URL;
 
 const BASE_URL = Platform.OS === "web" ? WEB_URL : NATIVE_URL;
 
-console.log(`[API] Configuration Found:`);
+console.log(`[API] Configuration Initialized:`);
 console.log(`- Platform: ${Platform.OS}`);
 console.log(`- Base URL: ${BASE_URL}`);
-console.log(`- Local IP: ${LAN_URL}`);
-console.log(`- Tunnel URL: ${TUNNEL_URL}`);
+if (NATIVE_URL === TUNNEL_URL) console.warn(`[API] ⚠️ Using unstable LocalTunnel fallback.`);
 
 const api = axios.create({
   baseURL: BASE_URL,
@@ -202,7 +201,7 @@ api.interceptors.response.use(
         if (isExpired) {
             console.warn('[API] Silent refresh skipped: Session is invalid or expired.');
         } else {
-            console.error('[API] Refresh request failed:', refreshErr.message);
+            console.error(`[API] Refresh request failed for ${BASE_URL}/auth/refresh:`, refreshErr.message);
         }
         
         // Final fallback: real logout
