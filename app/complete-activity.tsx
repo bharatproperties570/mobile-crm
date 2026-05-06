@@ -6,9 +6,9 @@ import {
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { updateActivity, getActivityById } from "@/services/activities.service";
+import { completeActivity, getActivityById } from "@/services/activities.service";
 import { safeApiCall, safeApiCallSingle } from "@/services/api.helpers";
-import { computeLeadStage, updateLeadStage, syncDealStage } from "@/services/stageEngine.service";
+import { syncDealStage } from "@/services/stageEngine.service";
 
 const CALL_OUTCOMES = ["Connected", "No Answer", "Busy", "Wrong Number", "Left Voicemail"];
 const MEETING_OUTCOMES = ["Conducted", "Rescheduled", "Cancelled", "No Show"];
@@ -69,42 +69,24 @@ export default function CompleteActivityScreen() {
     const handleSave = async () => {
         console.log("[CompleteActivity] handleSave pressed");
         setSaving(true);
-        const payload = {
-            ...formData,
-            details: {
-                ...formData.details,
-                callOutcome: formData.callOutcome,
-                completionResult: formData.completionResult,
-                completionResultNote: formData.clientFeedback,
-                meetingOutcomeStatus: formData.meetingOutcomeStatus,
-                visitedProperties: formData.visitedProperties
-            }
+        const completionPayload = {
+            outcome: formData.callOutcome || formData.meetingOutcomeStatus || formData.completionResult || "Completed",
+            outcomeReason: "", // Optional reason
+            completionNotes: formData.clientFeedback,
+            stageFormData: {} // Backend can request this if needed
         };
 
-        const res = await safeApiCall(() => updateActivity(params.id, payload));
+        const res = await safeApiCall(() => completeActivity(params.id, completionPayload));
         setSaving(false);
 
         if (!res.error) {
-            // ── Stage Engine: fire lead stage update ──────────────────────────────
-            const entityId = formData.entityId || formData.relatedTo?.[0]?.id;
-            const entityType = (formData.entityType || formData.relatedTo?.[0]?.entityType || "Lead").toLowerCase();
-            const dealId = formData.dealId || formData.relatedTo?.find((r: any) => r.entityType?.toLowerCase() === "deal")?.id;
-            const outcomeStr = formData.callOutcome || formData.meetingOutcomeStatus || "";
-            const resultStr = formData.completionResult || "";
+            // Global Sync Dispatch
+            const { emitSyncEvent, SyncEvents } = require("@/utils/sync-events");
+            emitSyncEvent(SyncEvents.ACTIVITY_COMPLETED, { id: params.id, entityId: formData.entityId || formData.relatedTo?.[0]?.id });
+            emitSyncEvent(SyncEvents.LEAD_UPDATED, { id: formData.entityId || formData.relatedTo?.[0]?.id });
 
-            if (entityId && entityType === "lead") {
-                const newStage = computeLeadStage(formData.leadStage || "New", outcomeStr, resultStr);
-                updateLeadStage(entityId, newStage, {
-                    activityType: params.actType,
-                    outcome: resultStr || outcomeStr,
-                    activityId: params.id,
-                    reason: `${params.actType} completed: ${outcomeStr}${resultStr ? ` — ${resultStr}` : ""}`,
-                }).then(r => {
-                    if (r?.success) {
-                        console.info(`[StageEngine] Lead ${entityId} → ${newStage}`);
-                        if (dealId) syncDealStage(dealId, [newStage]);
-                    }
-                }).catch(e => console.warn("[StageEngine] stage update error", e));
+            if (res.data?.stageChanged) {
+                console.log(`[StageEngine] Backend triggered stage change: ${res.data.prevStage} -> ${res.data.newStage}`);
             }
             // ─────────────────────────────────────────────────────────────────
 

@@ -43,6 +43,16 @@ export const updateActivity = async (id: string, data: any) => {
     return res.data;
 };
 
+export const completeActivity = async (id: string, data: {
+    outcome: string,
+    outcomeReason?: string,
+    completionNotes?: string,
+    stageFormData?: any
+}) => {
+    const res = await api.post(`/activities/${id}/complete`, data);
+    return res.data;
+};
+
 export const deleteActivity = async (id: string) => {
     const res = await api.delete(`/activities/${id}`);
     return res.data;
