@@ -881,7 +881,13 @@ export default function DealDetailScreen() {
                                         <Text style={{ fontSize: 12, fontWeight: '800', color: theme.textLight }}>BROKER ACTIONS</Text>
                                         <TouchableOpacity 
                                             style={[styles.actionBtnSecondary, { borderColor: theme.primary, borderWidth: 1 }]}
-                                            onPress={() => router.push(`/marketing-broadcast?dealId=${id}`)}
+                                            onPress={() => {
+                                                console.log("[Marketing] Launching Broadcast for Deal:", id);
+                                                router.push({
+                                                    pathname: "/marketing-broadcast",
+                                                    params: { dealId: id }
+                                                });
+                                            }}
                                         >
                                             <Ionicons name="megaphone-outline" size={20} color={theme.primary} />
                                             <Text style={[styles.actionBtnText, { color: theme.primary }]}>Launch Broadcast Campaign</Text>

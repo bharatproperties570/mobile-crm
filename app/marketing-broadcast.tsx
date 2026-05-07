@@ -76,6 +76,11 @@ export default function MarketingBroadcastScreen() {
             return;
         }
 
+        if (selectedChannels.includes('whatsapp') && !selectedTemplate && templates.length > 0) {
+            Alert.alert("Template Required", "Please select a WhatsApp template before launching.");
+            return;
+        }
+
         setSending(true);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
