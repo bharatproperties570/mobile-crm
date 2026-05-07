@@ -22,18 +22,28 @@ export default function MarketingBroadcastScreen() {
     const [sending, setSending] = useState(false);
     const [deal, setDeal] = useState<any>(null);
     const [groups, setGroups] = useState<CompanyGroup[]>([]);
+    const [templates, setTemplates] = useState<any[]>([]);
+    const [selectedTemplate, setSelectedTemplate] = useState<any>(null);
+    const [registry, setRegistry] = useState<any>({});
     const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
     const [channels, setChannels] = useState({ whatsapp: true, email: false });
 
     useEffect(() => {
         const fetchData = async () => {
             try {
-                const [dealRes, groupsRes] = await Promise.all([
+                const [dealRes, groupsRes, templatesRes, registryRes] = await Promise.all([
                     getDealById(dealId as string),
-                    getCompanyGroups()
+                    getCompanyGroups(),
+                    api.get('/marketing/whatsapp/templates'),
+                    api.get('/marketing/whatsapp/variable-registry').catch(() => ({ data: { data: { "1": "customer_name", "2": "property_list_default" } } }))
                 ]);
+                
                 setDeal(dealRes.data.data || dealRes.data || dealRes);
                 setGroups(groupsRes.data.data || []);
+                
+                const approved = (templatesRes.data.templates || []).filter((t: any) => t.status === 'APPROVED');
+                setTemplates(approved);
+                setRegistry(registryRes.data?.data || {});
             } catch (error) {
                 console.error("Fetch error:", error);
                 Alert.alert("Error", "Could not load broadcast details.");
@@ -73,7 +83,9 @@ export default function MarketingBroadcastScreen() {
             const res = await api.post('/marketing/broadcast/bna', {
                 dealId,
                 groupIds: selectedGroups,
-                channels: selectedChannels
+                channels: selectedChannels,
+                templateId: selectedTemplate?.name,
+                language: selectedTemplate?.language
             });
 
             if (res.data.success) {
@@ -175,13 +187,67 @@ export default function MarketingBroadcastScreen() {
                     </View>
                 </View>
 
+                {/* Template Selection */}
+                {channels.whatsapp && templates.length > 0 && (
+                    <View style={styles.section}>
+                        <Text style={[styles.sectionTitle, { color: theme.textLight }]}>WHATSAPP TEMPLATE</Text>
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.templatesScroll}>
+                            {templates.map(t => (
+                                <TouchableOpacity 
+                                    key={t.id}
+                                    style={[
+                                        styles.templateTab,
+                                        { backgroundColor: selectedTemplate?.id === t.id ? theme.primary : (isDark ? 'rgba(255,255,255,0.05)' : '#fff') },
+                                        { borderColor: selectedTemplate?.id === t.id ? theme.primary : theme.border }
+                                    ]}
+                                    onPress={() => setSelectedTemplate(t)}
+                                >
+                                    <Text style={[styles.templateTabText, { color: selectedTemplate?.id === t.id ? '#fff' : theme.text }]}>
+                                        {t.name.replace(/_/g, ' ')}
+                                    </Text>
+                                </TouchableOpacity>
+                            ))}
+                        </ScrollView>
+                    </View>
+                )}
+
                 {/* Message Preview */}
                 <View style={styles.section}>
-                    <Text style={[styles.sectionTitle, { color: theme.textLight }]}>MESSAGE PREVIEW</Text>
-                    <View style={[styles.previewBox, { backgroundColor: isDark ? '#1E293B' : '#F1F5F9' }]}>
-                        <Text style={[styles.previewText, { color: isDark ? '#CBD5E1' : '#475569' }]}>
-                            {`🏢 BROKER UPDATE: ${meta?.title}\n\n💰 Price: ${meta?.price}\n📍 Location: ${meta?.location}\n📐 Specs: ${meta?.features?.join(' | ')}\n\nRef: ${deal?.shareableId}`}
+                    <Text style={[styles.sectionTitle, { color: theme.textLight }]}>LIVE PREVIEW</Text>
+                    <View style={[styles.previewBox, { backgroundColor: isDark ? '#1E293B' : '#DCF8C6', borderLeftWidth: 4, borderLeftColor: '#25D366' }]}>
+                        <Text style={[styles.previewText, { color: isDark ? '#CBD5E1' : '#075E54' }]}>
+                            {selectedTemplate ? (
+                                (() => {
+                                    const body = selectedTemplate.components?.find((c: any) => c.type === 'BODY')?.text || '';
+                                    const resolveSource = (source: string) => {
+                                        switch(source) {
+                                            case 'customer_name': return '[Broker Company Name]';
+                                            case 'property_list_default':
+                                            case 'matchListDefault':
+                                                return `1️⃣ 🏢 ${meta?.title || 'Project'} | 📐 ${meta?.features?.[0] || 'Size'} | 💰 ${meta?.price || 'Price'}`;
+                                            default: return `[${source}]`;
+                                        }
+                                    };
+                                    let preview = body;
+                                    const varMatches = preview.match(/{{(\d+)}}/g) || [];
+                                    varMatches.forEach((m: string) => {
+                                        const idx = m.replace(/[{}]/g, '');
+                                        const config = registry[idx];
+                                        const source = typeof config === 'object' ? config.source : config;
+                                        preview = preview.replace(m, resolveSource(source));
+                                    });
+                                    return preview;
+                                })()
+                            ) : (
+                                `🏢 BROKER UPDATE: ${meta?.title}\n\n💰 Price: ${meta?.price}\n📍 Location: ${meta?.location}\n📐 Specs: ${meta?.features?.join(' | ')}\n\nRef: ${deal?.shareableId}`
+                            )}
                         </Text>
+                        {selectedTemplate && (
+                            <View style={styles.previewFooter}>
+                                <Ionicons name="time-outline" size={10} color={isDark ? '#94A3B8' : '#128C7E'} />
+                                <Text style={[styles.previewTime, { color: isDark ? '#94A3B8' : '#128C7E' }]}>Just now</Text>
+                            </View>
+                        )}
                     </View>
                 </View>
             </ScrollView>
@@ -227,8 +293,13 @@ const styles = StyleSheet.create({
     channelRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16 },
     channelLabel: { fontSize: 15, fontWeight: '700' },
     divider: { height: 1 },
-    previewBox: { padding: 16, borderRadius: 12 },
-    previewText: { fontSize: 13, lineHeight: 20, fontFamily: 'monospace' },
+    templatesScroll: { marginBottom: 10 },
+    templateTab: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10, borderWidth: 1, marginRight: 10 },
+    templateTabText: { fontSize: 13, fontWeight: '700', textTransform: 'capitalize' },
+    previewBox: { padding: 16, borderRadius: 12, elevation: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2 },
+    previewText: { fontSize: 13, lineHeight: 20 },
+    previewFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 4, marginTop: 8 },
+    previewTime: { fontSize: 10, fontWeight: '600' },
     footer: { padding: 20, borderTopWidth: 1 },
     launchBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12, padding: 18, borderRadius: 16 },
     launchBtnText: { color: '#fff', fontSize: 16, fontWeight: '900' }
