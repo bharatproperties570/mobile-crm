@@ -32,8 +32,8 @@ export default function MarketingBroadcastScreen() {
                     getDealById(dealId as string),
                     getCompanyGroups()
                 ]);
-                setDeal(dealRes.data || dealRes);
-                setGroups(groupsRes.data || []);
+                setDeal(dealRes.data.data || dealRes.data || dealRes);
+                setGroups(groupsRes.data.data || []);
             } catch (error) {
                 console.error("Fetch error:", error);
                 Alert.alert("Error", "Could not load broadcast details.");
