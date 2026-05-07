@@ -4,7 +4,7 @@ import {
     ActivityIndicator, Alert, Animated, Linking, Dimensions, Modal
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
+import { useLocalSearchParams, useRouter, useFocusEffect, Link } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/context/ThemeContext";
 import { useCallTracking } from "@/context/CallTrackingContext";
@@ -667,11 +667,6 @@ export default function DealDetailScreen() {
                             onPress={() => router.push(`/match-lead?dealId=${id}`)} 
                         />
                         <RibbonButton 
-                            icon="document-attach" 
-                            color="#0891B2" 
-                            onPress={() => router.push(`/add-document?id=${id}&type=Deal&mode=document`)} 
-                        />
-                        <RibbonButton 
                             icon="share-social" 
                             color="#64748B" 
                             onPress={() => Alert.alert("Share", `Sharing ${unitNo} details...`)} 
@@ -879,19 +874,17 @@ export default function DealDetailScreen() {
 
                                     <View style={{ marginTop: 20, gap: 12 }}>
                                         <Text style={{ fontSize: 12, fontWeight: '800', color: theme.textLight }}>BROKER ACTIONS</Text>
-                                        <TouchableOpacity 
-                                            style={[styles.actionBtnSecondary, { borderColor: theme.primary, borderWidth: 1 }]}
-                                            onPress={() => {
-                                                console.log("[Marketing] Launching Broadcast for Deal:", id);
-                                                router.push({
-                                                    pathname: "/marketing-broadcast",
-                                                    params: { dealId: id }
-                                                });
-                                            }}
+                                        <Link 
+                                            href={`/marketing-broadcast?dealId=${id}`}
+                                            asChild
                                         >
-                                            <Ionicons name="megaphone-outline" size={20} color={theme.primary} />
-                                            <Text style={[styles.actionBtnText, { color: theme.primary }]}>Launch Broadcast Campaign</Text>
-                                        </TouchableOpacity>
+                                            <TouchableOpacity 
+                                                style={[styles.actionBtnSecondary, { borderColor: theme.primary, borderWidth: 1 }]}
+                                            >
+                                                <Ionicons name="megaphone-outline" size={20} color={theme.primary} />
+                                                <Text style={[styles.actionBtnText, { color: theme.primary }]}>Launch Broadcast Campaign</Text>
+                                            </TouchableOpacity>
+                                        </Link>
                                     </View>
                                 </View>
 
