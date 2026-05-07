@@ -88,13 +88,49 @@ const ContactCard = memo(({ contact, idx, onPress, onMenuPress }: { contact: Con
         }).start();
     };
 
+    const handleWhatsApp = (phone: string | undefined) => {
+        if (!phone || phone.trim() === "") return Alert.alert("No Number", "No mobile number available for this contact.");
+        const cleanPhone = phone.replace(/\D/g, '');
+        if (cleanPhone.length < 10) return Alert.alert("Invalid Number", "The mobile number appears to be invalid.");
+        
+        const url = `whatsapp://send?phone=91${cleanPhone}`;
+        console.log(`[Contact WhatsApp] Opening: ${url}`);
+        Linking.openURL(url).catch(() => {
+            const webUrl = `https://wa.me/91${cleanPhone}`;
+            Linking.openURL(webUrl).catch(() => Alert.alert("Error", "Could not open WhatsApp."));
+        });
+    };
+
+    const handleSMS = (phone: string | undefined) => {
+        if (!phone || phone.trim() === "") return Alert.alert("No Number", "No mobile number available.");
+        console.log(`[Contact SMS] Dialing: ${phone}`);
+        Linking.openURL(`sms:${phone}`).catch(() => Alert.alert("Error", "Could not open SMS app."));
+    };
+
+    const handleEmail = (email: string | undefined) => {
+        if (!email || email.trim() === "") return Alert.alert("No Email", "No email address available.");
+        console.log(`[Contact Email] Opening: ${email}`);
+        Linking.openURL(`mailto:${email}`).catch(() => Alert.alert("Error", "Could not open Email app."));
+    };
+
     const renderRightActions = () => (
         <View style={styles.rightActions}>
-            <TouchableOpacity style={[styles.swipeAction, { backgroundColor: "#2563EB" }]} onPress={() => trackCall(phone || "", contact._id, "Contact", name)}>
+            <TouchableOpacity 
+                activeOpacity={0.6}
+                style={[styles.swipeAction, { backgroundColor: "#2563EB" }]} 
+                onPress={() => {
+                    if (!phone) return Alert.alert("No Number", "Cannot initiate call without a phone number.");
+                    trackCall(phone, contact._id, "Contact", name);
+                }}
+            >
                 <Ionicons name="call" size={20} color="#fff" />
                 <Text style={styles.swipeLabel}>Call</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.swipeAction, { backgroundColor: "#F59E0B" }]} onPress={() => Linking.openURL(`sms:${phone}`)}>
+            <TouchableOpacity 
+                activeOpacity={0.6}
+                style={[styles.swipeAction, { backgroundColor: "#F59E0B" }]} 
+                onPress={() => handleSMS(phone)}
+            >
                 <Ionicons name="chatbubble" size={20} color="#fff" />
                 <Text style={styles.swipeLabel}>SMS</Text>
             </TouchableOpacity>
@@ -103,14 +139,19 @@ const ContactCard = memo(({ contact, idx, onPress, onMenuPress }: { contact: Con
 
     const renderLeftActions = () => (
         <View style={styles.leftActions}>
-            <TouchableOpacity style={[styles.swipeAction, { backgroundColor: "#10B981" }]} onPress={() => {
-                const cleanPhone = (phone || "").replace(/[^0-9]/g, "");
-                Linking.openURL(`whatsapp://send?phone=${cleanPhone.length === 10 ? "91" + cleanPhone : cleanPhone}`);
-            }}>
+            <TouchableOpacity 
+                activeOpacity={0.6}
+                style={[styles.swipeAction, { backgroundColor: "#10B981" }]} 
+                onPress={() => handleWhatsApp(phone)}
+            >
                 <Ionicons name="logo-whatsapp" size={20} color="#fff" />
                 <Text style={styles.swipeLabel}>WhatsApp</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.swipeAction, { backgroundColor: "#6366F1" }]} onPress={() => email ? Linking.openURL(`mailto:${email}`) : null}>
+            <TouchableOpacity 
+                activeOpacity={0.6}
+                style={[styles.swipeAction, { backgroundColor: "#6366F1" }]} 
+                onPress={() => handleEmail(email)}
+            >
                 <Ionicons name="mail" size={20} color="#fff" />
                 <Text style={styles.swipeLabel}>Email</Text>
             </TouchableOpacity>

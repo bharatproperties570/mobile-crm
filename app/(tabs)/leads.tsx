@@ -413,27 +413,10 @@ const ActionSheet = memo(({ visible, onClose, lead, onUpdate, users }: any) => {
     );
 });
 
-const LeadCard = memo(({ lead, index, onPress, onMore, liveScore }: any) => {
+const LeadCard = memo(({ lead, index, onPress, onMore, liveScore, onAction }: any) => {
     const { theme } = useTheme();
     const { getLookupValue } = useLookup();
     const { findUser } = useUsers();
-    const { trackCall } = useCallTracking();
-
-    const handleWhatsApp = (phone: string) => {
-        if (!phone) return Alert.alert("No Number", "No mobile number available.");
-        const url = `whatsapp://send?phone=91${phone.replace(/\D/g, '')}`;
-        Linking.openURL(url).catch(() => Linking.openURL(`https://wa.me/91${phone.replace(/\D/g, '')}`));
-    };
-
-    const handleSMS = (phone: string) => {
-        if (!phone) return Alert.alert("No Number", "No mobile number available.");
-        Linking.openURL(`sms:${phone}`);
-    };
-
-    const handleEmail = (email: string) => {
-        if (!email) return Alert.alert("No Email", "No email address available.");
-        Linking.openURL(`mailto:${email}`);
-    };
 
     const name = String(leadName(lead) || "Unnamed");
     const scoreVal = liveScore?.score || lead.intent_index || 30;
@@ -486,15 +469,51 @@ const LeadCard = memo(({ lead, index, onPress, onMore, liveScore }: any) => {
 
     const renderRightActions = () => (
         <View style={styles.swipeActions}>
-            <TouchableOpacity style={[styles.swipeBtn, { backgroundColor: theme.primary }]} onPress={() => trackCall(lead.mobile || "", lead._id, "Lead", name)}><View style={{ alignItems: 'center' }}><Ionicons name="call" size={20} color="#fff" /><Text style={styles.swipeLabel}>Call</Text></View></TouchableOpacity>
-            <TouchableOpacity style={[styles.swipeBtn, { backgroundColor: '#25D366' }]} onPress={() => handleWhatsApp(lead.mobile || "")}><View style={{ alignItems: 'center' }}><Ionicons name="logo-whatsapp" size={20} color="#fff" /><Text style={styles.swipeLabel}>Chat</Text></View></TouchableOpacity>
+            <TouchableOpacity 
+                activeOpacity={0.6}
+                style={[styles.swipeBtn, { backgroundColor: theme.primary }]} 
+                onPress={() => onAction('Call')}
+            >
+                <View style={{ alignItems: 'center' }}>
+                    <Ionicons name="call" size={20} color="#fff" />
+                    <Text style={styles.swipeLabel}>Call</Text>
+                </View>
+            </TouchableOpacity>
+            <TouchableOpacity 
+                activeOpacity={0.6}
+                style={[styles.swipeBtn, { backgroundColor: '#25D366' }]} 
+                onPress={() => onAction('WhatsApp')}
+            >
+                <View style={{ alignItems: 'center' }}>
+                    <Ionicons name="logo-whatsapp" size={20} color="#fff" />
+                    <Text style={styles.swipeLabel}>Chat</Text>
+                </View>
+            </TouchableOpacity>
         </View>
     );
 
     const renderLeftActions = () => (
         <View style={styles.swipeActions}>
-            <TouchableOpacity style={[styles.swipeBtn, { backgroundColor: '#3B82F6' }]} onPress={() => handleSMS(lead.mobile || "")}><View style={{ alignItems: 'center' }}><Ionicons name="chatbubble-ellipses" size={20} color="#fff" /><Text style={styles.swipeLabel}>SMS</Text></View></TouchableOpacity>
-            <TouchableOpacity style={[styles.swipeBtn, { backgroundColor: '#F59E0B' }]} onPress={() => handleEmail(lead.email || "")}><View style={{ alignItems: 'center' }}><Ionicons name="mail" size={20} color="#fff" /><Text style={styles.swipeLabel}>Email</Text></View></TouchableOpacity>
+            <TouchableOpacity 
+                activeOpacity={0.6}
+                style={[styles.swipeBtn, { backgroundColor: '#3B82F6' }]} 
+                onPress={() => onAction('SMS')}
+            >
+                <View style={{ alignItems: 'center' }}>
+                    <Ionicons name="chatbubble-ellipses" size={20} color="#fff" />
+                    <Text style={styles.swipeLabel}>SMS</Text>
+                </View>
+            </TouchableOpacity>
+            <TouchableOpacity 
+                activeOpacity={0.6}
+                style={[styles.swipeBtn, { backgroundColor: '#F59E0B' }]} 
+                onPress={() => onAction('Email')}
+            >
+                <View style={{ alignItems: 'center' }}>
+                    <Ionicons name="mail" size={20} color="#fff" />
+                    <Text style={styles.swipeLabel}>Email</Text>
+                </View>
+            </TouchableOpacity>
         </View>
     );
 
@@ -502,12 +521,12 @@ const LeadCard = memo(({ lead, index, onPress, onMore, liveScore }: any) => {
         <Swipeable renderRightActions={renderRightActions} renderLeftActions={renderLeftActions}>
             <TouchableOpacity onPress={onPress}>
                 <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-<View style={styles.cardInner}>
+                    <View style={styles.cardInner}>
                         <View style={{ alignItems: 'center', width: 55, gap: 6 }}>
                             <LeadScoreRing score={scoreVal} color={scoreColor} />
                             <View style={[styles.ownerBadge, { backgroundColor: stageCfg.color + '15' }]}><Text style={[styles.ownerText, { color: stageCfg.color, fontSize: 8, fontWeight: '900' }]}>{stageLabel.toUpperCase()}</Text></View>
                         </View>
-<View style={styles.cardContent}><View style={styles.cardHeader}><Text style={[styles.cardName, { color: theme.text }]} numberOfLines={1}>{name}</Text><View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>{!!lead.source && <View style={styles.sourceBadge}><Text style={styles.sourceText}>{String(getLookupValue("Source", lead.source)).toUpperCase()}</Text></View>}<TouchableOpacity onPress={onMore} style={styles.moreBtn}><Ionicons name="ellipsis-vertical" size={18} color={theme.textMuted} /></TouchableOpacity></View></View><View style={styles.metaRow}><Ionicons name="call-outline" size={12} color={theme.textMuted} /><Text style={{ fontSize: 12, color: theme.textSecondary, fontWeight: '600', marginLeft: 4 }}>{String(lead.mobile)}</Text>{!!budgetText && <View style={{ flexDirection: 'row', alignItems: 'center' }}><Text style={{ color: theme.textMuted, marginHorizontal: 6 }}>|</Text><Ionicons name="pricetag-outline" size={12} color="#10B981" /><Text style={{ fontSize: 12, color: '#10B981', fontWeight: '800', marginLeft: 4 }}>{budgetText}</Text></View>}</View><View style={styles.requirementRow}>{!!sizeTypeText && <View style={[styles.sizeBadge, { backgroundColor: theme.primary + '10' }]}><Text style={[styles.sizeText, { color: theme.primary }]}>{sizeTypeText}</Text></View>}<Text style={{ fontSize: 11, color: theme.textMuted, marginLeft: sizeTypeText ? 8 : 0 }} numberOfLines={1}>{categoryText}</Text></View><View style={styles.footerRow}><View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}><Ionicons name="location-outline" size={10} color={theme.textMuted} /><Text style={{ fontSize: 11, color: theme.textSecondary, fontWeight: '700', marginLeft: 4, flex: 1 }} numberOfLines={1}>{combinedLocation}</Text></View><View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end' }}><Text style={[styles.ownerText, { color: theme.primary, fontWeight: '700', marginRight: 8 }]}>{resolveName(lead.owner, getLookupValue, findUser)}</Text><Text style={styles.timeText}>{formatTimeAgo(lead.createdAt)}</Text></View></View></View>
+                        <View style={styles.cardContent}><View style={styles.cardHeader}><Text style={[styles.cardName, { color: theme.text }]} numberOfLines={1}>{name}</Text><View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>{!!lead.source && <View style={styles.sourceBadge}><Text style={styles.sourceText}>{String(getLookupValue("Source", lead.source)).toUpperCase()}</Text></View>}<TouchableOpacity onPress={onMore} style={styles.moreBtn}><Ionicons name="ellipsis-vertical" size={18} color={theme.textMuted} /></TouchableOpacity></View></View><View style={styles.metaRow}><Ionicons name="call-outline" size={12} color={theme.textMuted} /><Text style={{ fontSize: 12, color: theme.textSecondary, fontWeight: '600', marginLeft: 4 }}>{String(lead.mobile)}</Text>{!!budgetText && <View style={{ flexDirection: 'row', alignItems: 'center' }}><Text style={{ color: theme.textMuted, marginHorizontal: 6 }}>|</Text><Ionicons name="pricetag-outline" size={12} color="#10B981" /><Text style={{ fontSize: 12, color: '#10B981', fontWeight: '800', marginLeft: 4 }}>{budgetText}</Text></View>}</View><View style={styles.requirementRow}>{!!sizeTypeText && <View style={[styles.sizeBadge, { backgroundColor: theme.primary + '10' }]}><Text style={[styles.sizeText, { color: theme.primary }]}>{sizeTypeText}</Text></View>}<Text style={{ fontSize: 11, color: theme.textMuted, marginLeft: sizeTypeText ? 8 : 0 }} numberOfLines={1}>{categoryText}</Text></View><View style={styles.footerRow}><View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}><Ionicons name="location-outline" size={10} color={theme.textMuted} /><Text style={{ fontSize: 11, color: theme.textSecondary, fontWeight: '700', marginLeft: 4, flex: 1 }} numberOfLines={1}>{combinedLocation}</Text></View><View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end' }}><Text style={[styles.ownerText, { color: theme.primary, fontWeight: '700', marginRight: 8 }]}>{resolveName(lead.owner, getLookupValue, findUser)}</Text><Text style={styles.timeText}>{formatTimeAgo(lead.createdAt)}</Text></View></View></View>
                     </View>
                 </View>
             </TouchableOpacity>
@@ -562,6 +581,70 @@ export default function LeadsScreen() {
     const [sortConfig, setSortConfig] = useState({ label: 'Newest First', by: 'createdAt', order: -1 });
     const [advFilters, setAdvFilters] = useState<any>({});
     const [liveScores, setLiveScores] = useState<any>({});
+
+    const [contactPickerVisible, setContactPickerVisible] = useState(false);
+    const [availableContacts, setAvailableContacts] = useState<any[]>([]);
+    const [pendingAction, setPendingAction] = useState<{ type: string, lead: any } | null>(null);
+
+    const getContactsForLead = (lead: any) => {
+        const contacts: any[] = [];
+        const name = leadName(lead) || "Lead";
+
+        if (lead.mobile) contacts.push({ name, phone: lead.mobile, type: 'Primary', email: lead.email });
+        if (lead.mobile2) contacts.push({ name, phone: lead.mobile2, type: 'Secondary', email: lead.email2 });
+        if (lead.phone) contacts.push({ name, phone: lead.phone, type: 'Work', email: lead.email });
+        
+        // Add unique emails if not already linked to a phone
+        if (lead.email && !contacts.some(c => c.email === lead.email)) {
+            contacts.push({ name, email: lead.email, type: 'Primary' });
+        }
+        if (lead.email2 && !contacts.some(c => c.email === lead.email2)) {
+            contacts.push({ name, email: lead.email2, type: 'Secondary' });
+        }
+
+        return contacts;
+    };
+
+    const handleCommunicationAction = (lead: any, actionType: string) => {
+        const contacts = getContactsForLead(lead);
+        if (contacts.length === 0) {
+            Alert.alert("No Contact", "No phone number or email available for this lead.");
+            return;
+        }
+
+        if (contacts.length === 1) {
+            executeAction(contacts[0], actionType, lead);
+        } else {
+            setAvailableContacts(contacts);
+            setPendingAction({ type: actionType, lead });
+            setContactPickerVisible(true);
+        }
+    };
+
+    const executeAction = (contact: any, actionType: string, lead: any) => {
+        const phone = contact.phone;
+        const email = contact.email;
+        const name = contact.name || leadName(lead);
+
+        switch (actionType) {
+            case 'Call':
+                if (phone) trackCall(phone, lead._id, "Lead", name);
+                break;
+            case 'WhatsApp':
+                if (phone) {
+                    const cleanPhone = phone.replace(/\D/g, '');
+                    const url = `whatsapp://send?phone=91${cleanPhone}`;
+                    Linking.openURL(url).catch(() => Linking.openURL(`https://wa.me/91${cleanPhone}`));
+                }
+                break;
+            case 'SMS':
+                if (phone) Linking.openURL(`sms:${phone}`);
+                break;
+            case 'Email':
+                if (email) Linking.openURL(`mailto:${email}`);
+                break;
+        }
+    };
 
     const fetchLeads = async (pageNum = 1, shouldAppend = false, isRefresh = false) => {
         if (isRefresh) setRefreshing(true); else if (!shouldAppend) setLoading(true);
@@ -688,11 +771,30 @@ export default function LeadsScreen() {
         </View>
     );
 
-const renderHeader = () => (<View style={[styles.header, { paddingTop: Math.max(insets.top, 20), backgroundColor: theme.card }]}><View style={styles.headerTop}><View><Text style={[styles.headerTitle, { color: theme.text }]}>SALES PIPELINE</Text><Text style={[styles.headerSub, { color: theme.textMuted }]}>{stats.total} Total Records</Text></View><TouchableOpacity onPress={() => router.push("/add-lead")}><Ionicons name="add-circle" size={32} color={theme.primary} /></TouchableOpacity></View><View style={styles.kpiRow}><KPIItem label="Hot" value={stats.hot} color="#EF4444" icon="flame" theme={theme} /><KPIItem label="Today" value={stats.today} color="#10B981" icon="calendar" theme={theme} /><KPIItem label="Fresh" value={stats.fresh} color="#8B5CF6" icon="leaf" theme={theme} /></View><View style={styles.searchBarRow}><View style={[styles.searchBar, { backgroundColor: theme.background, borderColor: theme.border }]}><Ionicons name="search" size={18} color={theme.textMuted} /><TextInput style={[styles.searchInput, { color: theme.text }]} placeholder="Search leads..." placeholderTextColor={theme.textMuted} value={search} onChangeText={setSearch} /><TouchableOpacity onPress={() => setSortVisible(true)} style={[styles.filterBtn, { marginRight: 8 }]}><Ionicons name="swap-vertical" size={18} color={theme.primary} /></TouchableOpacity><TouchableOpacity onPress={() => setFilterVisible(true)} style={[styles.filterBtn, Object.keys(advFilters).length > 0 && { backgroundColor: theme.primary }]}><Ionicons name="options" size={18} color={Object.keys(advFilters).length > 0 ? "#fff" : theme.textMuted} /></TouchableOpacity></View></View>{renderTabs()}</View>);
+    const renderHeader = () => (<View style={[styles.header, { paddingTop: Math.max(insets.top, 20), backgroundColor: theme.card }]}><View style={styles.headerTop}><View><Text style={[styles.headerTitle, { color: theme.text }]}>SALES PIPELINE</Text><Text style={[styles.headerSub, { color: theme.textMuted }]}>{stats.total} Total Records</Text></View><TouchableOpacity onPress={() => router.push("/add-lead")}><Ionicons name="add-circle" size={32} color={theme.primary} /></TouchableOpacity></View><View style={styles.kpiRow}><KPIItem label="Hot" value={stats.hot} color="#EF4444" icon="flame" theme={theme} /><KPIItem label="Today" value={stats.today} color="#10B981" icon="calendar" theme={theme} /><KPIItem label="Fresh" value={stats.fresh} color="#8B5CF6" icon="leaf" theme={theme} /></View><View style={styles.searchBarRow}><View style={[styles.searchBar, { backgroundColor: theme.background, borderColor: theme.border }]}><Ionicons name="search" size={18} color={theme.textMuted} /><TextInput style={[styles.searchInput, { color: theme.text }]} placeholder="Search leads..." placeholderTextColor={theme.textMuted} value={search} onChangeText={setSearch} /><TouchableOpacity onPress={() => setSortVisible(true)} style={[styles.filterBtn, { marginRight: 8 }]}><Ionicons name="swap-vertical" size={18} color={theme.primary} /></TouchableOpacity><TouchableOpacity onPress={() => setFilterVisible(true)} style={[styles.filterBtn, Object.keys(advFilters).length > 0 && { backgroundColor: theme.primary }]}><Ionicons name="options" size={18} color={Object.keys(advFilters).length > 0 ? "#fff" : theme.textMuted} /></TouchableOpacity></View></View>{renderTabs()}</View>);
 
     return (
         <View style={[styles.container, { backgroundColor: theme.background }]}>
-            <FlatList data={leads} renderItem={({ item, index }) => (<LeadCard lead={item} index={index} liveScore={liveScores[item._id]} onPress={() => router.push(`/lead-detail?id=${item._id}`)} onMore={() => { setSelectedLead(item); setSheetVisible(true); }} />)} keyExtractor={(item) => item._id} ListHeaderComponent={renderHeader} onEndReached={loadMore} onEndReachedThreshold={0.5} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />} contentContainerStyle={{ paddingBottom: 100 }} ListEmptyComponent={!!(!loading) ? <View style={styles.empty}><Ionicons name="person-outline" size={64} color="#CBD5E1" /><Text style={styles.emptyText}>No leads found matching criteria.</Text></View> : null} />
+            <FlatList 
+                data={leads} 
+                renderItem={({ item, index }) => (
+                    <LeadCard 
+                        lead={item} 
+                        index={index} 
+                        liveScore={liveScores[item._id]} 
+                        onPress={() => router.push(`/lead-detail?id=${item._id}`)} 
+                        onMore={() => { setSelectedLead(item); setSheetVisible(true); }} 
+                        onAction={(type: string) => handleCommunicationAction(item, type)}
+                    />
+                )} 
+                keyExtractor={(item) => item._id} 
+                ListHeaderComponent={renderHeader} 
+                onEndReached={loadMore} 
+                onEndReachedThreshold={0.5} 
+                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />} 
+                contentContainerStyle={{ paddingBottom: 100 }} 
+                ListEmptyComponent={!!(!loading) ? <View style={styles.empty}><Ionicons name="person-outline" size={64} color="#CBD5E1" /><Text style={styles.emptyText}>No leads found matching criteria.</Text></View> : null} 
+            />
             {!!loading && <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(255,255,255,0.4)', justifyContent: 'center', alignItems: 'center', zIndex: 9999 }]}><ActivityIndicator size="large" color={theme.primary} /></View>}
             <ActionSheet visible={sheetVisible} onClose={() => setSheetVisible(false)} lead={selectedLead} onUpdate={() => fetchLeads(1, false)} users={users} />
             <AdvancedFilterModal visible={filterVisible} onClose={() => setFilterVisible(false)} filters={advFilters} setFilters={setAdvFilters} users={users} projects={projects} />
@@ -721,6 +823,41 @@ const renderHeader = () => (<View style={[styles.header, { paddingTop: Math.max(
                 </Pressable>
             </Modal>
             <Modal visible={sortVisible} transparent animationType="fade"><Pressable style={styles.modalOverlay} onPress={() => setSortVisible(false)}><View style={[styles.sheetContainer, { backgroundColor: theme.card }]}><View style={styles.sheetHandle} /><View style={styles.sheetHeader}><Text style={[styles.sheetTitle, { color: theme.text, textAlign: 'center', flex: 1 }]}>SORT LEADS</Text></View><View style={{ padding: 20, gap: 10 }}>{[ { label: 'Newest First', by: 'createdAt', order: -1, icon: 'time-outline' }, { label: 'Oldest First', by: 'createdAt', order: 1, icon: 'hourglass-outline' }, { label: 'Alphabetical', by: 'firstName', order: 1, icon: 'text-outline' }, { label: 'Last Activity', by: 'updatedAt', order: -1, icon: 'flash-outline' }, { label: 'High Intent Score', by: 'intent_index', order: -1, icon: 'trending-up-outline' } ].map((opt: any) => (<TouchableOpacity key={opt.label} onPress={() => { setSortConfig(opt); setSortVisible(false); }} style={[styles.sortItem, sortConfig.label === opt.label && { backgroundColor: theme.primary + '15', borderColor: theme.primary }]}><Ionicons name={opt.icon as any} size={20} color={sortConfig.label === opt.label ? theme.primary : theme.textMuted} /><Text style={{ flex: 1, color: sortConfig.label === opt.label ? theme.primary : theme.text, fontWeight: '700' }}>{opt.label}</Text>{sortConfig.label === opt.label && <Ionicons name="checkmark-circle" size={20} color={theme.primary} />}</TouchableOpacity>))}</View></View></Pressable></Modal>
+
+            {/* Contact Picker Modal for Leads */}
+            <Modal transparent visible={contactPickerVisible} animationType="fade" onRequestClose={() => setContactPickerVisible(false)}>
+                <Pressable style={styles.modalOverlay} onPress={() => setContactPickerVisible(false)}>
+                    <View style={[styles.sheetContainer, { backgroundColor: theme.card, borderTopLeftRadius: 32, borderTopRightRadius: 32, paddingBottom: 60 }]}>
+                        <View style={[styles.sheetHandle, { backgroundColor: theme.border }]} />
+                        <Text style={[styles.sheetTitle, { color: theme.text }]}>Select Lead Contact</Text>
+                        <Text style={[styles.sheetSub, { color: theme.textLight, marginTop: 4, textTransform: 'uppercase', fontSize: 10, fontWeight: '800' }]}>Choose number/email for {pendingAction?.type.toLowerCase()}</Text>
+
+                        <View style={{ marginTop: 20 }}>
+                            {availableContacts.map((contact, idx) => (
+                                <TouchableOpacity
+                                    key={idx}
+                                    style={[styles.dropdownItem, { backgroundColor: theme.background, borderBottomWidth: 1, borderBottomColor: theme.border }]}
+                                    onPress={() => {
+                                        executeAction(contact, pendingAction!.type, pendingAction!.lead);
+                                        setContactPickerVisible(false);
+                                    }}
+                                >
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                                        <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: theme.primary + '15', justifyContent: 'center', alignItems: 'center' }}>
+                                            <Ionicons name={contact.phone ? "call" : "mail"} size={18} color={theme.primary} />
+                                        </View>
+                                        <View>
+                                            <Text style={{ fontSize: 14, fontWeight: '800', color: theme.text }}>{contact.type} {contact.phone ? 'Number' : 'Email'}</Text>
+                                            <Text style={{ fontSize: 12, color: theme.textSecondary }}>{contact.phone || contact.email}</Text>
+                                        </View>
+                                    </View>
+                                    <Ionicons name="chevron-forward" size={18} color={theme.textMuted} />
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+                    </View>
+                </Pressable>
+            </Modal>
         </View>
     );
 }

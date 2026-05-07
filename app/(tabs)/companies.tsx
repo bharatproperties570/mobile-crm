@@ -15,6 +15,7 @@ import { useUsers } from "@/context/UserContext";
 import { Vibration } from "react-native";
 import { updateCompany } from "@/services/companies.service";
 import FilterModal, { FilterField } from "@/components/FilterModal";
+import { getCompanyGroups, CompanyGroup, bulkAssignCompanies } from "@/services/companyGroups.service";
 
 const COMPANY_FILTER_FIELDS: FilterField[] = [
     { key: "relationshipType", label: "Relationship Type", type: "lookup", lookupType: "RelationshipType" },
@@ -41,7 +42,8 @@ const RELATIONSHIP_COLORS_DARK: Record<string, string> = {
     'Other': '#94A3B8'
 };
 
-const CompanyCard = ({ company, onPress, onMenuPress, idx }: { company: Company, onPress: () => void, onMenuPress: () => void, idx: number }) => {
+const CompanyCard = ({ company, onPress, onMenuPress, idx, groups = [] }: { company: Company, onPress: () => void, onMenuPress: () => void, idx: number, groups?: CompanyGroup[] }) => {
+    if (!company) return null;
     const { theme } = useTheme();
     const isDark = theme.background === '#0F172A';
     const { trackCall } = useCallTracking();
@@ -103,6 +105,11 @@ const CompanyCard = ({ company, onPress, onMenuPress, idx }: { company: Company,
         </View>
     );
 
+    const companyGroups = useMemo(() => {
+        const groupIds = (company as any).groups || [];
+        return groups.filter(g => groupIds.includes(g._id));
+    }, [company, groups]);
+
     return (
         <Swipeable renderRightActions={renderRightActions} renderLeftActions={renderLeftActions}>
             <Pressable 
@@ -115,11 +122,26 @@ const CompanyCard = ({ company, onPress, onMenuPress, idx }: { company: Company,
                 ]}>
                     <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
                     <View style={styles.cardHeader}>
-                        <Text style={[styles.companyName, { color: theme.text, flex: 1, marginRight: 8 }]} numberOfLines={1}>{company.name}</Text>
+                        <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <Text style={[styles.companyName, { color: theme.text }]} numberOfLines={1}>{company.name}</Text>
+                            {company?.isVerifiedBroker && (
+                                <Ionicons name="checkmark-seal" size={16} color="#3B82F6" />
+                            )}
+                        </View>
                         <TouchableOpacity style={styles.menuTrigger} onPress={(e) => { e.stopPropagation(); onMenuPress(); }}>
                             <Ionicons name="ellipsis-vertical" size={18} color={theme.textLight} />
                         </TouchableOpacity>
                     </View>
+
+                    {companyGroups.length > 0 && (
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginBottom: 8 }}>
+                            {companyGroups.map(g => (
+                                <View key={g._id} style={{ backgroundColor: g.color + '15', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, borderSize: 1, borderColor: g.color + '30' }}>
+                                    <Text style={{ fontSize: 9, fontWeight: '800', color: g.color }}>{g.name.toUpperCase()}</Text>
+                                </View>
+                            ))}
+                        </View>
+                    )}
 
                     {(phone || email) ? (
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10, marginTop: -2 }}>
@@ -198,8 +220,45 @@ export default function CompaniesScreen() {
     const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
     const [hubVisible, setHubVisible] = useState(false);
     const [showReassign, setShowReassign] = useState(false);
+    const [showGroupPicker, setShowGroupPicker] = useState(false);
+    const [groups, setGroups] = useState<CompanyGroup[]>([]);
+    const [loadingGroups, setLoadingGroups] = useState(false);
+    const [isCreatingGroup, setIsCreatingGroup] = useState(false);
+    const [newGroupName, setNewGroupName] = useState("");
+    const [newGroupColor, setNewGroupColor] = useState("#6366F1");
+    
     const slideAnim = useRef(new Animated.Value(Dimensions.get('window').height)).current;
     const { users } = useUsers();
+
+    const fetchGroups = async () => {
+        setLoadingGroups(true);
+        const res = await safeApiCall(getCompanyGroups);
+        if (!res.error && res.data?.success) {
+            setGroups(res.data.data);
+        }
+        setLoadingGroups(false);
+    };
+
+    useEffect(() => {
+        fetchGroups();
+    }, []);
+
+    const handleCreateGroup = async () => {
+        if (!newGroupName.trim()) return;
+        const res = await safeApiCall(() => api.post('/company-groups', {
+            name: newGroupName,
+            color: newGroupColor,
+            category: 'Broker'
+        }));
+        
+        if (!res.error && res.data?.success) {
+            setGroups(prev => [...prev, res.data.data]);
+            setNewGroupName("");
+            setIsCreatingGroup(false);
+            Vibration.vibrate(10);
+            Alert.alert("Success", "New broker group created!");
+        }
+    };
 
     const openHub = (company: Company) => {
         setSelectedCompany(company);
@@ -332,6 +391,7 @@ export default function CompaniesScreen() {
                         <CompanyCard
                             company={item}
                             idx={idx}
+                            groups={groups}
                             onPress={() => router.push(`/company-detail?id=${item._id}`)}
                             onMenuPress={() => openHub(item)}
                         />
@@ -388,7 +448,8 @@ export default function CompaniesScreen() {
             {/* Action Hub Modal */}
             <Modal transparent visible={hubVisible} animationType="none" onRequestClose={closeHub}>
                 <Pressable style={[styles.modalOverlay, { backgroundColor: isDark ? "rgba(0, 0, 0, 0.7)" : "rgba(15, 23, 42, 0.4)" }]} onPress={closeHub}>
-                    <Animated.View style={[styles.sheetContainer, { backgroundColor: theme.card, transform: [{ translateY: slideAnim }] }]}>
+                    {selectedCompany && (
+                        <Animated.View style={[styles.sheetContainer, { backgroundColor: theme.card, transform: [{ translateY: slideAnim }] }]}>
                         <View style={[styles.sheetHandle, { backgroundColor: theme.border }]} />
                         <View style={styles.sheetHeader}>
                             <Text style={[styles.sheetTitle, { color: theme.text }]}>{selectedCompany ? selectedCompany.name : "Company Actions"}</Text>
@@ -431,14 +492,120 @@ export default function CompaniesScreen() {
                             </TouchableOpacity>
 
                             <TouchableOpacity style={styles.actionItem} onPress={() => {
-                                Alert.alert("Tag", "Managing tags..."); closeHub();
+                                setShowGroupPicker(true);
                             }}>
                                 <View style={[styles.actionIcon, { backgroundColor: isDark ? 'rgba(219, 39, 119, 0.15)' : "#FDF2F8" }]}>
                                     <Ionicons name="pricetags" size={24} color={isDark ? '#F472B6' : "#DB2777"} />
                                 </View>
-                                <Text style={[styles.actionLabel, { color: theme.textLight }]}>Tag</Text>
+                                <Text style={[styles.actionLabel, { color: theme.textLight }]}>Groups</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity style={styles.actionItem} onPress={async () => {
+                                const newStatus = !selectedCompany?.isVerifiedBroker;
+                                const res = await safeApiCall(() => updateCompany(selectedCompany!._id, { isVerifiedBroker: newStatus }));
+                                if (!res.error) {
+                                    setCompanies(prev => prev.map(c => c._id === selectedCompany!._id ? { ...c, isVerifiedBroker: newStatus } : c));
+                                    Vibration.vibrate(50);
+                                    closeHub();
+                                }
+                            }}>
+                                <View style={[styles.actionIcon, { backgroundColor: selectedCompany?.isVerifiedBroker ? 'rgba(59, 130, 246, 0.15)' : (isDark ? 'rgba(255,255,255,0.05)' : '#F1F5F9') }]}>
+                                    <Ionicons name="checkmark-seal" size={24} color={selectedCompany?.isVerifiedBroker ? '#3B82F6' : (isDark ? theme.textLight : "#64748B")} />
+                                </View>
+                                <Text style={[styles.actionLabel, { color: theme.textLight }]}>{selectedCompany?.isVerifiedBroker ? "Verified" : "Verify"}</Text>
                             </TouchableOpacity>
                             </View >
+
+                            {showGroupPicker && (
+                                <View style={{ backgroundColor: isDark ? 'rgba(219, 39, 119, 0.05)' : '#FDF2F8', padding: 20, marginTop: 10 }}>
+                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                                        <Text style={{ fontSize: 14, fontWeight: '700', color: '#DB2777' }}>ASSIGN TO GROUPS</Text>
+                                        <TouchableOpacity onPress={() => setShowGroupPicker(false)}>
+                                            <Ionicons name="close" size={20} color={theme.textLight} />
+                                        </TouchableOpacity>
+                                    </View>
+                                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                                        {groups.map((g) => {
+                                            const isSelected = selectedCompany?.groups?.includes(g._id);
+                                            return (
+                                                <TouchableOpacity
+                                                    key={g._id}
+                                                    style={{ 
+                                                        backgroundColor: isSelected ? g.color : g.color + '15',
+                                                        paddingHorizontal: 12,
+                                                        paddingVertical: 6,
+                                                        borderRadius: 8,
+                                                        borderWidth: 1,
+                                                        borderColor: g.color + '30',
+                                                        flexDirection: 'row',
+                                                        alignItems: 'center',
+                                                        gap: 6
+                                                    }}
+                                                    onPress={async () => {
+                                                        const action = isSelected ? 'remove' : 'add';
+                                                        const res = await safeApiCall(() => bulkAssignCompanies([selectedCompany!._id], [g._id], action));
+                                                        if (!res.error) {
+                                                            setCompanies(prev => prev.map(c => {
+                                                                if (c._id === selectedCompany!._id) {
+                                                                    const currentGroups = (c as any).groups || [];
+                                                                    const updatedGroups = isSelected 
+                                                                        ? currentGroups.filter((id: string) => id !== g._id)
+                                                                        : [...currentGroups, g._id];
+                                                                    return { ...c, groups: updatedGroups };
+                                                                }
+                                                                return c;
+                                                            }));
+                                                            Vibration.vibrate(10);
+                                                        }
+                                                    }}
+                                                >
+                                                    <Text style={{ color: isSelected ? '#fff' : g.color, fontWeight: '800', fontSize: 11 }}>{g.name.toUpperCase()}</Text>
+                                                    {isSelected && <Ionicons name="checkmark" size={14} color="#fff" />}
+                                                </TouchableOpacity>
+                                            );
+                                        })}
+                                        <TouchableOpacity 
+                                            style={{ backgroundColor: theme.border, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderStyle: 'dashed', borderWidth: 1 }}
+                                            onPress={() => setIsCreatingGroup(true)}
+                                        >
+                                            <Text style={{ color: theme.textLight, fontWeight: '700', fontSize: 11 }}>+ NEW GROUP</Text>
+                                        </TouchableOpacity>
+                                    </View>
+
+                                    {isCreatingGroup && (
+                                        <View style={{ marginTop: 15, padding: 12, backgroundColor: theme.card, borderRadius: 12, borderWidth: 1, borderColor: theme.primary + '30' }}>
+                                            <Text style={{ fontSize: 12, fontWeight: '800', color: theme.text, marginBottom: 8 }}>NEW GROUP NAME</Text>
+                                            <TextInput 
+                                                style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#F1F5F9', padding: 10, borderRadius: 8, color: theme.text, fontSize: 14, fontWeight: '600' }}
+                                                placeholder="e.g. DLF Specialists"
+                                                placeholderTextColor={theme.textLight + '60'}
+                                                value={newGroupName}
+                                                onChangeText={setNewGroupName}
+                                                autoFocus
+                                            />
+                                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 }}>
+                                                <View style={{ flexDirection: 'row', gap: 8 }}>
+                                                    {['#6366F1', '#10B981', '#F59E0B', '#EF4444', '#EC4899'].map(c => (
+                                                        <TouchableOpacity 
+                                                            key={c} 
+                                                            style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: c, borderWidth: newGroupColor === c ? 2 : 0, borderColor: theme.text }}
+                                                            onPress={() => setNewGroupColor(c)}
+                                                        />
+                                                    ))}
+                                                </View>
+                                                <View style={{ flexDirection: 'row', gap: 10 }}>
+                                                    <TouchableOpacity onPress={() => setIsCreatingGroup(false)}>
+                                                        <Text style={{ color: theme.textLight, fontWeight: '700' }}>Cancel</Text>
+                                                    </TouchableOpacity>
+                                                    <TouchableOpacity onPress={handleCreateGroup} style={{ backgroundColor: theme.primary, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6 }}>
+                                                        <Text style={{ color: '#fff', fontWeight: '800' }}>Create</Text>
+                                                    </TouchableOpacity>
+                                                </View>
+                                            </View>
+                                        </View>
+                                    )}
+                                </View>
+                            )}
 
                             {showReassign && (
                                 <View style={{ backgroundColor: isDark ? 'rgba(124, 58, 237, 0.05)' : '#F5F3FF', padding: 20, marginTop: 10 }}>
@@ -484,6 +651,7 @@ export default function CompaniesScreen() {
                                 </View>
                             )}
                         </Animated.View >
+                    )}
                 </Pressable >
             </Modal >
 

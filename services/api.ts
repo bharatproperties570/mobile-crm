@@ -20,7 +20,10 @@ const LAN_URL = `http://${MACHINE_IP}:${BACKEND_PORT}/api`;
 
 const NATIVE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || PROD_URL;
 
-const BASE_URL = Platform.OS === "web" ? WEB_URL : NATIVE_URL;
+// On Web: If we are in dev, use localhost, else use PROD
+const BASE_URL = Platform.OS === "web" 
+  ? (process.env.NODE_ENV === "development" ? WEB_URL : PROD_URL)
+  : NATIVE_URL;
 
 console.log(`[API] Configuration Initialized:`);
 console.log(`- Platform: ${Platform.OS}`);
@@ -197,11 +200,16 @@ api.interceptors.response.use(
       } catch (refreshErr) {
         isRefreshing = false;
         
-        const isExpired = refreshErr.message === 'SESSION_EXPIRED' || refreshErr.message.includes('expired');
+        const status = refreshErr.response?.status;
+        const isExpired = refreshErr.message === 'SESSION_EXPIRED' || 
+                         refreshErr.message.includes('expired') || 
+                         status === 403 || 
+                         status === 401;
+
         if (isExpired) {
             console.warn('[API] Silent refresh skipped: Session is invalid or expired.');
         } else {
-            console.error(`[API] Refresh request failed for ${BASE_URL}/auth/refresh:`, refreshErr.message);
+            console.warn(`[API] Refresh request failed (${status || 'NET_ERROR'}):`, refreshErr.message);
         }
         
         // Final fallback: real logout

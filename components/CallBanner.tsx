@@ -15,7 +15,7 @@ interface Props {
 
 type TabType = 'Lead' | 'Deal' | 'Inventory' | 'Activity';
 
-export default function CallBanner({ info, onClose }: Props) {
+export default function CallBanner({ info, onClose, onDial }: Props) {
     const { theme } = useTheme();
     const router = useRouter();
     const slideAnim = useRef(new Animated.Value(-500)).current;
@@ -114,6 +114,17 @@ export default function CallBanner({ info, onClose }: Props) {
         router.push(`/${route === 'activity' ? 'activities' : route}-detail?id=${currentData.entityId}` as any);
     };
 
+    const safeString = (val: any): string => {
+        if (!val || val === "—") return "";
+        if (typeof val === 'string') return val;
+        if (typeof val === 'object') {
+            return val.lookup_value || val.name || val.fullName || val.title || val.projectName || JSON.stringify(val);
+        }
+        return String(val);
+    };
+
+    const displayName = safeString(currentData?.name || info.name);
+
     return (
         <Animated.View style={[styles.container, { transform: [{ translateY: slideAnim }] }]}>
             <View style={[styles.banner, { backgroundColor: theme.card, borderColor: theme.border }]}>
@@ -122,10 +133,10 @@ export default function CallBanner({ info, onClose }: Props) {
                 <View style={styles.header}>
                     <View style={styles.callerIdentity}>
                         <View style={[styles.avatar, { backgroundColor: config.color }]}>
-                            <Text style={styles.avatarText}>{(currentData?.name || info.name).charAt(0).toUpperCase()}</Text>
+                            <Text style={styles.avatarText}>{displayName.charAt(0).toUpperCase() || '?'}</Text>
                         </View>
                         <View style={{ flex: 1 }}>
-                            <Text style={[styles.name, { color: theme.text }]} numberOfLines={1}>{currentData?.name || info.name}</Text>
+                            <Text style={[styles.name, { color: theme.text }]} numberOfLines={1}>{displayName}</Text>
                             <Text style={[styles.mobile, { color: theme.textLight }]}>{info.mobile}</Text>
                         </View>
                     </View>
@@ -162,7 +173,7 @@ export default function CallBanner({ info, onClose }: Props) {
                             </View>
                             {currentData.status && (
                                 <View style={[styles.statusBadge, { backgroundColor: theme.border }]}>
-                                    <Text style={[styles.statusText, { color: theme.textSecondary }]}>{currentData.status}</Text>
+                                    <Text style={[styles.statusText, { color: theme.textSecondary }]}>{safeString(currentData.status)}</Text>
                                 </View>
                             )}
                         </View>
@@ -173,7 +184,7 @@ export default function CallBanner({ info, onClose }: Props) {
                                     {activeTab === 'Activity' ? 'DUE DATE' : 'INTENT / TYPE'}
                                 </Text>
                                 <Text style={[styles.dataValue, { color: theme.text }]}>
-                                    {currentData.intent || 'General Inq'} {currentData.subCategory ? `• ${currentData.subCategory}` : ''}
+                                    {safeString(currentData.intent || 'General Inq')} {currentData.subCategory ? `• ${safeString(currentData.subCategory)}` : ''}
                                 </Text>
                             </View>
                             
@@ -182,7 +193,7 @@ export default function CallBanner({ info, onClose }: Props) {
                                     {activeTab === 'Activity' ? 'SUBJECT / NOTES' : 'PROJECT / UNIT'}
                                 </Text>
                                 <Text style={[styles.dataValue, { color: theme.text }]} numberOfLines={1}>
-                                    {currentData.projectName || currentData.unitNumber || 'Global Selection'}
+                                    {safeString(currentData.projectName || currentData.unitNumber || 'Global Selection')}
                                 </Text>
                             </View>
                         </View>
@@ -191,7 +202,7 @@ export default function CallBanner({ info, onClose }: Props) {
                             <View style={[styles.highValueRow, { backgroundColor: theme.primary + '10' }]}>
                                 <Ionicons name="wallet-outline" size={14} color={theme.primary} />
                                 <Text style={[styles.highValueLabel, { color: theme.textSecondary }]}>VALUATION / BUDGET:</Text>
-                                <Text style={[styles.highValueText, { color: theme.primary }]}>{currentData.budget}</Text>
+                                <Text style={[styles.highValueText, { color: theme.primary }]}>{safeString(currentData.budget)}</Text>
                             </View>
                         )}
                     </View>
@@ -232,7 +243,7 @@ export default function CallBanner({ info, onClose }: Props) {
                                             id: 'new',
                                             entityId: currentData?.entityId || info.entityId,
                                             entityType: activeTab === 'Contact' ? 'Lead' : activeTab,
-                                            entityName: currentData?.name || info.name,
+                                            entityName: safeString(currentData?.name || info.name),
                                             actType: 'Call',
                                             mobile: info.mobile
                                         }

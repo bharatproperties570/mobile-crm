@@ -807,34 +807,42 @@ export default function DealsScreen() {
         const contacts: any[] = [];
         const seen = new Set();
 
-        const addContact = (name: string, phone: string | undefined, email: string | undefined, type: string) => {
-            const key = `${name}-${phone}-${email}`;
-            if (!seen.has(key) && (phone || email)) {
-                contacts.push({ name, phone, email, type });
-                seen.add(key);
+        const addUnique = (name: string, phone: string | undefined, email: string | undefined, type: string) => {
+            if (!phone && !email) return;
+            const key = `${name}-${phone}-${email}`.toLowerCase();
+            if (seen.has(key)) return;
+            contacts.push({ name, phone, email, type });
+            seen.add(key);
+        };
+
+        const extractFromObj = (obj: any, type: string) => {
+            if (!obj || typeof obj !== 'object') return;
+            const name = obj.name || obj.fullName || type;
+            if (obj.phones && obj.phones.length > 0) {
+                obj.phones.forEach((p: any) => addUnique(name, p.number || p.phone, obj.email, type));
+            } else {
+                addUnique(name, obj.phone || obj.mobile || obj.number, obj.email, type);
             }
         };
 
-        // 1. Associated Contact
-        if (deal.associatedContact && typeof deal.associatedContact === 'object') {
-            const c = deal.associatedContact as any;
-            addContact(resolveName(c, getLookupValue, findUser) || "Client", c.phone || c.mobile, c.email, 'Client');
-        }
+        // 1. Associated Contact (Main Client)
+        extractFromObj(deal.associatedContact, 'Client');
 
-        // 2. Owner stakeholder
-        if (deal.owner && typeof deal.owner === 'object') {
-            const o = deal.owner as any;
-            addContact(resolveName(o, getLookupValue, findUser) || "Owner", o.phone || o.mobile, o.email, 'Owner');
-        }
+        // 2. Owner Stakeholder
+        extractFromObj(deal.owner, 'Owner');
 
-        // 3. Party Structure
+        // 3. Party Structure (Buyer, Seller, etc.)
         if (deal.partyStructure) {
             const ps = deal.partyStructure;
-            if (ps.buyer) addContact(resolveName(ps.buyer, getLookupValue, findUser) || "Buyer", ps.buyer.phone || ps.buyer.mobile, ps.buyer.email, 'Buyer');
-            if (ps.owner) addContact(resolveName(ps.owner, getLookupValue, findUser) || "Seller", ps.owner.phone || ps.owner.mobile, ps.owner.email, 'Seller');
-            if (ps.channelPartner) addContact(resolveName(ps.channelPartner, getLookupValue, findUser) || "CP", ps.channelPartner.phone || ps.channelPartner.mobile, ps.channelPartner.email, 'CP');
-            if (ps.internalRM) addContact(resolveName(ps.internalRM, getLookupValue, findUser) || "RM", ps.internalRM.phone || ps.internalRM.mobile, ps.internalRM.email, 'Internal RM');
+            extractFromObj(ps.buyer, 'Buyer');
+            extractFromObj(ps.owner, 'Seller');
+            extractFromObj(ps.channelPartner, 'CP');
+            extractFromObj(ps.internalRM, 'RM');
         }
+
+        // 4. Fallback top-level fields
+        addUnique((deal as any).clientName || "Client", (deal as any).clientPhone, (deal as any).clientEmail, 'Client');
+        addUnique((deal as any).ownerName || "Owner", (deal as any).ownerPhone, (deal as any).ownerEmail, 'Owner');
 
         return contacts;
     };
@@ -857,31 +865,43 @@ export default function DealsScreen() {
     };
 
     const executeAction = (contact: any, type: string, deal: Deal) => {
-        const phone = contact.phone?.replace(/[^0-9]/g, "");
-        const email = contact.email;
+        const rawPhone = contact.phone || "";
+        const phone = rawPhone.replace(/[^0-9]/g, "");
+        const email = contact.email || "";
+
+        console.log(`[Deal Action] Type: ${type}, Contact: ${contact.name}`);
 
         switch (type) {
             case 'CALL':
-                if (!contact.phone) {
-                    Alert.alert("Error", "No phone number for this contact.");
+                if (!phone || phone.trim().length < 10) {
+                    Alert.alert("Error", "No valid phone number for this contact.");
                     return;
                 }
-                trackCall(contact.phone, deal._id, "Deal", getDealTitle(deal, getLookupValue, findUser));
+                trackCall(phone, deal._id, "Deal", getDealTitle(deal, getLookupValue, findUser));
                 break;
             case 'WHATSAPP':
-                if (!phone) return;
-                Linking.openURL(`whatsapp://send?phone=${phone.length === 10 ? "91" + phone : phone}`);
+                if (!phone || phone.trim().length < 10) {
+                    Alert.alert("Error", "Invalid phone number for WhatsApp.");
+                    return;
+                }
+                const waUrl = `whatsapp://send?phone=${phone.length === 10 ? "91" + phone : phone}`;
+                Linking.openURL(waUrl).catch(() => {
+                    Linking.openURL(`https://wa.me/${phone.length === 10 ? "91" + phone : phone}`).catch(() => Alert.alert("Error", "Could not open WhatsApp."));
+                });
                 break;
             case 'SMS':
-                if (!contact.phone) return;
-                Linking.openURL(`sms:${contact.phone}`);
+                if (!phone || phone.trim() === "") {
+                    Alert.alert("Error", "No mobile number available for SMS.");
+                    return;
+                }
+                Linking.openURL(`sms:${phone}`).catch(() => Alert.alert("Error", "Could not open SMS app."));
                 break;
             case 'EMAIL':
-                if (!email) {
+                if (!email || email.trim() === "") {
                     Alert.alert("No Email", "No email linked to this contact.");
                     return;
                 }
-                Linking.openURL(`mailto:${email}`);
+                Linking.openURL(`mailto:${email}`).catch(() => Alert.alert("Error", "Could not open Email app."));
                 break;
         }
     };
@@ -1419,6 +1439,45 @@ export default function DealsScreen() {
                     </Pressable>
                 </Animated.View>
             </Pressable>
+            </Modal>
+
+            {/* Contact Picker Modal */}
+            <Modal transparent visible={contactPickerVisible} animationType="fade" onRequestClose={() => setContactPickerVisible(false)}>
+                <Pressable style={styles.modalOverlay} onPress={() => setContactPickerVisible(false)}>
+                    <View style={[styles.contactPickerSheet, { backgroundColor: theme.card }]}>
+                        <View style={[styles.sheetHandle, { backgroundColor: theme.border }]} />
+                        <Text style={[styles.sheetTitle, { color: theme.text }]}>Select Contact</Text>
+                        <Text style={[styles.sheetSub, { color: theme.textLight }]}>Choose recipient for {pendingAction?.type.toLowerCase()}</Text>
+
+                        <View style={{ marginTop: 10 }}>
+                            {availableContacts.map((contact, idx) => (
+                                <TouchableOpacity
+                                    key={idx}
+                                    style={styles.contactItem}
+                                    onPress={() => {
+                                        executeAction(contact, pendingAction!.type, pendingAction!.deal);
+                                        setContactPickerVisible(false);
+                                    }}
+                                >
+                                    <View style={styles.contactInfo}>
+                                        <View style={[styles.contactAvatar, { backgroundColor: (contact.type === 'Owner' || contact.type === 'Seller') ? theme.danger + '20' : theme.primary + '20' }]}>
+                                            <Ionicons
+                                                name={(contact.type === 'Owner' || contact.type === 'Seller') ? "person" : "people"}
+                                                size={18}
+                                                color={(contact.type === 'Owner' || contact.type === 'Seller') ? theme.danger : theme.primary}
+                                            />
+                                        </View>
+                                        <View>
+                                            <Text style={[styles.contactName, { color: theme.text }]}>{contact.name}</Text>
+                                            <Text style={[styles.contactRole, { color: theme.textLight }]}>{contact.type} • {contact.phone || contact.email}</Text>
+                                        </View>
+                                    </View>
+                                    <Ionicons name="chevron-forward" size={18} color="#CBD5E1" />
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+                    </View>
+                </Pressable>
             </Modal>
 
             <TouchableOpacity style={styles.fab} onPress={() => router.push("/add-deal")}>

@@ -156,6 +156,10 @@ const InventoryCard = memo(({ item, onPress, onCall, onWhatsApp, onSMS, onEmail,
 
     const renderRightActions = () => (
         <View style={styles.rightActions}>
+            <TouchableOpacity style={[styles.swipeAction, { backgroundColor: isDark ? '#1E3A8A' : '#3B82F6' }]} onPress={onCall}>
+                <Ionicons name="call" size={22} color="#fff" />
+                <Text style={styles.swipeLabel}>Call</Text>
+            </TouchableOpacity>
             <TouchableOpacity style={[styles.swipeAction, { backgroundColor: isDark ? '#1E293B' : '#64748B' }]} onPress={onSMS}>
                 <Ionicons name="chatbubble" size={20} color="#fff" />
                 <Text style={styles.swipeLabel}>SMS</Text>
@@ -165,10 +169,6 @@ const InventoryCard = memo(({ item, onPress, onCall, onWhatsApp, onSMS, onEmail,
 
     const renderLeftActions = () => (
         <View style={styles.leftActions}>
-            <TouchableOpacity style={[styles.swipeAction, { backgroundColor: isDark ? '#1E3A8A' : '#3B82F6' }]} onPress={onCall}>
-                <Ionicons name="call" size={22} color="#fff" />
-                <Text style={styles.swipeLabel}>Call</Text>
-            </TouchableOpacity>
             <TouchableOpacity style={[styles.swipeAction, { backgroundColor: isDark ? '#166534' : '#25D366' }]} onPress={onWhatsApp}>
                 <Ionicons name="logo-whatsapp" size={22} color="#fff" />
                 <Text style={styles.swipeLabel}>WhatsApp</Text>
@@ -521,39 +521,45 @@ export default function InventoryScreen() {
     // Communication Logic with Multi-Contact Support
     const getContactsForInventory = (item: Inventory) => {
         const contacts: any[] = [];
+        const seen = new Set();
 
+        const addUnique = (name: string, phone: string | undefined, email: string | undefined, type: string) => {
+            if (!phone && !email) return;
+            const key = `${name}-${phone}-${email}`.toLowerCase();
+            if (seen.has(key)) return;
+            contacts.push({ name, phone, email, type });
+            seen.add(key);
+        };
+
+        // 1. Array-based Owners
         if (item.owners && item.owners.length > 0) {
             item.owners.forEach(owner => {
-                if (typeof owner === 'string') {
-                    // Handle raw ID or string if population failed
-                    return;
-                }
-                const name = owner.name || "Owner";
-                if (owner.phones && owner.phones.length > 0) {
-                    owner.phones.forEach((p: any) => {
-                        contacts.push({ name, phone: p.number || p.phone, type: 'Owner', email: owner.email });
-                    });
-                } else if (owner.phone || owner.number) {
-                     contacts.push({ name, phone: owner.phone || owner.number, type: 'Owner', email: owner.email });
+                if (typeof owner === 'object' && owner !== null) {
+                    const name = owner.name || "Owner";
+                    if (owner.phones && owner.phones.length > 0) {
+                        owner.phones.forEach((p: any) => addUnique(name, p.number || p.phone, owner.email, 'Owner'));
+                    } else {
+                        addUnique(name, owner.phone || owner.number || (owner as any).mobile, owner.email, 'Owner');
+                    }
                 }
             });
         }
 
-        // Fallback to top-level owner fields if owners array is empty or lacks data
-        if (contacts.length === 0) {
-            if (item.ownerPhone) {
-                contacts.push({ name: item.ownerName || "Owner", phone: item.ownerPhone, type: 'Owner' });
-            } else if (item.associatedPhone) {
-                contacts.push({ name: item.associatedContact || "Associate", phone: item.associatedPhone, type: 'Associate' });
-            }
+        // 2. Singular Owner Object
+        if ((item as any).owner && typeof (item as any).owner === 'object') {
+            const o = (item as any).owner;
+            addUnique(o.name || "Owner", o.phone || o.number || o.mobile, o.email, 'Owner');
         }
 
-        // Extract from Associates
+        // 3. Top-level Fallbacks (Crucial for unpopulated items)
+        addUnique(item.ownerName || "Owner", item.ownerPhone, (item as any).ownerEmail, 'Owner');
+        addUnique(item.associatedContact || "Associate", item.associatedPhone, (item as any).associatedEmail, 'Associate');
+
+        // 4. Array-based Associates
         if (item.associates && item.associates.length > 0) {
             item.associates.forEach(assoc => {
-                const name = assoc.name || "Associate";
-                if (assoc.phone || assoc.number) {
-                    contacts.push({ name, phone: assoc.phone || assoc.number, type: 'Associate', email: assoc.email });
+                if (typeof assoc === 'object' && assoc !== null) {
+                    addUnique(assoc.name || "Associate", assoc.phone || assoc.number || (assoc as any).mobile, assoc.email, 'Associate');
                 }
             });
         }
@@ -579,32 +585,43 @@ export default function InventoryScreen() {
     };
 
     const executeAction = (contact: any, type: string, item: Inventory) => {
-        const phone = contact.phone?.replace(/[^0-9]/g, "");
-        const email = contact.email;
+        const rawPhone = contact.phone || "";
+        const phone = rawPhone.replace(/[^0-9]/g, "");
+        const email = contact.email || "";
+
+        console.log(`[Inventory Action] Type: ${type}, Contact: ${contact.name}`);
 
         switch (type) {
             case 'CALL':
-                if (!phone) {
+                if (!phone || phone.trim().length < 10) {
                     Alert.alert("Error", "No valid phone number for this contact.");
                     return;
                 }
-                // Track with original display number, dial with cleaned number
                 trackCall(phone, item._id, "Inventory", `${item.projectName} - ${item.unitNumber || item.unitNo}`);
                 break;
             case 'WHATSAPP':
-                if (!phone) return;
-                Linking.openURL(`whatsapp://send?phone=${phone.length === 10 ? "91" + phone : phone}`);
+                if (!phone || phone.trim().length < 10) {
+                    Alert.alert("Error", "Invalid phone number for WhatsApp.");
+                    return;
+                }
+                const waUrl = `whatsapp://send?phone=${phone.length === 10 ? "91" + phone : phone}`;
+                Linking.openURL(waUrl).catch(() => {
+                    Linking.openURL(`https://wa.me/${phone.length === 10 ? "91" + phone : phone}`).catch(() => Alert.alert("Error", "Could not open WhatsApp."));
+                });
                 break;
             case 'SMS':
-                if (!contact.phone) return;
-                Linking.openURL(`sms:${contact.phone}`);
+                if (!phone || phone.trim() === "") {
+                    Alert.alert("Error", "No mobile number available for SMS.");
+                    return;
+                }
+                Linking.openURL(`sms:${phone}`).catch(() => Alert.alert("Error", "Could not open SMS app."));
                 break;
             case 'EMAIL':
-                if (!email) {
+                if (!email || email.trim() === "") {
                     Alert.alert("No Email", "No email linked to this contact.");
                     return;
                 }
-                Linking.openURL(`mailto:${email}`);
+                Linking.openURL(`mailto:${email}`).catch(() => Alert.alert("Error", "Could not open Email app."));
                 break;
         }
     };

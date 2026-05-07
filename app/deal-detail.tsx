@@ -13,17 +13,18 @@ import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { getUnifiedTimeline } from "@/services/activities.service";
 import { getMatchingLeads } from "@/services/leads.service";
-import { getDealById, type Deal } from "@/services/deals.service";
+import { getDealById, type Deal, sanitizeDeal, getDealAnalytics } from "@/services/deals.service";
 import { useLookup } from "@/context/LookupContext";
 import { useUsers } from "@/context/UserContext";
 import { getDealHealth } from "@/services/stageEngine.service";
 import { formatSize, getSizeLabel } from "@/utils/format.utils";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { safeApiCall } from "@/services/api.helpers";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const CACHE_KEY_PREFIX = "@cache_deal_detail_";
 
-const TABS = ["Analysis", "Financial", "Details", "Location", "Activities", "Match", "Owner", "History"];
+const TABS = ["Analysis", "Financial", "Marketing", "Details", "Location", "Activities", "Match", "Owner", "History"];
 
 function fmt(amount?: number): string {
     if (!amount) return "—";
@@ -234,6 +235,29 @@ export default function DealDetailScreen() {
     const fadeAnim = useRef(new Animated.Value(0)).current;
     const [stageHistory, setStageHistory] = useState<any[]>([]);
     const [generatingPdf, setGeneratingPdf] = useState(false);
+    const [sanitizing, setSanitizing] = useState(false);
+    const [analytics, setAnalytics] = useState<any>(null);
+
+    const fetchAnalytics = async () => {
+        const res = await safeApiCall(() => getDealAnalytics(id as string));
+        if (!res.error) setAnalytics(res.data?.data);
+    };
+
+    useEffect(() => {
+        if (activeTab === 2) { // Marketing Tab
+            fetchAnalytics();
+        }
+    }, [activeTab]);
+
+    const handleSanitize = async () => {
+        setSanitizing(true);
+        const res = await safeApiCall(() => sanitizeDeal(id as string));
+        if (!res.error && res.data?.success) {
+            setDeal({ ...deal, broadcastMetadata: res.data.data, shareableId: res.data.shareableId });
+            Alert.alert("Success", "Deal has been sanitized and is ready for broadcast.");
+        }
+        setSanitizing(false);
+    };
 
     const handleGeneratePDF = async () => {
         if (!deal || !valuation) {
@@ -711,7 +735,7 @@ export default function DealDetailScreen() {
                 </View>
 
                 {/* 2. Financial */}
-                <View style={styles.tabContent}>
+                <View style={[styles.tabContent, { width: SCREEN_WIDTH }]}>
                     <ScrollView contentContainerStyle={styles.innerScroll}>
 
                         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
@@ -801,6 +825,114 @@ export default function DealDetailScreen() {
                                 ))
                             )}
                         </View>
+                    </ScrollView>
+                </View>
+
+                {/* 3. Marketing & Broadcast (BNA Phase 2) */}
+                <View style={[styles.tabContent, { width: SCREEN_WIDTH }]}>
+                    <ScrollView contentContainerStyle={styles.innerScroll}>
+                        {!deal.broadcastMetadata?.isReady ? (
+                            <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border, alignItems: 'center', padding: 30 }]}>
+                                <Ionicons name="shield-checkmark-outline" size={48} color={theme.primary} style={{ marginBottom: 16 }} />
+                                <Text style={[styles.cardTitle, { color: theme.text, textAlign: 'center' }]}>Ready for Broadcast?</Text>
+                                <Text style={{ color: theme.textLight, textAlign: 'center', marginBottom: 24, fontSize: 14 }}>
+                                    Sanitize this deal to remove sensitive owner information and create a professional broker-ready listing.
+                                </Text>
+                                <TouchableOpacity 
+                                    style={[styles.primaryBtn, { backgroundColor: theme.primary, width: '100%' }]}
+                                    onPress={handleSanitize}
+                                    disabled={sanitizing}
+                                >
+                                    {sanitizing ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryBtnText}>Sanitize & Prepare</Text>}
+                                </TouchableOpacity>
+                            </View>
+                        ) : (
+                            <View style={{ gap: 20 }}>
+                                <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+                                        <View>
+                                            <Text style={[styles.cardTitle, { color: theme.text, marginBottom: 4 }]}>Broadcast Preview</Text>
+                                            <Text style={{ color: theme.primary, fontWeight: '800', fontSize: 12 }}>ID: {deal.shareableId}</Text>
+                                        </View>
+                                        <TouchableOpacity onPress={handleSanitize}>
+                                            <Ionicons name="refresh-circle" size={24} color={theme.primary} />
+                                        </TouchableOpacity>
+                                    </View>
+                                    
+                                    <View style={[styles.previewContainer, { backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#F8FAFC', borderColor: theme.border }]}>
+                                        <Text style={[styles.previewTitle, { color: theme.text }]}>{deal.broadcastMetadata.title}</Text>
+                                        <Text style={[styles.previewPrice, { color: theme.primary }]}>{deal.broadcastMetadata.price}</Text>
+                                        <View style={styles.previewLocationRow}>
+                                            <Ionicons name="location" size={14} color={theme.textLight} />
+                                            <Text style={[styles.previewLocation, { color: theme.textLight }]}>{deal.broadcastMetadata.location}</Text>
+                                        </View>
+                                        <Text style={[styles.previewDesc, { color: theme.textSecondary }]}>{deal.broadcastMetadata.description}</Text>
+                                        
+                                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
+                                            {deal.broadcastMetadata.features?.map((f: string, i: number) => (
+                                                <View key={i} style={{ backgroundColor: theme.primary + '15', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 }}>
+                                                    <Text style={{ color: theme.primary, fontSize: 10, fontWeight: '800' }}>{f.toUpperCase()}</Text>
+                                                </View>
+                                            ))}
+                                        </View>
+                                    </View>
+
+                                    <View style={{ marginTop: 20, gap: 12 }}>
+                                        <Text style={{ fontSize: 12, fontWeight: '800', color: theme.textLight }}>BROKER ACTIONS</Text>
+                                        <TouchableOpacity 
+                                            style={[styles.actionBtnSecondary, { borderColor: theme.primary, borderWidth: 1 }]}
+                                            onPress={() => router.push(`/marketing-broadcast?dealId=${id}`)}
+                                        >
+                                            <Ionicons name="megaphone-outline" size={20} color={theme.primary} />
+                                            <Text style={[styles.actionBtnText, { color: theme.primary }]}>Launch Broadcast Campaign</Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                </View>
+
+                                {/* Analytics Dashboard */}
+                                {analytics && analytics.total > 0 && (
+                                    <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                                        <Text style={[styles.cardTitle, { color: theme.text }]}>Real-time Performance</Text>
+                                        
+                                        <View style={styles.statsGrid}>
+                                            <View style={styles.statBox}>
+                                                <Text style={[styles.statVal, { color: theme.text }]}>{analytics.total}</Text>
+                                                <Text style={[styles.statLabel, { color: theme.textLight }]}>REACH</Text>
+                                            </View>
+                                            <View style={styles.statBox}>
+                                                <Text style={[styles.statVal, { color: '#10B981' }]}>{analytics.delivered}</Text>
+                                                <Text style={[styles.statLabel, { color: theme.textLight }]}>DELIVERED</Text>
+                                            </View>
+                                            <View style={styles.statBox}>
+                                                <Text style={[styles.statVal, { color: theme.primary }]}>{analytics.read}</Text>
+                                                <Text style={[styles.statLabel, { color: theme.textLight }]}>READ</Text>
+                                            </View>
+                                        </View>
+
+                                        <View style={{ marginTop: 20, gap: 10 }}>
+                                            <View>
+                                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                                                    <Text style={{ fontSize: 11, fontWeight: '800', color: theme.textLight }}>DELIVERY RATE</Text>
+                                                    <Text style={{ fontSize: 11, fontWeight: '800', color: theme.text }}>{Math.round((analytics.delivered / analytics.total) * 100)}%</Text>
+                                                </View>
+                                                <View style={{ height: 6, backgroundColor: theme.border, borderRadius: 3, overflow: 'hidden' }}>
+                                                    <View style={{ width: `${(analytics.delivered / analytics.total) * 100}%`, height: '100%', backgroundColor: '#10B981' }} />
+                                                </View>
+                                            </View>
+                                            <View>
+                                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                                                    <Text style={{ fontSize: 11, fontWeight: '800', color: theme.textLight }}>ENGAGEMENT (READ)</Text>
+                                                    <Text style={{ fontSize: 11, fontWeight: '800', color: theme.text }}>{Math.round((analytics.read / analytics.total) * 100)}%</Text>
+                                                </View>
+                                                <View style={{ height: 6, backgroundColor: theme.border, borderRadius: 3, overflow: 'hidden' }}>
+                                                    <View style={{ width: `${(analytics.read / analytics.total) * 100}%`, height: '100%', backgroundColor: theme.primary }} />
+                                                </View>
+                                            </View>
+                                        </View>
+                                    </View>
+                                )}
+                            </View>
+                        )}
                     </ScrollView>
                 </View>
 
@@ -1419,6 +1551,23 @@ const styles = StyleSheet.create({
     msgModal: { width: '90%', alignSelf: 'center', borderRadius: 28, padding: 24, shadowOpacity: 0.1, shadowRadius: 20, elevation: 10, marginContent: 'center', marginTop: 'auto', marginBottom: 'auto' },
     msgTitle: { fontSize: 20, fontWeight: '900', marginBottom: 4 },
     msgSub: { fontSize: 13, fontWeight: '600', marginBottom: 20 },
+    sortItem: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, borderRadius: 12, borderWidth: 1, borderColor: 'transparent' },
+    
+    // BNA Phase 2 Styles
+    previewContainer: { padding: 16, borderRadius: 16, borderWidth: 1, marginTop: 8 },
+    previewTitle: { fontSize: 16, fontWeight: '800', marginBottom: 4 },
+    previewPrice: { fontSize: 18, fontWeight: '900', marginBottom: 4 },
+    previewLocationRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 },
+    previewLocation: { fontSize: 12, fontWeight: '700' },
+    previewDesc: { fontSize: 13, lineHeight: 20 },
+    primaryBtn: { padding: 16, borderRadius: 12, alignItems: 'center' },
+    primaryBtnText: { color: '#fff', fontWeight: '800', fontSize: 14 },
+    actionBtnSecondary: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, padding: 14, borderRadius: 12 },
+    actionBtnText: { fontSize: 14, fontWeight: '700' },
+    statsGrid: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 10 },
+    statBox: { alignItems: 'center', flex: 1 },
+    statVal: { fontSize: 22, fontWeight: '900' },
+    statLabel: { fontSize: 10, fontWeight: '800', marginTop: 2 },
     channelItem: { flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 16, borderWidth: 1.5, marginBottom: 8 },
     channelIconBox: { width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
     channelLabel: { flex: 1, fontSize: 14, fontWeight: '700' },

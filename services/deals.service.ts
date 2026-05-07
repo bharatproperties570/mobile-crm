@@ -112,3 +112,13 @@ export const deleteDeal = async (id: string) => {
     return res.data;
 };
 
+export const sanitizeDeal = async (id: string) => {
+    const res = await api.post(`/deals/${id}/sanitize`);
+    return res.data;
+};
+
+export const getDealAnalytics = async (id: string) => {
+    const res = await api.get(`/marketing/broadcast/analytics/${id}`);
+    return res.data;
+};
+
