@@ -97,7 +97,7 @@ export default function MarketingBroadcastScreen() {
                 Alert.alert(
                     "Success", 
                     `Broadcast launched successfully to ${res.data.dispatchCount} brokers.`,
-                    [{ text: "Great", onPress: () => router.back() }]
+                    [{ text: "Great", onPress: () => router.canGoBack() ? router.back() : router.replace('/(tabs)/deals') }]
                 );
             }
         } catch (error: any) {
@@ -115,7 +115,7 @@ export default function MarketingBroadcastScreen() {
         <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
             {/* Header */}
             <View style={[styles.header, { borderBottomColor: theme.border }]}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+                <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)/deals')} style={styles.backBtn}>
                     <Ionicons name="chevron-back" size={24} color={theme.text} />
                 </TouchableOpacity>
                 <Text style={[styles.headerTitle, { color: theme.text }]}>Broadcast Deal</Text>
