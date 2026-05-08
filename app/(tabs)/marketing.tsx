@@ -130,13 +130,16 @@ export default function MarketingScreen() {
     }, [fetchData]);
 
     const fetchTemplates = useCallback(async () => {
-        if (!showForm || (form.channel !== 'WhatsApp' && form.channel !== 'SMS')) return;
+        if (!showForm) return;
         setIsLoadingTemplates(true);
         try {
             const res = await marketingService.getTemplates(form.channel);
-            setTemplates(res.data?.templates || res.templates || []);
+            // 🧠 SENIOR PROFESSIONAL: Handle diverse backend response shapes
+            const list = res.data?.templates || res.templates || res.data || [];
+            setTemplates(Array.isArray(list) ? list : []);
         } catch (error) {
             console.error("Failed to fetch templates:", error);
+            setTemplates([]);
         } finally {
             setIsLoadingTemplates(false);
         }
@@ -696,7 +699,7 @@ export default function MarketingScreen() {
                                 </View>
 
                                 {/* Step 5: Templates / Content */}
-                                {(form.channel === 'WhatsApp' || form.channel === 'SMS') && (
+                                {(form.channel === 'WhatsApp' || form.channel === 'SMS' || form.channel === 'Email') && (
                                     <>
                                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                                             <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>{form.channel.toUpperCase() === 'WHATSAPP' ? 'META VERIFIED' : 'DLT'} TEMPLATE</Text>
@@ -721,7 +724,14 @@ export default function MarketingScreen() {
                                                             { backgroundColor: theme.background, borderColor: theme.border },
                                                             form.templateId === (t.id || t.name) && { borderColor: theme.primary, backgroundColor: theme.primary + '10' }
                                                         ]}
-                                                        onPress={() => setForm({...form, templateId: t.id || t.name})}
+                                                        onPress={() => {
+                                                            const bodyContent = t.body || t.content || t.message || '';
+                                                            setForm({
+                                                                ...form, 
+                                                                templateId: t.id || t.name,
+                                                                content: bodyContent
+                                                            });
+                                                        }}
                                                     >
                                                         <Text style={{ color: theme.text, fontSize: 12, fontWeight: '700' }} numberOfLines={1}>{t.name}</Text>
                                                         <Text numberOfLines={2} style={{ color: theme.textSecondary, fontSize: 10, marginTop: 4 }}>{t.body || t.content || t.message || 'Template message content...'}</Text>

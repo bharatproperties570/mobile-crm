@@ -270,41 +270,60 @@ export default function CommunicationHub() {
                     <Text style={[styles.loadingText, { color: theme.textSecondary }]}>Syncing Omnichannel Stream...</Text>
                 </View>
             ) : (
-                <FlatList 
-                    data={displayItems}
-                    keyExtractor={item => `${item.id}_${item.via}`}
-                    contentContainerStyle={styles.listContent}
-                    refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => fetchAll(true)} tintColor={theme.primary} />}
-                    renderItem={({ item }) => (
-                                <InboxRow 
-                                    item={item} 
-                                    theme={theme} 
-                                    isDark={isDark} 
-                                    onPress={() => {
-                                        router.push({
-                                            pathname: "/conversation",
-                                            params: {
-                                                id: item.id,
-                                                participant: item.participant,
-                                                phone: item.phone || '',
-                                                via: item.via
-                                            }
-                                        });
-                                    }}
-                                    onLongPress={() => setSelectedItem(item)}
-                                />
-                    )}
-                    ListEmptyComponent={
-                        <View style={styles.emptyContainer}>
-                            <Ionicons name="chatbubbles-outline" size={64} color={theme.primary + '20'} />
-                            <Text style={[styles.emptyTitle, { color: theme.text }]}>No Conversations</Text>
-                            <Text style={[styles.emptySub, { color: theme.textMuted }]}>This channel is currently silent.</Text>
-                            <TouchableOpacity onPress={() => fetchAll(true)} style={[styles.refreshEmptyBtn, { backgroundColor: theme.primary }]}>
-                                <Text style={{ color: '#fff', fontWeight: '800' }}>Refresh Stream</Text>
+                <>
+                    {channel === 'Email' && emailError === 'oauth' && (
+                        <View style={[styles.card, { backgroundColor: '#0ea5e915', margin: 15, padding: 20, borderRadius: 20, borderWidth: 1, borderColor: '#0ea5e9' }]}>
+                            <Ionicons name="mail-open-outline" size={32} color="#0ea5e9" style={{ marginBottom: 10 }} />
+                            <Text style={[styles.cardTitle, { color: theme.text, fontSize: 16 }]}>Email Session Expired</Text>
+                            <Text style={{ color: theme.textSecondary, fontSize: 13, marginBottom: 15 }}>Please reconnect your Google account to sync your latest enterprise emails.</Text>
+                            <TouchableOpacity 
+                                onPress={async () => {
+                                    const res = await safeApiCall(() => getOAuthUrl());
+                                    if (res.data) Linking.openURL(res.data);
+                                }}
+                                style={{ backgroundColor: '#0ea5e9', padding: 12, borderRadius: 10, alignItems: 'center' }}
+                            >
+                                <Text style={{ color: '#fff', fontWeight: '800' }}>Reconnect Google</Text>
                             </TouchableOpacity>
                         </View>
-                    }
-                />
+                    )}
+
+                    <FlatList 
+                        data={displayItems}
+                        keyExtractor={item => `${item.id}_${item.via}`}
+                        contentContainerStyle={styles.listContent}
+                        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => fetchAll(true)} tintColor={theme.primary} />}
+                        renderItem={({ item }) => (
+                                    <InboxRow 
+                                        item={item} 
+                                        theme={theme} 
+                                        isDark={isDark} 
+                                        onPress={() => {
+                                            router.push({
+                                                pathname: "/conversation",
+                                                params: {
+                                                    id: item.id,
+                                                    participant: item.participant,
+                                                    phone: item.phone || '',
+                                                    via: item.via
+                                                }
+                                            });
+                                        }}
+                                        onLongPress={() => setSelectedItem(item)}
+                                    />
+                        )}
+                        ListEmptyComponent={
+                            <View style={styles.emptyContainer}>
+                                <Ionicons name="chatbubbles-outline" size={64} color={theme.primary + '20'} />
+                                <Text style={[styles.emptyTitle, { color: theme.text }]}>No Conversations</Text>
+                                <Text style={[styles.emptySub, { color: theme.textMuted }]}>This channel is currently silent.</Text>
+                                <TouchableOpacity onPress={() => fetchAll(true)} style={[styles.refreshEmptyBtn, { backgroundColor: theme.primary }]}>
+                                    <Text style={{ color: '#fff', fontWeight: '800' }}>Refresh Stream</Text>
+                                </TouchableOpacity>
+                            </View>
+                        }
+                    />
+                </>
             )}
             
             {/* Quick Action Modal */}

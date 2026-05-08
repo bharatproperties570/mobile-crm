@@ -879,7 +879,7 @@ export default function DealDetailScreen() {
                                             asChild
                                         >
                                             <TouchableOpacity 
-                                                style={[styles.actionBtnSecondary, { borderColor: theme.primary, borderWidth: 1 }]}
+                                                style={StyleSheet.flatten([styles.actionBtnSecondary, { borderColor: theme.primary, borderWidth: 1 }])}
                                             >
                                                 <Ionicons name="megaphone-outline" size={20} color={theme.primary} />
                                                 <Text style={[styles.actionBtnText, { color: theme.primary }]}>Launch Broadcast Campaign</Text>

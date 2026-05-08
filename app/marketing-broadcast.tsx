@@ -199,15 +199,15 @@ export default function MarketingBroadcastScreen() {
                         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.templatesScroll}>
                             {templates.map(t => (
                                 <TouchableOpacity 
-                                    key={t.id}
+                                    key={t.id || t.name}
                                     style={[
                                         styles.templateTab,
-                                        { backgroundColor: selectedTemplate?.id === t.id ? theme.primary : (isDark ? 'rgba(255,255,255,0.05)' : '#fff') },
-                                        { borderColor: selectedTemplate?.id === t.id ? theme.primary : theme.border }
+                                        { backgroundColor: (selectedTemplate?.id || selectedTemplate?.name) === (t.id || t.name) ? theme.primary : (isDark ? 'rgba(255,255,255,0.05)' : '#fff') },
+                                        { borderColor: (selectedTemplate?.id || selectedTemplate?.name) === (t.id || t.name) ? theme.primary : theme.border }
                                     ]}
                                     onPress={() => setSelectedTemplate(t)}
                                 >
-                                    <Text style={[styles.templateTabText, { color: selectedTemplate?.id === t.id ? '#fff' : theme.text }]}>
+                                    <Text style={[styles.templateTabText, { color: (selectedTemplate?.id || selectedTemplate?.name) === (t.id || t.name) ? '#fff' : theme.text }]}>
                                         {t.name.replace(/_/g, ' ')}
                                     </Text>
                                 </TouchableOpacity>
@@ -223,7 +223,9 @@ export default function MarketingBroadcastScreen() {
                         <Text style={[styles.previewText, { color: isDark ? '#CBD5E1' : '#075E54' }]}>
                             {selectedTemplate ? (
                                 (() => {
-                                    const body = selectedTemplate.components?.find((c: any) => c.type === 'BODY')?.text || '';
+                                    const bodyComp = selectedTemplate.components?.find((c: any) => c.type?.toUpperCase() === 'BODY');
+                                    const body = bodyComp?.text || selectedTemplate.body || selectedTemplate.content || '';
+                                    
                                     const resolveSource = (source: string) => {
                                         switch(source) {
                                             case 'customer_name': return '[Broker Company Name]';
@@ -239,9 +241,9 @@ export default function MarketingBroadcastScreen() {
                                         const idx = m.replace(/[{}]/g, '');
                                         const config = registry[idx];
                                         const source = typeof config === 'object' ? config.source : config;
-                                        preview = preview.replace(m, resolveSource(source));
+                                        preview = preview.replace(m, resolveSource(source || idx));
                                     });
-                                    return preview;
+                                    return preview || 'Message content loading...';
                                 })()
                             ) : (
                                 `🏢 BROKER UPDATE: ${meta?.title}\n\n💰 Price: ${meta?.price}\n📍 Location: ${meta?.location}\n📐 Specs: ${meta?.features?.join(' | ')}\n\nRef: ${deal?.shareableId}`

@@ -413,7 +413,8 @@ const ActionSheet = memo(({ visible, onClose, lead, onUpdate, users }: any) => {
     );
 });
 
-const LeadCard = memo(({ lead, index, onPress, onMore, liveScore, onAction }: any) => {
+const LeadCard = memo(({ lead, index, onPress, onMore, liveScore, onAction, onSwipeWillOpen }: any) => {
+    const swipeableRef = useRef<any>(null);
     const { theme } = useTheme();
     const { getLookupValue } = useLookup();
     const { findUser } = useUsers();
@@ -518,7 +519,15 @@ const LeadCard = memo(({ lead, index, onPress, onMore, liveScore, onAction }: an
     );
 
     return (
-        <Swipeable renderRightActions={renderRightActions} renderLeftActions={renderLeftActions}>
+        <Swipeable 
+            ref={swipeableRef}
+            friction={2}
+            rightThreshold={40}
+            leftThreshold={40}
+            renderRightActions={renderRightActions} 
+            renderLeftActions={renderLeftActions}
+            onSwipeableWillOpen={() => onSwipeWillOpen(swipeableRef.current)}
+        >
             <TouchableOpacity onPress={onPress}>
                 <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
                     <View style={styles.cardInner}>
@@ -543,6 +552,7 @@ export default function LeadsScreen() {
     const { getLookupValue, getLookupsByType } = useLookup();
     const { findUser, users } = useUsers();
     const { projects } = useProjects();
+    const { trackCall } = useCallTracking();
 
     const dynamicTabs = useMemo(() => {
         const statuses = getLookupsByType('Lead Status');
@@ -582,11 +592,21 @@ export default function LeadsScreen() {
     const [advFilters, setAdvFilters] = useState<any>({});
     const [liveScores, setLiveScores] = useState<any>({});
 
+    const activeRowRef = useRef<any>(null);
+
+    const onSwipeableWillOpen = useCallback((rowRef: any) => {
+        if (activeRowRef.current && activeRowRef.current !== rowRef) {
+            activeRowRef.current.close();
+        }
+        activeRowRef.current = rowRef;
+    }, []);
+
     const [contactPickerVisible, setContactPickerVisible] = useState(false);
     const [availableContacts, setAvailableContacts] = useState<any[]>([]);
     const [pendingAction, setPendingAction] = useState<{ type: string, lead: any } | null>(null);
 
     const getContactsForLead = (lead: any) => {
+        if (!lead) return [];
         const contacts: any[] = [];
         const name = leadName(lead) || "Lead";
 
@@ -785,6 +805,7 @@ export default function LeadsScreen() {
                         onPress={() => router.push(`/lead-detail?id=${item._id}`)} 
                         onMore={() => { setSelectedLead(item); setSheetVisible(true); }} 
                         onAction={(type: string) => handleCommunicationAction(item, type)}
+                        onSwipeWillOpen={onSwipeableWillOpen}
                     />
                 )} 
                 keyExtractor={(item) => item._id} 

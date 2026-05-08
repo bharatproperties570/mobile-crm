@@ -102,7 +102,13 @@ export const marketingService = {
    */
   getTemplates: async (channel: string) => {
     try {
-      const endpoint = channel.toLowerCase() === 'whatsapp' ? "/marketing/whatsapp/templates" : "/marketing/sms/templates";
+      let endpoint = "/marketing/sms/templates";
+      if (channel.toLowerCase() === 'whatsapp') {
+        endpoint = "/marketing/whatsapp/templates";
+      } else if (channel.toLowerCase() === 'email') {
+        endpoint = "/marketing/content?type=Email";
+      }
+      
       const { data } = await api.get(endpoint);
       return data;
     } catch (error) {

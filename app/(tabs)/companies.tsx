@@ -7,7 +7,7 @@ import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Swipeable } from "react-native-gesture-handler";
 import { getCompanies, type Company } from "@/services/companies.service";
-import { lookupVal, safeApiCall, extractList } from "@/services/api.helpers";
+import { lookupVal, safeApiCall, safeApiCallSingle, extractList } from "@/services/api.helpers";
 import { useTheme } from "@/context/ThemeContext";
 import { useLookup } from "@/context/LookupContext";
 import { useCallTracking } from "@/context/CallTrackingContext";
@@ -15,7 +15,8 @@ import { useUsers } from "@/context/UserContext";
 import { Vibration } from "react-native";
 import { updateCompany } from "@/services/companies.service";
 import FilterModal, { FilterField } from "@/components/FilterModal";
-import { getCompanyGroups, CompanyGroup, bulkAssignCompanies } from "@/services/companyGroups.service";
+import { getCompanyGroups, CompanyGroup, bulkAssignCompanies, createCompanyGroup, deleteCompanyGroup } from "@/services/companyGroups.service";
+import api from "@/services/api";
 
 const COMPANY_FILTER_FIELDS: FilterField[] = [
     { key: "relationshipType", label: "Relationship Type", type: "lookup", lookupType: "RelationshipType" },
@@ -226,17 +227,27 @@ export default function CompaniesScreen() {
     const [isCreatingGroup, setIsCreatingGroup] = useState(false);
     const [newGroupName, setNewGroupName] = useState("");
     const [newGroupColor, setNewGroupColor] = useState("#6366F1");
+    const [creatingGroup, setCreatingGroup] = useState(false);
+    const [showGlobalGroups, setShowGlobalGroups] = useState(false);
     
     const slideAnim = useRef(new Animated.Value(Dimensions.get('window').height)).current;
     const { users } = useUsers();
 
     const fetchGroups = async () => {
         setLoadingGroups(true);
-        const res = await safeApiCall(getCompanyGroups);
-        if (!res.error && res.data?.success) {
-            setGroups(res.data.data);
+        try {
+            const res = await safeApiCall(getCompanyGroups);
+            if (!res.error) {
+                // safeApiCall already returns the list in .data
+                setGroups(res.data);
+            } else {
+                console.warn("[Groups] Fetch failed:", res.error);
+            }
+        } catch (err) {
+            console.error("[Groups] Critical fetch error:", err);
+        } finally {
+            setLoadingGroups(false);
         }
-        setLoadingGroups(false);
     };
 
     useEffect(() => {
@@ -245,19 +256,62 @@ export default function CompaniesScreen() {
 
     const handleCreateGroup = async () => {
         if (!newGroupName.trim()) return;
-        const res = await safeApiCall(() => api.post('/company-groups', {
-            name: newGroupName,
-            color: newGroupColor,
-            category: 'Broker'
-        }));
-        
-        if (!res.error && res.data?.success) {
-            setGroups(prev => [...prev, res.data.data]);
-            setNewGroupName("");
-            setIsCreatingGroup(false);
-            Vibration.vibrate(10);
-            Alert.alert("Success", "New broker group created!");
+        setCreatingGroup(true);
+        try {
+            const res = await safeApiCallSingle(() => createCompanyGroup({
+                name: newGroupName,
+                color: newGroupColor,
+                category: 'Broker'
+            }));
+
+            if (!res.error) {
+                // Refetch to ensure state is perfectly in sync with server
+                await fetchGroups();
+                
+                setNewGroupName("");
+                setIsCreatingGroup(false); 
+                Vibration.vibrate(10);
+                
+                if (showGlobalGroups) {
+                    Alert.alert("Success", "Group created and added to list.");
+                } else {
+                    setShowGroupPicker(false);
+                    closeHub();
+                    Alert.alert("Success", "New broker group created!");
+                }
+            } else {
+                const errorMsg = res.error || "Failed to create group. The name might already exist.";
+                Alert.alert("Creation Failed", errorMsg);
+            }
+        } catch (err) {
+            console.error("[Groups] Create handler error:", err);
+            Alert.alert("Error", "An unexpected error occurred while updating the UI.");
+        } finally {
+            setCreatingGroup(false);
         }
+    };
+
+    const handleDeleteGroup = async (groupId: string) => {
+        Alert.alert(
+            "Delete Group",
+            "Are you sure? This will remove this group from all companies.",
+            [
+                { text: "Cancel", style: "cancel" },
+                { 
+                    text: "Delete", 
+                    style: "destructive",
+                    onPress: async () => {
+                        const res = await safeApiCallSingle(() => deleteCompanyGroup(groupId));
+                        if (!res.error) {
+                            setGroups(prev => prev.filter(g => g._id !== groupId));
+                            Vibration.vibrate(20);
+                        } else {
+                            Alert.alert("Delete Failed", res.error);
+                        }
+                    }
+                }
+            ]
+        );
     };
 
     const openHub = (company: Company) => {
@@ -356,12 +410,20 @@ export default function CompaniesScreen() {
                     <Text style={[styles.title, { color: theme.text }]}>Companies</Text>
                     <Text style={[styles.subtitle, { color: theme.textLight }]}>{companies.length} industry partners</Text>
                 </View>
-                <TouchableOpacity
-                    style={[styles.addBtnHeader, { backgroundColor: theme.primary }]}
-                    onPress={() => router.push("/add-company")}
-                >
-                    <Ionicons name="add" size={26} color="#fff" />
-                </TouchableOpacity>
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                    <TouchableOpacity
+                        style={[styles.addBtnHeader, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#F1F5F9' }]}
+                        onPress={() => setShowGlobalGroups(true)}
+                    >
+                        <Ionicons name="pricetags" size={22} color={theme.primary} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={[styles.addBtnHeader, { backgroundColor: theme.primary }]}
+                        onPress={() => router.push("/add-company")}
+                    >
+                        <Ionicons name="add" size={26} color="#fff" />
+                    </TouchableOpacity>
+                </View>
             </View>
 
             <View style={[styles.searchBar, { backgroundColor: (theme as any).inputBg || theme.card, borderColor: theme.border }]}>
@@ -491,14 +553,6 @@ export default function CompaniesScreen() {
                                 <Text style={[styles.actionLabel, { color: theme.textLight }]}>Activity</Text>
                             </TouchableOpacity>
 
-                            <TouchableOpacity style={styles.actionItem} onPress={() => {
-                                setShowGroupPicker(true);
-                            }}>
-                                <View style={[styles.actionIcon, { backgroundColor: isDark ? 'rgba(219, 39, 119, 0.15)' : "#FDF2F8" }]}>
-                                    <Ionicons name="pricetags" size={24} color={isDark ? '#F472B6' : "#DB2777"} />
-                                </View>
-                                <Text style={[styles.actionLabel, { color: theme.textLight }]}>Groups</Text>
-                            </TouchableOpacity>
 
                             <TouchableOpacity style={styles.actionItem} onPress={async () => {
                                 const newStatus = !selectedCompany?.isVerifiedBroker;
@@ -597,8 +651,16 @@ export default function CompaniesScreen() {
                                                     <TouchableOpacity onPress={() => setIsCreatingGroup(false)}>
                                                         <Text style={{ color: theme.textLight, fontWeight: '700' }}>Cancel</Text>
                                                     </TouchableOpacity>
-                                                    <TouchableOpacity onPress={handleCreateGroup} style={{ backgroundColor: theme.primary, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6 }}>
-                                                        <Text style={{ color: '#fff', fontWeight: '800' }}>Create</Text>
+                                                    <TouchableOpacity 
+                                                        onPress={handleCreateGroup} 
+                                                        style={{ backgroundColor: theme.primary, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6, minWidth: 80, alignItems: 'center' }}
+                                                        disabled={creatingGroup}
+                                                    >
+                                                        {creatingGroup ? (
+                                                            <ActivityIndicator size="small" color="#fff" />
+                                                        ) : (
+                                                            <Text style={{ color: '#fff', fontWeight: '800' }}>Create</Text>
+                                                        )}
                                                     </TouchableOpacity>
                                                 </View>
                                             </View>
@@ -654,6 +716,87 @@ export default function CompaniesScreen() {
                     )}
                 </Pressable >
             </Modal >
+
+            {/* Global Group Manager Modal */}
+            <Modal visible={showGlobalGroups} transparent animationType="slide">
+                <View style={[styles.modalOverlay, { backgroundColor: 'rgba(0,0,0,0.5)' }]}>
+                    <View style={[styles.sheetContainer, { backgroundColor: theme.card, height: '70%' }]}>
+                        <View style={styles.sheetHandle} />
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                <Text style={[styles.sheetTitle, { color: theme.text }]}>MANAGE GROUPS</Text>
+                                <TouchableOpacity onPress={fetchGroups} style={{ padding: 4 }}>
+                                    {loadingGroups ? <ActivityIndicator size="small" color={theme.primary} /> : <Ionicons name="refresh-circle" size={24} color={theme.primary} />}
+                                </TouchableOpacity>
+                            </View>
+                            <TouchableOpacity onPress={() => setShowGlobalGroups(false)}>
+                                <Ionicons name="close-circle" size={28} color={theme.textLight} />
+                            </TouchableOpacity>
+                        </View>
+
+                        <ScrollView contentContainerStyle={{ gap: 12, paddingBottom: 40 }}>
+                            <TouchableOpacity 
+                                style={{ marginTop: 10, padding: 16, borderRadius: 16, backgroundColor: theme.primary + '10', borderStyle: 'dashed', borderWidth: 1, borderColor: theme.primary, alignItems: 'center' }}
+                                onPress={() => setIsCreatingGroup(true)}
+                            >
+                                <Text style={{ color: theme.primary, fontWeight: '800' }}>+ CREATE NEW GROUP</Text>
+                            </TouchableOpacity>
+
+                            {isCreatingGroup && (
+                                <View style={{ marginTop: 15, padding: 16, backgroundColor: isDark ? 'rgba(255,255,255,0.02)' : '#f8fafc', borderRadius: 16, borderWidth: 1, borderColor: theme.border }}>
+                                    <TextInput 
+                                        style={{ backgroundColor: theme.card, padding: 12, borderRadius: 12, color: theme.text, fontSize: 15, fontWeight: '600', borderWidth: 1, borderColor: theme.border }}
+                                        placeholder="Group Name..."
+                                        placeholderTextColor={theme.textLight}
+                                        value={newGroupName}
+                                        onChangeText={setNewGroupName}
+                                    />
+                                    <View style={{ flexDirection: 'row', gap: 8, marginVertical: 15, justifyContent: 'center' }}>
+                                        {['#6366F1', '#10B981', '#F59E0B', '#EF4444', '#EC4899', '#8B5CF6'].map(c => (
+                                            <TouchableOpacity 
+                                                key={c} 
+                                                style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: c, borderWidth: newGroupColor === c ? 3 : 0, borderColor: theme.text }}
+                                                onPress={() => setNewGroupColor(c)}
+                                            />
+                                        ))}
+                                    </View>
+                                    <View style={{ flexDirection: 'row', gap: 10 }}>
+                                        <TouchableOpacity style={{ flex: 1, padding: 12, alignItems: 'center' }} onPress={() => setIsCreatingGroup(false)}>
+                                            <Text style={{ color: theme.textLight, fontWeight: '700' }}>Cancel</Text>
+                                        </TouchableOpacity>
+                                        <TouchableOpacity 
+                                            style={{ flex: 1, backgroundColor: theme.primary, padding: 12, borderRadius: 12, alignItems: 'center' }}
+                                            onPress={handleCreateGroup}
+                                        >
+                                            {creatingGroup ? <ActivityIndicator size="small" color="#fff" /> : <Text style={{ color: '#fff', fontWeight: '800' }}>Create</Text>}
+                                        </TouchableOpacity>
+                                    </View>
+                                </View>
+                            )}
+
+                            <View style={{ marginTop: 20 }}>
+                                <Text style={{ fontSize: 11, fontWeight: '900', color: theme.textLight, marginBottom: 15, letterSpacing: 1 }}>EXISTING GROUPS</Text>
+                                {groups.map(g => (
+                                    <View key={g._id} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 14, backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#f8fafc', borderRadius: 16, marginBottom: 8, borderWidth: 1, borderColor: theme.border }}>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                                            <View style={{ width: 14, height: 14, borderRadius: 7, backgroundColor: g.color }} />
+                                            <View>
+                                                <Text style={{ color: theme.text, fontWeight: '800', fontSize: 14 }}>{g.name}</Text>
+                                                <Text style={{ color: theme.textLight, fontSize: 9, fontWeight: '700', textTransform: 'uppercase' }}>{g.category}</Text>
+                                            </View>
+                                        </View>
+                                        {!g.isSystem && (
+                                            <TouchableOpacity onPress={() => handleDeleteGroup(g._id)} style={{ padding: 8 }}>
+                                                <Ionicons name="trash-outline" size={18} color="#EF4444" />
+                                            </TouchableOpacity>
+                                        )}
+                                    </View>
+                                ))}
+                            </View>
+                        </ScrollView>
+                    </View>
+                </View>
+            </Modal>
 
             <FilterModal
                 visible={showFilterModal}
