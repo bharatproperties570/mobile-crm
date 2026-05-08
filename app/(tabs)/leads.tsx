@@ -454,11 +454,12 @@ const LeadCard = memo(({ lead, index, onPress, onMore, liveScore, onAction, onSw
     
     if (!combinedLocation) combinedLocation = "Location Unspecified";
 
-    const budgetText = lead.budgetMax ? `₹${formatAmount(lead.budgetMax)}` : (lead.budgetMin ? `₹${formatAmount(lead.budgetMin)}` : null);
+    const budgetText = lead.budgetMax ? `₹${formatAmount(lead.budgetMax)}` : (lead.budgetMin ? `₹${formatAmount(lead.budgetMin)}` : (typeof lead.budget === 'object' ? lead.budget?.lookup_value : getLookupValue("Budget", lead.budget)) || null);
     
     const resolveLookupArr = (type: string, val: any) => {
         if (!val) return "";
-        if (Array.isArray(val)) return val.map(v => getLookupValue(type, v)).filter(Boolean).join(", ");
+        if (Array.isArray(val)) return val.map(v => typeof v === 'object' ? (v.lookup_value || v.name) : getLookupValue(type, v)).filter(Boolean).join(", ");
+        if (typeof val === 'object') return String(val.lookup_value || val.name || "");
         return String(getLookupValue(type, val) || "");
     };
 
