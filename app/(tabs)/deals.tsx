@@ -38,10 +38,7 @@ const STAGE_COLORS_LIGHT: Record<string, string> = {
     quote: "#8B5CF6",
     negotiation: "#F59E0B",
     booked: "#F97316",
-    "closed won": "#10B981",
-    "closed lost": "#EF4444",
-    cancelled: "#64748B",
-    dormant: "#64748B",
+    closed: "#10B981"
 };
 
 const STAGE_COLORS_DARK: Record<string, string> = {
@@ -49,10 +46,7 @@ const STAGE_COLORS_DARK: Record<string, string> = {
     quote: "#A78BFA",
     negotiation: "#FBBF24",
     booked: "#FB923C",
-    "closed won": "#34D399",
-    "closed lost": "#F87171",
-    cancelled: "#94A3B8",
-    dormant: "#94A3B8",
+    closed: "#34D399"
 };
 
 function resolveName(field: unknown, getLookupValue?: (type: string, val: any) => string, findUser?: (id: string) => any): string {
@@ -142,9 +136,7 @@ const SHORT_NAMES: Record<string, string> = {
     quote: "Quote",
     negotiation: "Nego",
     booked: "Book",
-    "closed won": "Won",
-    "closed lost": "Lost",
-    dormant: "Dorm",
+    closed: "Closed"
 };
 
 const ChevronSegment = memo(({
@@ -205,26 +197,13 @@ const DealPipelineHorizontal = memo(({
     activeStage: string | null;
     onStagePress: (label: string | null) => void;
 }) => {
-    const { theme, isDarkMode } = useTheme();
-    const isDark = isDarkMode;
-    const [isClosedExpanded, setIsClosedExpanded] = useState(false);
-
-    const toggleClosed = () => {
-        setIsClosedExpanded(!isClosedExpanded);
-    };
-
-    const primaryStages = stages.filter(s => !['closed won', 'closed lost'].includes(s.label));
-    const closedSubStages = stages.filter(s => ['closed won', 'closed lost'].includes(s.label));
-
-    // Aggregated Closed Data
-    const closedTotal = closedSubStages.reduce((sum, s) => sum + s.count, 0);
+    const { theme } = useTheme();
     const totalCount = stages.reduce((sum, s) => sum + s.count, 0) || 1;
-    const closedPercent = Math.round((closedTotal / totalCount) * 100);
 
     return (
         <View style={[styles.horizontalPipelineWrapper, { backgroundColor: theme.card, borderBottomColor: theme.border }]}>
             <View style={styles.chevronContainer}>
-                {primaryStages.map((s, idx) => (
+                {stages.map((s, idx) => (
                     <ChevronSegment
                         key={idx}
                         label={s.label}
@@ -233,53 +212,11 @@ const DealPipelineHorizontal = memo(({
                         color={s.color}
                         isSelected={activeStage === s.label}
                         isFirst={idx === 0}
+                        isLast={idx === stages.length - 1}
                         onPress={() => onStagePress(s.label)}
                     />
                 ))}
-
-                <TouchableOpacity
-                    onPress={toggleClosed}
-                    activeOpacity={0.9}
-                    style={[
-                        styles.chevronSegment,
-                        { backgroundColor: activeStage?.includes('closed') ? theme.success : theme.success + (isDark ? '25' : '15') },
-                        { borderTopRightRadius: 8, borderBottomRightRadius: 8, borderLeftWidth: 0 }
-                    ]}
-                >
-                    <View style={styles.chevronContent}>
-                        <Text style={[styles.chevronLabel, { color: activeStage?.includes('closed') ? '#fff' : theme.success }]}>Closed</Text>
-                        <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 2 }}>
-                            <Text style={[styles.chevronCount, { color: activeStage?.includes('closed') ? '#fff' : theme.success }]}>{closedTotal}</Text>
-                            <Text style={[styles.chevronPercent, { color: activeStage?.includes('closed') ? '#ffffff90' : theme.success + '90' }]}>{closedPercent}%</Text>
-                            <Ionicons
-                                name={isClosedExpanded ? "chevron-up" : "chevron-down"}
-                                size={10}
-                                color={activeStage?.includes('closed') ? '#fff' : theme.success}
-                                style={{ marginLeft: 2 }}
-                            />
-                        </View>
-                    </View>
-                </TouchableOpacity>
             </View>
-
-            {isClosedExpanded && (
-                <View style={styles.compactSubRow}>
-                    {closedSubStages.map((s, idx) => (
-                        <TouchableOpacity
-                            key={idx}
-                            onPress={() => onStagePress(s.label)}
-                            style={[
-                                styles.subStageChip,
-                                { backgroundColor: activeStage === s.label ? s.color : s.color + (theme.background === '#0F172A' ? '25' : '10') }
-                            ]}
-                        >
-                            <Text style={[styles.subStageText, { color: activeStage === s.label ? '#fff' : s.color }]}>
-                                {SHORT_NAMES[s.label] || s.label}: {s.count}
-                            </Text>
-                        </TouchableOpacity>
-                    ))}
-                </View>
-            )}
         </View>
     );
 });
@@ -322,6 +259,16 @@ const DealCard = memo(({
     const color = stageColorMap[stageStr] ?? (isDark ? "#94A3B8" : "#6366F1");
     const amount = deal.price || deal.amount || 0;
     const userName = resolveName(deal.assignedTo, getLookupValue, findUser);
+
+    const isBooked = stageStr === 'booked';
+    const isWon = stageStr === 'closed won' || stageStr === 'won';
+    const isClosed = stageStr.includes('closed') || stageStr === 'won' || stageStr === 'lost';
+
+    let cardBg = theme.card;
+    if (isBooked) cardBg = isDark ? '#450a0a' : '#fee2e2';
+    if (isWon) cardBg = isDark ? '#831843' : '#fce7f3';
+
+    const isNonActionable = isBooked || isClosed;
 
     const renderRightActions = () => (
         <View style={styles.rightActions}>
@@ -367,16 +314,16 @@ const DealCard = memo(({
     };
 
     return (
-        <Swipeable renderRightActions={renderRightActions} renderLeftActions={renderLeftActions} friction={2}>
+        <Swipeable renderRightActions={isNonActionable ? undefined : renderRightActions} renderLeftActions={isNonActionable ? undefined : renderLeftActions} friction={2}>
             <Pressable 
-                onPressIn={() => animatePress(0.97)}
-                onPressOut={() => animatePress(1)}
-                onPress={onPress}
-                onLongPress={onLongPress}
+                onPressIn={() => !isNonActionable && animatePress(0.97)}
+                onPressOut={() => !isNonActionable && animatePress(1)}
+                onPress={isNonActionable ? undefined : onPress}
+                onLongPress={isNonActionable ? undefined : onLongPress}
             >
                 <Animated.View style={[
                     styles.card, 
-                    { backgroundColor: theme.card, borderColor: theme.border, transform: [{ scale: scaleAnim }] }
+                    { backgroundColor: cardBg, borderColor: theme.border, transform: [{ scale: scaleAnim }], opacity: isNonActionable ? 0.8 : 1 }
                 ]}>
                 <View style={[styles.cardAccent, { backgroundColor: color }]} />
                 <View style={styles.cardMain}>
@@ -460,7 +407,17 @@ const DealCard = memo(({
                         </View>
                         <View style={styles.headerRight}>
                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-                                <DealScoreRing score={liveScore ? liveScore.score : (deal.score || (deal as any).dealScore || 0)} color={liveScore?.color || color} size={32} />
+                                {(() => {
+                                    const scoreVal = liveScore ? liveScore.score : (deal.dealProbability || 0);
+                                    const getFallbackColor = (score: number) => {
+                                        if (score >= 80) return '#EF4444'; // Super Hot
+                                        if (score >= 60) return '#F59E0B'; // Hot
+                                        if (score >= 30) return '#3B82F6'; // Active
+                                        return '#94A3B8'; // Cold
+                                    };
+                                    const ringColor = liveScore?.color || getFallbackColor(scoreVal);
+                                    return <DealScoreRing score={scoreVal} color={ringColor} size={32} />;
+                                })()}
                                 <View style={[styles.stagePill, { backgroundColor: color + "15" }]}>
                                     <View style={[styles.stageDot, { backgroundColor: color }]} />
                                     <Text style={[styles.stageText, { color }]}>{resolveName(deal.stage, getLookupValue, findUser)}</Text>
@@ -576,24 +533,25 @@ export default function DealsScreen() {
 
     const pipelineStats = useMemo(() => {
         const stats: Record<string, number> = {};
-        const isDark = isDarkMode;
-        const stageColorMap = isDark ? STAGE_COLORS_DARK : STAGE_COLORS_LIGHT;
+        const stageColorMap = isDarkMode ? STAGE_COLORS_DARK : STAGE_COLORS_LIGHT;
         
         deals.forEach(d => {
             let stage = (resolveName(d.stage, getLookupValue) || "open").toLowerCase();
-            if (stage === 'closed' || stage === 'closed won') stage = 'closed won';
-            if (stage === 'closed lost') stage = 'closed lost';
+            // Map legacy and varied stages to the clean 5-stage array
+            if (stage.includes('closed') || stage === 'won' || stage === 'lost') {
+                stage = 'closed';
+            }
             stats[stage] = (stats[stage] || 0) + 1;
         });
 
-        // Logical pipeline sequence
-        const order = ['open', 'quote', 'negotiation', 'booked', 'closed won', 'closed lost', 'dormant'];
+        // Strict 5-stage enterprise pipeline
+        const order = ['open', 'quote', 'negotiation', 'booked', 'closed'];
         return order.map(s => ({
             label: s,
             count: stats[s] || 0,
             color: stageColorMap[s] || "#64748B"
         }));
-    }, [deals, theme.background]);
+    }, [deals, theme.background, isDarkMode, getLookupValue]);
 
     const lastFetchTime = useRef<number>(0);
 
@@ -705,8 +663,9 @@ export default function DealsScreen() {
             // Pipeline stage filter
             if (activePipelineStage) {
                 let s = (resolveName(deal.stage, getLookupValue, findUser) || "open").toLowerCase();
-                if (s === 'closed' || s === 'closed won') s = 'closed won';
-                if (s === 'closed lost') s = 'closed lost';
+                if (s.includes('closed') || s === 'won' || s === 'lost') {
+                    s = 'closed';
+                }
                 if (s !== activePipelineStage.toLowerCase()) return false;
             }
 
