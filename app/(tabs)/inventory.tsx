@@ -302,6 +302,14 @@ const InventoryCard = memo(({ item, onPress, onCall, onWhatsApp, onSMS, onEmail,
     );
 });
 
+// Senior Optimization: Memoize the card to prevent expensive re-renders during high-frequency events (like search typing)
+const MemoizedInventoryCard = React.memo(InventoryCard, (prev, next) => {
+    return prev.item._id === next.item._id && 
+           prev.viewMode === next.viewMode &&
+           prev.item.status === next.item.status &&
+           prev.item.assignedTo === next.item.assignedTo;
+});
+
 export default function InventoryScreen() {
     const { theme, isDarkMode } = useTheme();
     const insets = useSafeAreaInsets();
@@ -749,10 +757,19 @@ export default function InventoryScreen() {
                     numColumns={viewMode === 'grid' ? 2 : 1}
                     columnWrapperStyle={viewMode === 'grid' ? styles.gridRow : undefined}
                     renderItem={({ item }) => (
-                        <InventoryCard
+                            <MemoizedInventoryCard
                             item={item}
                             viewMode={viewMode}
-                            onPress={() => router.push(`/inventory-detail?id=${item._id}`)}
+                            onPress={() => router.push({
+                                pathname: "/inventory-detail",
+                                params: { 
+                                    id: item._id,
+                                    // Passing basic data for instant "Ghost Hydration"
+                                    _unitNo: item.unitNumber || item.unitNo || "N/A",
+                                    _projectName: item.projectName || "N/A",
+                                    _status: typeof item.status === 'object' ? (item.status as any)._id : item.status
+                                }
+                            })}
                             onCall={() => handleCall(item)}
                             onWhatsApp={() => handleWhatsApp(item)}
                             onSMS={() => handleSMS(item)}

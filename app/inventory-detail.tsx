@@ -64,7 +64,12 @@ const ACTIVE_STATUSES = ['Available', 'Interested / Medium', 'Interested / High'
 const INACTIVE_STATUSES = ['Sold Out', 'Rented Out', 'Not Interested', 'Inactive', 'Wrong Number / Invalid', 'Switch Off / Unreachable'];
 
 export default function InventoryDetailScreen() {
-    const { id } = useLocalSearchParams<{ id: string }>();
+    const { id, _unitNo, _projectName, _status } = useLocalSearchParams<{ 
+        id: string; 
+        _unitNo?: string; 
+        _projectName?: string; 
+        _status?: string; 
+    }>();
     const router = useRouter();
     const { theme } = useTheme();
     const { trackCall } = useCallTracking();
@@ -150,17 +155,18 @@ export default function InventoryDetailScreen() {
         }, [fetchData])
     );
 
-    if (loading) return <View style={[styles.center, { backgroundColor: theme.background }]}><ActivityIndicator size="large" color={theme.primary} /></View>;
-    if (!inv) return <View style={[styles.center, { backgroundColor: theme.background }]}><Text style={[styles.noData, { color: theme.textLight }]}>Unit not found</Text></View>;
+    // Senior Optimization: If we have ghost data, don't show the full-screen loader
+    if (loading && !_unitNo) return <View style={[styles.center, { backgroundColor: theme.background }]}><ActivityIndicator size="large" color={theme.primary} /></View>;
+    if (!inv && !_unitNo) return <View style={[styles.center, { backgroundColor: theme.background }]}><Text style={[styles.noData, { color: theme.textLight }]}>Unit not found</Text></View>;
 
-    const resolvedStatus = resolveStatus(inv.status);
+    const resolvedStatus = resolveStatus(inv?.status || _status);
     const stageLabel = INACTIVE_STATUSES.includes(resolvedStatus) ? 'InActive' : 'Active';
     const isDark = theme.background === '#0F172A';
     const stageColor = stageLabel === 'Active' ? (isDark ? '#34D399' : '#10B981') : (isDark ? '#FBBF24' : '#F59E0B');
-    const unitNo = lv(inv.unitNumber || inv.unitNo, getLookupValue);
-    const unitType = lv(inv.unitType, getLookupValue);
-    const projectName = lv(inv.projectName || "Unknown Project", getLookupValue);
-    const block = lv(inv.block, getLookupValue);
+    const unitNo = lv(inv?.unitNumber || inv?.unitNo || _unitNo, getLookupValue);
+    const unitType = lv(inv?.unitType, getLookupValue);
+    const projectName = lv(inv?.projectName || inv?.area || _projectName || "Unknown Project", getLookupValue);
+    const block = lv(inv?.block, getLookupValue);
 
     return (
         <View style={[styles.container, { backgroundColor: theme.background }]}>

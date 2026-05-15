@@ -873,31 +873,67 @@ export default function DealsScreen() {
     // Action Grid Handlers
     const handleReassign = async (userId: string) => {
         if (!selectedDeal) return;
+        
+        // 🚀 OPTIMISTIC UI
+        const previousDeals = [...deals];
+        const previousSelected = { ...selectedDeal };
+        const updatedDeal = { ...selectedDeal, assignedTo: userId };
+        
+        setDeals(prev => prev.map(d => d._id === selectedDeal._id ? updatedDeal : d));
+        setSelectedDeal(updatedDeal);
+        closeHub();
+
         const res = await safeApiCall(() => updateDeal(selectedDeal._id, { assignedTo: userId }));
         if (!res.error) {
-            fetchDeals();
-            closeHub();
-            Alert.alert("Success", "Deal reassigned successfully");
+            Vibration.vibrate(50);
+        } else {
+            Alert.alert("Update Failed", "Reverting reassignment.");
+            setDeals(previousDeals);
+            setSelectedDeal(previousSelected);
         }
     };
 
     const handleStageUpdate = async (stage: string) => {
         if (!selectedDeal) return;
+        
+        // 🚀 OPTIMISTIC UI
+        const previousDeals = [...deals];
+        const previousSelected = { ...selectedDeal };
+        const updatedDeal = { ...selectedDeal, stage };
+        
+        setDeals(prev => prev.map(d => d._id === selectedDeal._id ? updatedDeal : d));
+        setSelectedDeal(updatedDeal);
+        closeHub();
+
         const res = await safeApiCall(() => updateDeal(selectedDeal._id, { stage }));
         if (!res.error) {
-            fetchDeals();
-            closeHub();
-            Alert.alert("Success", `Stage updated to ${stage}`);
+            Vibration.vibrate(50);
+        } else {
+            Alert.alert("Update Failed", "Reverting stage change.");
+            setDeals(previousDeals);
+            setSelectedDeal(previousSelected);
         }
     };
 
     const handleQuickDormant = async () => {
         if (!selectedDeal) return;
+
+        // 🚀 OPTIMISTIC UI
+        const previousDeals = [...deals];
+        const previousSelected = { ...selectedDeal };
+        const updatedDeal = { ...selectedDeal, status: "Dormant" };
+        
+        setDeals(prev => prev.map(d => d._id === selectedDeal._id ? updatedDeal : d));
+        setSelectedDeal(updatedDeal);
+        closeHub();
+
         const res = await safeApiCall(() => updateDeal(selectedDeal._id, { status: "Dormant" }));
         if (!res.error) {
-            fetchDeals();
-            closeHub();
-            Alert.alert("Success", "Deal marked as Dormant");
+            Vibration.vibrate(50);
+        } else {
+            Alert.alert("Update Failed", "Reverting status.");
+            setDeals(previousDeals);
+            setSelectedDeal(previousSelected);
         }
     };
 
@@ -1041,7 +1077,25 @@ export default function DealsScreen() {
                         <DealCard
                             deal={item}
                             idx={index}
-                            onPress={() => router.push(`/deal-detail?id=${item._id}`)}
+                            onPress={() => {
+                                const unitNo = item.unitNo || item.unitNumber || (typeof item.inventoryId === 'object' ? (item.inventoryId?.unitNo || item.inventoryId?.unitNumber) : "") || "N/A";
+                                const projectName = item.projectName || (item.projectId && typeof item.projectId === 'object' ? (item.projectId as any).name : "") || "Unnamed Project";
+                                const stage = resolveName(item.stage, getLookupValue, findUser);
+                                const amount = item.price || item.amount || 0;
+                                const associate = resolveName(item.associatedContact, getLookupValue, findUser);
+                                
+                                router.push({
+                                    pathname: "/deal-detail",
+                                    params: { 
+                                        id: item._id,
+                                        ghost_unitNo: unitNo,
+                                        ghost_projectName: projectName,
+                                        ghost_stage: stage,
+                                        ghost_amount: amount.toString(),
+                                        ghost_associate: associate
+                                    }
+                                });
+                            }}
                             onLongPress={() => openHub(item)}
                             onCall={() => {
                                 const contacts = getContactsForDeal(item);
@@ -1061,13 +1115,13 @@ export default function DealsScreen() {
                         />
                     )}
                     contentContainerStyle={styles.list}
-                    initialNumToRender={10}
+                    initialNumToRender={8}
                     maxToRenderPerBatch={10}
-                    windowSize={5}
-                    removeClippedSubviews={true}
+                    windowSize={7}
+                    removeClippedSubviews={Platform.OS === 'android'}
                     getItemLayout={(data, index) => ({
-                        length: 100,
-                        offset: 100 * index,
+                        length: 185, // Fixed height for DealCard
+                        offset: 185 * index,
                         index,
                     })}
                     onEndReached={loadMore}

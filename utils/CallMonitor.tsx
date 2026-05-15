@@ -4,14 +4,6 @@ import { getLeads } from '../services/leads.service';
 import CallSyncService from '../services/CallSyncService';
 
 let CallKeep: any = null;
-try {
-    // CallKeep only works on Android for this implementation, 
-    // and requires native linking (not Expo Go)
-    const Module = require('react-native-callkeep');
-    CallKeep = Module.default || Module;
-} catch (e) {
-    console.warn('[CallMonitor] Native CallKeep module not available.');
-}
 
 /**
  * Enterprise Call Monitor
@@ -20,10 +12,20 @@ try {
  */
 export const useCallMonitor = () => {
     useEffect(() => {
-        if (Platform.OS !== 'android' || !CallKeep) return;
+        if (Platform.OS !== 'android') return;
 
         const setupCallKeep = async () => {
             try {
+                // Dynamic import to prevent startup crash if module is missing
+                if (!CallKeep) {
+                    try {
+                        const Module = require('react-native-callkeep');
+                        CallKeep = Module.default || Module;
+                    } catch (e) {
+                        console.warn('[CallMonitor] Native CallKeep module not available.');
+                        return;
+                    }
+                }
                 if (!CallKeep.setup) return;
                 await CallKeep.setup({
                     ios: { appName: 'Bharat Properties' },

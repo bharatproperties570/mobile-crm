@@ -431,7 +431,7 @@ const LeadCard = memo(({ lead, index, onPress, onMore, liveScore, onAction, onSw
     const cityVal = getLookupValue("City", lead.locCity);
     
     const projects = Array.isArray(lead.projectName) && lead.projectName.length > 0 
-        ? lead.projectName.join(", ") 
+        ? lead.projectName.map(p => typeof p === 'object' ? (p.name || p.lookup_value || "—") : p).filter(Boolean).join(", ") 
         : (typeof lead.project === 'object' ? lead.project?.name : getLookupValue("Project", lead.project));
 
     let primaryLocation = "";

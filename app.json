@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Bharat Properties CRM",
-    "slug": "bharat-properties-crm-mobile",
+    "slug": "bharat-mobile-crm",
     "version": "1.0.4",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -30,7 +30,9 @@
         "READ_PHONE_STATE",
         "READ_CONTACTS",
         "SYSTEM_ALERT_WINDOW",
-        "FOREGROUND_SERVICE"
+        "FOREGROUND_SERVICE",
+        "android.permission.READ_CALENDAR",
+        "android.permission.WRITE_CALENDAR"
       ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -43,7 +45,6 @@
     "plugins": [
       "expo-router",
       "expo-secure-store",
-      "expo-web-browser",
       [
         "expo-calendar",
         {
@@ -58,9 +59,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "8a273a2e-193d-4d23-86b9-3e41ba6c398a"
+        "projectId": "f584ac28-9815-4b90-9fe4-a7a3b5603073"
       }
     },
-    "owner": "bharatproperties"
+    "owner": "realdeal570s-organization"
   }
 }

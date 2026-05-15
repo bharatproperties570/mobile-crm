@@ -204,17 +204,39 @@ const RibbonButton = ({ icon, color, onPress }: { icon: any; color: string; onPr
 
 export default function DealDetailScreen() {
     const insets = useSafeAreaInsets();
-    const { id } = useLocalSearchParams<{ id: string }>();
+    const { id, ghost_unitNo, ghost_projectName, ghost_stage, ghost_amount, ghost_associate } = useLocalSearchParams<{ 
+        id: string;
+        ghost_unitNo?: string;
+        ghost_projectName?: string;
+        ghost_stage?: string;
+        ghost_amount?: string;
+        ghost_associate?: string;
+    }>();
     const router = useRouter();
     const { theme } = useTheme();
     const { trackCall } = useCallTracking();
     const { getLookupValue } = useLookup();
     const { users, findUser } = useUsers();
-    const [deal, setDeal] = useState<any>(null);
+    
+    // 🚀 GHOST HYDRATION: Initialize with forwarded data for instant UI
+    const [deal, setDeal] = useState<any>(() => {
+        if (ghost_unitNo) {
+            return {
+                _id: id,
+                unitNo: ghost_unitNo,
+                projectName: ghost_projectName,
+                stage: ghost_stage,
+                price: ghost_amount ? parseFloat(ghost_amount) : 0,
+                associatedContact: { fullName: ghost_associate },
+                isGhost: true // Marker for conditional logic if needed
+            };
+        }
+        return null;
+    });
     const [activities, setActivities] = useState<any[]>([]);
     const [matchingLeads, setMatchingLeads] = useState<any[]>([]);
     const isDark = theme.background === '#0F172A';
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(!ghost_unitNo); // Bypass loading if we have ghost data
     const [activeTab, setActiveTab] = useState(0);
     const [isActionModalVisible, setIsActionModalVisible] = useState(false);
     const scrollViewRef = useRef<ScrollView>(null);

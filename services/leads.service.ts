@@ -48,9 +48,18 @@ export interface Lead {
 }
 
 export function leadName(lead: Lead): string {
-    const isObjectId = (val: string) => /^[0-9a-fA-F]{24}$/.test(val);
-    const salutation = lead.salutation && !isObjectId(lead.salutation) ? lead.salutation : "";
-    return [salutation, lead.firstName, lead.lastName].filter(Boolean).join(" ") || "Unknown";
+    const resolve = (val: any) => {
+        if (!val) return "";
+        if (typeof val === 'object') return val.lookup_value || val.fullName || val.name || "";
+        if (typeof val === 'string' && /^[0-9a-fA-F]{24}$/.test(val)) return ""; // Filter out raw IDs
+        return String(val);
+    };
+    
+    const salutation = resolve(lead.salutation);
+    const first = resolve(lead.firstName);
+    const last = resolve(lead.lastName);
+    
+    return [salutation, first, last].filter(Boolean).join(" ") || "Unknown";
 }
 
 
