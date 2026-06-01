@@ -11,6 +11,7 @@ const TABS_CONFIG = [
     { name: 'index', label: 'Home', icon: 'home-outline', iconActive: 'home' },
     { name: 'leads', label: 'Leads', icon: 'people-outline', iconActive: 'people' },
     { name: 'deals', label: 'Deals', icon: 'wallet-outline', iconActive: 'wallet' },
+    { name: 'bookings', label: 'Bookings', icon: 'document-text-outline', iconActive: 'document-text' },
     { name: 'activities', label: 'Activities', icon: 'calendar-outline', iconActive: 'calendar' },
     { name: 'communication', label: 'Inbox', icon: 'chatbox-ellipses-outline', iconActive: 'chatbox-ellipses' },
     { name: 'contacts', label: 'Contacts', icon: 'person-circle-outline', iconActive: 'person-circle' },

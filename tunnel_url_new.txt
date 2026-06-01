@@ -1,1 +1,9 @@
-your url is: https://bharat-crm-prod-v2.loca.lt
+Starting project at /Users/bharatproperties/.gemini/antigravity/scratch/mobile-crm-expo
+env: load .env
+env: export EXPO_PUBLIC_API_BASE_URL EXPO_PUBLIC_GOOGLE_MAPS_API_KEY
+Starting Metro Bundler
+CommandError: failed to start tunnel
+
+remote gone away
+
+Check the Ngrok status page for outages: https://status.ngrok.com/

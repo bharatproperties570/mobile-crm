@@ -20,10 +20,9 @@ const LAN_URL = `http://${MACHINE_IP}:${BACKEND_PORT}/api`;
 
 const NATIVE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || PROD_URL;
 
-// On Web: If we are in dev, use localhost, else use PROD
-const BASE_URL = Platform.OS === "web" 
-  ? (process.env.NODE_ENV === "development" ? WEB_URL : PROD_URL)
-  : NATIVE_URL;
+// On Web: Always use localhost for testing
+// On Native: Always use LAN URL for testing
+const BASE_URL = Platform.OS === "web" ? WEB_URL : LAN_URL;
 
 console.log(`[API] Configuration Initialized:`);
 console.log(`- Platform: ${Platform.OS}`);

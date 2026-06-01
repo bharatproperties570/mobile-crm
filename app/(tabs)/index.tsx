@@ -570,8 +570,62 @@ export default function MissionControlScreen() {
                    ]);
                 }}
             />
+            {/* ONE-TAP QUICK ACTIONS */}
+            <View style={{ flexDirection: 'row', gap: 12, paddingHorizontal: 16, marginBottom: 24, marginTop: 12 }}>
+                <TouchableOpacity 
+                    style={{ flex: 1, backgroundColor: '#6366F1', padding: 12, borderRadius: 12, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 8, elevation: 4, shadowColor: '#6366F1', shadowOffset: {width: 0, height: 4}, shadowOpacity: 0.3, shadowRadius: 8 }}
+                    onPress={() => router.push("/(modals)/add-lead")}
+                >
+                    <Ionicons name="person-add" size={18} color="#fff" />
+                    <Text style={{ color: '#fff', fontWeight: '800', fontSize: 13 }}>New Lead</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                    style={{ flex: 1, backgroundColor: theme.card, padding: 12, borderRadius: 12, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 8, borderWidth: 1, borderColor: theme.border }}
+                    onPress={() => router.push("/(tabs)/activities?filter=Today")}
+                >
+                    <Ionicons name="call" size={18} color={theme.text} />
+                    <Text style={{ color: theme.text, fontWeight: '700', fontSize: 13 }}>Log Call</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                    style={{ flex: 1, backgroundColor: theme.card, padding: 12, borderRadius: 12, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 8, borderWidth: 1, borderColor: theme.border }}
+                    onPress={() => router.push("/(tabs)/activities?filter=Today")}
+                >
+                    <Ionicons name="calendar" size={18} color={theme.text} />
+                    <Text style={{ color: theme.text, fontWeight: '700', fontSize: 13 }}>Schedule</Text>
+                </TouchableOpacity>
+            </View>
+
 
             {/* 3. Activity Monitor (Urgency Based) */}
+            
+            {/* AI HOT LEADS PRIORITY */}
+            {dashboardData?.aiAlertHub?.hotLeads && dashboardData.aiAlertHub.hotLeads.length > 0 && (
+                <View style={{ marginBottom: 24, paddingHorizontal: 16 }}>
+                    <View style={styles.sectionHeaderRow}>
+                        <Text style={[styles.sectionHeader, { color: theme.textMuted }]}>AI Hot Leads</Text>
+                        <View style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }}>
+                            <Text style={{ color: '#EF4444', fontSize: 10, fontWeight: '800' }}>CALL NOW</Text>
+                        </View>
+                    </View>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12 }}>
+                        {dashboardData.aiAlertHub.hotLeads.map((lead: any, idx: number) => (
+                            <TouchableOpacity 
+                                key={idx}
+                                style={{ width: 220, backgroundColor: theme.card, padding: 16, borderRadius: 16, borderWidth: 1, borderColor: 'rgba(239, 68, 68, 0.3)', borderLeftWidth: 4, borderLeftColor: '#EF4444' }}
+                                onPress={() => router.push({ pathname: "/lead-detail", params: { id: lead.entityId } })}
+                            >
+                                <Text style={{ color: theme.text, fontWeight: '800', fontSize: 14, marginBottom: 4 }} numberOfLines={1}>{lead.title || 'Hot Prospect'}</Text>
+                                <Text style={{ color: theme.textSecondary, fontSize: 11, marginBottom: 12 }} numberOfLines={2}>{lead.message}</Text>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                    <Ionicons name="call" size={14} color="#10B981" />
+                                    <Text style={{ color: '#10B981', fontSize: 12, fontWeight: '800' }}>Engage Immediately</Text>
+                                </View>
+                            </TouchableOpacity>
+                        ))}
+                    </ScrollView>
+                </View>
+            )}
+
             <View style={styles.monitorContainer}>
                 <View style={styles.sectionHeaderRow}>
                     <Text style={[styles.sectionHeader, { color: theme.textMuted }]}>Activity Monitor</Text>
@@ -585,6 +639,43 @@ export default function MissionControlScreen() {
                     <PulseTile count={dashboardData?.activities?.today || 0} label="Today" icon="today" color="#F59E0B" bgColor="#FEF3C7" filter="Today" router={router} />
                     <PulseTile count={dashboardData?.activities?.upcoming || 0} label="Upcoming" icon="calendar" color="#6366F1" bgColor="#E0E7FF" filter="Upcoming" router={router} />
                 </View>
+
+                {/* ACTION FOCUS: TODAY'S AGENDA */}
+                {activities && activities.length > 0 ? (
+                    <View style={{ marginTop: 16, gap: 8 }}>
+                        <Text style={{ fontSize: 11, fontWeight: '700', color: theme.textMuted, marginBottom: 4, textTransform: 'uppercase' }}>Your Next Actions</Text>
+                        {activities.slice(0, 3).map((act, i) => (
+                            <TouchableOpacity 
+                                key={i}
+                                style={{ flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: theme.card, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: theme.border }}
+                                onPress={() => {
+                                    if (act.entityId && act.entityType) {
+                                        router.push({ pathname: `/${act.entityType.toLowerCase()}-detail`, params: { id: act.entityId } });
+                                    }
+                                }}
+                            >
+                                <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(99, 102, 241, 0.1)', alignItems: 'center', justifyContent: 'center' }}>
+                                    <Ionicons name={act.type === 'Call' ? 'call' : act.type === 'Meeting' ? 'people' : 'calendar'} size={18} color="#6366F1" />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={{ color: theme.text, fontWeight: '700', fontSize: 13 }}>{act.title}</Text>
+                                    <Text style={{ color: theme.textSecondary, fontSize: 11 }}>{act.time || 'Today'} • {act.target || 'Follow-up'}</Text>
+                                </View>
+                                <Ionicons name="chevron-forward" size={16} color={theme.textMuted} />
+                            </TouchableOpacity>
+                        ))}
+                        {activities.length > 3 && (
+                            <TouchableOpacity onPress={() => router.push("/(tabs)/activities?filter=Today")}>
+                                <Text style={{ color: '#6366F1', fontSize: 12, fontWeight: '700', textAlign: 'center', marginTop: 8 }}>View {activities.length - 3} more actions</Text>
+                            </TouchableOpacity>
+                        )}
+                    </View>
+                ) : (
+                    <View style={{ marginTop: 16, backgroundColor: theme.card, padding: 16, borderRadius: 12, alignItems: 'center', borderWidth: 1, borderColor: theme.border, borderStyle: 'dashed' }}>
+                        <Text style={{ color: theme.textMuted, fontSize: 12, fontWeight: '600' }}>Inbox Zero! No pending actions for today.</Text>
+                    </View>
+                )}
+
             </View>
 
             {/* AI Alert Hub Section */}
@@ -653,7 +744,7 @@ export default function MissionControlScreen() {
                 </View>
                 <View style={styles.segmentedPipeline}>
                     {['INCOMING', 'PROSPECT', 'OPPORTUNITY', 'NEGOTIATION', 'CLOSED'].map((cat, idx) => {
-                        const item = (dashboardData?.leads || []).find(l => l.status.toUpperCase() === cat.toUpperCase()) || { count: 0 };
+                        const item = (dashboardData?.leads || []).find(l => (l.status || '').toUpperCase() === cat.toUpperCase()) || { count: 0 };
                         const colors = ["#2563EB", "#3B82F6", "#60A5FA", "#8B5CF6", "#10B981"];
                         return (
                             <View key={idx} style={{ flex: Math.max(item.count, 0.5), minWidth: 20 }}>
@@ -740,7 +831,7 @@ export default function MissionControlScreen() {
                                 <Text style={[styles.agendaSub, { color: theme.textSecondary }]}>{t.target} • {t.time}</Text>
                             </View>
                             <View style={[styles.statusTag, { backgroundColor: t.status === 'overdue' ? (isDark ? 'rgba(239, 68, 68, 0.15)' : '#FEE2E2') : (isDark ? 'rgba(255,255,255,0.05)' : '#F1F5F9') }]}>
-                                <Text style={[styles.statusTagText, { color: t.status === 'overdue' ? (isDark ? '#F87171' : '#EF4444') : theme.textMuted }]}>{t.status.toUpperCase()}</Text>
+                                <Text style={[styles.statusTagText, { color: t.status === 'overdue' ? (isDark ? '#F87171' : '#EF4444') : theme.textMuted }]}>{(t.status || 'PENDING').toUpperCase()}</Text>
                             </View>
                         </View>
                     ))}

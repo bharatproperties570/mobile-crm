@@ -40,7 +40,8 @@
       }
     },
     "web": {
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/favicon.png",
+      "bundler": "metro"
     },
     "plugins": [
       "expo-router",
@@ -57,11 +58,7 @@
       "typedRoutes": true
     },
     "extra": {
-      "router": {},
-      "eas": {
-        "projectId": "f584ac28-9815-4b90-9fe4-a7a3b5603073"
-      }
-    },
-    "owner": "realdeal570s-organization"
+      "router": {}
+    }
   }
 }

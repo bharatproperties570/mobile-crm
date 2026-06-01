@@ -303,7 +303,7 @@ const InventoryCard = memo(({ item, onPress, onCall, onWhatsApp, onSMS, onEmail,
 });
 
 // Senior Optimization: Memoize the card to prevent expensive re-renders during high-frequency events (like search typing)
-const MemoizedInventoryCard = React.memo(InventoryCard, (prev, next) => {
+const MemoizedInventoryCard = memo(InventoryCard, (prev, next) => {
     return prev.item._id === next.item._id && 
            prev.viewMode === next.viewMode &&
            prev.item.status === next.item.status &&
