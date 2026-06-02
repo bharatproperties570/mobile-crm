@@ -172,20 +172,20 @@ const STAGE_COLORS_LIGHT: Record<string, string> = {
     open: "#3B82F6",
     quote: "#8B5CF6",
     negotiation: "#F59E0B",
-    booked: "#10B981",
     closed: "#059669",
-    cancelled: "#EF4444",
-    dormant: "#64748B",
+    won: "#10B981",
+    lost: "#EF4444",
+    unqualified: "#64748B"
 };
 
 const STAGE_COLORS_DARK: Record<string, string> = {
     open: "#60A5FA",
     quote: "#A78BFA",
     negotiation: "#FBBF24",
-    booked: "#34D399",
     closed: "#10B981",
-    cancelled: "#F87171",
-    dormant: "#94A3B8",
+    won: "#34D399",
+    lost: "#F87171",
+    unqualified: "#94A3B8"
 };
 
 const RibbonButton = ({ icon, color, onPress }: { icon: any; color: string; onPress: () => void }) => {
@@ -610,28 +610,39 @@ export default function DealDetailScreen() {
                             { id: 'open', label: 'Open', color: '#6366F1', icon: 'flag-outline' },
                             { id: 'quote', label: 'Quote', color: '#8B5CF6', icon: 'calculator-outline' },
                             { id: 'negotiation', label: 'Nego', color: '#F59E0B', icon: 'people-outline' },
-                            { id: 'booked', label: 'Booked', color: '#F97316', icon: 'home-outline' },
                             { id: 'closed', label: 'Closed', color: '#10B981', icon: 'checkmark-circle-outline' }
                         ].map((step) => {
                             const currentStage = (lv(deal?.stage) || 'open').toLowerCase();
-                            const isCurrent = currentStage.includes(step.id);
+                            // If current stage is a terminal status, group it under 'closed'
+                            const terminalSubStages = ['won', 'lost', 'unqualified'];
+                            let mappedStage = currentStage;
+                            if (terminalSubStages.includes(currentStage)) mappedStage = 'closed';
+                            const isCurrent = mappedStage.includes(step.id);
                             
                             // Aggregate activity and duration
                             const stageActivities = Array.isArray(activities) ? activities.filter(a => {
                                 const t = new Date(a.timestamp || a.createdAt);
-                                const hist = Array.isArray(stageHistory) ? stageHistory.find(h => (h.stage || "").toLowerCase().includes(step.id)) : null;
+                                const hist = Array.isArray(stageHistory) ? stageHistory.find(h => {
+                                    let hStage = (h.stage || "").toLowerCase();
+                                    if (terminalSubStages.includes(hStage)) hStage = 'closed';
+                                    return hStage.includes(step.id);
+                                }) : null;
                                 if (!hist) return false;
                                 return new Date(hist.enteredAt) <= t && (!hist.exitedAt || t <= new Date(hist.exitedAt));
                             }) : [];
 
-                            const histItem = Array.isArray(stageHistory) ? stageHistory.find(h => (h.stage || "").toLowerCase().includes(step.id)) : null;
+                            const histItem = Array.isArray(stageHistory) ? stageHistory.find(h => {
+                                let hStage = (h.stage || "").toLowerCase();
+                                if (terminalSubStages.includes(hStage)) hStage = 'closed';
+                                return hStage.includes(step.id);
+                            }) : null;
                             const days = histItem ? Math.ceil(Math.abs((histItem.exitedAt ? new Date(histItem.exitedAt).getTime() : Date.now()) - new Date(histItem.enteredAt).getTime()) / (1000 * 60 * 60 * 24)) : 0;
                             const isStuck = isCurrent && days > 14;
 
                             return (
                                 <TouchableOpacity 
                                     key={step.id} 
-                                    onPress={() => router.push(`/change-stage?dealId=${id}&currentStage=${(lv(deal?.stage) || "open").toLowerCase()}`)}
+                                    disabled={true}
                                     style={[
                                         styles.enterpriseArrow, 
                                         { backgroundColor: isCurrent ? step.color + '15' : 'transparent', borderColor: isCurrent ? step.color : theme.border },
@@ -1216,12 +1227,6 @@ export default function DealDetailScreen() {
                                 label="Location" 
                                 color="#EF4444" 
                                 onPress={() => { setIsActionModalVisible(false); router.push(`/geography?dealId=${id}`); }} 
-                            />
-                            <ActionItem 
-                                icon="swap-horizontal-outline" 
-                                label="Update Stage" 
-                                color="#F59E0B" 
-                                onPress={() => { setIsActionModalVisible(false); router.push(`/change-stage?dealId=${id}&currentStage=${(lv(deal?.stage) || "open").toLowerCase()}`); }} 
                             />
                             <ActionItem 
                                 icon="document-text-outline" 

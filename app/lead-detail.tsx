@@ -424,9 +424,8 @@ export default function LeadDetailScreen() {
                             const days = histItem ? Math.ceil(Math.abs((histItem.exitedAt ? new Date(histItem.exitedAt).getTime() : Date.now()) - new Date(histItem.enteredAt).getTime()) / (1000 * 60 * 60 * 24)) : 0;
 
                             return (
-                                <TouchableOpacity 
+                                <View 
                                     key={ms.id} 
-                                    onPress={() => router.push(`/change-stage?leadId=${id}&currentStage=${(lv(lead?.stage) || "incoming lead").toLowerCase()}`)}
                                     style={[
                                         styles.enterpriseArrow, 
                                         { backgroundColor: isCurrent ? ms.color + '15' : 'transparent', borderColor: isCurrent ? ms.color : theme.border },
@@ -448,7 +447,7 @@ export default function LeadDetailScreen() {
                                         </View>
                                     </View>
                                     {isCurrent && <View style={[styles.pulseDot, { backgroundColor: ms.color }]} />}
-                                </TouchableOpacity>
+                                </View>
                             );
                         })}
                     </ScrollView>

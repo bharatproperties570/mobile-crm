@@ -12,52 +12,10 @@ import api from "./api";
 export const STAGE_COLORS: Record<string, string> = {
     "Incoming": "#94a3b8",
     "Prospect": "#3b82f6",
-    "Qualified": "#8b5cf6",
     "Opportunity": "#f59e0b",
     "Negotiation": "#f97316",
-    "Booked": "#10b981",
-    "Closed Won": "#059669",
-    "Closed Lost": "#ef4444",
-    "Stalled": "#78716c",
-    "Dormant": "#64748b",
+    "Closed": "#10b981", // Represents Won/Lost/Unqualified via backend statuses
 };
-
-const OUTCOME_TO_STAGE: Record<string, string> = {
-    // Positive — move forward
-    "Interested": "Qualified",
-    "Follow-up Required": "Qualified",
-    "Call Back Requested": "Qualified",
-    "Next Step Decided": "Negotiation",
-    "Price Discussion": "Negotiation",
-    "Closing Soon": "Negotiation",
-    "Liked Property": "Negotiation",
-    "Wants More Options": "Opportunity",
-    // Neutral — hold
-    "Left Voicemail": "Prospect",
-    "Client Busy": "Prospect",
-    "Weather": "Prospect",
-    "Client Requested": "Prospect",
-    // Negative — keep or downgrade
-    "Not Interested": "Dormant",
-    "Lost Interest": "Dormant",
-    "No Answer": "Prospect",
-    "No response": "Prospect",
-    "Call Back Later": "Prospect",
-    "Invalid Lead": "Dormant",
-    "No Show": "Prospect",
-    "Location Issue": "Opportunity",
-    "Price Issue": "Opportunity",
-};
-
-// Given an activity's outcomeStatus + result, compute the new lead stage
-export function computeLeadStage(
-    currentStage: string,
-    outcomeStatus: string,
-    result: string
-): string {
-    const key = result || outcomeStatus;
-    return OUTCOME_TO_STAGE[key] || currentStage || "Incoming";
-}
 
 // ── API Calls ──────────────────────────────────────────────────────────────
 

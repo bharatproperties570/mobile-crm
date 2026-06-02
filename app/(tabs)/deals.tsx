@@ -318,8 +318,8 @@ const DealCard = memo(({
             <Pressable 
                 onPressIn={() => !isNonActionable && animatePress(0.97)}
                 onPressOut={() => !isNonActionable && animatePress(1)}
-                onPress={isNonActionable ? undefined : onPress}
-                onLongPress={isNonActionable ? undefined : onLongPress}
+                onPress={onPress}
+                onLongPress={onLongPress}
             >
                 <Animated.View style={[
                     styles.card, 

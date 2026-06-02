@@ -18,8 +18,8 @@ export const EnterpriseProviders: React.FC<{ children: React.ReactNode }> = ({ c
                             </CallTrackingProvider>
                         </DepartmentProvider>
                     </LookupProvider>
-                </UserProvider>
-            </NotificationProvider>
+                </ProjectProvider>
+            </UserProvider>
         </NotificationProvider>
     );
 };
