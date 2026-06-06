@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
-import { useRouter, useSegments } from "expo-router";
+import { useRouter, useSegments, useRootNavigationState } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { storage } from "@/services/storage";
 import api, { set401Callback } from "@/services/api";
@@ -27,6 +27,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const [loading, setLoading] = useState(true);
 
     const router = useRouter();
+    const rootNavigationState = useRootNavigationState();
 
     // Safety: useSegments can throw if router isn't mounted yet
     let segments: string[] = [];
@@ -116,6 +117,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // loading=false + no token → go to login
     useEffect(() => {
         if (loading) return; // Wait for auth check to complete
+        if (!rootNavigationState?.key) return; // Wait for navigation to be ready
 
         const group = segments?.[0];
         const inAuthGroup = group === "(auth)";
@@ -132,7 +134,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 router.replace("/(tabs)");
             }
         }
-    }, [token, loading]);
+    }, [token, loading, rootNavigationState?.key, segments]);
     // NOTE: Intentionally NOT including `segments` in deps — it causes loop
     // when navigating. token+loading is the correct minimal dependency set.
 

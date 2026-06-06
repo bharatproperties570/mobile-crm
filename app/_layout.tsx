@@ -106,20 +106,26 @@ function RootContent() {
 }
 
 export default function RootLayout() {
-    const [fontsLoaded] = useFonts({
+    const [fontsLoaded, fontError] = useFonts({
         ...Ionicons.font,
     });
 
+    React.useEffect(() => {
+        if (fontError) {
+            console.error("[RootLayout] Font load error:", fontError);
+        }
+    }, [fontError]);
+
     const onLayoutRootView = React.useCallback(async () => {
-        if (fontsLoaded) {
+        if (fontsLoaded || fontError) {
             // Give the app 300ms to paint the first frame behind the splash
             setTimeout(() => {
                 SplashScreen.hideAsync().catch(() => {});
             }, 300);
         }
-    }, [fontsLoaded]);
+    }, [fontsLoaded, fontError]);
 
-    if (!fontsLoaded) {
+    if (!fontsLoaded && !fontError) {
         return <View style={{ flex: 1, backgroundColor: "#121212" }} />;
     }
 
