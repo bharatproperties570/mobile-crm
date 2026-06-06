@@ -18,7 +18,7 @@ import { formatSize, getSizeLabel } from "@/utils/format.utils";
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const CACHE_KEY_PREFIX = "@cache_contact_detail_";
 
-const TABS = ["Details", "Activities", "Deals", "Inventory", "History", "Documents"];
+const TABS = ["Details", "Activities", "Deals", "Inventory", "History", "Resources"];
 
 function lv(field: unknown): any {
     if (field === null || field === undefined || field === "" || field === "null" || field === "undefined") return "—";

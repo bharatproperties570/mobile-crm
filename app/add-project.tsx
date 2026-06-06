@@ -384,7 +384,7 @@ export default function AddProjectScreen() {
     };
 
     const handleSave = async () => {
-        if (!formData.teams?.length || !formData.assignedTo?.length) {
+        if (!formData?.teams?.length || !formData?.assignedTo?.length) {
             Alert.alert("Required", "Please complete all Assignment fields (Team and Assign).");
             return;
         }
@@ -394,19 +394,19 @@ export default function AddProjectScreen() {
         // Normalize lookup fields before save
         const payload = {
             ...formData,
-            category: (formData.category || []).map(c => getLookupId("Category", c)).filter(Boolean),
-            subCategory: (formData.subCategory || []).map(s => getLookupId("SubCategory", s)).filter(Boolean),
-            status: getLookupId("ProjectStatus", formData.status),
-            parkingType: getLookupId("ParkingType", formData.parkingType),
-            blocks: (formData.blocks || []).map((b: any) => ({
+            category: (formData?.category || []).map(c => getLookupId("Category", c)).filter(Boolean),
+            subCategory: (formData?.subCategory || []).map(s => getLookupId("SubCategory", s)).filter(Boolean),
+            status: getLookupId("ProjectStatus", formData?.status),
+            parkingType: getLookupId("ParkingType", formData?.parkingType),
+            blocks: (formData?.blocks || []).map((b: any) => ({
                 ...b,
                 status: getLookupId("ProjectStatus", b.status),
                 parkingType: getLookupId("ParkingType", b.parkingType)
             })),
-            team: formData.teams[0] || formData.team,
-            teams: formData.teams,
-            assign: formData.assignedTo,
-            owner: formData.assignedTo[0] || (formData as any).owner
+            team: formData?.teams?.[0] || formData?.team,
+            teams: formData?.teams,
+            assign: formData?.assignedTo,
+            owner: formData?.assignedTo?.[0] || (formData as any)?.owner
         };
 
         const res = id ? await safeApiCall(() => api.put(`/projects/${id}`, payload)) : await safeApiCall(() => createProject(payload));
@@ -483,9 +483,9 @@ export default function AddProjectScreen() {
                     options={teams}
                     selectedValues={formData.teams || []}
                     onToggle={(tid) => {
-                        const current = formData.teams || [];
+                        const current = formData?.teams || [];
                         const newList = current.includes(tid) ? current.filter((i: string) => i !== tid) : [...current, tid];
-                        setFormData({ ...formData, teams: newList, assignedTo: [] });
+                        setFormData({ ...(formData || {}), teams: newList, assignedTo: [] });
                     }}
                     placeholder="Select Assigned Teams"
                 />
@@ -494,11 +494,11 @@ export default function AddProjectScreen() {
                     visible={activeDropdown === 'users'}
                     onClose={() => setActiveDropdown(null)}
                     options={filteredUsersByTeam}
-                    selectedValues={formData.assignedTo || []}
+                    selectedValues={formData?.assignedTo || []}
                     onToggle={(uid) => {
-                        const current = formData.assignedTo || [];
+                        const current = formData?.assignedTo || [];
                         const newList = current.includes(uid) ? current.filter((i: string) => i !== uid) : [...current, uid];
-                        setFormData({ ...formData, assignedTo: newList });
+                        setFormData({ ...(formData || {}), assignedTo: newList });
                     }}
                     placeholder="Select Assigned Users"
                 />
@@ -938,9 +938,9 @@ function AssignmentStep({ data, update, teams, users, activeDropdown, setActiveD
                         onPress={() => setActiveDropdown('users')}
                     >
                         <View style={styles.pickerValueRow}>
-                            <Text style={[styles.pickerValue, { color: data.assignedTo?.length ? theme.textPrimary : theme.textMuted }]}>
-                                {data.assignedTo?.length ? `${data.assignedTo.length} Users Selected` : "Select Users..."}
-                            </Text>
+                        <Text style={[styles.pickerValue, { color: data?.assignedTo?.length ? theme.textPrimary : theme.textMuted }]}>
+                            {data?.assignedTo?.length ? `${data.assignedTo.length} Users Selected` : "Select Users..."}
+                        </Text>
                             <Ionicons name="person-add" size={18} color={theme.textMuted} />
                         </View>
                     </TouchableOpacity>

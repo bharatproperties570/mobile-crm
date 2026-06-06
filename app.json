@@ -1,17 +1,14 @@
 {
   "expo": {
     "name": "Bharat Properties CRM",
-    "slug": "bharat-mobile-crm",
+    "slug": "bharat-properties-crm-mobile",
     "version": "1.0.4",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "bharatproperties",
     "userInterfaceStyle": "dark",
     "backgroundColor": "#121212",
-    "splash": {
-      "backgroundColor": "#121212",
-      "resizeMode": "contain"
-    },
+
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.bharatproperties.crm",
@@ -52,13 +49,22 @@
           "calendarPermission": "Allow Bharat Properties to sync with your calendar."
         }
       ],
-      "expo-font"
+      "expo-font",
+      "@react-native-community/datetimepicker",
+      "expo-sharing",
+      "expo-splash-screen",
+      "expo-status-bar",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true
     },
     "extra": {
-      "router": {}
-    }
+      "router": {},
+      "eas": {
+        "projectId": "8a273a2e-193d-4d23-86b9-3e41ba6c398a"
+      }
+    },
+    "owner": "bharatproperties"
   }
 }

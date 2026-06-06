@@ -1,0 +1,48 @@
+{
+  "id": "bbdec9af-dd86-4e1c-843b-f292f6b901c7",
+  "status": "ERRORED",
+  "platform": "ANDROID",
+  "error": {
+    "errorCode": "EAS_BUILD_UNKNOWN_GRADLE_ERROR",
+    "message": "Gradle build failed with unknown error. See logs for the \"Run gradlew\" phase for more information."
+  },
+  "artifacts": {},
+  "fingerprint": {
+    "id": "019e9ab2-bf2d-7f41-8a9e-a414c0490aee",
+    "hash": "bb459ea08bb0b3cfa090dac68da0d04e40ac42ab"
+  },
+  "initiatingActor": {
+    "id": "6eef0dde-5d6f-47b7-9006-609e6160c454",
+    "displayName": "bharatproperties"
+  },
+  "logFiles": [
+    "https://storage.googleapis.com/eas-workflows-production/logs/8a273a2e-193d-4d23-86b9-3e41ba6c398a/bbdec9af-dd86-4e1c-843b-f292f6b901c7/2026-06-06T02%3A11%3A11Z-b71a41e6-7b4f-4c87-b803-25fc73c0cba6.txt?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=www-production%40exponentjs.iam.gserviceaccount.com%2F20260606%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20260606T021335Z&X-Goog-Expires=900&X-Goog-SignedHeaders=host&X-Goog-Signature=d76b550e8958e4a4510ee530f2fa987eac8b1119cf269d0bca96fe00fce0a5ca8ad474f605295f9f95063331baee8c1508b1ae17563e50ba080a63ea2f7cf68156ced74434c189b0d209fd85d31c97716808c1d3c8ba9e514dc7316790ca1a2e7174822c966e7f9e0c3bb43011002d0c30bb8bd47c8321c85b168b4580b1a05d92e3e9971b357cfb6c78923a8a558c57a86e8c4f2480a3ecd3d6396e6a5f1c1444e8462bbae8568e90d44e2d7c1b2f736eee83b1357eabef0d05518da0f00ea0fe38ff8c0d8d4ea374112acb6d1b08ead6e087fd7e085e6be0ae604dedbd352cb73ef82d5d3fdb2ca235ccf366b92bb996a16ea3616c404064f9f809afff746f"
+  ],
+  "project": {
+    "id": "8a273a2e-193d-4d23-86b9-3e41ba6c398a",
+    "name": "bharat-properties-crm-mobile",
+    "slug": "bharat-properties-crm-mobile",
+    "ownerAccount": {
+      "id": "68a2bda1-1c2d-412e-a058-d3a307035bd3",
+      "name": "bharatproperties"
+    }
+  },
+  "distribution": "INTERNAL",
+  "buildProfile": "preview",
+  "sdkVersion": "56.0.0",
+  "appVersion": "1.0.4",
+  "appBuildVersion": "1",
+  "gitCommitHash": "7d261410fe4123b2cde2349d4c82e09d85ffa230",
+  "gitCommitMessage": "fix: align deal details, stages representation, list view navigation, and compile layout",
+  "priority": "NORMAL",
+  "createdAt": "2026-06-06T02:11:06.133Z",
+  "updatedAt": "2026-06-06T02:15:32.637Z",
+  "completedAt": "2026-06-06T02:15:32.459Z",
+  "expirationDate": "2026-06-20T02:11:06.151Z",
+  "isForIosSimulator": false,
+  "metrics": {
+    "buildWaitTime": 4913,
+    "buildQueueTime": 4499,
+    "buildDuration": 256914
+  }
+}

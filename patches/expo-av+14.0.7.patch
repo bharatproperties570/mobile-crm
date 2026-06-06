@@ -1,0 +1,29 @@
+diff --git a/node_modules/expo-av/android/CMakeLists.txt b/node_modules/expo-av/android/CMakeLists.txt
+index e55dbb2..5f9200b 100644
+--- a/node_modules/expo-av/android/CMakeLists.txt
++++ b/node_modules/expo-av/android/CMakeLists.txt
+@@ -43,6 +43,12 @@ target_link_libraries(
+         ${LOG_LIB}
+         fbjni::fbjni
+         ReactAndroid::jsi
+-        ReactAndroid::reactnativejni
+         android
+ )
++
++if(TARGET ReactAndroid::reactnativejni)
++    target_link_libraries(
++        ${PACKAGE_NAME}
++        ReactAndroid::reactnativejni
++    )
++endif()
+diff --git a/node_modules/expo-av/build/ExponentAV.web.js b/node_modules/expo-av/build/ExponentAV.web.js
+index 4d8e8f0..14f5a17 100644
+--- a/node_modules/expo-av/build/ExponentAV.web.js
++++ b/node_modules/expo-av/build/ExponentAV.web.js
+@@ -1,4 +1,5 @@
+-import { DeviceEventEmitter, PermissionStatus } from 'expo-modules-core';
++import { PermissionStatus } from 'expo-modules-core';
++import { DeviceEventEmitter } from 'react-native';
+ import { RecordingOptionsPresets } from './Audio/RecordingConstants';
+ async function getPermissionWithQueryAsync(name) {
+     if (!navigator || !navigator.permissions || !navigator.permissions.query)

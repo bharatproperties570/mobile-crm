@@ -218,7 +218,7 @@ export default function InventoryDetailScreen() {
                         <View style={styles.strategyValueRow}>
                             <Ionicons name="person-circle" size={14} color={theme.primary} />
                             <Text style={[styles.strategyValue, { color: theme.text }]} numberOfLines={1}>
-                                {lv(inv.assignedTo)}
+                                {lv(inv?.assignedTo)}
                             </Text>
                         </View>
                     </View>
@@ -228,8 +228,8 @@ export default function InventoryDetailScreen() {
                     <View style={styles.strategyBlock}>
                         <Text style={[styles.strategyLabel, { color: theme.textLight }]}>TEAM(S)</Text>
                         <View style={[styles.strategyValueRow, { flexWrap: 'wrap', gap: 4 }]}>
-                            {Array.isArray(inv.teams) && inv.teams.length > 0 ? (
-                                inv.teams.map((t: any, i: number) => (
+                            {Array.isArray(inv?.teams) && inv?.teams.length > 0 ? (
+                                inv?.teams.map((t: any, i: number) => (
                                     <View key={i} style={{ backgroundColor: isDark ? 'rgba(129, 140, 248, 0.15)' : '#6366F110', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
                                         <Text style={{ fontSize: 9, fontWeight: '800', color: isDark ? '#C7D2FE' : '#6366F1' }}>{String(lv(t) || "").toUpperCase()}</Text>
                                     </View>
@@ -238,7 +238,7 @@ export default function InventoryDetailScreen() {
                                 <>
                                     <Ionicons name="people-outline" size={12} color={isDark ? '#818CF8' : "#6366F1"} />
                                     <Text style={[styles.strategyValue, { color: theme.text }]} numberOfLines={1}>
-                                        {lv(inv.team)}
+                                        {lv(inv?.team)}
                                     </Text>
                                 </>
                             )}
@@ -255,11 +255,11 @@ export default function InventoryDetailScreen() {
                         </Text>
                     </View>
 
-                    {inv.intent && (
+                    {inv?.intent && (
                         <View style={[styles.marketingPill, { backgroundColor: isDark ? 'rgba(124, 58, 237, 0.15)' : '#7C3AED' + '10' }]}>
                             <Ionicons name="flag" size={12} color={isDark ? '#A78BFA' : "#7C3AED"} />
                             <Text style={[styles.marketingText, { color: isDark ? '#A78BFA' : '#7C3AED' }]}>
-                                {String(lv(inv.intent) || "").toUpperCase()}
+                                {String(lv(inv?.intent) || "").toUpperCase()}
                             </Text>
                         </View>
                     )}
@@ -269,7 +269,7 @@ export default function InventoryDetailScreen() {
                 <View style={[styles.actionRibbonContainer, { backgroundColor: isDark ? 'rgba(255,255,255,0.02)' : '#f8fafc', borderColor: theme.border }]}>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.actionRibbonScroll}>
                         {(() => {
-                            const primaryOwner = inv.owners?.[0];
+                            const primaryOwner = inv?.owners?.[0];
                             const ownerPhone = primaryOwner?.phones?.[0]?.number || "";
                             const ownerEmail = primaryOwner?.emails?.[0]?.address || "";
                             const cleanPhone = ownerPhone.replace(/\D/g, "");
@@ -343,8 +343,8 @@ export default function InventoryDetailScreen() {
                         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
                             <Text style={[styles.cardTitle, { color: theme.text }]}>Pricing & Commercials</Text>
                             {(() => {
-                                const priceVal = typeof inv.price === 'object' ? inv.price?.value : inv.price;
-                                const currency = typeof inv.price === 'object' ? inv.price?.currency : 'INR';
+                                const priceVal = typeof inv?.price === 'object' ? inv?.price?.value : inv?.price;
+                                const currency = typeof inv?.price === 'object' ? inv?.price?.currency : 'INR';
                                 return (
                                     <InfoRow 
                                         label="Demand" 
@@ -354,24 +354,24 @@ export default function InventoryDetailScreen() {
                                     />
                                 );
                             })()}
-                            <InfoRow label="Maintenance" value={lv(inv.maintenance)} icon="construct-outline" />
-                            <InfoRow label="Ownership" value={lv(inv.ownership)} icon="document-text-outline" />
+                            <InfoRow label="Maintenance" value={lv(inv?.maintenance)} icon="construct-outline" />
+                            <InfoRow label="Ownership" value={lv(inv?.ownership)} icon="document-text-outline" />
                         </View>
 
                         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
                             <Text style={[styles.cardTitle, { color: theme.text }]}>Unit Configuration</Text>
-                            <InfoRow label="Category" value={lv(inv.category)} icon="list-outline" />
-                            <InfoRow label="Sub-Category" value={lv(inv.subCategory)} icon="layers-outline" />
+                            <InfoRow label="Category" value={lv(inv?.category)} icon="list-outline" />
+                            <InfoRow label="Sub-Category" value={lv(inv?.subCategory)} icon="layers-outline" />
                             <InfoRow label="Size Label" value={getSizeLabel(inv, getLookupValue) || "—"} icon="cube-outline" accent />
-                            <InfoRow label="Facing" value={lv(inv.facing)} icon="compass-outline" />
-                            <InfoRow label="Floor" value={lv(inv.floor)} icon="layers-outline" />
-                            <InfoRow label="Road Width" value={lv(inv.roadWidth)} icon="trail-sign-outline" />
+                            <InfoRow label="Facing" value={lv(inv?.facing)} icon="compass-outline" />
+                            <InfoRow label="Floor" value={lv(inv?.floor)} icon="layers-outline" />
+                            <InfoRow label="Road Width" value={lv(inv?.roadWidth)} icon="trail-sign-outline" />
                         </View>
 
                         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
                             <Text style={[styles.cardTitle, { color: theme.text }]}>Area Breakdown</Text>
-                            <InfoRow label="Built-up Area" value={formatSize(inv.builtUpArea, 'Sq.Ft.', getLookupValue)} icon="business-outline" />
-                            <InfoRow label="Carpet Area" value={formatSize(inv.carpetArea, 'Sq.Ft.', getLookupValue)} icon="grid-outline" />
+                            <InfoRow label="Built-up Area" value={formatSize(inv?.builtUpArea, 'Sq.Ft.', getLookupValue)} icon="business-outline" />
+                            <InfoRow label="Carpet Area" value={formatSize(inv?.carpetArea, 'Sq.Ft.', getLookupValue)} icon="grid-outline" />
                         </View>
                     </ScrollView>
                 </View>
@@ -389,18 +389,18 @@ export default function InventoryDetailScreen() {
                                     <Ionicons name="create-outline" size={18} color={theme.primary} />
                                 </TouchableOpacity>
                             </View>
-                            <InfoRow label="City" value={lv(inv.address?.city || inv.city, getLookupValue)} icon="business-outline" />
-                            <InfoRow label="Sector/Locality" value={lv(inv.address?.locality || inv.sector || inv.locArea, getLookupValue)} icon="map-outline" />
-                            <InfoRow label="Pin Code" value={lv(inv.address?.pincode || inv.pincode, getLookupValue)} icon="pin-outline" />
-                            <InfoRow label="Address" value={lv(inv.address?.street || inv.address?.hNo)} icon="location-outline" />
+                            <InfoRow label="City" value={lv(inv?.address?.city || inv?.city, getLookupValue)} icon="business-outline" />
+                            <InfoRow label="Sector/Locality" value={lv(inv?.address?.locality || inv?.sector || inv?.locArea, getLookupValue)} icon="map-outline" />
+                            <InfoRow label="Pin Code" value={lv(inv?.address?.pincode || inv?.pincode, getLookupValue)} icon="pin-outline" />
+                            <InfoRow label="Address" value={lv(inv?.address?.street || inv?.address?.hNo)} icon="location-outline" />
                         </View>
 
-                        {(inv.latitude || inv.address?.lat) && (
+                        {(inv?.latitude || inv?.address?.lat) && (
                             <TouchableOpacity
                                 style={[styles.googleMapsBtn, { backgroundColor: theme.primary, marginHorizontal: 20 }]}
                                 onPress={() => {
-                                    const lat = inv.latitude || inv.address?.lat;
-                                    const lng = inv.longitude || inv.address?.lng;
+                                    const lat = inv?.latitude || inv?.address?.lat;
+                                    const lng = inv?.longitude || inv?.address?.lng;
                                     Linking.openURL(`geo:${lat},${lng}?q=${lat},${lng}(${unitNo})`);
                                 }}
                             >
@@ -453,7 +453,7 @@ export default function InventoryDetailScreen() {
                                 </TouchableOpacity>
                             </View>
                             {(() => {
-                                const ownersArr = inv.owners || (inv.ownerName ? [{ name: inv.ownerName, phone: inv.ownerPhone }] : []);
+                                const ownersArr = inv?.owners || (inv?.ownerName ? [{ name: inv?.ownerName, phone: inv?.ownerPhone }] : []);
                                 if (ownersArr.length === 0) return <Text style={styles.emptyText}>No owners assigned.</Text>;
                                 return ownersArr.map((owner: any, idx: number) => (
                                     <TouchableOpacity key={idx} style={[styles.partyCard, { backgroundColor: theme.background, marginBottom: 12 }]} onPress={() => owner._id && router.push(`/contact-detail?id=${owner._id}`)}>
@@ -481,10 +481,10 @@ export default function InventoryDetailScreen() {
                                     <Text style={{ color: theme.primary, fontWeight: '700' }}>+ Add</Text>
                                 </TouchableOpacity>
                             </View>
-                            {(!inv.inventoryDocuments || inv.inventoryDocuments.length === 0) ? (
+                            {(!inv?.inventoryDocuments || inv?.inventoryDocuments.length === 0) ? (
                                 <Text style={styles.emptyText}>No documents recorded.</Text>
                             ) : (
-                                inv.inventoryDocuments.map((doc: any, i: number) => (
+                                inv?.inventoryDocuments.map((doc: any, i: number) => (
                                     <View key={i} style={[styles.docItem, { borderBottomColor: theme.border }]}>
                                         <Ionicons name="document-text" size={20} color={theme.primary} />
                                         <View style={styles.docInfo}>
@@ -506,10 +506,10 @@ export default function InventoryDetailScreen() {
                                 </TouchableOpacity>
                             </View>
                             <View style={styles.mediaGrid}>
-                                {[...(inv.inventoryImages || []), ...(inv.inventoryVideos || [])].length === 0 ? (
+                                {[...(inv?.inventoryImages || []), ...(inv?.inventoryVideos || [])].length === 0 ? (
                                     <Text style={styles.emptyText}>No media uploaded.</Text>
                                 ) : (
-                                    [...(inv.inventoryImages || []), ...(inv.inventoryVideos || [])].map((item: any, i: number) => (
+                                    [...(inv?.inventoryImages || []), ...(inv?.inventoryVideos || [])].map((item: any, i: number) => (
                                         <TouchableOpacity key={i} style={styles.mediaItem} onPress={() => item.url && Linking.openURL(item.url)}>
                                             <View style={[styles.mediaPlaceholder, { backgroundColor: theme.background, borderColor: theme.border }]}>
                                                 <Ionicons name={item.type === 'video' || item.url?.includes('.mp4') ? "play-circle" : "image"} size={32} color={theme.primary} />
@@ -528,10 +528,10 @@ export default function InventoryDetailScreen() {
                     <ScrollView contentContainerStyle={styles.innerScroll}>
                         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
                             <Text style={[styles.cardTitle, { color: theme.text }]}>Ownership History</Text>
-                            {(!inv.ownerHistory || inv.ownerHistory.length === 0) ? (
+                            {(!inv?.ownerHistory || inv?.ownerHistory.length === 0) ? (
                                 <Text style={styles.emptyText}>No records found.</Text>
                             ) : (
-                                inv.ownerHistory.map((h: any, idx: number) => {
+                                inv?.ownerHistory.map((h: any, idx: number) => {
                                     const contactNo = h.contactPhone || h.contactMobile || h.phone || h.mobile;
                                     return (
                                         <View key={idx} style={[styles.timelineItem, { borderLeftColor: theme.border }]}>

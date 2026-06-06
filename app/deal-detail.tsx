@@ -24,7 +24,7 @@ import { safeApiCall } from "@/services/api.helpers";
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const CACHE_KEY_PREFIX = "@cache_deal_detail_";
 
-const TABS = ["Analysis", "Financial", "Marketing", "Details", "Location", "Activities", "Match", "Owner", "History"];
+const TABS = ["Analysis", "Financial", "Marketing", "Details", "Location", "Activities", "Match", "Owner", "History", "Resources"];
 
 function fmt(amount?: number): string {
     if (!amount) return "—";
@@ -1175,6 +1175,34 @@ export default function DealDetailScreen() {
                         </View>
                     </ScrollView>
                 </View>
+
+                {/* 9. Resources */}
+                <View style={styles.tabContent}>
+                    <ScrollView contentContainerStyle={styles.innerScroll}>
+                        <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                            <View style={styles.sectionHeader}>
+                                <Text style={[styles.cardTitle, { color: theme.text, marginBottom: 0 }]}>Documents</Text>
+                                <TouchableOpacity onPress={() => router.push(`/add-document?id=${id}&type=Deal`)}>
+                                    <Text style={{ color: theme.primary, fontWeight: '700' }}>+ Add</Text>
+                                </TouchableOpacity>
+                            </View>
+                            {(!deal?.documents || deal.documents.length === 0) ? (
+                                <Text style={styles.emptyText}>No documents uploaded.</Text>
+                            ) : (
+                                deal.documents.map((doc: any, i: number) => (
+                                    <View key={i} style={[styles.docItem, { borderBottomColor: theme.border }]}>
+                                        <Ionicons name="document-text" size={20} color={theme.primary} />
+                                        <View style={styles.docInfo}>
+                                            <Text style={[styles.docName, { color: theme.text }]}>{doc.documentType || "Document"}</Text>
+                                            <Text style={[styles.docMeta, { color: theme.textLight }]}>{doc.documentNo}</Text>
+                                        </View>
+                                        {doc.url && <TouchableOpacity onPress={() => Linking.openURL(doc.url)}><Ionicons name="eye-outline" size={20} color={theme.primary} /></TouchableOpacity>}
+                                    </View>
+                                ))
+                            )}
+                        </View>
+                    </ScrollView>
+                </View>
             </ScrollView>
 
             {/* Action Center Modal */}
@@ -1668,5 +1696,9 @@ const styles = StyleSheet.create({
         position: 'absolute',
         top: 10,
         right: 10,
-    }
+    },
+    docItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, gap: 12 },
+    docInfo: { flex: 1 },
+    docName: { fontSize: 14, fontWeight: '700' },
+    docMeta: { fontSize: 11, marginTop: 2 },
 });

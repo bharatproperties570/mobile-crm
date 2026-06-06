@@ -11,7 +11,7 @@ import { lookupVal, safeApiCall } from "@/services/api.helpers";
 import { getActivities } from "@/services/activities.service";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
-const TABS = ["Overview", "Activities"];
+const TABS = ["Overview", "Activities", "Resources"];
 
 function lv(field: unknown): any {
     if (field === null || field === undefined || field === "" || field === "null" || field === "undefined") return "—";
@@ -292,21 +292,26 @@ export default function ProjectDetailScreen() {
                     </ScrollView>
                 </View>
 
-                {/* 3. Documents */}
+                {/* 3. Resources (Documents & Media) */}
                 <View style={styles.tabContent}>
                     <ScrollView contentContainerStyle={styles.innerScroll}>
-                        <View style={[styles.sectionCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                        
+                        <View style={[styles.sectionCard, { backgroundColor: theme.card, borderColor: theme.border, marginBottom: 16 }]}>
                             <View style={styles.sectionHeader}>
-                                <Text style={[styles.sectionTitle, { color: theme.text, marginBottom: 0 }]}>Project Documents</Text>
+                                <Text style={[styles.sectionTitle, { color: theme.text, marginBottom: 0 }]}>Documents</Text>
                                 <TouchableOpacity onPress={() => router.push(`/add-document?id=${id}&type=Project&mode=document`)}>
                                     <Text style={{ color: theme.primary, fontWeight: '700' }}>+ Add</Text>
                                 </TouchableOpacity>
                             </View>
                             {(!project.projectDocuments || project.projectDocuments.length === 0) ? (
-                                <Text style={styles.emptyText}>No documents recorded.</Text>
+                                <Text style={styles.emptyText}>No documents uploaded.</Text>
                             ) : (
                                 project.projectDocuments.map((doc: any, i: number) => (
-                                    <TouchableOpacity key={i} style={[styles.docRow, { borderBottomColor: theme.border }]} onPress={() => doc.url && Linking.openURL(doc.url)}>
+                                    <TouchableOpacity 
+                                        key={i} 
+                                        style={[styles.docRow, { borderBottomColor: theme.border }]}
+                                        onPress={() => doc.url && Linking.openURL(doc.url)}
+                                    >
                                         <View style={[styles.docIcon, { backgroundColor: theme.primary + '10' }]}>
                                             <Ionicons name="document-text" size={20} color={theme.primary} />
                                         </View>
@@ -319,12 +324,7 @@ export default function ProjectDetailScreen() {
                                 ))
                             )}
                         </View>
-                    </ScrollView>
-                </View>
 
-                {/* 4. Media */}
-                <View style={styles.tabContent}>
-                    <ScrollView contentContainerStyle={styles.innerScroll}>
                         <View style={[styles.sectionCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
                             <View style={styles.sectionHeader}>
                                 <Text style={[styles.sectionTitle, { color: theme.text, marginBottom: 0 }]}>Site Media</Text>
@@ -348,6 +348,7 @@ export default function ProjectDetailScreen() {
                                 )}
                             </View>
                         </View>
+                        
                     </ScrollView>
                 </View>
             </ScrollView>

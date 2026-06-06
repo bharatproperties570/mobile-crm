@@ -22,7 +22,7 @@ import { useLeadIntelligence } from "@/hooks/useLeadIntelligence";
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const CACHE_KEY_PREFIX = "@cache_lead_detail_";
 
-const TABS = ["Requirement", "Details", "Intelligence", "Activities", "Match", "Inventory"];
+const TABS = ["Requirement", "Details", "Intelligence", "Activities", "Match", "Inventory", "Resources"];
 
 function lv(field: unknown): string {
     if (!field) return "";
@@ -488,28 +488,44 @@ export default function LeadDetailScreen() {
                             }} 
                         />
                         <RibbonButton 
-                            icon="flash" 
-                            color="#F59E0B" 
-                            onPress={() => onTabPress(4)} 
-                        />
-                        <RibbonButton 
-                            icon="people" 
-                            color={isDark ? '#818CF8' : '#6366F1'} 
-                            onPress={() => onTabPress(3)} 
-                        />
-                        <RibbonButton 
                             icon="share-social" 
                             color="#64748B" 
                             onPress={() => {
-                                const phone = resolvePhoneFromObject(lead);
-                                const text = `Lead Details: ${name}\nPhone: ${phone}\nRequirement: ${lv(lead.requirement)}\nBudget: ${lv(lead.budget)}`;
-                                Share.share({ message: text }).catch(() => Alert.alert("Error", "Could not share lead"));
+                                const details = [];
+                                details.push(`Lead ID: ${lead.leadId || id}`);
+                                
+                                const req = getLookupValue("Requirement", lead.requirement);
+                                if (req && req !== '—') details.push(`Requirement: ${req}`);
+                                
+                                const propType = getLookupValue("PropertyType", lead.propertyType);
+                                if (propType && propType !== '—') details.push(`Category: ${propType}`);
+                                
+                                const subType = getLookupValue("SubType", lead.subType);
+                                if (subType && subType !== '—') details.push(`Sub Category: ${subType}`);
+                                
+                                const proj = lv(lead.project);
+                                if (proj) details.push(`Project: ${proj}`);
+                                
+                                const budget = getLookupValue("Budget", lead.budget);
+                                if (budget && budget !== '—') details.push(`Budget: ${budget}`);
+                                
+                                if (lead.budgetMin || lead.budgetMax) details.push(`Budget Range: ₹${lead.budgetMin || 0} - ₹${lead.budgetMax || 0}`);
+                                
+                                const loc = [getLookupValue("City", lead.locCity), lead.locArea, getLookupValue("Location", lead.location)].filter(v => v && v !== "—").join(", ");
+                                if (loc) details.push(`Location Preference: ${loc}`);
+
+                                const unit = getLookupValue("UnitType", lead.unitType);
+                                if (unit && unit !== '—') details.push(`Unit Type: ${unit}`);
+                                
+                                if (lead.areaMin || lead.areaMax) details.push(`Area Range: ${lead.areaMin || 0} - ${lead.areaMax || 0} ${lead.areaMetric || ''}`);
+                                
+                                if (lead.purpose && lead.purpose !== '—') details.push(`Purpose: ${lead.purpose}`);
+                                if (lead.timeline && lead.timeline !== '—') details.push(`Timeline: ${lead.timeline}`);
+                                if (lead.furnishing && lead.furnishing !== '—') details.push(`Furnishing: ${lead.furnishing}`);
+                                if (lead.funding && lead.funding !== '—') details.push(`Funding: ${lead.funding}`);
+                                
+                                Share.share({ message: details.join('\n') }).catch(() => Alert.alert("Error", "Could not share lead"));
                             }} 
-                        />
-                        <RibbonButton 
-                            icon="trash" 
-                            color="#EF4444" 
-                            onPress={handleDelete} 
                         />
                     </ScrollView>
                 </View>
@@ -1007,6 +1023,34 @@ export default function LeadDetailScreen() {
                     </ScrollView>
                 </View>
 
+                {/* 7. Resources */}
+                <View style={styles.tabContent}>
+                    <ScrollView contentContainerStyle={styles.innerScroll}>
+                        <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                            <View style={styles.sectionHeader}>
+                                <Text style={[styles.cardTitle, { color: theme.text, marginBottom: 0 }]}>Documents</Text>
+                                <TouchableOpacity onPress={() => router.push(`/add-document?id=${id}&type=Lead`)}>
+                                    <Text style={{ color: theme.primary, fontWeight: '700' }}>+ Add</Text>
+                                </TouchableOpacity>
+                            </View>
+                            {(!lead.documents || lead.documents.length === 0) ? (
+                                <Text style={styles.emptyText}>No documents uploaded.</Text>
+                            ) : (
+                                lead.documents.map((doc: any, i: number) => (
+                                    <View key={i} style={[styles.docItem, { borderBottomColor: theme.border }]}>
+                                        <Ionicons name="document-text" size={20} color={theme.primary} />
+                                        <View style={styles.docInfo}>
+                                            <Text style={[styles.docName, { color: theme.text }]}>{doc.documentType || "Document"}</Text>
+                                            <Text style={[styles.docMeta, { color: theme.textLight }]}>{doc.documentNo}</Text>
+                                        </View>
+                                        {doc.url && <TouchableOpacity onPress={() => Linking.openURL(doc.url)}><Ionicons name="eye-outline" size={20} color={theme.primary} /></TouchableOpacity>}
+                                    </View>
+                                ))
+                            )}
+                        </View>
+                    </ScrollView>
+                </View>
+
             </ScrollView>
 
             {/* Edit FAB */}
@@ -1333,4 +1377,8 @@ const styles = StyleSheet.create({
     riskIcon: { width: 40, height: 40, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
     riskStatus: { fontSize: 15, fontWeight: '900' },
     riskReason: { fontSize: 12, fontWeight: '600' },
+    docItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, gap: 12 },
+    docInfo: { flex: 1 },
+    docName: { fontSize: 14, fontWeight: '700' },
+    docMeta: { fontSize: 11, marginTop: 2 },
 });
