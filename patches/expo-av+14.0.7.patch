@@ -11,6 +11,48 @@ index e55dbb2..f943917 100644
  )
 +
 +
+diff --git a/node_modules/expo-av/android/src/main/java/expo/modules/av/ViewUtils.kt b/node_modules/expo-av/android/src/main/java/expo/modules/av/ViewUtils.kt
+index d18b58a..dda344d 100644
+--- a/node_modules/expo-av/android/src/main/java/expo/modules/av/ViewUtils.kt
++++ b/node_modules/expo-av/android/src/main/java/expo/modules/av/ViewUtils.kt
+@@ -17,17 +17,7 @@ object ViewUtils {
+ 
+   @UiThread
+   private fun tryRunWithVideoViewOnUiThread(moduleRegistry: ModuleRegistry, viewTag: Int, callback: VideoViewCallback, promise: Promise) {
+-    try {
+-      val videoWrapperView = moduleRegistry.getModule(UIManager::class.java).resolveView(viewTag) as VideoViewWrapper?
+-      val videoView = videoWrapperView?.videoViewInstance
+-      if (videoView != null) {
+-        callback.runWithVideoView(videoView)
+-      } else {
+-        promise.reject("E_VIDEO_TAGINCORRECT", "Invalid view returned from registry.")
+-      }
+-    } catch (e: IllegalViewOperationException) {
+-      promise.reject("E_VIDEO_TAGINCORRECT", "Invalid view returned from registry.")
+-    }
++    promise.reject("E_VIDEO_TAGINCORRECT", "Invalid view returned from registry.")
+   }
+ 
+   /**
+@@ -48,17 +38,7 @@ object ViewUtils {
+ 
+   @UiThread
+   private fun tryRunWithVideoViewOnUiThread(moduleRegistry: ModuleRegistry, viewTag: Int, callback: VideoViewCallback, promise: expo.modules.kotlin.Promise) {
+-    try {
+-      val videoWrapperView = moduleRegistry.getModule(UIManager::class.java).resolveView(viewTag) as VideoViewWrapper?
+-      val videoView = videoWrapperView?.videoViewInstance
+-      if (videoView != null) {
+-        callback.runWithVideoView(videoView)
+-      } else {
+-        promise.reject("E_VIDEO_TAGINCORRECT", "Invalid view returned from registry.", null)
+-      }
+-    } catch (e: IllegalViewOperationException) {
+-      promise.reject("E_VIDEO_TAGINCORRECT", "Invalid view returned from registry.", null)
+-    }
++    promise.reject("E_VIDEO_TAGINCORRECT", "Invalid view returned from registry.", null)
+   }
+ 
+   /**
 diff --git a/node_modules/expo-av/build/ExponentAV.web.js b/node_modules/expo-av/build/ExponentAV.web.js
 index 4d8e8f0..14f5a17 100644
 --- a/node_modules/expo-av/build/ExponentAV.web.js
