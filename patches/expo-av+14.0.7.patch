@@ -53,6 +53,34 @@ index d18b58a..dda344d 100644
    }
  
    /**
+diff --git a/node_modules/expo-av/android/src/main/java/expo/modules/av/video/FullscreenVideoPlayer.java b/node_modules/expo-av/android/src/main/java/expo/modules/av/video/FullscreenVideoPlayer.java
+index ec4c842..24f64f8 100644
+--- a/node_modules/expo-av/android/src/main/java/expo/modules/av/video/FullscreenVideoPlayer.java
++++ b/node_modules/expo-av/android/src/main/java/expo/modules/av/video/FullscreenVideoPlayer.java
+@@ -11,7 +11,7 @@ import android.widget.FrameLayout;
+ import java.lang.ref.WeakReference;
+ 
+ import expo.modules.core.ModuleRegistry;
+-import expo.modules.core.interfaces.services.KeepAwakeManager;
++
+ import expo.modules.av.player.PlayerData;
+ import expo.modules.kotlin.AppContext;
+ 
+@@ -36,12 +36,10 @@ public class FullscreenVideoPlayer extends Dialog {
+           AppContext appContext = fullscreenVideoPlayer.mAppContext.get();
+           ModuleRegistry moduleRegistry = appContext != null ? appContext.getLegacyModuleRegistry() : null;
+           if (moduleRegistry != null) {
+-            KeepAwakeManager keepAwakeManager = moduleRegistry.getModule(KeepAwakeManager.class);
+-            boolean keepAwakeIsActivated = keepAwakeManager != null && keepAwakeManager.isActivated();
+-            if (isPlaying || keepAwakeIsActivated) {
++            if (isPlaying) {
+               window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+             } else {
+-              window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
++              window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+             }
+           }
+         }
 diff --git a/node_modules/expo-av/build/ExponentAV.web.js b/node_modules/expo-av/build/ExponentAV.web.js
 index 4d8e8f0..14f5a17 100644
 --- a/node_modules/expo-av/build/ExponentAV.web.js
