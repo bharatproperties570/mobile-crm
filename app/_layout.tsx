@@ -110,22 +110,43 @@ export default function RootLayout() {
         ...Ionicons.font,
     });
 
+    // ---- Global error handler – guarantee splash hides on any uncaught error ----
+    React.useEffect(() => {
+      if (global && typeof (global as any).ErrorUtils !== 'undefined') {
+        const ErrorUtils = (global as any).ErrorUtils;
+        const previousHandler = ErrorUtils.getGlobalHandler?.();
+        ErrorUtils.setGlobalHandler((error: any, isFatal: boolean) => {
+          console.error('[GlobalError] Uncaught error:', error);
+          SplashScreen.hideAsync().catch(() => {});
+          if (previousHandler) previousHandler(error, isFatal);
+        });
+      }
+    }, []);
+
+    // ---- New: max‑timeout fallback so splash never hangs forever ----
+    const [splashTimedOut, setSplashTimedOut] = React.useState(false);
+    React.useEffect(() => {
+        const timer = setTimeout(() => setSplashTimedOut(true), 2000); // 2 s max
+        return () => clearTimeout(timer);
+    }, []);
+
+    // Log any font loading problem (useful for production debugging)
     React.useEffect(() => {
         if (fontError) {
-            console.error("[RootLayout] Font load error:", fontError);
+            console.error('[RootLayout] Font load error:', fontError);
         }
     }, [fontError]);
 
-    const onLayoutRootView = React.useCallback(async () => {
-        if (fontsLoaded || fontError) {
-            // Give the app 300ms to paint the first frame behind the splash
-            setTimeout(() => {
-                SplashScreen.hideAsync().catch(() => {});
-            }, 300);
-        }
-    }, [fontsLoaded, fontError]);
+    const readyToHide = fontsLoaded || fontError || splashTimedOut;
 
-    if (!fontsLoaded && !fontError) {
+    const onLayoutRootView = React.useCallback(async () => {
+        if (readyToHide) {
+            SplashScreen.hideAsync().catch(() => {});
+        }
+    }, [readyToHide]);
+
+    // If nothing is ready yet, keep the splash on screen (blank view underneath)
+    if (!readyToHide) {
         return <View style={{ flex: 1, backgroundColor: "#121212" }} />;
     }
 
