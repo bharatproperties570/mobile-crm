@@ -28,6 +28,8 @@
         "READ_CONTACTS",
         "SYSTEM_ALERT_WINDOW",
         "FOREGROUND_SERVICE",
+        "CALL_PHONE",
+        "android.permission.BIND_TELECOM_CONNECTION_SERVICE",
         "android.permission.READ_CALENDAR",
         "android.permission.WRITE_CALENDAR"
       ],
@@ -54,7 +56,8 @@
       "expo-sharing",
       "expo-splash-screen",
       "expo-status-bar",
-      "expo-web-browser"
+      "expo-web-browser",
+      "./plugins/withCallKeep"
     ],
     "experiments": {
       "typedRoutes": true
