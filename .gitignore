@@ -48,3 +48,9 @@ app-example
 qrcode.png
 expo.pid
 
+# build artifacts and temporary files
+*.apk
+build_info*.json
+bundle.js
+eas_*log*
+headers.txt
