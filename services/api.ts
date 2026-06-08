@@ -17,12 +17,8 @@ const WEB_URL = `http://localhost:${BACKEND_PORT}/api`;
 const PROD_URL = "https://api.bharatproperties.co/api";
 const TUNNEL_URL = "https://bharat-properties-crm-v3.loca.lt/api";
 const LAN_URL = `http://${MACHINE_IP}:${BACKEND_PORT}/api`;
-
 const NATIVE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || PROD_URL;
-
-// On Web: Always use localhost for testing
-// On Native: Always use LAN URL for testing
-const BASE_URL = Platform.OS === "web" ? WEB_URL : LAN_URL;
+const BASE_URL = Platform.OS === "web" ? WEB_URL : NATIVE_URL;
 
 console.log(`[API] Configuration Initialized:`);
 console.log(`- Platform: ${Platform.OS}`);

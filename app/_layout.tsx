@@ -139,8 +139,10 @@ export default function RootLayout() {
 
     const readyToHide = fontsLoaded || fontError || splashTimedOut;
 
-    const onLayoutRootView = React.useCallback(async () => {
+    // Force hide splash screen via React side-effect as soon as readyToHide is true
+    React.useEffect(() => {
         if (readyToHide) {
+            console.log("[RootLayout] Hiding native splash screen...");
             SplashScreen.hideAsync().catch(() => {});
         }
     }, [readyToHide]);
@@ -151,7 +153,7 @@ export default function RootLayout() {
     }
 
     return (
-        <View style={styles.root} onLayout={onLayoutRootView}>
+        <View style={styles.root}>
             <StatusBar style="light" />
             <ErrorBoundary>
                 <SafeAreaProvider style={styles.root}>
