@@ -574,7 +574,7 @@ export default function MissionControlScreen() {
             <View style={{ flexDirection: 'row', gap: 12, paddingHorizontal: 16, marginBottom: 24, marginTop: 12 }}>
                 <TouchableOpacity 
                     style={{ flex: 1, backgroundColor: '#6366F1', padding: 12, borderRadius: 12, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 8, elevation: 4, shadowColor: '#6366F1', shadowOffset: {width: 0, height: 4}, shadowOpacity: 0.3, shadowRadius: 8 }}
-                    onPress={() => router.push("/(modals)/add-lead")}
+                    onPress={() => router.push("/(modals)/add-lead" as any)}
                 >
                     <Ionicons name="person-add" size={18} color="#fff" />
                     <Text style={{ color: '#fff', fontWeight: '800', fontSize: 13 }}>New Lead</Text>
@@ -650,7 +650,7 @@ export default function MissionControlScreen() {
                                 style={{ flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: theme.card, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: theme.border }}
                                 onPress={() => {
                                     if (act.entityId && act.entityType) {
-                                        router.push({ pathname: `/${act.entityType.toLowerCase()}-detail`, params: { id: act.entityId } });
+                                        router.push({ pathname: `/${act.entityType.toLowerCase()}-detail` as any, params: { id: act.entityId } });
                                     }
                                 }}
                             >
@@ -1559,6 +1559,8 @@ const styles = StyleSheet.create({
     modalSectionLabel: { fontSize: 10, fontWeight: '800', letterSpacing: 1, marginTop: 20, marginBottom: 12 },
     modalOption: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, paddingHorizontal: 16, borderRadius: 16, marginBottom: 6 },
     modalOptionText: { fontSize: 14, fontWeight: '700' },
+    filterOption: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, paddingHorizontal: 16, borderRadius: 16, marginBottom: 6 },
+    filterOptionText: { fontSize: 14, fontWeight: '700' },
 
     notificationModal: { borderTopLeftRadius: 32, borderTopRightRadius: 32, height: '80%', padding: 24, elevation: 15 },
     notificationItem: { flexDirection: 'row', gap: 12, padding: 12, borderRadius: 16, marginBottom: 10, borderLeftWidth: 4 },

@@ -2,12 +2,13 @@ import { useEffect, useState, useCallback, useMemo, useRef, memo } from "react";
 import {
     View, Text, StyleSheet, FlatList, TouchableOpacity,
     TextInput, RefreshControl, ActivityIndicator, Alert, Linking,
-    Modal, Animated, Dimensions, Pressable, ScrollView, Vibration, Platform, SectionList, Share
+    Modal, Animated, Dimensions, Pressable, ScrollView, Vibration, Platform, SectionList, Share, Switch
 } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Swipeable } from "react-native-gesture-handler";
 import { getLeads, leadName, updateLead, deleteLead } from "@/services/leads.service";
+import { getMatchingDeals } from "@/services/deals.service";
 import { getLeadScores } from "@/services/stageEngine.service";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
@@ -16,6 +17,7 @@ import { useUsers } from "@/context/UserContext";
 import { useProjects } from "@/context/ProjectContext";
 import { useCallTracking } from "@/context/CallTrackingContext";
 import { extractList, extractTotal, safeApiCall } from "@/services/api.helpers";
+import api from "@/services/api";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -108,6 +110,8 @@ const AdvancedFilterModal = memo(({ visible, onClose, filters, setFilters, users
     const stages = getLookupsByType("Stage");
     const intents = getLookupsByType("Requirement");
     const categories = getLookupsByType("Category");
+    const subCategories = getLookupsByType("SubCategory");
+    const sizes = getLookupsByType("UnitType");
     const facings = getLookupsByType("Facing");
     const directions = getLookupsByType("Direction");
     const roadWidths = getLookupsByType("RoadWidth");
@@ -176,7 +180,12 @@ const AdvancedFilterModal = memo(({ visible, onClose, filters, setFilters, users
                     <FilterSection title="LEAD STAGE"><SelectChips data={stages} filterKey="stage" /></FilterSection>
                     <FilterSection title="LEAD SOURCE"><SelectChips data={sources} filterKey="source" /></FilterSection>
                     <FilterSection title="OWNER / ASSIGNED TO"><SelectChips data={users} filterKey="userId" labelKey="fullName" /></FilterSection>
-                    <FilterSection title="PROPERTY TYPE"><SelectChips data={categories} filterKey="propertyType" /></FilterSection>
+                    
+                    <FilterSection title="PROPERTY DETAILS">
+                        <Text style={[styles.fieldLabel, { marginTop: 10, marginBottom: 5 }]}>Category</Text><SelectChips data={categories} filterKey="category" />
+                        <Text style={[styles.fieldLabel, { marginTop: 10, marginBottom: 5 }]}>Sub Category</Text><SelectChips data={subCategories} filterKey="subCategory" />
+                        <Text style={[styles.fieldLabel, { marginTop: 10, marginBottom: 5 }]}>Size Type</Text><SelectChips data={sizes} filterKey="size" />
+                    </FilterSection>
 
                     <FilterSection title="BUDGET RANGE (₹)">
                         <View style={{ flexDirection: 'row', gap: 12 }}>
@@ -215,7 +224,7 @@ const AdvancedFilterModal = memo(({ visible, onClose, filters, setFilters, users
     );
 });
 
-const ActionSheet = memo(({ visible, onClose, lead, onUpdate, users }: any) => {
+const ActionSheet = memo(({ visible, onClose, lead, onUpdate, users, onMatch }: any) => {
     const router = useRouter();
     const { theme, isDarkMode } = useTheme();
     const { getLookupsByType } = useLookup();
@@ -271,7 +280,14 @@ const ActionSheet = memo(({ visible, onClose, lead, onUpdate, users }: any) => {
                                 <View style={[styles.actionIcon, { backgroundColor: theme.primary + '15' }]}><Ionicons name="create" size={24} color={theme.primary} /></View>
                                 <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Edit</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity style={styles.actionItem} onPress={() => { router.push(`/match-lead?id=${lead._id}`); onClose(); }}>
+                            <TouchableOpacity style={styles.actionItem} onPress={() => {
+                                if (onMatch) {
+                                    onMatch(lead);
+                                } else {
+                                    router.push(`/match-lead?id=${lead._id}`);
+                                }
+                                onClose();
+                            }}>
                                 <View style={[styles.actionIcon, { backgroundColor: '#DB277715' }]}><Ionicons name="git-compare" size={24} color="#DB2777" /></View>
                                 <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Match</Text>
                             </TouchableOpacity>
@@ -420,8 +436,8 @@ const LeadCard = memo(({ lead, index, onPress, onMore, liveScore, onAction, onSw
     const { findUser } = useUsers();
 
     const name = String(leadName(lead) || "Unnamed");
-    const scoreVal = liveScore?.score || lead.intent_index || 30;
-    const scoreColor = liveScore?.color || (scoreVal > 70 ? "#10B981" : scoreVal > 40 ? "#F59E0B" : "#3B82F6");
+    const scoreVal = lead.leadScore || lead.intent_index || lead.intentIndex || 50;
+    const scoreColor = scoreVal >= 81 ? "#8B5CF6" : scoreVal >= 61 ? "#EF4444" : scoreVal >= 31 ? "#F59E0B" : "#64748B";
 
     const stageLabel = String(getLookupValue("Stage", lead.stage) || "Incoming");
     const stageCfg = STAGE_CONFIG[stageLabel] || STAGE_CONFIG.default;
@@ -431,7 +447,7 @@ const LeadCard = memo(({ lead, index, onPress, onMore, liveScore, onAction, onSw
     const cityVal = getLookupValue("City", lead.locCity);
     
     const projects = Array.isArray(lead.projectName) && lead.projectName.length > 0 
-        ? lead.projectName.map(p => typeof p === 'object' ? (p.name || p.lookup_value || "—") : p).filter(Boolean).join(", ") 
+        ? lead.projectName.map((p: any) => typeof p === 'object' ? (p.name || p.lookup_value || "—") : p).filter(Boolean).join(", ") 
         : (typeof lead.project === 'object' ? lead.project?.name : getLookupValue("Project", lead.project));
 
     let primaryLocation = "";
@@ -463,18 +479,24 @@ const LeadCard = memo(({ lead, index, onPress, onMore, liveScore, onAction, onSw
         return String(getLookupValue(type, val) || "");
     };
 
-    const sizeTypeText = resolveLookupArr("UnitType", lead.unitType);
-    const categoryText = [
-        resolveLookupArr("Category", lead.propertyType),
-        resolveLookupArr("SubCategory", lead.subType)
-    ].filter(v => v && v !== "" && v !== "-" && v !== "—").join(" • ");
+    const reqRaw = resolveLookupArr("Requirement", lead.requirement);
+    const requirementText = reqRaw && reqRaw !== "-" && reqRaw !== "—" ? reqRaw : "";
+    
+    const subCategoryText = resolveLookupArr("SubCategory", lead.subType);
+    let sizeRaw = resolveLookupArr("PropertyType", lead.sizeType);
+    if (!sizeRaw || sizeRaw === "-" || sizeRaw === "—") {
+        sizeRaw = resolveLookupArr("Size", lead.sizeType) || lead.sizeType;
+    }
+    const sizeText = sizeRaw && sizeRaw !== "-" && sizeRaw !== "—" ? sizeRaw : "";
+
+    const configText = [subCategoryText, sizeText].filter(v => v && v !== "" && v !== "-" && v !== "—").join(" • ");
 
     const renderRightActions = () => (
         <View style={styles.swipeActions}>
             <TouchableOpacity 
                 activeOpacity={0.6}
                 style={[styles.swipeBtn, { backgroundColor: theme.primary }]} 
-                onPress={() => onAction('Call')}
+                onPress={() => { swipeableRef.current?.close(); onAction('Call'); }}
             >
                 <View style={{ alignItems: 'center' }}>
                     <Ionicons name="call" size={20} color="#fff" />
@@ -484,7 +506,7 @@ const LeadCard = memo(({ lead, index, onPress, onMore, liveScore, onAction, onSw
             <TouchableOpacity 
                 activeOpacity={0.6}
                 style={[styles.swipeBtn, { backgroundColor: '#25D366' }]} 
-                onPress={() => onAction('WhatsApp')}
+                onPress={() => { swipeableRef.current?.close(); onAction('WhatsApp'); }}
             >
                 <View style={{ alignItems: 'center' }}>
                     <Ionicons name="logo-whatsapp" size={20} color="#fff" />
@@ -499,7 +521,7 @@ const LeadCard = memo(({ lead, index, onPress, onMore, liveScore, onAction, onSw
             <TouchableOpacity 
                 activeOpacity={0.6}
                 style={[styles.swipeBtn, { backgroundColor: '#3B82F6' }]} 
-                onPress={() => onAction('SMS')}
+                onPress={() => { swipeableRef.current?.close(); onAction('SMS'); }}
             >
                 <View style={{ alignItems: 'center' }}>
                     <Ionicons name="chatbubble-ellipses" size={20} color="#fff" />
@@ -509,7 +531,7 @@ const LeadCard = memo(({ lead, index, onPress, onMore, liveScore, onAction, onSw
             <TouchableOpacity 
                 activeOpacity={0.6}
                 style={[styles.swipeBtn, { backgroundColor: '#F59E0B' }]} 
-                onPress={() => onAction('Email')}
+                onPress={() => { swipeableRef.current?.close(); onAction('Email'); }}
             >
                 <View style={{ alignItems: 'center' }}>
                     <Ionicons name="mail" size={20} color="#fff" />
@@ -529,17 +551,21 @@ const LeadCard = memo(({ lead, index, onPress, onMore, liveScore, onAction, onSw
             renderLeftActions={renderLeftActions}
             onSwipeableWillOpen={() => onSwipeWillOpen(swipeableRef.current)}
         >
-            <TouchableOpacity onPress={onPress}>
+            <Pressable 
+                onPress={onPress} 
+                delayPressIn={50}
+                style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
+            >
                 <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
                     <View style={styles.cardInner}>
                         <View style={{ alignItems: 'center', width: 55, gap: 6 }}>
                             <LeadScoreRing score={scoreVal} color={scoreColor} />
                             <View style={[styles.ownerBadge, { backgroundColor: stageCfg.color + '15' }]}><Text style={[styles.ownerText, { color: stageCfg.color, fontSize: 8, fontWeight: '900' }]}>{stageLabel.toUpperCase()}</Text></View>
                         </View>
-                        <View style={styles.cardContent}><View style={styles.cardHeader}><Text style={[styles.cardName, { color: theme.text }]} numberOfLines={1}>{name}</Text><View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>{!!lead.source && <View style={styles.sourceBadge}><Text style={styles.sourceText}>{String(getLookupValue("Source", lead.source)).toUpperCase()}</Text></View>}<TouchableOpacity onPress={onMore} style={styles.moreBtn}><Ionicons name="ellipsis-vertical" size={18} color={theme.textMuted} /></TouchableOpacity></View></View><View style={styles.metaRow}><Ionicons name="call-outline" size={12} color={theme.textMuted} /><Text style={{ fontSize: 12, color: theme.textSecondary, fontWeight: '600', marginLeft: 4 }}>{String(lead.mobile)}</Text>{!!budgetText && <View style={{ flexDirection: 'row', alignItems: 'center' }}><Text style={{ color: theme.textMuted, marginHorizontal: 6 }}>|</Text><Ionicons name="pricetag-outline" size={12} color="#10B981" /><Text style={{ fontSize: 12, color: '#10B981', fontWeight: '800', marginLeft: 4 }}>{budgetText}</Text></View>}</View><View style={styles.requirementRow}>{!!sizeTypeText && <View style={[styles.sizeBadge, { backgroundColor: theme.primary + '10' }]}><Text style={[styles.sizeText, { color: theme.primary }]}>{sizeTypeText}</Text></View>}<Text style={{ fontSize: 11, color: theme.textMuted, marginLeft: sizeTypeText ? 8 : 0 }} numberOfLines={1}>{categoryText}</Text></View><View style={styles.footerRow}><View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}><Ionicons name="location-outline" size={10} color={theme.textMuted} /><Text style={{ fontSize: 11, color: theme.textSecondary, fontWeight: '700', marginLeft: 4, flex: 1 }} numberOfLines={1}>{combinedLocation}</Text></View><View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end' }}><Text style={[styles.ownerText, { color: theme.primary, fontWeight: '700', marginRight: 8 }]}>{resolveName(lead.owner, getLookupValue, findUser)}</Text><Text style={styles.timeText}>{formatTimeAgo(lead.createdAt)}</Text></View></View></View>
+                        <View style={styles.cardContent}><View style={styles.cardHeader}><Text style={[styles.cardName, { color: theme.text }]} numberOfLines={1}>{name}</Text><View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>{!!lead.source && <View style={styles.sourceBadge}><Text style={styles.sourceText}>{String(getLookupValue("Source", lead.source)).toUpperCase()}</Text></View>}<TouchableOpacity onPress={onMore} style={styles.moreBtn}><Ionicons name="ellipsis-vertical" size={18} color={theme.textMuted} /></TouchableOpacity></View></View><View style={styles.metaRow}><Ionicons name="call-outline" size={12} color={theme.textMuted} /><Text style={{ fontSize: 12, color: theme.textSecondary, fontWeight: '600', marginLeft: 4 }}>{String(lead.mobile)}</Text>{!!budgetText && budgetText !== "-" && budgetText !== "—" && <View style={{ flexDirection: 'row', alignItems: 'center' }}><Text style={{ color: theme.textMuted, marginHorizontal: 6 }}>|</Text><Ionicons name="pricetag-outline" size={12} color="#10B981" /><Text style={{ fontSize: 12, color: '#10B981', fontWeight: '800', marginLeft: 4 }}>{budgetText}</Text></View>}</View><View style={styles.requirementRow}>{!!requirementText && <View style={[styles.sizeBadge, { backgroundColor: theme.primary + '10' }]}><Text style={[styles.sizeText, { color: theme.primary }]}>{requirementText}</Text></View>}{!!configText && <Text style={{ fontSize: 11, color: theme.textMuted, marginLeft: requirementText ? 8 : 0 }} numberOfLines={1}>{configText}</Text>}</View><View style={styles.footerRow}><View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}><Ionicons name="location-outline" size={10} color={theme.textMuted} /><Text style={{ fontSize: 11, color: theme.textSecondary, fontWeight: '700', marginLeft: 4, flex: 1 }} numberOfLines={1}>{combinedLocation}</Text></View><View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end' }}><Text style={[styles.ownerText, { color: theme.primary, fontWeight: '700', marginRight: 8 }]}>{resolveName(lead.owner, getLookupValue, findUser)}</Text><Text style={styles.timeText}>{formatTimeAgo(lead.createdAt)}</Text></View></View></View>
                     </View>
                 </View>
-            </TouchableOpacity>
+            </Pressable>
         </Swipeable>
     );
 });
@@ -606,6 +632,97 @@ export default function LeadsScreen() {
     const [availableContacts, setAvailableContacts] = useState<any[]>([]);
     const [pendingAction, setPendingAction] = useState<{ type: string, lead: any } | null>(null);
 
+    // Match Centre States
+    const [matchesVisible, setMatchesVisible] = useState(false);
+    const [matchingDeals, setMatchingDeals] = useState<any[]>([]);
+    const [fetchingMatches, setFetchingMatches] = useState(false);
+    const [matchesForLead, setMatchesForLead] = useState<any>(null);
+    
+    // Share Deal State
+    const [selectedMatchDeals, setSelectedMatchDeals] = useState<string[]>([]);
+    const [shareModalVisible, setShareModalVisible] = useState(false);
+    const [dealsToShare, setDealsToShare] = useState<string[]>([]);
+    const [shareToggles, setShareToggles] = useState({ whatsapp: true, email: true, sms: false });
+    const [isSharing, setIsSharing] = useState(false);
+    
+    const handleShareDeal = async () => {
+        if (!dealsToShare.length || !selectedLead) return;
+        setIsSharing(true);
+        
+        try {
+            // 1. Native WhatsApp Fallback
+            if (shareToggles.whatsapp) {
+                const selectedDealsData = matchingDeals.filter(d => 
+                    dealsToShare.includes(d._id || d.id || (typeof d.inventoryId === 'object' ? d.inventoryId._id : null))
+                );
+                
+                let message = `Hi ${selectedLead.firstName || selectedLead.name?.split(' ')[0] || 'there'},\n\nHere are some property matches for your requirement:\n\n`;
+                
+                selectedDealsData.forEach((deal, i) => {
+                    const inv = typeof deal.inventoryId === 'object' ? deal.inventoryId : null;
+                    const project = deal.projectName || inv?.projectName || deal.project?.name || "";
+                    const unit = deal.unitNo || deal.unitNumber || inv?.unitNo || inv?.unitNumber || deal.dealId || "Property";
+                    const priceRaw = deal.price || deal.quotePrice || inv?.price || inv?.quotePrice;
+                    const pStr = priceRaw ? (Number(priceRaw) >= 10000000 ? `₹${(Number(priceRaw)/10000000).toFixed(2)}Cr` : `₹${(Number(priceRaw)/100000).toFixed(2)}L`) : '';
+                    
+                    message += `*${i+1}. ${unit} ${project ? 'in ' + project : ''}*\n`;
+                    if (pStr) message += `💰 Price: ${pStr}\n`;
+                    message += `\n`;
+                });
+                
+                message += `Let me know if you'd like more details or a site visit!\n\nRegards,\nBharat Properties`;
+                
+                const phone = selectedLead.mobile || selectedLead.phone || selectedLead.phones?.[0]?.number || selectedLead.phones?.[0] || "";
+                if (phone) {
+                    const cleanPhone = phone.replace(/\D/g, '').slice(-10);
+                    const url = `whatsapp://send?phone=91${cleanPhone}&text=${encodeURIComponent(message)}`;
+                    Linking.openURL(url).catch(() => Alert.alert("Notice", "WhatsApp is not installed on your device."));
+                } else {
+                    Alert.alert("Notice", "Lead does not have a valid mobile number for WhatsApp.");
+                }
+            }
+            
+            // 2. Dispatch Email/SMS via backend
+            if (shareToggles.email || shareToggles.sms) {
+                const apiToggles = { ...shareToggles, whatsapp: false }; // Bypass backend WA
+                const { data } = await api.post('/marketing/send-manual', {
+                    leadId: selectedLead._id,
+                    dealIds: dealsToShare,
+                    toggles: apiToggles
+                });
+                
+                if (!data.success) {
+                    Alert.alert("Error", data.error || "Failed to dispatch email/sms.");
+                }
+            }
+            
+            Alert.alert("Success", "Deals processed successfully.");
+            setShareModalVisible(false);
+            setSelectedMatchDeals([]);
+            
+        } catch (err: any) {
+            Alert.alert("Error", err.response?.data?.error || err.message || "Something went wrong.");
+        } finally {
+            setIsSharing(false);
+        }
+    };
+
+    const handleRunMatch = async (leadToMatch: any) => {
+        setMatchesForLead(leadToMatch);
+        setMatchesVisible(true);
+        setFetchingMatches(true);
+        setMatchingDeals([]);
+
+        const res = await safeApiCall(() => getMatchingDeals(leadToMatch._id));
+        if (!res.error && res.data) {
+            const data = (res.data as any).data || (res.data as any).matchingDeals || (Array.isArray(res.data) ? res.data : []);
+            setMatchingDeals(data);
+        } else {
+            Alert.alert("Match Failed", "Could not fetch matching properties.");
+        }
+        setFetchingMatches(false);
+    };
+
     const getContactsForLead = (lead: any) => {
         if (!lead) return [];
         const contacts: any[] = [];
@@ -671,7 +788,7 @@ export default function LeadsScreen() {
         if (isRefresh) setRefreshing(true); else if (!shouldAppend) setLoading(true);
         try {
             const limit = 20;
-            const params: any = { page: String(pageNum), limit: String(limit), sortBy: sortConfig.by, sortOrder: String(sortConfig.order), ...advFilters };
+            const params: any = { view: 'compact', page: String(pageNum), limit: String(limit), sortBy: sortConfig.by, sortOrder: String(sortConfig.order), ...advFilters };
             if (search) params.search = search;
             
             // Sync with Web CRM logic: activeTab is the Status ID or Value
@@ -688,6 +805,11 @@ export default function LeadsScreen() {
             }
             
             if (advFilters.stage) params.stage = advFilters.stage;
+            
+            // Map frontend array filters to backend expected parameter names
+            if (advFilters.category) { params.propertyType = advFilters.category; delete params.category; }
+            if (advFilters.subCategory) { params.subType = advFilters.subCategory; delete params.subCategory; }
+            if (advFilters.size) { params.unitType = advFilters.size; delete params.size; }
 
             const res = await getLeads(params);
             const newLeads = extractList(res);
@@ -699,8 +821,7 @@ export default function LeadsScreen() {
             setPage(pageNum);
             
             if (newLeads.length > 0) {
-                const ids = newLeads.map((l: any) => l._id);
-                getLeadScores(ids).then(scores => { if (scores) setLiveScores((prev: any) => ({ ...prev, ...scores })); }).catch(() => {});
+                // No longer fetching redundant live scores; using lead.leadScore directly from database.
             }
         } catch (err) { 
             console.error("FetchLeads Error:", err); 
@@ -803,22 +924,46 @@ export default function LeadsScreen() {
                         lead={item} 
                         index={index} 
                         liveScore={liveScores[item._id]} 
-                        onPress={() => router.push(`/lead-detail?id=${item._id}`)} 
-                        onMore={() => { setSelectedLead(item); setSheetVisible(true); }} 
+                        onPress={() => {
+                            if (activeRowRef.current) { 
+                                activeRowRef.current.close(); 
+                                activeRowRef.current = null; 
+                                return; 
+                            }
+                            router.push(`/lead-detail?id=${item._id}`);
+                        }} 
+                        onMore={() => { 
+                            if (activeRowRef.current) { 
+                                activeRowRef.current.close(); 
+                                activeRowRef.current = null; 
+                                return; 
+                            }
+                            setSelectedLead(item); setSheetVisible(true); 
+                        }} 
                         onAction={(type: string) => handleCommunicationAction(item, type)}
                         onSwipeWillOpen={onSwipeableWillOpen}
                     />
                 )} 
                 keyExtractor={(item) => item._id} 
-                ListHeaderComponent={renderHeader} 
+                ListHeaderComponent={renderHeader()} 
                 onEndReached={loadMore} 
                 onEndReachedThreshold={0.5} 
+                initialNumToRender={8}
+                maxToRenderPerBatch={10}
+                windowSize={5}
+                removeClippedSubviews={Platform.OS === 'android'}
+                onScrollBeginDrag={() => {
+                    if (activeRowRef.current) {
+                        activeRowRef.current.close();
+                        activeRowRef.current = null;
+                    }
+                }}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />} 
                 contentContainerStyle={{ paddingBottom: 100 }} 
                 ListEmptyComponent={!!(!loading) ? <View style={styles.empty}><Ionicons name="person-outline" size={64} color="#CBD5E1" /><Text style={styles.emptyText}>No leads found matching criteria.</Text></View> : null} 
             />
             {!!loading && <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(255,255,255,0.4)', justifyContent: 'center', alignItems: 'center', zIndex: 9999 }]}><ActivityIndicator size="large" color={theme.primary} /></View>}
-            <ActionSheet visible={sheetVisible} onClose={() => setSheetVisible(false)} lead={selectedLead} onUpdate={() => fetchLeads(1, false)} users={users} />
+            <ActionSheet visible={sheetVisible} onClose={() => setSheetVisible(false)} lead={selectedLead} onUpdate={() => fetchLeads(1, false)} users={users} onMatch={handleRunMatch} />
             <AdvancedFilterModal visible={filterVisible} onClose={() => setFilterVisible(false)} filters={advFilters} setFilters={setAdvFilters} users={users} projects={projects} />
             <Modal visible={closedSheetVisible} transparent animationType="slide">
                 <Pressable style={styles.modalOverlay} onPress={() => setClosedSheetVisible(false)}>
@@ -852,7 +997,7 @@ export default function LeadsScreen() {
                     <View style={[styles.sheetContainer, { backgroundColor: theme.card, borderTopLeftRadius: 32, borderTopRightRadius: 32, paddingBottom: 60 }]}>
                         <View style={[styles.sheetHandle, { backgroundColor: theme.border }]} />
                         <Text style={[styles.sheetTitle, { color: theme.text }]}>Select Lead Contact</Text>
-                        <Text style={[styles.sheetSub, { color: theme.textLight, marginTop: 4, textTransform: 'uppercase', fontSize: 10, fontWeight: '800' }]}>Choose number/email for {pendingAction?.type.toLowerCase()}</Text>
+                        <Text style={[(styles as any).sheetSub, { color: theme.textLight, marginTop: 4, textTransform: 'uppercase', fontSize: 10, fontWeight: '800' }]}>Choose number/email for {pendingAction?.type.toLowerCase()}</Text>
 
                         <View style={{ marginTop: 20 }}>
                             {availableContacts.map((contact, idx) => (
@@ -878,6 +1023,231 @@ export default function LeadsScreen() {
                             ))}
                         </View>
                     </View>
+                </Pressable>
+            </Modal>
+
+            {/* Matches Modal */}
+            <Modal transparent visible={matchesVisible} animationType="slide" onRequestClose={() => setMatchesVisible(false)}>
+                <Pressable style={styles.modalOverlay} onPress={() => setMatchesVisible(false)}>
+                    <View style={[styles.sheetContainer, { backgroundColor: theme.card, borderTopLeftRadius: 32, borderTopRightRadius: 32, paddingBottom: 60, maxHeight: '85%' }]}>
+                        <View style={[styles.sheetHandle, { backgroundColor: theme.border }]} />
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                            <View>
+                                <Text style={[styles.sheetTitle, { color: theme.text }]}>Matched Properties</Text>
+                                <Text style={[(styles as any).sheetSub, { color: theme.textLight, marginTop: 4, textTransform: 'uppercase', fontSize: 10, fontWeight: '800' }]}>{leadName(matchesForLead)}</Text>
+                            </View>
+                            {!fetchingMatches && matchingDeals.length > 0 && (
+                                <TouchableOpacity 
+                                    onPress={() => {
+                                        if (selectedMatchDeals.length === matchingDeals.length) {
+                                            setSelectedMatchDeals([]);
+                                        } else {
+                                            setSelectedMatchDeals(matchingDeals.map(d => d._id || d.id || (typeof d.inventoryId === 'object' ? d.inventoryId._id : null)).filter(Boolean));
+                                        }
+                                    }}
+                                    style={{ paddingHorizontal: 12, paddingVertical: 6, backgroundColor: theme.primary + '15', borderRadius: 12 }}
+                                >
+                                    <Text style={{ fontSize: 12, fontWeight: '800', color: theme.primary }}>
+                                        {selectedMatchDeals.length === matchingDeals.length ? "Deselect All" : "Select All"}
+                                    </Text>
+                                </TouchableOpacity>
+                            )}
+                        </View>
+
+                        {fetchingMatches ? (
+                            <View style={{ padding: 40, alignItems: 'center' }}>
+                                <ActivityIndicator size="large" color="#DB2777" />
+                                <Text style={{ marginTop: 12, color: theme.textLight }}>Analyzing requirements...</Text>
+                            </View>
+                        ) : (
+                            <ScrollView style={{ marginTop: 16 }} showsVerticalScrollIndicator={false}>
+                                {matchingDeals.length === 0 ? (
+                                    <View style={{ padding: 40, alignItems: 'center' }}>
+                                        <Ionicons name="sad-outline" size={48} color={theme.border} />
+                                        <Text style={{ marginTop: 12, color: theme.textLight, fontSize: 16, fontWeight: '600' }}>No matched properties found.</Text>
+                                    </View>
+                                ) : (
+                                    matchingDeals.map((deal, idx) => {
+                                        const score = deal.score || deal.matchPercentage || 0;
+                                        const isHighMatch = score > 80;
+                                        
+                                        return (
+                                            <TouchableOpacity
+                                                key={idx}
+                                                style={[styles.dropdownItem, { 
+                                                    backgroundColor: isHighMatch ? '#FEF08A20' : theme.background, 
+                                                    borderWidth: 1,
+                                                    borderColor: isHighMatch ? '#FBBF24' : theme.border,
+                                                    marginBottom: 8,
+                                                    borderRadius: 16,
+                                                    padding: 16
+                                                }]}
+                                                onPress={() => {
+                                                    setMatchesVisible(false);
+                                                    router.push(`/deal-detail?id=${deal._id}`);
+                                                }}
+                                            >
+                                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
+                                                    <TouchableOpacity
+                                                        onPress={() => {
+                                                            const id = deal._id || deal.id || (typeof deal.inventoryId === 'object' ? deal.inventoryId._id : null);
+                                                            if (!id) return;
+                                                            setSelectedMatchDeals(prev => 
+                                                                prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+                                                            );
+                                                        }}
+                                                        style={{ width: 44, height: 44, justifyContent: 'center', alignItems: 'center' }}
+                                                    >
+                                                        <Ionicons 
+                                                            name={selectedMatchDeals.includes(deal._id || deal.id || (typeof deal.inventoryId === 'object' ? deal.inventoryId._id : null)) ? "checkmark-circle" : "ellipse-outline"} 
+                                                            size={24} 
+                                                            color={selectedMatchDeals.includes(deal._id || deal.id || (typeof deal.inventoryId === 'object' ? deal.inventoryId._id : null)) ? theme.primary : theme.textMuted} 
+                                                        />
+                                                    </TouchableOpacity>
+                                                    <View style={{ flex: 1 }}>
+                                                        <Text style={{ fontSize: 15, fontWeight: '800', color: theme.text }} numberOfLines={1}>
+                                                            {(() => {
+                                                                const inv = typeof deal.inventoryId === 'object' ? deal.inventoryId : null;
+                                                                const project = deal.projectName || inv?.projectName || deal.project?.name || "";
+                                                                const block = deal.block || inv?.block;
+                                                                const unit = deal.unitNo || deal.unitNumber || inv?.unitNo || inv?.unitNumber;
+                                                                
+                                                                let mainTitle = unit ? unit : (deal.dealId || "Property");
+                                                                let subTitle = "";
+                                                                if (project) subTitle += ` • ${project}`;
+                                                                if (block) subTitle += ` (Block ${block})`;
+                                                                
+                                                                return (
+                                                                    <Text>
+                                                                        <Text>{mainTitle}</Text>
+                                                                        {subTitle ? <Text style={{ fontSize: 12, color: theme.textSecondary, fontWeight: '600' }}>{subTitle}</Text> : null}
+                                                                    </Text>
+                                                                );
+                                                            })()}
+                                                        </Text>
+                                                        <Text style={{ fontSize: 12, color: theme.textSecondary, marginTop: 4 }} numberOfLines={1}>
+                                                            {(() => {
+                                                                const priceRaw = deal.price || deal.quotePrice || deal.inventoryId?.price || deal.inventoryId?.quotePrice;
+                                                                let priceStr = "";
+                                                                if (priceRaw && Number(priceRaw) > 0) {
+                                                                    const p = Number(priceRaw);
+                                                                    priceStr = p >= 10000000 ? `₹${(p / 10000000).toFixed(2)}Cr` : `₹${(p / 100000).toFixed(2)}L`;
+                                                                }
+                                                            
+                                                                const sizeRaw = deal.size?.value || deal.inventoryId?.size?.value || (typeof deal.size === 'number' ? deal.size : null) || (typeof deal.inventoryId?.size === 'number' ? deal.inventoryId.size : null);
+                                                                const sizeUnit = deal.size?.unit || deal.inventoryId?.size?.unit || deal.sizeUnit || deal.inventoryId?.sizeUnit || "";
+                                                                let sizeStr = "";
+                                                                if (sizeRaw) {
+                                                                    sizeStr = `${sizeRaw} ${sizeUnit}`.trim();
+                                                                }
+                                                            
+                                                                const getLookupVal = (obj: any, type: any) => {
+                                                                    if (!obj) return "";
+                                                                    if (typeof obj === "string") {
+                                                                        const val = getLookupValue(type || "Any", obj);
+                                                                        return (val && val !== "—" && val !== obj) ? val : "";
+                                                                    }
+                                                                    return obj.lookup_value || obj.lookup_name || obj.name || obj.title || "";
+                                                                };
+                                                                
+                                                                const inv = typeof deal.inventoryId === 'object' ? deal.inventoryId : null;
+                                                                const sLabel = getLookupVal(deal.sizeLabel, "SizeLabel") || 
+                                                                               getLookupVal(deal.unitSpecification?.sizeLabel, "SizeLabel") || 
+                                                                               getLookupVal(inv?.unitSpecification?.sizeLabel, "SizeLabel") || 
+                                                                               getLookupVal(deal.sizeConfig, "SizeConfig") || 
+                                                                               getLookupVal(inv?.sizeConfig, "SizeConfig") || 
+                                                                               getLookupVal(inv?.sizeLabel, "SizeLabel");
+                                                                               
+                                                                let sizeLabelStr = sLabel;
+                                                                
+                                                                const subCat = getLookupVal(deal.subCategory, "SubCategory") || getLookupVal(inv?.subCategory, "SubCategory");
+                                                                let subCatStr = subCat;
+                                                            
+                                                                const parts = [priceStr, sizeStr, subCatStr, sizeLabelStr].filter(Boolean);
+                                                                return parts.join(" • ") || "Details N/A";
+                                                            })()}
+                                                        </Text>
+                                                    </View>
+                                                    <View style={{ alignItems: 'flex-end', justifyContent: 'space-between' }}>
+                                                        {score > 0 && (
+                                                            <View style={{ backgroundColor: isHighMatch ? '#F59E0B' : '#10B981', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }}>
+                                                                <Text style={{ fontSize: 11, fontWeight: '900', color: '#fff' }}>{score}%</Text>
+                                                            </View>
+                                                        )}
+                                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 8 }}>
+                                                            <Ionicons name="chevron-forward" size={18} color={theme.textMuted} />
+                                                        </View>
+                                                    </View>
+                                                </View>
+                                            </TouchableOpacity>
+                                        );
+                                    })
+                                )}
+                            </ScrollView>
+                        )}
+                    </View>
+
+                    {/* Bottom Action Bar for Multi-Select */}
+                    {selectedMatchDeals.length > 0 && (
+                        <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: 20, backgroundColor: theme.card, borderTopWidth: 1, borderColor: theme.border, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 40 }}>
+                            <Text style={{ fontSize: 16, fontWeight: '800', color: theme.text }}>
+                                {selectedMatchDeals.length} Deal{selectedMatchDeals.length > 1 ? 's' : ''} Selected
+                            </Text>
+                            <TouchableOpacity 
+                                onPress={() => {
+                                    setDealsToShare(selectedMatchDeals);
+                                    setShareModalVisible(true);
+                                }}
+                                style={{ backgroundColor: theme.primary, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 12, flexDirection: 'row', alignItems: 'center', gap: 8 }}
+                            >
+                                <Text style={{ color: '#fff', fontSize: 15, fontWeight: '800' }}>Send</Text>
+                                <Ionicons name="paper-plane" size={16} color="#fff" />
+                            </TouchableOpacity>
+                        </View>
+                    )}
+                </Pressable>
+            </Modal>
+
+            <Modal transparent visible={shareModalVisible} animationType="fade" onRequestClose={() => setShareModalVisible(false)}>
+                <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }} onPress={() => setShareModalVisible(false)}>
+                    <Pressable style={{ backgroundColor: theme.card, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24 }} onPress={e => e.stopPropagation()}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                            <Text style={{ fontSize: 18, fontWeight: '800', color: theme.text }}>Share Deal with Client</Text>
+                            <TouchableOpacity onPress={() => setShareModalVisible(false)}>
+                                <Ionicons name="close" size={24} color={theme.textMuted} />
+                            </TouchableOpacity>
+                        </View>
+                        
+                        <View style={{ gap: 16, marginBottom: 24 }}>
+                            {['whatsapp', 'email', 'sms'].map((channel) => (
+                                <View key={channel} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, backgroundColor: theme.background, borderRadius: 12 }}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                                        <Ionicons 
+                                            name={channel === 'whatsapp' ? 'logo-whatsapp' : channel === 'email' ? 'mail' : 'chatbubble-ellipses'} 
+                                            size={20} 
+                                            color={channel === 'whatsapp' ? '#25D366' : theme.primary} 
+                                        />
+                                        <Text style={{ fontSize: 16, fontWeight: '600', color: theme.text, textTransform: 'capitalize' }}>{channel}</Text>
+                                    </View>
+                                    <Switch 
+                                        value={shareToggles[channel as keyof typeof shareToggles]}
+                                        onValueChange={(val) => setShareToggles(prev => ({ ...prev, [channel]: val }))}
+                                        trackColor={{ false: theme.border, true: theme.primary }}
+                                    />
+                                </View>
+                            ))}
+                        </View>
+
+                        <TouchableOpacity 
+                            style={{ backgroundColor: theme.primary, padding: 16, borderRadius: 12, alignItems: 'center', opacity: isSharing ? 0.7 : 1 }}
+                            onPress={handleShareDeal}
+                            disabled={isSharing}
+                        >
+                            <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700' }}>
+                                {isSharing ? "Sending..." : "Send Deal"}
+                            </Text>
+                        </TouchableOpacity>
+                    </Pressable>
                 </Pressable>
             </Modal>
         </View>

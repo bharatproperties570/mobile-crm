@@ -30,7 +30,7 @@ export const parseWhatsAppZip = async (uri: string): Promise<ImportedMessage[]> 
             !f.dir &&
             f.name.toLowerCase().endsWith('.txt') &&
             !f.name.startsWith('__MACOSX') &&
-            !f.name.split('/').pop().startsWith('.')
+            !f.name.split('/').pop()?.startsWith('.')
         );
 
         if (!chatFile) {

@@ -109,7 +109,7 @@ export default function CommunicationHub() {
             // Force fetch emails if manually refreshing or channel is selected or first load
             if (isRefresh || channel === 'Email' || emails.length === 0) {
                 const emailRes = await safeApiCall(() => getEmails({ limit: 20 }));
-                const rawEmails = Array.isArray(emailRes.data) ? emailRes.data : (emailRes.data?.emails || []);
+                const rawEmails = Array.isArray(emailRes.data) ? emailRes.data : ((emailRes.data as any)?.emails || []);
 
                 if (Array.isArray(rawEmails)) {
                     const mappedEmails = rawEmails.map((e: any) => ({
@@ -279,7 +279,7 @@ export default function CommunicationHub() {
                             <TouchableOpacity 
                                 onPress={async () => {
                                     const res = await safeApiCall(() => getOAuthUrl());
-                                    if (res.data) Linking.openURL(res.data);
+                                    if (res.data) Linking.openURL(res.data as unknown as string);
                                 }}
                                 style={{ backgroundColor: '#0ea5e9', padding: 12, borderRadius: 10, alignItems: 'center' }}
                             >
@@ -539,6 +539,8 @@ function InboxRow({ item, theme, isDark, onPress, onLongPress }: any) {
 }
 
 const styles = StyleSheet.create({
+    card: {},
+    cardTitle: { fontSize: 16, fontWeight: '700' },
     header: { padding: 18, borderBottomWidth: 1 },
     topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
     title: { fontSize: 24, fontWeight: '900', letterSpacing: -0.5 },

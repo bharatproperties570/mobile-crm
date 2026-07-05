@@ -9,7 +9,7 @@ import { getDealById } from "@/services/deals.service";
 export default function GeographyScreen() {
     const { dealId } = useLocalSearchParams<{ dealId: string }>();
     const router = useRouter();
-    const { theme, isDark } = useTheme();
+    const { theme } = useTheme();
     const [loading, setLoading] = useState(true);
     const [deal, setDeal] = useState<any>(null);
 
@@ -92,7 +92,7 @@ export default function GeographyScreen() {
             </View>
 
             <ScrollView contentContainerStyle={styles.content}>
-                <View style={[styles.card, { backgroundColor: isDark ? "rgba(255,255,255,0.05)" : "#fff" }]}>
+                <View style={[styles.card, { backgroundColor: theme.cardBg || theme.card || "#fff" }]}>
                     <View style={styles.iconContainer}>
                         <Ionicons name="location" size={32} color={theme.primary} />
                     </View>

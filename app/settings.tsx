@@ -179,12 +179,19 @@ const styles = StyleSheet.create({
     avatarText: { color: "#fff", fontSize: 20, fontWeight: "800" },
     profileInfo: { flex: 1, marginLeft: 16 },
     profileName: { fontSize: 17, fontWeight: "700" },
+    // New missing style keys
+    item: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12, paddingHorizontal: 12, borderBottomWidth: 1 },
+    iconBox: { width: 40, height: 40, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
+    itemContent: { flex: 1, marginLeft: 12 },
+    profileRole: { fontSize: 13, fontWeight: '500', color: '#6B7280' },
+    editBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6 },
+    editBtnText: { fontSize: 13, color: '#4F46E5' },
+    section: { marginTop: 20, borderRadius: 12, borderWidth: 1, padding: 12 },
+    sectionTitle: { fontSize: 14, fontWeight: '600', marginBottom: 8 },
     itemLabel: { fontSize: 15, fontWeight: "600" },
     itemSublabel: { fontSize: 12, fontWeight: "500", marginTop: 2 },
-
     logoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 16, borderRadius: 20, marginTop: 8, marginBottom: 30 },
     logoutText: { color: "#EF4444", fontSize: 15, fontWeight: "700" },
-
     footer: { alignItems: 'center', marginBottom: 50 },
     footerText: { fontSize: 13, fontWeight: "700" },
     footerVersion: { fontSize: 11, fontWeight: "600", marginTop: 4 }

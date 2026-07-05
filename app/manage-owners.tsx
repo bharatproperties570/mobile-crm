@@ -147,9 +147,12 @@ export default function ManageOwnersScreen() {
             };
 
             await updateInventory(id!, updates);
-            Alert.alert("Success", "Owners and associates updated successfully", [
-                { text: "OK", onPress: () => router.back() }
-            ]);
+            
+            if (router.canGoBack()) {
+                router.back();
+            } else {
+                router.replace("/(tabs)/inventory");
+            }
         } catch (error) {
             console.error("Save error:", error);
             Alert.alert("Error", "Failed to save changes");
@@ -180,11 +183,11 @@ export default function ManageOwnersScreen() {
 
             <ScrollView contentContainerStyle={styles.scroll}>
                 {/* Search Section */}
-                <View style={[styles.section, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                <View style={[styles.section, { backgroundColor: theme.card, borderColor: theme.border, zIndex: 99, elevation: 99 }]}>
                     <Text style={[styles.sectionTitle, { color: theme.text }]}>Add New Person</Text>
 
                     {!selectedContact ? (
-                        <View style={styles.searchContainer}>
+                        <View style={[styles.searchContainer, { zIndex: 100, elevation: 100 }]}>
                             <View style={[styles.searchInputWrapper, { backgroundColor: theme.background, borderColor: theme.border }]}>
                                 <Ionicons name="search" size={20} color={theme.textLight} />
                                 <TextInput

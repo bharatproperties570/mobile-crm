@@ -38,23 +38,47 @@ export const useCallMonitor = () => {
                     }
                 });
 
+                // Handle sync response to show Alert for pending activities
+                const handlePendingResolutions = (res: any) => {
+                    if (res?.success && res.pendingResolutions && res.pendingResolutions.length > 0) {
+                        const pending = res.pendingResolutions[0];
+                        Alert.alert(
+                            "📞 Complete Call Activity",
+                            `You have a pending Call activity for ${pending.entityName}. Would you like to complete it now?`,
+                            [
+                                { text: "Skip", style: "cancel" },
+                                { text: "Complete", onPress: () => console.log('Navigate to complete activity', pending.activityId) }
+                            ]
+                        );
+                    }
+                };
+
                 // Listen for incoming calls
                 if (CallKeep.addEventListener) {
                     CallKeep.addEventListener('didReceiveStartCallAction', async ({ handle }: any) => {
                         console.log('[CallMonitor] Incoming call from:', handle);
                         identifyCaller(handle);
                     });
+                    CallKeep.addEventListener('endCall', async () => {
+                        console.log('[CallMonitor] Call ended, syncing logs...');
+                        setTimeout(async () => {
+                            const res = await CallSyncService.syncLogs();
+                            handlePendingResolutions(res);
+                        }, 2000);
+                    });
                 }
 
                 // Periodic Sync
-                const interval = setInterval(() => {
-                    CallSyncService.syncLogs();
+                const interval = setInterval(async () => {
+                    const res = await CallSyncService.syncLogs();
+                    handlePendingResolutions(res);
                 }, 15 * 60 * 1000); // Every 15 mins
 
                 return () => {
                     clearInterval(interval);
                     if (CallKeep?.removeEventListener) {
                         CallKeep.removeEventListener('didReceiveStartCallAction');
+                        CallKeep.removeEventListener('endCall');
                     }
                 };
             } catch (e) {
@@ -71,7 +95,7 @@ export const useCallMonitor = () => {
             const clean = phoneNumber.replace(/[^0-9]/g, '').slice(-10);
             
             // Fast lookup in CRM
-            const leadsRes = await getLeads({ search: clean, limit: 1 });
+            const leadsRes = await getLeads({ search: clean, limit: "1" as any });
             const leads = leadsRes?.data ?? leadsRes;
 
             if (Array.isArray(leads) && leads.length > 0) {

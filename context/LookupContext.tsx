@@ -15,10 +15,12 @@ interface Lookup {
 interface LookupContextType {
     lookups: Lookup[];
     propertyConfig: any;
+    masterFields: any;
     leadMasterFields: any;
+    dealMasterFields: any;
     loading: boolean;
     getLookupValue: (type: string, idOrValue: any) => string;
-    getLookupsByType: (type: string) => Lookup[];
+    getLookupsByType: (type: string, parentId?: string | null) => Lookup[];
     refreshLookups: () => Promise<void>;
 }
 
@@ -27,7 +29,9 @@ const LookupContext = createContext<LookupContextType | undefined>(undefined);
 export const LookupProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [lookups, setLookups] = useState<Lookup[]>([]);
     const [propertyConfig, setPropertyConfig] = useState<any>(null);
+    const [masterFields, setMasterFields] = useState<any>(null);
     const [leadMasterFields, setLeadMasterFields] = useState<any>(null);
+    const [dealMasterFields, setDealMasterFields] = useState<any>(null);
     const [idIndex, setIdIndex] = useState<Map<string, Lookup>>(new Map());
     const [typeIndex, setTypeIndex] = useState<Map<string, Lookup[]>>(new Map());
     const [loading, setLoading] = useState(true);
@@ -38,10 +42,12 @@ export const LookupProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         // 1. Try to load from cache first for instant UI response
         if (lookups.length === 0) {
             try {
-                const [cachedLookups, cachedConfig, cachedLeadFields] = await Promise.all([
+                const [cachedLookups, cachedConfig, cachedMasterFields, cachedLeadFields, cachedDealFields] = await Promise.all([
                     AsyncStorage.getItem("@cache_lookups"),
                     AsyncStorage.getItem("@cache_property_config"),
-                    AsyncStorage.getItem("@cache_lead_master_fields")
+                    AsyncStorage.getItem("@cache_master_fields"),
+                    AsyncStorage.getItem("@cache_lead_master_fields"),
+                    AsyncStorage.getItem("@cache_deal_master_fields")
                 ]);
 
                 if (cachedLookups) {
@@ -52,9 +58,10 @@ export const LookupProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                         const newIdIndex = new Map<string, Lookup>();
                         const newTypeIndex = new Map<string, Lookup[]>();
                         parsed.forEach((item: Lookup) => {
-                            if (item && item.lookup_type) {
+                            const actualType = (item as any).type || item.lookup_type;
+                            if (item && actualType) {
                                 newIdIndex.set(item._id, item);
-                                const type = item.lookup_type.toLowerCase();
+                                const type = actualType.toLowerCase().replace(/\s+/g, '');
                                 if (!newTypeIndex.has(type)) newTypeIndex.set(type, []);
                                 newTypeIndex.get(type)?.push(item);
                             }
@@ -65,7 +72,9 @@ export const LookupProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                     }
                 }
                 if (cachedConfig) setPropertyConfig(JSON.parse(cachedConfig));
+                if (cachedMasterFields) setMasterFields(JSON.parse(cachedMasterFields));
                 if (cachedLeadFields) setLeadMasterFields(JSON.parse(cachedLeadFields));
+                if (cachedDealFields) setDealMasterFields(JSON.parse(cachedDealFields));
 
             } catch (e) { console.warn("[LookupContext] Cache read failed", e); }
         }
@@ -77,19 +86,44 @@ export const LookupProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         }
 
         try {
-            const res = await api.get('/lookups', { params: { limit: 2500 } });
+            const requiredTypes = [
+                'UnitType', 'Category', 'SubCategory', 'PropertyType', 'BuiltupType', 'Facing', 'RoadWidth', 
+                'Direction', 'Relation', 'CompanyType', 'Industry', 'Size',
+                'Status', 'State', 'City', 'Location', 'Area', 'Pincode', 'Tehsil', 'PostOffice', 'Country',
+                'Source', 'Stage', 'Title', 'Requirement', 'SubRequirement', 'Budget', 'Campaign', 'SubSource',
+                'TransactionType', 'FundingType', 'FurnishingStatus', 'Timeline', 'PossessionStatus',
+                'DocumentCategory', 'Document-Category', 'DocumentType', 'Document-Type', 'LeadStage',
+                'ProfessionalCategory', 'ProfessionalSubCategory', 'ProfessionalDesignation', 'Designation'
+            ].join(',');
+            
+            const res = await api.get('/lookups', { params: { limit: 2500, lookup_type: requiredTypes } });
 
             let data: Lookup[] = [];
             const responseData = res.data;
 
+            const normalizeLookup = (l: any) => ({
+                ...l,
+                lookup_type: l.type || l.lookup_type,
+                lookup_value: l.label || l.value || l.lookup_value
+            });
+
             if (Array.isArray(responseData)) {
-                data = responseData;
+                data = responseData.map(normalizeLookup);
             } else if (responseData?.data && Array.isArray(responseData.data)) {
-                data = responseData.data;
+                data = responseData.data.map(normalizeLookup);
             } else if (responseData?.records && Array.isArray(responseData.records)) {
-                data = responseData.records;
+                data = responseData.records.map(normalizeLookup);
+            } else if (responseData?.success && responseData?.data && typeof responseData.data === 'object' && !Array.isArray(responseData.data)) {
+                // Backend returns grouped object: { "TypeA": [...], "TypeB": [...] }
+                const flattened: Lookup[] = [];
+                Object.values(responseData.data).forEach((arr: any) => {
+                    if (Array.isArray(arr)) {
+                        flattened.push(...arr.map(normalizeLookup));
+                    }
+                });
+                data = flattened;
             } else if (responseData?.success && responseData?.data && Array.isArray(responseData.data)) {
-                data = responseData.data;
+                data = responseData.data.map(normalizeLookup);
             }
 
             if (data.length > 0) {
@@ -102,7 +136,7 @@ export const LookupProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 data.forEach(item => {
                     if (item && item.lookup_type) {
                         newIdIndex.set(item._id, item);
-                        const type = item.lookup_type.toLowerCase();
+                        const type = item.lookup_type.toLowerCase().replace(/\s+/g, '');
                         if (!newTypeIndex.has(type)) newTypeIndex.set(type, []);
                         newTypeIndex.get(type)?.push(item);
                     }
@@ -122,6 +156,16 @@ export const LookupProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 }
             } catch (err) { }
 
+            // Fetch Master Fields
+            try {
+                const masterRes = await api.get('/system-settings/masterFields');
+                if (masterRes.data?.data?.value) {
+                    const val = masterRes.data.data.value;
+                    setMasterFields(val);
+                    AsyncStorage.setItem("@cache_master_fields", JSON.stringify(val)).catch(() => {});
+                }
+            } catch (err) { }
+
             // Fetch Lead Master Fields
             try {
                 const leadRes = await api.get('/system-settings/leadMasterFields');
@@ -129,6 +173,16 @@ export const LookupProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                     const val = leadRes.data.data.value;
                     setLeadMasterFields(val);
                     AsyncStorage.setItem("@cache_lead_master_fields", JSON.stringify(val)).catch(() => {});
+                }
+            } catch (err) { }
+
+            // Fetch Deal Master Fields
+            try {
+                const dealRes = await api.get('/system-settings/dealMasterFields');
+                if (dealRes.data?.data?.value) {
+                    const val = dealRes.data.data.value;
+                    setDealMasterFields(val);
+                    AsyncStorage.setItem("@cache_deal_master_fields", JSON.stringify(val)).catch(() => {});
                 }
             } catch (err) { }
 
@@ -150,8 +204,19 @@ export const LookupProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         refreshLookups();
     }, [refreshLookups]);
 
-    const getLookupsByType = useCallback((type: string): Lookup[] => {
-        return typeIndex.get(type.toLowerCase()) || [];
+    const getLookupsByType = useCallback((t: string, parentId?: string | null) => {
+        if (!t) return [];
+        const normalizedType = t.toLowerCase().replace(/\s+/g, '');
+        const typeGroup = typeIndex.get(normalizedType);
+        if (typeGroup) {
+            let res = typeGroup;
+            if (parentId !== undefined) {
+                if (!parentId) return []; // If parent is expected but not selected, return empty
+                res = res.filter((r: any) => r.parent_lookup_id === parentId);
+            }
+            return res.sort((a: any, b: any) => (a.order || 0) - (b.order || 0));
+        }
+        return [];
     }, [typeIndex]);
 
     const getLookupValue = useCallback((type: string, idOrValue: any): string => {
@@ -212,7 +277,7 @@ export const LookupProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             if (foundById) return foundById.lookup_value;
 
             // B. Check typeIndex (legacy fallback)
-            const normalizedType = t.toLowerCase();
+            const normalizedType = t.toLowerCase().replace(/\s+/g, '');
             const typeGroup = typeIndex.get(normalizedType);
             if (typeGroup) {
                 const foundInType = typeGroup.find(l => l.lookup_value === idVal);
@@ -245,7 +310,17 @@ export const LookupProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }, [idIndex, typeIndex, propertyConfig]);
 
     return (
-        <LookupContext.Provider value={{ lookups, propertyConfig, leadMasterFields, loading, getLookupValue, getLookupsByType, refreshLookups }}>
+        <LookupContext.Provider value={{
+            lookups,
+            propertyConfig,
+            masterFields,
+            leadMasterFields,
+            dealMasterFields,
+            loading,
+            getLookupValue,
+            getLookupsByType,
+            refreshLookups
+        }}>
             {children}
         </LookupContext.Provider>
     );

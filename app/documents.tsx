@@ -8,7 +8,7 @@ import { useTheme } from "@/context/ThemeContext";
 export default function DocumentsScreen() {
     const router = useRouter();
     const { id, dealId, type = "Deal" } = useLocalSearchParams<{ id: string; dealId: string; type: string }>();
-    const { theme, isDark } = useTheme();
+    const { theme } = useTheme();
     const [loading, setLoading] = useState(true);
     const [entityData, setEntityData] = useState<any>(null);
     const [documents, setDocuments] = useState<any[]>([]);

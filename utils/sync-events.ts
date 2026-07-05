@@ -9,12 +9,12 @@ export const SyncEvents = {
     NOTE_ADDED: 'note-added'
 };
 
-export const emitSyncEvent = (event, detail = {}) => {
+export const emitSyncEvent = (event: any, detail: any = {}) => {
     console.log(`[Sync] Emitting event: ${event}`, detail);
     DeviceEventEmitter.emit(event, detail);
 };
 
-export const useSyncListener = (events, callback) => {
+export const useSyncListener = (events: any, callback: any) => {
     const eventArray = Array.isArray(events) ? events : [events];
     
     eventArray.forEach(event => {

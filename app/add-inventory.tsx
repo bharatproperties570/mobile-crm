@@ -359,7 +359,7 @@ export default function AddInventoryScreen() {
     const { id, step: initialStepParam } = useLocalSearchParams<{ id?: string, step?: string }>();
     const router = useRouter();
     const { theme } = useTheme();
-    const { getLookupValue, getLookupsByType, propertyConfig } = useLookup();
+    const { propertyConfig, masterFields, getLookupValue, getLookupsByType, lookups } = useLookup();
     const { users, loading: loadingUsers, findUser, findTeam } = useUsers();
     const { projects, loading: loadingProjects } = useProjects();
     
@@ -381,7 +381,6 @@ export default function AddInventoryScreen() {
         ]).start();
     };
 
-    const [masterFields, setMasterFields] = useState<any>({});
     const [teams, setTeams] = useState<any[]>([]);
     const propertySizes = useMemo(() => getLookupsByType('Size'), [getLookupsByType]);
     const [isContactModalOpen, setIsContactModalOpen] = useState(false);
@@ -411,10 +410,10 @@ export default function AddInventoryScreen() {
     const setAddress = (key: keyof InventoryForm['address']) => (val: string) => {
         setForm(f => {
             const newAddr = { ...f.address, [key]: val };
-            if (key === 'country') { newAddr.state = ""; newAddr.city = ""; newAddr.location = ""; newAddr.tehsil = ""; newAddr.postOffice = ""; newAddr.pinCode = ""; }
-            if (key === 'state') { newAddr.city = ""; newAddr.location = ""; newAddr.tehsil = ""; newAddr.postOffice = ""; newAddr.pinCode = ""; }
-            if (key === 'city') { newAddr.location = ""; newAddr.tehsil = ""; newAddr.postOffice = ""; newAddr.pinCode = ""; }
-            if (key === 'location') { newAddr.postOffice = ""; newAddr.pinCode = ""; }
+            if (key === 'country') { newAddr.state = ""; newAddr.city = ""; newAddr.location = ""; newAddr.tehsil = ""; newAddr.postOffice = ""; newAddr.pincode = ""; }
+            if (key === 'state') { newAddr.city = ""; newAddr.location = ""; newAddr.tehsil = ""; newAddr.postOffice = ""; newAddr.pincode = ""; }
+            if (key === 'city') { newAddr.location = ""; newAddr.tehsil = ""; newAddr.postOffice = ""; newAddr.pincode = ""; }
+            if (key === 'location') { newAddr.postOffice = ""; newAddr.pincode = ""; }
             return { ...f, address: newAddr };
         });
     };
@@ -447,11 +446,6 @@ export default function AddInventoryScreen() {
             };
 
             await Promise.all([
-                load("/system-settings/masterFields", (data) => {
-                    if (data?.value) {
-                        setMasterFields(data.value);
-                    }
-                }),
                 load("/teams", (data) => setTeams(data.map((t: any) => ({ label: t.name, value: t._id })))),
             ]);
         };
@@ -651,14 +645,14 @@ export default function AddInventoryScreen() {
                                 value={selectedSizeId}
                                 options={propertySizes
                                     .filter(s => {
-                                        const metaPrj = s.metadata?.project || s.project;
-                                        const metaBlk = s.metadata?.block || s.block;
+                                        const metaPrj = s.metadata?.project || (s as any).project;
+                                        const metaBlk = s.metadata?.block || (s as any).block;
                                         const projMatch = String(metaPrj || "").trim().toLowerCase() === form.projectName?.trim().toLowerCase();
                                         const blockMatch = !form.block || String(metaBlk || "").trim().toLowerCase() === form.block?.trim().toLowerCase();
                                         return projMatch && blockMatch;
                                     })
                                     .map(s => ({
-                                        label: `${s.lookup_value} (${(s.metadata?.area || s.metadata?.saleableArea || s.metadata?.totalArea) || ''} ${(s.metadata?.areaMetrics || s.areaMetrics || 'SqFt')})`,
+                                        label: `${s.lookup_value} (${(s.metadata?.area || s.metadata?.saleableArea || s.metadata?.totalArea) || ''} ${(s.metadata?.areaMetrics || (s as any).areaMetrics || 'SqFt')})`,
                                         value: s.id || s._id
                                     }))
                                 }
@@ -735,8 +729,14 @@ export default function AddInventoryScreen() {
                             {form.builtupDetails.map((row, idx) => (
                                 <View key={idx} style={[styles.dimensionRow, { backgroundColor: theme.inputBg, borderColor: theme.border }]}>
                                     <View style={styles.row}>
-                                        <View style={{ flex: 1.2 }}><Input label="Floor" value={row.floor} onChangeText={(val) => { const newRows = [...form.builtupDetails]; newRows[idx].floor = val; setForm(f => ({ ...f, builtupDetails: newRows })); }} /></View>
-                                        <View style={{ flex: 1 }}><Input label="Type" value={row.cluster} onChangeText={(val) => { const newRows = [...form.builtupDetails]; newRows[idx].cluster = val; setForm(f => ({ ...f, builtupDetails: newRows })); }} /></View>
+                                        <View style={{ flex: 1.2 }}>
+                                            <Text style={{ fontSize: 12, fontWeight: '700', color: theme.textSecondary, marginBottom: 6, textTransform: 'uppercase' }}>Floor</Text>
+                                            <SelectButton value={row.floor} options={(masterFields?.floorLevels || ["Ground Floor", "First Floor", "Second Floor", "Third Floor", "Other"]).map((f: string) => ({ label: f, value: f }))} onSelect={(val: string) => { const newRows = [...form.builtupDetails]; newRows[idx].floor = val; setForm(f => ({ ...f, builtupDetails: newRows })); }} />
+                                        </View>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={{ fontSize: 12, fontWeight: '700', color: theme.textSecondary, marginBottom: 6, textTransform: 'uppercase' }}>Plan</Text>
+                                            <SelectButton value={row.cluster} options={(masterFields?.floorPlans || ["Drawing Room", "Bedroom"]).map((f: string) => ({ label: f, value: f }))} onSelect={(val: string) => { const newRows = [...form.builtupDetails]; newRows[idx].cluster = val; setForm(f => ({ ...f, builtupDetails: newRows })); }} />
+                                        </View>
                                     </View>
                                     <View style={[styles.dimGrid, { marginTop: 12 }]}>
                                         <View style={{ flex: 1 }}><Input label="Width" value={row.width} keyboardType="numeric" onChangeText={(val) => { const clean = val.replace(/[^0-9.]/g, ''); const newRows = [...form.builtupDetails]; newRows[idx].width = clean; const area = parseFloat(clean || '0') * parseFloat(newRows[idx].length || '0'); newRows[idx].totalArea = isNaN(area) ? '0' : area.toFixed(2).replace(/\.00$/, ''); setForm(f => ({ ...f, builtupDetails: newRows })); }} /></View>

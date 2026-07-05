@@ -167,7 +167,7 @@ export default function AddOffer() {
                 {/* Visual Header */}
                 <View style={[styles.dealBranding, { backgroundColor: theme.card }]}>
                     <View style={[styles.iconCircle, { backgroundColor: theme.primary + '15' }]}>
-                        <Ionicons name="handshake" size={24} color={theme.primary} />
+                        <Ionicons name="briefcase-outline" size={24} color={theme.primary} />
                     </View>
                     <View style={{ flex: 1 }}>
                         <Text style={[styles.dealName, { color: theme.text }]}>{deal?.unitNo || "Unit"} • {deal?.projectName || "Direct Deal"}</Text>

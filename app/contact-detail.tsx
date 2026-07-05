@@ -232,7 +232,7 @@ export default function ContactDetailScreen() {
                             <View style={[styles.miniBadge, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : theme.primary + '20' }]}>
                                 <Text style={[styles.miniBadgeText, { color: isDark ? theme.textSecondary : theme.primary }]}>{phone}</Text>
                             </View>
-                            {email && (
+                            {!!email && (
                                 <View style={[styles.miniBadge, { backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : theme.border + '40' }]}>
                                     <Text style={[styles.miniBadgeText, { color: theme.textLight }]}>{email}</Text>
                                 </View>

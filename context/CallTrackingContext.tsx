@@ -72,10 +72,10 @@ export function CallTrackingProvider({ children }: { children: React.ReactNode }
             }));
             const pending = extractList(activityRes.data);
             if (pending.length > 0) {
-                info.activity = `Next: ${pending[0].title || pending[0].type}`;
+                (info as any).activity = `Next: ${pending[0].title || pending[0].type}`;
             }
         } else {
-            info.activity = "New Prospect Detection";
+            (info as any).activity = "New Prospect Detection";
         }
         
         setActiveBanner(info);
@@ -173,10 +173,13 @@ export function CallTrackingProvider({ children }: { children: React.ReactNode }
     };
 
     const trackCall = (mobile: string, entityId: string, entityType: string, entityName: string) => {
-        // 1. First, lookup info and show banner (Briefing Mode)
+        // 1. Immediately open the dial pad (Enterprise Speed UX)
+        initiateDial(mobile);
+
+        // 2. Fetch info and show the banner in the background (like Truecaller)
         handleIncomingCall(mobile);
 
-        // 2. Prepare for outcome prompt on return
+        // 3. Prepare for outcome prompt on return
         setLastCall({
             mobile,
             entityId,
@@ -185,9 +188,6 @@ export function CallTrackingProvider({ children }: { children: React.ReactNode }
             startTime: Date.now(),
             direction: 'Outgoing Call'
         });
-        
-        // Note: We don't call Linking.openURL here anymore. 
-        // The CallBanner will now have a "Call" button to initiate the dial.
     };
 
     return (

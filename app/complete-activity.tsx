@@ -85,8 +85,8 @@ export default function CompleteActivityScreen() {
             emitSyncEvent(SyncEvents.ACTIVITY_COMPLETED, { id: params.id, entityId: formData.entityId || formData.relatedTo?.[0]?.id });
             emitSyncEvent(SyncEvents.LEAD_UPDATED, { id: formData.entityId || formData.relatedTo?.[0]?.id });
 
-            if (res.data?.stageChanged) {
-                console.log(`[StageEngine] Backend triggered stage change: ${res.data.prevStage} -> ${res.data.newStage}`);
+            if ((res.data as any)?.stageChanged) {
+                console.log(`[StageEngine] Backend triggered stage change: ${(res.data as any).prevStage} -> ${(res.data as any).newStage}`);
             }
             // ─────────────────────────────────────────────────────────────────
 
@@ -182,7 +182,7 @@ export default function CompleteActivityScreen() {
                             style={[styles.input, { height: 100, textAlignVertical: 'top' }]}
                             multiline
                             value={formData.clientFeedback}
-                            onChangeText={t => setFormData(p => ({ ...p, clientFeedback: t }))}
+                            onChangeText={t => setFormData((p: any) => ({ ...p, clientFeedback: t }))}
                             placeholder="Brief notes about the call..."
                         />
                     </Section>
@@ -226,7 +226,7 @@ export default function CompleteActivityScreen() {
                             style={[styles.input, { height: 100, textAlignVertical: 'top' }]}
                             multiline
                             value={formData.clientFeedback}
-                            onChangeText={t => setFormData(p => ({ ...p, clientFeedback: t }))}
+                            onChangeText={t => setFormData((p: any) => ({ ...p, clientFeedback: t }))}
                             placeholder="Summarize the client reaction..."
                         />
                     </Section>
@@ -281,7 +281,7 @@ export default function CompleteActivityScreen() {
                             style={[styles.input, { height: 120, textAlignVertical: 'top' }]}
                             multiline
                             value={formData.clientFeedback}
-                            onChangeText={t => setFormData(p => ({ ...p, clientFeedback: t }))}
+                            onChangeText={t => setFormData((p: any) => ({ ...p, clientFeedback: t }))}
                             placeholder="What exactly was completed?"
                         />
                     </Section>

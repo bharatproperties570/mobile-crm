@@ -12,7 +12,8 @@ import { useTheme } from "@/context/ThemeContext";
 import { useLookup } from "@/context/LookupContext";
 import { useCallTracking } from "@/context/CallTrackingContext";
 import { useUsers } from "@/context/UserContext";
-import { Vibration } from "react-native";
+import { Vibration, Platform } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { updateCompany } from "@/services/companies.service";
 import FilterModal, { FilterField } from "@/components/FilterModal";
 import { getCompanyGroups, CompanyGroup, bulkAssignCompanies, createCompanyGroup, deleteCompanyGroup } from "@/services/companyGroups.service";
@@ -43,7 +44,7 @@ const RELATIONSHIP_COLORS_DARK: Record<string, string> = {
     'Other': '#94A3B8'
 };
 
-const CompanyCard = ({ company, onPress, onMenuPress, idx, groups = [] }: { company: Company, onPress: () => void, onMenuPress: () => void, idx: number, groups?: CompanyGroup[] }) => {
+const CompanyCard = ({ company, onPress, onMenuPress, idx, groups = [], onSwipeWillOpen }: { company: Company, onPress: () => void, onMenuPress: () => void, idx: number, groups?: CompanyGroup[], onSwipeWillOpen?: (ref: any) => void }) => {
     if (!company) return null;
     const { theme } = useTheme();
     const isDark = theme.background === '#0F172A';
@@ -52,7 +53,9 @@ const CompanyCard = ({ company, onPress, onMenuPress, idx, groups = [] }: { comp
 
     const phone = company.phones?.[0]?.phoneNumber;
     const email = company.emails?.[0]?.address;
+    const websiteUrl = company.website || (company as any).websiteUrl || "";
 
+    const swipeableRef = useRef<any>(null);
     const fadeAnim = useRef(new Animated.Value(0)).current;
     const scaleAnim = useRef(new Animated.Value(1)).current;
 
@@ -82,11 +85,11 @@ const CompanyCard = ({ company, onPress, onMenuPress, idx, groups = [] }: { comp
 
     const renderRightActions = () => (
         <View style={styles.rightActions}>
-            <TouchableOpacity style={[styles.swipeAction, { backgroundColor: isDark ? '#1E40AF' : "#2563EB" }]} onPress={() => trackCall(phone || "", company._id, "Company", company.name)}>
+            <TouchableOpacity style={[styles.swipeAction, { backgroundColor: isDark ? '#1E40AF' : "#2563EB" }]} onPress={() => { swipeableRef.current?.close(); trackCall(phone || "", company._id, "Company", company.name); }}>
                 <Ionicons name="call" size={20} color="#fff" />
                 <Text style={styles.swipeLabel}>Call</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.swipeAction, { backgroundColor: isDark ? '#92400E' : "#F59E0B" }]} onPress={() => phone && Linking.openURL(`sms:${phone}`)}>
+            <TouchableOpacity style={[styles.swipeAction, { backgroundColor: isDark ? '#92400E' : "#F59E0B" }]} onPress={() => { swipeableRef.current?.close(); phone && Linking.openURL(`sms:${phone}`); }}>
                 <Ionicons name="chatbubble" size={20} color="#fff" />
                 <Text style={styles.swipeLabel}>SMS</Text>
             </TouchableOpacity>
@@ -95,11 +98,11 @@ const CompanyCard = ({ company, onPress, onMenuPress, idx, groups = [] }: { comp
 
     const renderLeftActions = () => (
         <View style={styles.leftActions}>
-            <TouchableOpacity style={[styles.swipeAction, { backgroundColor: isDark ? '#065F46' : "#10B981" }]} onPress={openWhatsApp}>
+            <TouchableOpacity style={[styles.swipeAction, { backgroundColor: isDark ? '#065F46' : "#10B981" }]} onPress={() => { swipeableRef.current?.close(); openWhatsApp(); }}>
                 <Ionicons name="logo-whatsapp" size={20} color="#fff" />
                 <Text style={styles.swipeLabel}>WhatsApp</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.swipeAction, { backgroundColor: isDark ? '#3730A3' : "#6366F1" }]} onPress={() => email && Linking.openURL(`mailto:${email}`)}>
+            <TouchableOpacity style={[styles.swipeAction, { backgroundColor: isDark ? '#3730A3' : "#6366F1" }]} onPress={() => { swipeableRef.current?.close(); email && Linking.openURL(`mailto:${email}`); }}>
                 <Ionicons name="mail" size={20} color="#fff" />
                 <Text style={styles.swipeLabel}>Email</Text>
             </TouchableOpacity>
@@ -112,10 +115,16 @@ const CompanyCard = ({ company, onPress, onMenuPress, idx, groups = [] }: { comp
     }, [company, groups]);
 
     return (
-        <Swipeable renderRightActions={renderRightActions} renderLeftActions={renderLeftActions}>
+        <Swipeable 
+            ref={swipeableRef} 
+            renderRightActions={renderRightActions} 
+            renderLeftActions={renderLeftActions}
+            onSwipeableWillOpen={() => onSwipeWillOpen && onSwipeWillOpen(swipeableRef.current)}
+        >
             <Pressable 
                 onPressIn={() => animatePress(0.97)}
                 onPressOut={() => animatePress(1)}
+                delayPressIn={50}
                 onPress={onPress}
             >
                 <Animated.View style={[
@@ -125,8 +134,8 @@ const CompanyCard = ({ company, onPress, onMenuPress, idx, groups = [] }: { comp
                     <View style={styles.cardHeader}>
                         <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                             <Text style={[styles.companyName, { color: theme.text }]} numberOfLines={1}>{company.name}</Text>
-                            {company?.isVerifiedBroker && (
-                                <Ionicons name="checkmark-seal" size={16} color="#3B82F6" />
+                            {(company as any)?.isVerifiedBroker && (
+                                <Ionicons name="checkmark-circle" size={16} color="#3B82F6" />
                             )}
                         </View>
                         <TouchableOpacity style={styles.menuTrigger} onPress={(e) => { e.stopPropagation(); onMenuPress(); }}>
@@ -137,7 +146,7 @@ const CompanyCard = ({ company, onPress, onMenuPress, idx, groups = [] }: { comp
                     {companyGroups.length > 0 && (
                         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginBottom: 8 }}>
                             {companyGroups.map(g => (
-                                <View key={g._id} style={{ backgroundColor: g.color + '15', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, borderSize: 1, borderColor: g.color + '30' }}>
+                                <View key={g._id} style={{ backgroundColor: g.color + '15', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, borderWidth: 1, borderColor: g.color + '30' }}>
                                     <Text style={{ fontSize: 9, fontWeight: '800', color: g.color }}>{g.name.toUpperCase()}</Text>
                                 </View>
                             ))}
@@ -217,6 +226,15 @@ export default function CompaniesScreen() {
     const [sortVisible, setSortVisible] = useState(false);
     const [sortConfig, setSortConfig] = useState({ label: 'Newest First', by: 'createdAt', order: -1, icon: 'time-outline' });
 
+    const activeRowRef = useRef<any>(null);
+    const lastFetchTime = useRef<number>(0);
+    const onSwipeableWillOpen = useCallback((rowRef: any) => {
+        if (activeRowRef.current && activeRowRef.current !== rowRef) {
+            activeRowRef.current.close();
+        }
+        activeRowRef.current = rowRef;
+    }, []);
+
     // Action Hub State
     const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
     const [hubVisible, setHubVisible] = useState(false);
@@ -239,7 +257,7 @@ export default function CompaniesScreen() {
             const res = await safeApiCall(getCompanyGroups);
             if (!res.error) {
                 // safeApiCall already returns the list in .data
-                setGroups(res.data);
+                setGroups(res.data as any);
             } else {
                 console.warn("[Groups] Fetch failed:", res.error);
             }
@@ -338,10 +356,26 @@ export default function CompaniesScreen() {
     };
 
     const fetchCompanies = useCallback(async (pageNum = 1, shouldAppend = false) => {
-        setLoading(true);
+        // 1. Instant Cache Load (only on first page, non-append load)
+        if (pageNum === 1 && !shouldAppend && companies.length === 0) {
+            try {
+                const cached = await AsyncStorage.getItem("@cache_companies_list");
+                if (cached) {
+                    const parsed = JSON.parse(cached);
+                    if (Array.isArray(parsed) && parsed.length > 0) {
+                        setCompanies(parsed);
+                        setLoading(false); // Show cached data instantly
+                    }
+                }
+            } catch (e) { console.warn("[Companies] Cache read failed", e); }
+        }
+
+        if (companies.length === 0) setLoading(true);
+
         const result = await safeApiCall<any>(() => getCompanies({ 
             page: String(pageNum), 
-            limit: "50",
+            limit: "20",           // 🚀 SENIOR: Reduced from 50→20
+            view: 'compact',       // 🚀 SENIOR: Skips 46 address populate paths
             sortBy: sortConfig.by,
             sortOrder: String(sortConfig.order)
         }));
@@ -352,25 +386,37 @@ export default function CompaniesScreen() {
             setCompanies(prev => {
                 const combined = shouldAppend ? [...prev, ...newRecords] : newRecords;
                 const seen = new Set();
-                return combined.filter((c: any) => {
+                const filtered = combined.filter((c: any) => {
                     const id = c?._id || c?.id;
                     if (!id || seen.has(id)) return false;
                     seen.add(id);
                     return true;
                 });
+
+                // 2. Update Cache (only for first page)
+                if (pageNum === 1 && !shouldAppend) {
+                    AsyncStorage.setItem("@cache_companies_list", JSON.stringify(filtered.slice(0, 20))).catch(() => {});
+                    lastFetchTime.current = Date.now();
+                }
+
+                return filtered;
             });
             
-            setHasMore(newRecords.length === 50);
+            setHasMore(newRecords.length === 20); // ✅ Synced with limit=20
             setPage(pageNum);
         }
         setLoading(false);
         setRefreshing(false);
-    }, [sortConfig.by, sortConfig.order, safeApiCall]);
+    }, [sortConfig.by, sortConfig.order, companies.length]);
 
     useFocusEffect(
         useCallback(() => {
-            fetchCompanies(1, false);
-        }, [fetchCompanies, sortConfig])
+            const now = Date.now();
+            // 🚀 Stale-while-revalidate: Only refetch if cache is stale (>2 min) or empty
+            if (companies.length === 0 || (now - lastFetchTime.current > 120000)) {
+                fetchCompanies(1, false);
+            }
+        }, [fetchCompanies, companies.length, sortConfig])
     );
 
     const onRefresh = useCallback(() => {
@@ -446,30 +492,49 @@ export default function CompaniesScreen() {
             {loading && page === 1 ? (
                 <View style={styles.center}><ActivityIndicator size="large" color={theme.primary} /></View>
             ) : (
-                <FlatList
-                    data={filtered}
-                    keyExtractor={(item) => item._id}
-                    renderItem={({ item, index: idx }) => (
-                        <CompanyCard
-                            company={item}
-                            idx={idx}
-                            groups={groups}
-                            onPress={() => router.push(`/company-detail?id=${item._id}`)}
-                            onMenuPress={() => openHub(item)}
-                        />
-                    )}
-                    contentContainerStyle={styles.list}
-                    onEndReached={loadMore}
-                    onEndReachedThreshold={0.5}
-                    refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />}
-                    ListFooterComponent={loading && page > 1 ? <ActivityIndicator color={theme.primary} style={{ marginVertical: 20 }} /> : null}
-                    ListEmptyComponent={
-                        <View style={styles.empty}>
-                            <Ionicons name="business-outline" size={64} color={theme.border} />
-                            <Text style={[styles.emptyText, { color: theme.textLight }]}>{search ? "No partners found" : "Database is empty"}</Text>
-                        </View>
-                    }
-                />
+                    <FlatList
+                        data={filtered}
+                        keyExtractor={(item) => item._id}
+                        onScrollBeginDrag={() => {
+                            if (activeRowRef.current) {
+                                activeRowRef.current.close();
+                                activeRowRef.current = null;
+                            }
+                        }}
+                        renderItem={({ item, index: idx }) => (
+                            <CompanyCard
+                                company={item}
+                                idx={idx}
+                                groups={groups}
+                                onPress={() => {
+                                    if (activeRowRef.current) { 
+                                        activeRowRef.current.close(); 
+                                        activeRowRef.current = null; 
+                                        return; 
+                                    }
+                                    router.push(`/company-detail?id=${item._id}`);
+                                }}
+                                onMenuPress={() => openHub(item)}
+                                onSwipeWillOpen={onSwipeableWillOpen}
+                            />
+                        )}
+                        contentContainerStyle={styles.list}
+                        initialNumToRender={8}
+                        maxToRenderPerBatch={10}
+                        windowSize={5}
+                        removeClippedSubviews={Platform.OS === 'android'}
+                        onEndReached={loadMore}
+                        onEndReachedThreshold={0.5}
+                        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />}
+                        ListHeaderComponent={renderHeader()}
+                        ListFooterComponent={loading && page > 1 ? <ActivityIndicator color={theme.primary} style={{ marginVertical: 20 }} /> : null}
+                        ListEmptyComponent={
+                            <View style={styles.empty}>
+                                <Ionicons name="business-outline" size={64} color={theme.border} />
+                                <Text style={[styles.emptyText, { color: theme.textLight }]}>{search ? "No partners found" : "Database is empty"}</Text>
+                            </View>
+                        }
+                    />
             )}
 
             {/* Sort Modal */}
@@ -555,7 +620,7 @@ export default function CompaniesScreen() {
 
 
                             <TouchableOpacity style={styles.actionItem} onPress={async () => {
-                                const newStatus = !selectedCompany?.isVerifiedBroker;
+                                const newStatus = !(selectedCompany as any)?.isVerifiedBroker;
                                 const res = await safeApiCall(() => updateCompany(selectedCompany!._id, { isVerifiedBroker: newStatus }));
                                 if (!res.error) {
                                     setCompanies(prev => prev.map(c => c._id === selectedCompany!._id ? { ...c, isVerifiedBroker: newStatus } : c));
@@ -563,10 +628,10 @@ export default function CompaniesScreen() {
                                     closeHub();
                                 }
                             }}>
-                                <View style={[styles.actionIcon, { backgroundColor: selectedCompany?.isVerifiedBroker ? 'rgba(59, 130, 246, 0.15)' : (isDark ? 'rgba(255,255,255,0.05)' : '#F1F5F9') }]}>
-                                    <Ionicons name="checkmark-seal" size={24} color={selectedCompany?.isVerifiedBroker ? '#3B82F6' : (isDark ? theme.textLight : "#64748B")} />
+                                <View style={[styles.actionIcon, { backgroundColor: (selectedCompany as any)?.isVerifiedBroker ? 'rgba(59, 130, 246, 0.15)' : (isDark ? 'rgba(255,255,255,0.05)' : '#F1F5F9') }]}>
+                                    <Ionicons name="checkmark-circle" size={24} color={(selectedCompany as any)?.isVerifiedBroker ? '#3B82F6' : (isDark ? theme.textLight : "#64748B")} />
                                 </View>
-                                <Text style={[styles.actionLabel, { color: theme.textLight }]}>{selectedCompany?.isVerifiedBroker ? "Verified" : "Verify"}</Text>
+                                <Text style={[styles.actionLabel, { color: theme.textLight }]}>{(selectedCompany as any)?.isVerifiedBroker ? "Verified" : "Verify"}</Text>
                             </TouchableOpacity>
                             </View >
 
@@ -580,7 +645,7 @@ export default function CompaniesScreen() {
                                     </View>
                                     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                                         {groups.map((g) => {
-                                            const isSelected = selectedCompany?.groups?.includes(g._id);
+                                            const isSelected = (selectedCompany as any)?.groups?.includes(g._id);
                                             return (
                                                 <TouchableOpacity
                                                     key={g._id}

@@ -55,29 +55,74 @@ export default function FilterModal({
         setFilters({ ...filters, [key]: next });
     };
 
+    const getDependentOptions = (field: FilterField) => {
+        const type = field.lookupType || "";
+        
+        let parentKey = "";
+        if (type === "ProfessionalSubCategory") parentKey = "professionCategory";
+        if (type === "ProfessionalDesignation") parentKey = "professionSubCategory";
+        if (type === "State") parentKey = "personalAddress.country";
+        if (type === "City") parentKey = "personalAddress.state";
+        if (type === "Location" || type === "Tehsil" || type === "PostOffice") parentKey = "personalAddress.city";
+        if (type === "Pincode") {
+            parentKey = (filters["personalAddress.postOffice"]?.length > 0) ? "personalAddress.postOffice" : "personalAddress.city";
+        }
+
+        if (parentKey) {
+            const parentValues = filters[parentKey] || [];
+            if (parentValues.length === 0) return [];
+            return parentValues.flatMap((pVal: string) => getLookupsByType(type, pVal));
+        }
+
+        return getLookupsByType(type);
+    };
+
     const renderLookupField = (field: FilterField) => {
-        const options = getLookupsByType(field.lookupType || "");
+        let options = getDependentOptions(field);
+        
+        // Hide dependent fields if parent is not selected
+        if (options.length === 0) return null;
+        
+        // Enterprise UI Enhancement: Better layout and mapping for missing names
         return (
             <View key={field.key} style={styles.section}>
                 <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>{field.label}</Text>
                 <View style={styles.chipGrid}>
-                    {options.map(opt => (
-                        <TouchableOpacity
-                            key={opt._id}
-                            style={[
-                                styles.chip,
-                                { borderColor: theme.border, backgroundColor: theme.card },
-                                (filters[field.key] || []).includes(opt._id) && { borderColor: theme.primary, backgroundColor: theme.primary + '10' }
-                            ]}
-                            onPress={() => toggleMultiSelect(field.key, opt._id)}
-                        >
-                            <Text style={[
-                                styles.chipText,
-                                { color: theme.textMuted },
-                                (filters[field.key] || []).includes(opt._id) && { color: theme.primary, fontWeight: '700' }
-                            ]}>{opt.lookup_value || getLookupValue(field.lookupType || "", opt._id) || opt._id}</Text>
-                        </TouchableOpacity>
-                    ))}
+                    {options.map(opt => {
+                        const isSelected = (filters[field.key] || []).includes(opt._id);
+                        let displayName = opt.lookup_value || getLookupValue(field.lookupType || "", opt._id);
+                        
+                        // Fallback for legacy DB where status names might be missing
+                        if (!displayName && field.lookupType === 'Status') {
+                            displayName = ['64df1', 'available'].some(s => opt._id.toLowerCase().includes(s)) ? 'Available' :
+                                          ['64df2', 'sold'].some(s => opt._id.toLowerCase().includes(s)) ? 'Sold' : opt._id;
+                        }
+
+                        return (
+                            <TouchableOpacity
+                                key={opt._id}
+                                style={[
+                                    styles.chip,
+                                    { borderColor: theme.border, backgroundColor: theme.card, shadowColor: '#000', shadowOffset: {width: 0, height: 1}, shadowOpacity: 0.05, shadowRadius: 2, elevation: 1 },
+                                    isSelected && { 
+                                        borderColor: theme.primary, 
+                                        backgroundColor: theme.primary + '15',
+                                        shadowOpacity: 0.1,
+                                        elevation: 2
+                                    }
+                                ]}
+                                onPress={() => toggleMultiSelect(field.key, opt._id)}
+                            >
+                                <Text style={[
+                                    styles.chipText,
+                                    { color: theme.textMuted },
+                                    isSelected && { color: theme.primary, fontWeight: '700' }
+                                ]}>
+                                    {displayName || opt._id}
+                                </Text>
+                            </TouchableOpacity>
+                        );
+                    })}
                 </View>
             </View>
         );
@@ -202,29 +247,39 @@ const styles = StyleSheet.create({
         justifyContent: 'flex-end',
     },
     container: {
-        height: '80%',
-        borderTopLeftRadius: 30,
-        borderTopRightRadius: 30,
+        width: '100%',
+        height: '90%',
+        borderTopLeftRadius: 32,
+        borderTopRightRadius: 32,
         overflow: 'hidden',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: -5 },
+        shadowOpacity: 0.1,
+        shadowRadius: 10,
+        elevation: 10,
     },
     header: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingHorizontal: 20,
-        paddingVertical: 18,
+        paddingHorizontal: 24,
+        paddingVertical: 20,
         borderBottomWidth: 1,
     },
     headerTitle: {
         fontSize: 18,
-        fontWeight: '800',
+        fontWeight: '700',
+        letterSpacing: 0.5
     },
     closeBtn: {
-        padding: 4,
+        padding: 8,
+        marginLeft: -8,
+        backgroundColor: 'rgba(128,128,128,0.1)',
+        borderRadius: 20
     },
     resetText: {
         fontSize: 15,
-        fontWeight: '700',
+        fontWeight: '600',
     },
     content: {
         flex: 1,
@@ -250,14 +305,15 @@ const styles = StyleSheet.create({
         gap: 8,
     },
     chip: {
-        paddingHorizontal: 14,
-        paddingVertical: 8,
-        borderRadius: 12,
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        borderRadius: 100,
         borderWidth: 1,
     },
     chipText: {
-        fontSize: 14,
-        fontWeight: '600',
+        fontSize: 13,
+        fontWeight: '500',
+        letterSpacing: 0.3
     },
     rangeRow: {
         flexDirection: 'row',

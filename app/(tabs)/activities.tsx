@@ -10,6 +10,7 @@ import { getActivities, Activity, deleteActivity, updateActivity } from "@/servi
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Swipeable } from "react-native-gesture-handler";
 import { useUsers } from "@/context/UserContext";
+import { useCallTracking } from "@/context/CallTrackingContext";
 import { useTheme } from "@/context/ThemeContext";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -55,27 +56,55 @@ export default function ActivitiesScreen() {
     const isDark = isDarkMode;
     const insets = useSafeAreaInsets();
     const router = useRouter();
+    const { trackCall } = useCallTracking();
     const [activities, setActivities] = useState<Activity[]>([]);
+    const [search, setSearch] = useState("");
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
-    const [search, setSearch] = useState("");
     const [typeFilter, setTypeFilter] = useState("All");
-    const [statusFilter, setStatusFilter] = useState("All");
+    const [statusFilter, setStatusFilter] = useState("Pending");
     const [sortVisible, setSortVisible] = useState(false);
     const [sortConfig, setSortConfig] = useState({ label: 'Newest First', by: 'createdAt', order: -1, icon: 'time-outline' });
+    const [page, setPage] = useState(1);
+    const [hasMore, setHasMore] = useState(true);
     const { findUser } = useUsers();
+
+    const activeRowRef = useRef<any>(null);
+    const onSwipeableWillOpen = useCallback((rowRef: any) => {
+        if (activeRowRef.current && activeRowRef.current !== rowRef) {
+            activeRowRef.current.close();
+        }
+        activeRowRef.current = rowRef;
+    }, []);
 
     // Audio Playback State
     const [playingId, setPlayingId] = useState<string | null>(null);
     const [sound, setSound] = useState<Audio.Sound | null>(null);
+    const lastFetchTime = useRef<number>(0);
 
-    const fetchActivities = async (isRefreshing = false) => {
-        if (!isRefreshing) setLoading(true);
+    const fetchActivities = async (pageNum = 1, shouldAppend = false) => {
+        // 1. Instant Cache Load (only on first page, non-append load)
+        if (pageNum === 1 && !shouldAppend && activities.length === 0) {
+            try {
+                const cached = await AsyncStorage.getItem("@cache_activities_list");
+                if (cached) {
+                    const parsed = JSON.parse(cached);
+                    if (Array.isArray(parsed) && parsed.length > 0) {
+                        setActivities(parsed);
+                        setLoading(false); // Show cached data instantly
+                    }
+                }
+            } catch (e) { console.warn("[Activities] Cache read failed", e); }
+        }
+
+        if (activities.length === 0) setLoading(true);
+
         console.log("[Activities] Senior Fetch: Filtering for Manual Interactions Only");
         try {
             const params: any = { 
                 search, 
-                limit: 500,
+                page: String(pageNum),
+                limit: 20, // 🚀 SENIOR: Reduced from 500→20
                 includeCommunications: 'false', // Strict exclusion of WhatsApp/SMS/Email campaigns
                 sortBy: sortConfig.by,
                 sortOrder: String(sortConfig.order)
@@ -93,7 +122,28 @@ export default function ActivitiesScreen() {
 
             const res = await getActivities(params);
             const data = (res.data || res.records || (Array.isArray(res) ? res : [])) as Activity[];
-            setActivities(data);
+            
+            setActivities(prev => {
+                const combined = shouldAppend ? [...prev, ...data] : data;
+                const seen = new Set();
+                const filtered = combined.filter((c: any) => {
+                    const id = c?._id || c?.id;
+                    if (!id || seen.has(id)) return false;
+                    seen.add(id);
+                    return true;
+                });
+
+                // 2. Update Cache (only for first page)
+                if (pageNum === 1 && !shouldAppend) {
+                    AsyncStorage.setItem("@cache_activities_list", JSON.stringify(filtered.slice(0, 20))).catch(() => {});
+                    lastFetchTime.current = Date.now();
+                }
+
+                return filtered;
+            });
+            
+            setHasMore(data.length === 20);
+            setPage(pageNum);
         } catch (error) {
             console.error("Fetch activities error:", error);
             Alert.alert("Error", "Could not synchronize activities with backend");
@@ -105,9 +155,19 @@ export default function ActivitiesScreen() {
 
     useFocusEffect(
         React.useCallback(() => {
-            fetchActivities();
-        }, [search, typeFilter, statusFilter, sortConfig])
+            const now = Date.now();
+            // 🚀 Stale-while-revalidate: Only refetch if cache is stale (>2 min) or empty
+            if (activities.length === 0 || (now - lastFetchTime.current > 120000)) {
+                fetchActivities(1, false);
+            }
+        }, [search, typeFilter, statusFilter, sortConfig, activities.length])
     );
+
+    const loadMore = useCallback(() => {
+        if (!loading && hasMore) {
+            fetchActivities(page + 1, true);
+        }
+    }, [loading, hasMore, page, search, typeFilter, statusFilter, sortConfig]);
 
     const handleReschedule = async (item: Activity, timeframe: 'tomorrow' | 'nextWeek') => {
         try {
@@ -119,7 +179,7 @@ export default function ActivitiesScreen() {
                 dueDate: nextDate.toISOString(),
                 status: 'Pending'
             });
-            fetchActivities(true);
+            fetchActivities(1, false);
             Vibration.vibrate(15);
         } catch (e) {
             Alert.alert("Error", "Failed to reschedule activity");
@@ -199,9 +259,13 @@ export default function ActivitiesScreen() {
         }
     };
 
-    const handleCall = (mobile: string) => {
+    const handleCall = (mobile: string, activity: Activity) => {
         if (!mobile) return Alert.alert("Error", "No mobile number available");
-        Linking.openURL(`tel:${mobile}`);
+        if (activity && activity.entityId) {
+            trackCall(mobile, activity.entityId, activity.entityType || "Lead", (activity as any).entityName || "Unknown");
+        } else {
+            Linking.openURL(`tel:${mobile}`);
+        }
     };
 
     const handleWhatsApp = (mobile: string) => {
@@ -211,7 +275,7 @@ export default function ActivitiesScreen() {
         Linking.openURL(url).catch(() => Alert.alert("Error", "WhatsApp is not installed"));
     };
 
-    const ActivityCard = memo(({ item, onPress, onDelete, onEdit, onReschedule, onComplete, onPlayAudio, isPlaying, onCall, onWhatsApp, findUser }: {
+    const ActivityCard = memo(({ item, onPress, onDelete, onEdit, onReschedule, onComplete, onPlayAudio, isPlaying, onCall, onWhatsApp, findUser, onSwipeWillOpen }: {
         item: Activity;
         onPress: () => void;
         onDelete: (id: string) => void;
@@ -220,12 +284,14 @@ export default function ActivitiesScreen() {
         onComplete: (item: Activity) => void;
         onPlayAudio: (id: string, url: string) => void;
         isPlaying: boolean;
-        onCall: (mobile: string) => void;
+        onCall: (mobile: string, item: Activity) => void;
         onWhatsApp: (mobile: string) => void;
         findUser: (id: string) => any;
+        onSwipeWillOpen?: (ref: any) => void;
     }) => {
         const { theme, isDarkMode } = useTheme();
         const isDark = isDarkMode;
+        const swipeableRef = useRef<any>(null);
 
         const scaleAnim = useRef(new Animated.Value(1)).current;
 
@@ -283,11 +349,11 @@ export default function ActivitiesScreen() {
 
         const renderLeftActions = () => (
             <View style={styles.leftActions}>
-                <TouchableOpacity style={[styles.swipeAction, { backgroundColor: isDark ? '#1E40AF' : "#2563EB" }]} onPress={() => onEdit(item._id)}>
+                <TouchableOpacity style={[styles.swipeAction, { backgroundColor: isDark ? '#1E40AF' : "#2563EB" }]} onPress={() => { swipeableRef.current?.close(); onEdit(item._id); }}>
                     <Ionicons name="create" size={22} color="#fff" />
                     <Text style={styles.swipeLabel}>Edit</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={[styles.swipeAction, { backgroundColor: isDark ? '#991B1B' : "#EF4444" }]} onPress={() => onDelete(item._id!)}>
+                <TouchableOpacity style={[styles.swipeAction, { backgroundColor: isDark ? '#991B1B' : "#EF4444" }]} onPress={() => { swipeableRef.current?.close(); onDelete(item._id!); }}>
                     <Ionicons name="trash" size={22} color="#fff" />
                     <Text style={styles.swipeLabel}>Delete</Text>
                 </TouchableOpacity>
@@ -296,11 +362,11 @@ export default function ActivitiesScreen() {
 
         const renderRightActions = () => (
             <View style={styles.rightActions}>
-                <TouchableOpacity style={[styles.swipeAction, { backgroundColor: isDark ? '#92400E' : "#F59E0B" }]} onPress={() => onReschedule(item)}>
+                <TouchableOpacity style={[styles.swipeAction, { backgroundColor: isDark ? '#92400E' : "#F59E0B" }]} onPress={() => { swipeableRef.current?.close(); onReschedule(item); }}>
                     <Ionicons name="calendar-outline" size={22} color="#fff" />
                     <Text style={styles.swipeLabel}>Reschedule</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={[styles.swipeAction, { backgroundColor: isDark ? '#065F46' : "#10B981" }]} onPress={() => onComplete(item)}>
+                <TouchableOpacity style={[styles.swipeAction, { backgroundColor: isDark ? '#065F46' : "#10B981" }]} onPress={() => { swipeableRef.current?.close(); onComplete(item); }}>
                     <Ionicons name="checkmark-circle-outline" size={22} color="#fff" />
                     <Text style={styles.swipeLabel}>Complete</Text>
                 </TouchableOpacity>
@@ -308,7 +374,14 @@ export default function ActivitiesScreen() {
         );
 
         return (
-            <Swipeable renderLeftActions={renderLeftActions} renderRightActions={renderRightActions} overshootLeft={false} overshootRight={false}>
+            <Swipeable 
+                ref={swipeableRef} 
+                renderLeftActions={renderLeftActions} 
+                renderRightActions={renderRightActions} 
+                overshootLeft={false} 
+                overshootRight={false}
+                onSwipeableWillOpen={() => onSwipeWillOpen && onSwipeWillOpen(swipeableRef.current)}
+            >
                 <Pressable 
                     onPressIn={() => animatePress(0.97)}
                     onPressOut={() => animatePress(1)}
@@ -349,7 +422,7 @@ export default function ActivitiesScreen() {
                                 <View style={styles.actionGroup}>
                                     {relatedMobile ? (
                                         <>
-                                            <TouchableOpacity style={[styles.actionBtn, { backgroundColor: theme.primary + '15' }]} onPress={() => onCall(relatedMobile)}>
+                                            <TouchableOpacity style={[styles.actionBtn, { backgroundColor: theme.primary + '15' }]} onPress={() => onCall(relatedMobile, item)}>
                                                 <Ionicons name="call" size={16} color={theme.primary} />
                                             </TouchableOpacity>
                                             <TouchableOpacity style={[styles.actionBtn, { backgroundColor: isDark ? '#065F4630' : '#DCFCE7' }]} onPress={() => onWhatsApp(relatedMobile)}>
@@ -490,6 +563,11 @@ export default function ActivitiesScreen() {
                         <ActivityCard
                             item={item}
                             onPress={() => {
+                                if (activeRowRef.current) { 
+                                    activeRowRef.current.close(); 
+                                    activeRowRef.current = null; 
+                                    return; 
+                                }
                                 if (item.entityId && item.entityType) {
                                     const type = item.entityType.toLowerCase();
                                     let route = `/${type}-detail` as any;
@@ -541,8 +619,15 @@ export default function ActivitiesScreen() {
                                 console.log("[Activities] complete pressed for", act._id);
                                 router.push(`/outcome?id=${act._id}` as any);
                             }}
+                            onSwipeWillOpen={onSwipeableWillOpen}
                         />
                     )}
+                    onScrollBeginDrag={() => {
+                        if (activeRowRef.current) {
+                            activeRowRef.current.close();
+                            activeRowRef.current = null;
+                        }
+                    }}
                     contentContainerStyle={styles.list}
                     initialNumToRender={10}
                     maxToRenderPerBatch={10}
@@ -553,7 +638,10 @@ export default function ActivitiesScreen() {
                         offset: 129 * index,
                         index,
                     })}
-                    refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchActivities(); }} tintColor={theme.primary} />}
+                    onEndReached={loadMore}
+                    onEndReachedThreshold={0.5}
+                    refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchActivities(1, false); }} tintColor={theme.primary} />}
+                    ListFooterComponent={loading && page > 1 ? <ActivityIndicator color={theme.primary} style={{ marginVertical: 20 }} /> : null}
                     ListEmptyComponent={
                         <View style={styles.empty}>
                             <Ionicons name="calendar-outline" size={64} color={theme.border} />

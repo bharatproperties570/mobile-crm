@@ -41,15 +41,12 @@ function lv(field: unknown): string {
 
 function getLeadScore(lead: any, isDark = false) {
     const bgOpacity = isDark ? '20' : '10';
-    if (lead.intent_index !== undefined && lead.intent_index !== null) {
-        const scoreVal = lead.intent_index || 0;
-        let color = "#64748B";
-        if (scoreVal >= 81) color = "#8B5CF6";
-        else if (scoreVal >= 61) color = "#EF4444";
-        else if (scoreVal >= 31) color = "#F59E0B";
-        return { val: scoreVal, color, bg: color + bgOpacity };
-    }
-    return { val: 50, color: "#F59E0B", bg: "#F59E0B" + bgOpacity };
+    const scoreVal = lead.leadScore || lead.intent_index || 50;
+    let color = "#64748B";
+    if (scoreVal >= 81) color = "#8B5CF6";
+    else if (scoreVal >= 61) color = "#EF4444";
+    else if (scoreVal >= 31) color = "#F59E0B";
+    return { val: scoreVal, color, bg: color + bgOpacity };
 }
 
 function InfoRow({ label, value, accent, icon }: { label: string; value: string; accent?: boolean; icon?: any }) {
@@ -123,6 +120,7 @@ export default function LeadDetailScreen() {
     const [selectedChannels, setSelectedChannels] = useState(['whatsapp', 'email']); // Default
     const [isSending, setIsSending] = useState(false);
     const [activeTab, setActiveTab] = useState(0);
+    const [selectedStageIntel, setSelectedStageIntel] = useState<{ id: string, label: string, color: string, activities: any[], days: number } | null>(null);
     const lastFetchRef = useRef<number>(0);
 
     const scrollX = useRef(new Animated.Value(0)).current;
@@ -225,7 +223,7 @@ export default function LeadDetailScreen() {
             if (currentLead && currentLead.contactDetails?._id) {
                 try {
                     const ownedRes = await getInventoryByContact(currentLead.contactDetails._id).catch(() => null);
-                    currentOwnedInventory = Array.isArray(ownedRes?.data) ? ownedRes.data : (Array.isArray(ownedRes) ? ownedRes : []);
+                    currentOwnedInventory = Array.isArray(ownedRes?.records) ? ownedRes.records : (Array.isArray(ownedRes?.data) ? ownedRes.data : (Array.isArray(ownedRes) ? ownedRes : []));
                 } catch (e) { console.warn("Owned Inventory Error"); }
             }
 
@@ -361,40 +359,43 @@ export default function LeadDetailScreen() {
 
                     <View style={[styles.strategyDivider, { backgroundColor: theme.border }]} />
 
-                    {/* Block 2: CRM Linkage / Relation (Center) */}
-                    <View style={styles.strategyBlock}>
-                        <Text style={[styles.strategyLabel, { color: theme.textLight, textAlign: 'center' }]}>CRM LINKAGE</Text>
-                        <View style={[styles.strategyValueRow, { justifyContent: 'center' }]}>
-                            <Ionicons name="link-outline" size={12} color="#10B981" />
-                            <Text style={[styles.strategyValue, { color: theme.text, fontSize: 11 }]} numberOfLines={1}>
-                                {lead.contactDetails?.firstName ? `${lv(lead.contactDetails.salutation)} ${lead.contactDetails.firstName}` : (lead.firstName || "Independent")}
-                            </Text>
-                        </View>
-                        {!!lead.contactDetails?.companyName && (
-                            <Text style={{ fontSize: 9, color: theme.textLight, textAlign: 'center', fontWeight: '600', marginTop: 2 }}>
-                                {lv(lead.contactDetails.companyName)}
-                            </Text>
-                        )}
-                    </View>
-
-                    <View style={[styles.strategyDivider, { backgroundColor: theme.border }]} />
-
-                    {/* Block 3: Stage (Right) */}
-                    <View style={styles.strategyBlock}>
-                        <Text style={[styles.strategyLabel, { color: theme.textLight, textAlign: 'right' }]}>STAGE</Text>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }}>
-                            {(() => {
-                                const stageStr = lv(lead.stage) !== '' ? lv(lead.stage) : 'Incoming';
-                                const stageColor = STAGE_COLORS[stageStr] || theme.primary;
-                                return (
-                                    <View style={[styles.strategyValueRow]}>
-                                        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: stageColor }} />
-                                        <Text style={[styles.strategyValue, { color: stageColor }]} numberOfLines={1}>
-                                            {stageStr}
-                                        </Text>
+                    {/* Block 2: Assignment Data (Center & Right) */}
+                    <View style={[styles.strategyBlock, { flex: 2, paddingLeft: 10 }]}>
+                        <Text style={[styles.strategyLabel, { color: theme.textLight, textAlign: 'left', letterSpacing: 0.5 }]}>ASSIGNMENT</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
+                            <View style={{ flex: 1, paddingRight: 8 }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                    <View style={{ backgroundColor: theme.primary + '15', padding: 3, borderRadius: 4 }}>
+                                        <Ionicons name="people" size={11} color={theme.primary} />
                                     </View>
-                                );
-                            })()}
+                                    <Text style={[styles.strategyValue, { color: theme.text, fontSize: 11, fontWeight: '700' }]} numberOfLines={1}>
+                                        {lead.assignment?.team?.length > 0 ? lv(lead.assignment.team) : (lead.teams?.length > 0 ? lv(lead.teams) : "No Team")}
+                                    </Text>
+                                </View>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                                    <View style={{ backgroundColor: theme.border + '30', padding: 3, borderRadius: 4 }}>
+                                        <Ionicons name="person" size={11} color={theme.textLight} />
+                                    </View>
+                                    <Text style={{ fontSize: 10, color: theme.textLight, fontWeight: '600' }} numberOfLines={1}>
+                                        {lead.assignment?.assignedTo ? lv(lead.assignment.assignedTo) : (lead.owner ? lv(lead.owner) : "Unassigned")}
+                                    </Text>
+                                </View>
+                            </View>
+                            <View style={{ alignItems: 'flex-end', justifyContent: 'center' }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: lead.visibility === 'private' ? '#EF444415' : '#10B98115', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8 }}>
+                                    <Ionicons 
+                                        name={lead.visibility === 'private' ? "lock-closed" : "earth"} 
+                                        size={10} 
+                                        color={lead.visibility === 'private' ? "#EF4444" : "#10B981"} 
+                                    />
+                                    <Text style={{ fontSize: 9, color: lead.visibility === 'private' ? "#EF4444" : "#10B981", fontWeight: '800', textTransform: 'uppercase' }}>
+                                        {lead.visibility === 'private' ? 'Private' : 'Public'}
+                                    </Text>
+                                </View>
+                                <Text style={{ fontSize: 9, color: theme.textLight, fontWeight: '500', marginTop: 4 }}>
+                                    {new Date(lead.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                </Text>
+                            </View>
                         </View>
                     </View>
                 </View>
@@ -404,15 +405,30 @@ export default function LeadDetailScreen() {
                     <Text style={{ fontSize: 10, fontWeight: '900', color: theme.textLight, paddingHorizontal: 20, marginBottom: 8, letterSpacing: 1 }}>JOURNEY INTEL</Text>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, gap: 10 }}>
                         {[
-                            { id: 'incoming', label: 'Incoming', subStages: ['New'], icon: "information-circle-outline", color: '#6366f1' },
+                            { id: 'incoming', label: 'Incoming', subStages: ['New', 'Incoming', 'Incoming Lead'], icon: "information-circle-outline", color: '#6366f1' },
                             { id: 'prospect', label: 'Prospect', subStages: ['Prospect', 'Qualified'], icon: "people-outline", color: '#8b5cf6' },
                             { id: 'opportunity', label: 'Opportunity', subStages: ['Opportunity'], icon: "trending-up-outline", color: '#f59e0b' },
                             { id: 'negotiations', label: 'Negotiations', subStages: ['Negotiation', 'Booking', 'Booked'], icon: "home-outline", color: '#f97316' },
                             { id: 'closed', label: 'Closed', subStages: ['Closed Won', 'Won', 'Closed Lost', 'Lost', 'Unqualified', 'Stalled'], icon: "checkmark-circle-outline", color: '#10b981' }
                         ].map((ms, idx) => {
-                            const currentStageLabel = (lv(lead?.stage) || 'incoming lead').toLowerCase();
-                            const isCurrent = ms.subStages.some(ss => ss.toLowerCase() === currentStageLabel);
+                            const resolvedStage = String(getLookupValue('Stage', lead?.stage) || lv(lead?.stage) || 'Incoming').trim();
+                            const currentStageLabel = resolvedStage.toLowerCase();
+                            const isCurrent = ms.subStages.some(ss => ss.toLowerCase() === currentStageLabel || currentStageLabel.includes(ss.toLowerCase()));
                             
+                            let dynamicColor = ms.color;
+                            let displayLabel = ms.label.toUpperCase();
+
+                            if (ms.id === 'closed' && isCurrent) {
+                                if (currentStageLabel.includes('won')) {
+                                    dynamicColor = '#10B981'; // Green for Won
+                                } else if (currentStageLabel.includes('lost') || currentStageLabel.includes('stalled')) {
+                                    dynamicColor = '#EF4444'; // Red for Lost
+                                } else if (currentStageLabel.includes('unqualified')) {
+                                    dynamicColor = '#64748B'; // Gray for Unqualified
+                                }
+                                displayLabel = `CLOSED (${resolvedStage.toUpperCase()})`;
+                            }
+
                             const stageActivities = Array.isArray(activities) ? activities.filter(a => {
                                 const t = new Date(a.timestamp || a.createdAt);
                                 const hist = Array.isArray(stageHistory) ? stageHistory.find(h => ms.subStages.some(ss => ss.toLowerCase() === (h.stage || "").toLowerCase())) : null;
@@ -424,17 +440,19 @@ export default function LeadDetailScreen() {
                             const days = histItem ? Math.ceil(Math.abs((histItem.exitedAt ? new Date(histItem.exitedAt).getTime() : Date.now()) - new Date(histItem.enteredAt).getTime()) / (1000 * 60 * 60 * 24)) : 0;
 
                             return (
-                                <View 
+                                <TouchableOpacity 
                                     key={ms.id} 
+                                    activeOpacity={0.7}
+                                    onPress={() => setSelectedStageIntel({ id: ms.id, label: displayLabel, color: dynamicColor, activities: stageActivities, days })}
                                     style={[
                                         styles.enterpriseArrow, 
-                                        { backgroundColor: isCurrent ? ms.color + '15' : 'transparent', borderColor: isCurrent ? ms.color : theme.border },
-                                        isCurrent && { borderLeftWidth: 4, borderLeftColor: ms.color }
+                                        { backgroundColor: isCurrent ? dynamicColor + '15' : 'transparent', borderColor: isCurrent ? dynamicColor : theme.border },
+                                        isCurrent && { borderLeftWidth: 4, borderLeftColor: dynamicColor }
                                     ]}
                                 >
                                     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-                                        <Text style={{ fontSize: 12, fontWeight: '900', color: isCurrent ? ms.color : theme.text }}>{ms.label.toUpperCase()}</Text>
-                                        <Ionicons name={ms.icon as any} size={14} color={isCurrent ? ms.color : theme.textLight} />
+                                        <Text style={{ fontSize: 12, fontWeight: '900', color: isCurrent ? dynamicColor : theme.text }}>{displayLabel}</Text>
+                                        <Ionicons name={ms.icon as any} size={14} color={isCurrent ? dynamicColor : theme.textLight} />
                                     </View>
                                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
@@ -447,7 +465,7 @@ export default function LeadDetailScreen() {
                                         </View>
                                     </View>
                                     {isCurrent && <View style={[styles.pulseDot, { backgroundColor: ms.color }]} />}
-                                </View>
+                                </TouchableOpacity>
                             );
                         })}
                     </ScrollView>
@@ -738,7 +756,7 @@ export default function LeadDetailScreen() {
                             <Text style={[styles.cardTitle, { color: theme.text }]}>Closing Probability Timeline</Text>
                             <View style={{ marginTop: 10 }}>
                                 <View style={{ height: 8, backgroundColor: theme.border + '50', borderRadius: 4, overflow: 'hidden', marginBottom: 15 }}>
-                                    <View style={{ width: `${intel?.closingProbability.score}%`, height: '100%', backgroundColor: theme.primary }} />
+                                    <View style={{ width: `${intel?.closingProbability.score || 0}%` as any, height: '100%', backgroundColor: theme.primary }} />
                                 </View>
                                 {intel?.closingProbability.stages.map((st, i) => (
                                     <View key={i} style={styles.probRow}>
@@ -874,17 +892,28 @@ export default function LeadDetailScreen() {
                             </View>
 
                             {Array.isArray(matchingDeals) && matchingDeals.length === 0 ? (
-                                <Text style={styles.emptyText}>No matching deals found.</Text>
+                                <View style={{ padding: 40, alignItems: 'center' }}>
+                                    <Ionicons name="sad-outline" size={48} color={theme.border} />
+                                    <Text style={{ marginTop: 12, color: theme.textLight, fontSize: 16, fontWeight: '600' }}>No perfect property matches found.</Text>
+                                </View>
                             ) : (
                                 Array.isArray(matchingDeals) && matchingDeals.map((deal: any, i: number) => {
                                     const isSelected = selectedDealIds.includes(deal._id);
-                                    const score = deal.score || 0;
+                                    const score = deal.score || deal.matchPercentage || 0;
+                                    const isHighMatch = score > 80;
+                                    
                                     let scoreColor = '#EF4444'; 
-                                    if (score >= 70) scoreColor = '#10B981';
+                                    if (isHighMatch) scoreColor = '#F59E0B'; // Premium Golden
+                                    else if (score >= 70) scoreColor = '#10B981';
                                     else if (score >= 40) scoreColor = '#F59E0B';
 
                                     return (
-                                        <View key={i} style={[styles.matchItem, { borderBottomColor: theme.border }, isSelected && { backgroundColor: theme.primary + '05' }]}>
+                                        <View key={i} style={[
+                                            styles.matchItem, 
+                                            { borderBottomColor: theme.border },
+                                            isHighMatch && { backgroundColor: isDark ? 'rgba(253, 224, 71, 0.05)' : '#FEF08A20', borderLeftWidth: 4, borderLeftColor: '#FBBF24', paddingLeft: 16 },
+                                            isSelected && !isHighMatch && { backgroundColor: theme.primary + '05' }
+                                        ]}>
                                              <TouchableOpacity 
                                                  style={{ marginRight: 15, justifyContent: 'center' }}
                                                  onPress={() => {
@@ -907,13 +936,15 @@ export default function LeadDetailScreen() {
                                                  onPress={() => router.push(`/deal-detail?id=${deal._id}`)}
                                              >
                                                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                                                     <View style={[styles.scorePill, { backgroundColor: isDark ? scoreColor + '25' : scoreColor + '15', borderColor: isDark ? scoreColor + '40' : scoreColor + '30' }]}>
-                                                         <Text style={[styles.scorePillText, { color: isDark ? (score >= 70 ? '#34D399' : (score >= 40 ? '#FBBF24' : '#F87171')) : scoreColor }]}>{score}% Match</Text>
+                                                     <View style={[styles.scorePill, { backgroundColor: isHighMatch ? scoreColor : (isDark ? scoreColor + '25' : scoreColor + '15'), borderColor: isHighMatch ? scoreColor : (isDark ? scoreColor + '40' : scoreColor + '30') }]}>
+                                                         <Text style={[styles.scorePillText, { color: isHighMatch ? '#fff' : (isDark ? (score >= 70 ? '#34D399' : (score >= 40 ? '#FBBF24' : '#F87171')) : scoreColor) }]}>{score}% Match</Text>
                                                      </View>
-                                                     <Text style={[styles.matchUnit, { color: theme.text }]}>{deal.unitNo || deal.unitNumber || "Matched Item"}</Text>
+                                                     <Text style={[styles.matchUnit, { color: theme.text }]} numberOfLines={1}>
+                                                         {isHighMatch && <Ionicons name="star" size={14} color="#F59E0B" />} {deal.unitNo || deal.unitNumber || "Matched Item"}
+                                                     </Text>
                                                  </View>
                                                  
-                                                 <Text style={[styles.matchProject, { color: theme.textLight }]}>{lv(deal.projectName)} • {lv(deal.block)}</Text>
+                                                 <Text style={[styles.matchProject, { color: theme.textLight }]} numberOfLines={1}>{lv(deal.projectName)} • {lv(deal.block)}</Text>
                                                  
                                                  <View style={styles.matchDetailTags}>
                                                      {(deal.matchDetails || []).slice(0, 3).map((tag: string, idx: number) => {
@@ -997,27 +1028,60 @@ export default function LeadDetailScreen() {
                         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
                             <Text style={[styles.cardTitle, { color: theme.text }]}>Owned / Associated Units</Text>
                             {Array.isArray(ownedInventory) && ownedInventory.length === 0 ? (
-                                <Text style={styles.emptyText}>No inventory linked to this contact.</Text>
+                                <View style={{ padding: 20, alignItems: 'center', justifyContent: 'center' }}>
+                                    <Ionicons name="business-outline" size={40} color={theme.border} style={{ marginBottom: 10 }} />
+                                    <Text style={[styles.emptyText, { fontSize: 13 }]}>No inventory linked to this contact.</Text>
+                                </View>
                             ) : (
-                                Array.isArray(ownedInventory) && ownedInventory.map((inv, i) => (
-                                    <TouchableOpacity key={i} style={[styles.matchItem, { borderBottomColor: theme.border }]} onPress={() => router.push(`/inventory-detail?id=${inv._id}`)}>
-                                        <View style={styles.matchLeft}>
-                                            <Text style={[styles.matchUnit, { color: theme.text }]}>{String(inv.unitNumber || inv.unitNo || "Unit")}</Text>
-                                            <Text style={[styles.matchProject, { color: theme.textLight }]}>{lv(inv.projectName)} • {lv(inv.block)}</Text>
-                                        </View>
-                                        
-                                        {/* Centered Relation Badge */}
-                                        <View style={{ flex: 0.8, alignItems: 'center' }}>
-                                            <View style={[styles.relationBadge, { backgroundColor: isDark ? 'rgba(37, 99, 235, 0.15)' : theme.primary + '10' }]}>
-                                                <Text style={{ fontSize: 10, color: isDark ? '#60A5FA' : theme.primary, fontWeight: '700' }}>OWNER</Text>
+                                Array.isArray(ownedInventory) && ownedInventory.map((inv, i) => {
+                                    const contactId = lead?.contactDetails?._id;
+                                    const isOwner = Array.isArray(inv.owners) && inv.owners.some((o: any) => String(o._id || o) === String(contactId));
+                                    
+                                    return (
+                                        <TouchableOpacity key={i} style={[styles.matchItem, { borderBottomWidth: 0, paddingVertical: 14, paddingHorizontal: 14, backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#F8FAFC', borderRadius: 12, marginBottom: 12, borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.05)' : '#E2E8F0' }]} onPress={() => router.push(`/inventory-detail?id=${inv._id}`)}>
+                                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', width: '100%' }}>
+                                                <View style={{ flex: 1, paddingRight: 10 }}>
+                                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                                                        <View style={{ backgroundColor: theme.primary + '15', padding: 5, borderRadius: 6 }}>
+                                                            <Ionicons name="business" size={14} color={theme.primary} />
+                                                        </View>
+                                                        <Text style={{ fontSize: 15, fontWeight: '800', color: theme.text, letterSpacing: 0.3 }} numberOfLines={1}>
+                                                            {String(inv.unitNumber || inv.unitNo || "Unit")}
+                                                        </Text>
+                                                    </View>
+                                                    
+                                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                                                        <Ionicons name="location-outline" size={12} color={theme.textLight} />
+                                                        <Text style={{ fontSize: 13, color: theme.textSecondary, fontWeight: '600' }} numberOfLines={1}>
+                                                            {lv(inv.projectName)}{inv.block ? ` • ${lv(inv.block)}` : ''}
+                                                        </Text>
+                                                    </View>
+                                                    
+                                                    {(inv.sizeLabel || inv.size) && (
+                                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6 }}>
+                                                            <Ionicons name="resize-outline" size={12} color={theme.textLight} />
+                                                            <Text style={{ fontSize: 12, color: theme.textSecondary, fontWeight: '600' }} numberOfLines={1}>
+                                                                {inv.sizeLabel || inv.size} {inv.sizeUnit ? `(${inv.sizeUnit})` : ''}
+                                                            </Text>
+                                                        </View>
+                                                    )}
+                                                </View>
+                                                
+                                                <View style={{ alignItems: 'flex-end', justifyContent: 'space-between', height: '100%', minHeight: 65 }}>
+                                                    <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, backgroundColor: isOwner ? theme.primary + '15' : '#F59E0B15' }}>
+                                                        <Ionicons name={isOwner ? "key" : "people"} size={10} color={isOwner ? theme.primary : '#F59E0B'} style={{ marginRight: 4 }} />
+                                                        <Text style={{ fontSize: 10, color: isOwner ? theme.primary : '#F59E0B', fontWeight: '800', letterSpacing: 0.5 }}>
+                                                            {isOwner ? 'OWNER' : 'ASSOCIATE'}
+                                                        </Text>
+                                                    </View>
+                                                    <Text style={{ fontSize: 16, fontWeight: '800', color: theme.text, marginTop: 'auto' }}>
+                                                        ₹{inv.price ? Number(inv.price).toLocaleString('en-IN') : "N/A"}
+                                                    </Text>
+                                                </View>
                                             </View>
-                                        </View>
-
-                                        <View style={styles.matchRight}>
-                                            <Text style={[styles.matchPrice, { color: theme.primary }]}>₹{inv.price || "N/A"}</Text>
-                                        </View>
-                                    </TouchableOpacity>
-                                ))
+                                        </TouchableOpacity>
+                                    );
+                                })
                             )}
                         </View>
                     </ScrollView>
@@ -1060,6 +1124,70 @@ export default function LeadDetailScreen() {
             >
                 <Ionicons name="create" size={24} color="#fff" />
             </TouchableOpacity>
+
+            {/* Stage Intel Modal */}
+            <Modal
+                visible={!!selectedStageIntel}
+                transparent={true}
+                animationType="slide"
+                onRequestClose={() => setSelectedStageIntel(null)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={[styles.modalContent, { backgroundColor: theme.card, maxHeight: '80%' }]}>
+                        {selectedStageIntel && (
+                            <>
+                                <View style={styles.modalHeader}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                        <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: selectedStageIntel.color }} />
+                                        <Text style={[styles.modalTitle, { color: theme.text }]}>{selectedStageIntel.label} Stage Journey</Text>
+                                    </View>
+                                    <TouchableOpacity onPress={() => setSelectedStageIntel(null)}>
+                                        <Ionicons name="close" size={24} color={theme.textLight} />
+                                    </TouchableOpacity>
+                                </View>
+                                
+                                <View style={{ flexDirection: 'row', gap: 20, marginBottom: 15 }}>
+                                    <View>
+                                        <Text style={{ fontSize: 11, color: theme.textLight, fontWeight: '700' }}>DAYS IN STAGE</Text>
+                                        <Text style={{ fontSize: 16, color: theme.text, fontWeight: '800' }}>{selectedStageIntel.days}</Text>
+                                    </View>
+                                    <View>
+                                        <Text style={{ fontSize: 11, color: theme.textLight, fontWeight: '700' }}>ACTIVITIES</Text>
+                                        <Text style={{ fontSize: 16, color: theme.text, fontWeight: '800' }}>{selectedStageIntel.activities.length}</Text>
+                                    </View>
+                                </View>
+
+                                <ScrollView style={{ marginTop: 10 }} showsVerticalScrollIndicator={false}>
+                                    {selectedStageIntel.activities.length === 0 ? (
+                                        <View style={{ padding: 20, alignItems: 'center' }}>
+                                            <Ionicons name="flag-outline" size={40} color={theme.textLight} />
+                                            <Text style={{ color: theme.textLight, marginTop: 10, fontWeight: '600' }}>No recorded activities for this stage.</Text>
+                                        </View>
+                                    ) : (
+                                        selectedStageIntel.activities.map((act: any, i: number) => {
+                                            const isLast = i === selectedStageIntel.activities.length - 1;
+                                            return (
+                                                <View key={act._id || i} style={{ flexDirection: 'row', marginBottom: isLast ? 0 : 20 }}>
+                                                    <View style={{ width: 2, backgroundColor: isLast ? 'transparent' : theme.border, alignItems: 'center', marginRight: 15 }}>
+                                                        <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: theme.primary, position: 'absolute', top: 4 }} />
+                                                    </View>
+                                                    <View style={{ flex: 1, backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#f8fafc', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: theme.border }}>
+                                                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                                                            <Text style={{ color: theme.text, fontWeight: '800', fontSize: 14 }}>{act.type || 'Interaction'}</Text>
+                                                            <Text style={{ color: theme.textLight, fontSize: 11 }}>{new Date(act.timestamp || act.createdAt).toLocaleDateString()}</Text>
+                                                        </View>
+                                                        {act.notes ? <Text style={{ color: theme.textLight, fontSize: 13, marginTop: 4 }}>{act.notes}</Text> : null}
+                                                    </View>
+                                                </View>
+                                            )
+                                        })
+                                    )}
+                                </ScrollView>
+                            </>
+                        )}
+                    </View>
+                </View>
+            </Modal>
 
             {/* Manual Match Dispatch Modal */}
             <Modal
@@ -1379,6 +1507,8 @@ const styles = StyleSheet.create({
     riskReason: { fontSize: 12, fontWeight: '600' },
     docItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, gap: 12 },
     docInfo: { flex: 1 },
-    docName: { fontSize: 14, fontWeight: '700' },
+    docName: { fontSize: 13, fontWeight: '600' },
     docMeta: { fontSize: 11, marginTop: 2 },
+    confirmBtn: { padding: 14, borderRadius: 12, alignItems: 'center', marginTop: 15 },
+    confirmBtnText: { color: '#fff', fontSize: 14, fontWeight: '700' }
 });

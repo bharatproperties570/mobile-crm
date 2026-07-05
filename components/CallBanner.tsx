@@ -43,7 +43,7 @@ export default function CallBanner({ info, onClose, onDial }: Props) {
             }).start();
 
             // Auto-Dial logic: If this is a fresh briefing, start countdown
-            if (onDial && !info.isIncoming) {
+            if (onDial && !(info as any).isIncoming) {
                 setCountdown(3);
                 if (timerRef.current) clearInterval(timerRef.current);
                 timerRef.current = setInterval(() => {
@@ -242,7 +242,7 @@ export default function CallBanner({ info, onClose, onDial }: Props) {
                                         params: {
                                             id: 'new',
                                             entityId: currentData?.entityId || info.entityId,
-                                            entityType: activeTab === 'Contact' ? 'Lead' : activeTab,
+                                            entityType: activeTab === ('Contact' as any) ? 'Lead' : activeTab,
                                             entityName: safeString(currentData?.name || info.name),
                                             actType: 'Call',
                                             mobile: info.mobile

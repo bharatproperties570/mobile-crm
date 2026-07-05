@@ -7,7 +7,9 @@ import {
 import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Swipeable, GestureHandlerRootView } from 'react-native-gesture-handler';
+import { MapView, Marker, Callout } from '@/components/MapComponent';
 import { getDeals, type Deal, updateDeal } from "@/services/deals.service";
+import { getMatchingLeads } from "@/services/leads.service";
 import { safeApiCall, safeApiCallSingle, extractList } from "@/services/api.helpers";
 import api from "@/services/api";
 import { useCallTracking } from "@/context/CallTrackingContext";
@@ -89,14 +91,15 @@ function resolveName(field: unknown, getLookupValue?: (type: string, val: any) =
     return str;
 }
 
-function getDealTitle(deal: Deal, getLookupValue?: (type: string, val: any) => string, findUser?: (id: string) => any): string {
+function getDealTitle(deal: Deal | null, getLookupValue?: (type: string, val: any) => string, findUser?: (id: string) => any): string {
+    if (!deal) return "";
     const inv = typeof deal.inventoryId === 'object' ? deal.inventoryId : null;
     const project = deal.projectName || inv?.projectName || "Property";
     const block = deal.block || inv?.block;
     const unit = deal.unitNo || deal.unitNumber || inv?.unitNo || inv?.unitNumber;
 
     let titleParts = [project];
-    if (block) titleParts.push(block);
+    if (block) titleParts.push(`Block ${block}`);
     if (unit) titleParts.push(unit);
 
     return titleParts.join(" - ") || deal.dealId || deal.name || deal.title || "Untitled Deal";
@@ -238,6 +241,7 @@ const DealCard = memo(({
     getLookupValue,
     findUser,
     liveScore,
+    onSwipeWillOpen,
 }: {
     deal: Deal;
     idx: number;
@@ -251,9 +255,11 @@ const DealCard = memo(({
     getLookupValue: (type: string, id: any) => string;
     findUser?: (id: string) => any;
     liveScore?: { score: number; color: string; label: string };
+    onSwipeWillOpen?: (ref: any) => void;
 }) => {
     const { theme, isDarkMode } = useTheme();
     const isDark = isDarkMode;
+    const swipeableRef = useRef<any>(null);
     const stageStr = (resolveName(deal.stage, getLookupValue, findUser) || "open").toLowerCase();
     const stageColorMap = isDark ? STAGE_COLORS_DARK : STAGE_COLORS_LIGHT;
     const color = stageColorMap[stageStr] ?? (isDark ? "#94A3B8" : "#6366F1");
@@ -272,11 +278,11 @@ const DealCard = memo(({
 
     const renderRightActions = () => (
         <View style={styles.rightActions}>
-            <TouchableOpacity style={[styles.swipeAction, { backgroundColor: theme.primary }]} onPress={onCall}>
+            <TouchableOpacity style={[styles.swipeAction, { backgroundColor: theme.primary }]} onPress={() => { swipeableRef.current?.close(); onCall(); }}>
                 <Ionicons name="call" size={20} color="#fff" />
                 <Text style={styles.swipeLabel}>Call</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.swipeAction, { backgroundColor: theme.textSecondary }]} onPress={onSMS}>
+            <TouchableOpacity style={[styles.swipeAction, { backgroundColor: theme.textSecondary }]} onPress={() => { swipeableRef.current?.close(); onSMS(); }}>
                 <Ionicons name="chatbubble" size={20} color="#fff" />
                 <Text style={styles.swipeLabel}>SMS</Text>
             </TouchableOpacity>
@@ -285,13 +291,14 @@ const DealCard = memo(({
 
     const renderLeftActions = () => (
         <View style={styles.leftActions}>
-            <TouchableOpacity style={[styles.swipeAction, { backgroundColor: theme.success }]} onPress={onWhatsApp}>
+            <TouchableOpacity style={[styles.swipeAction, { backgroundColor: theme.success }]} onPress={() => { swipeableRef.current?.close(); onWhatsApp(); }}>
                 <Ionicons name="logo-whatsapp" size={22} color="#fff" />
                 <Text style={styles.swipeLabel}>WhatsApp</Text>
             </TouchableOpacity>
             <TouchableOpacity
                 style={[styles.swipeAction, { backgroundColor: isDark ? '#818CF8' : '#6366F1' }]}
                 onPress={() => {
+                    swipeableRef.current?.close();
                     const contact = deal.associatedContact as any;
                     if (contact?.email) Linking.openURL(`mailto:${contact.email}`);
                 }}
@@ -314,8 +321,15 @@ const DealCard = memo(({
     };
 
     return (
-        <Swipeable renderRightActions={isNonActionable ? undefined : renderRightActions} renderLeftActions={isNonActionable ? undefined : renderLeftActions} friction={2}>
+        <Swipeable 
+            ref={swipeableRef} 
+            renderRightActions={isNonActionable ? undefined : renderRightActions} 
+            renderLeftActions={isNonActionable ? undefined : renderLeftActions} 
+            friction={2}
+            onSwipeableWillOpen={() => onSwipeWillOpen && onSwipeWillOpen(swipeableRef.current)}
+        >
             <Pressable 
+                delayPressIn={50}
                 onPressIn={() => !isNonActionable && animatePress(0.97)}
                 onPressOut={() => !isNonActionable && animatePress(1)}
                 onPress={onPress}
@@ -377,7 +391,7 @@ const DealCard = memo(({
                                     let finalLabel = hasSizeData ? label : null;
                                     if (!finalLabel || finalLabel === "—") {
                                         if (deal.sizeLabel && deal.sizeLabel !== "—") finalLabel = deal.sizeLabel;
-                                        else if (deal.size || deal.sizeUnit) finalLabel = `${deal.size?.value ?? deal.size ?? ""} ${deal.sizeUnit ?? deal.size?.unit ?? ""}`.trim();
+                                        else if (deal.size || (deal as any).sizeUnit) finalLabel = `${(deal.size as any)?.value ?? deal.size ?? ""} ${(deal as any).sizeUnit ?? (deal.size as any)?.unit ?? ""}`.trim();
                                     }
 
                                     if (!finalLabel || finalLabel === "—" || finalLabel.includes("[object Object]")) return null;
@@ -392,7 +406,7 @@ const DealCard = memo(({
                                     );
                                 })()}
                                 {(() => {
-                                    const location = resolveName(deal.location, getLookupValue) || deal.locArea || deal.locCity;
+                                    const location = resolveName(deal.location, getLookupValue) || (deal as any).locArea || (deal as any).locCity;
                                     if (!location || location === "—") return null;
                                     return (
                                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#F1F5F9', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
@@ -415,8 +429,8 @@ const DealCard = memo(({
                                         if (score >= 30) return '#3B82F6'; // Active
                                         return '#94A3B8'; // Cold
                                     };
-                                    const ringColor = liveScore?.color || getFallbackColor(scoreVal);
-                                    return <DealScoreRing score={scoreVal} color={ringColor} size={32} />;
+                                    const ringColor = liveScore?.color || getFallbackColor(Number(scoreVal));
+                                    return <DealScoreRing score={Number(scoreVal)} color={ringColor} size={32} />;
                                 })()}
                                 <View style={[styles.stagePill, { backgroundColor: color + "15" }]}>
                                     <View style={[styles.stageDot, { backgroundColor: color }]} />
@@ -425,7 +439,7 @@ const DealCard = memo(({
                             </View>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                                 {(() => {
-                                    const matched = deal.matched || 0;
+                                    const matched = (deal as any).matched || 0;
                                     if (matched > 0) {
                                         return (
                                             <View style={{ backgroundColor: '#EEF2FF', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4 }}>
@@ -480,8 +494,8 @@ const DealCard = memo(({
                         <View style={{ alignItems: 'flex-end', gap: 2 }}>
                             <Text style={[styles.dealAmount, { color: color }]}>{formatAmount(amount)}</Text>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                <Text style={[styles.ownerText, { color: theme.primary, fontWeight: '700', fontSize: 11 }]}>{userName}</Text>
-                                <Text style={[styles.timeText, { color: '#64748B', fontSize: 10, fontWeight: '600' }]}>{deal.createdAt ? new Date(deal.createdAt).toLocaleDateString("en-IN") : ""}</Text>
+                                <Text style={[{ color: theme.primary, fontWeight: '700', fontSize: 11 }]}>{userName}</Text>
+                                <Text style={[{ color: '#64748B', fontSize: 10, fontWeight: '600' }]}>{deal.createdAt ? new Date(deal.createdAt).toLocaleDateString("en-IN") : ""}</Text>
                             </View>
                         </View>
                     </View>
@@ -511,6 +525,15 @@ export default function DealsScreen() {
     const [refreshing, setRefreshing] = useState(false);
     const [page, setPage] = useState(1);
     const [hasMore, setHasMore] = useState(true);
+    const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
+    const activeRowRef = useRef<any>(null);
+
+    const onSwipeableWillOpen = useCallback((rowRef: any) => {
+        if (activeRowRef.current && activeRowRef.current !== rowRef) {
+            activeRowRef.current.close();
+        }
+        activeRowRef.current = rowRef;
+    }, []);
 
     // Action Hub State
     const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null);
@@ -530,6 +553,12 @@ export default function DealsScreen() {
     const [pendingAction, setPendingAction] = useState<{ type: string; deal: Deal } | null>(null);
     const [activePipelineStage, setActivePipelineStage] = useState<string | null>(null);
     const [isPublishing, setIsPublishing] = useState(false);
+
+    // Match Centre States
+    const [matchesVisible, setMatchesVisible] = useState(false);
+    const [matchingLeads, setMatchingLeads] = useState<any[]>([]);
+    const [fetchingMatches, setFetchingMatches] = useState(false);
+    const [matchesForDeal, setMatchesForDeal] = useState<Deal | null>(null);
 
     const pipelineStats = useMemo(() => {
         const stats: Record<string, number> = {};
@@ -576,7 +605,8 @@ export default function DealsScreen() {
         
         const result = await safeApiCall<any>(() => getDeals({ 
             page: String(pageNum), 
-            limit: "50",
+            limit: "20",           // 🚀 SENIOR: Reduced from 50→20. Deal cards are heavier than leads.
+            view: 'compact',       // 🚀 SENIOR: Skips match counts, activity & inventory re-fetch
             sortBy: sortBy === 'newest' ? 'createdAt' : (sortBy === 'oldest' ? 'createdAt' : sortBy),
             sortOrder: sortBy === 'newest' ? '-1' : (sortBy === 'oldest' ? '1' : '1')
         }));
@@ -601,14 +631,14 @@ export default function DealsScreen() {
 
                 // 3. Update Cache (only for first page)
                 if (pageNum === 1 && !shouldAppend) {
-                    AsyncStorage.setItem("@cache_deals_list", JSON.stringify(filtered.slice(0, 50))).catch(() => {});
+                    AsyncStorage.setItem("@cache_deals_list", JSON.stringify(filtered.slice(0, 20))).catch(() => {});
                     lastFetchTime.current = Date.now();
                 }
                 
                 return filtered;
             });
             
-            setHasMore(newDeals.length === 50);
+            setHasMore(newDeals.length === 20); // ✅ Synced with limit=20
             setPage(pageNum);
             // Fetch live deal scores from Stage Engine (fire-and-forget)
             if (!shouldAppend) {
@@ -699,7 +729,21 @@ export default function DealsScreen() {
                     <Text style={[styles.headerTitle, { color: theme.text }]}>Deals</Text>
                     <Text style={[styles.headerSubtitle, { color: theme.textLight }]}>{filteredDeals.length} active opportunities</Text>
                 </TouchableOpacity>
-                <View style={{ flexDirection: 'row', gap: 10 }}>
+                <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
+                    <View style={{ flexDirection: 'row', backgroundColor: theme.card, borderRadius: 8, padding: 2 }}>
+                        <TouchableOpacity 
+                            onPress={() => setViewMode('list')}
+                            style={{ padding: 6, paddingHorizontal: 12, borderRadius: 6, backgroundColor: viewMode === 'list' ? theme.border : 'transparent' }}
+                        >
+                            <Ionicons name="list" size={18} color={viewMode === 'list' ? theme.text : theme.textMuted} />
+                        </TouchableOpacity>
+                        <TouchableOpacity 
+                            onPress={() => setViewMode('map')}
+                            style={{ padding: 6, paddingHorizontal: 12, borderRadius: 6, backgroundColor: viewMode === 'map' ? theme.border : 'transparent' }}
+                        >
+                            <Ionicons name="map" size={18} color={viewMode === 'map' ? theme.text : theme.textMuted} />
+                        </TouchableOpacity>
+                    </View>
                     <TouchableOpacity style={[styles.addBtn, { backgroundColor: theme.primary }]} onPress={() => router.push("/add-deal")}>
                         <Ionicons name="add" size={26} color="#fff" />
                     </TouchableOpacity>
@@ -759,6 +803,23 @@ export default function DealsScreen() {
             setHubVisible(false);
             setSelectedDeal(null);
         });
+    };
+
+    const handleRunMatch = async (deal: Deal) => {
+        closeHub();
+        setMatchesForDeal(deal);
+        setMatchesVisible(true);
+        setFetchingMatches(true);
+        setMatchingLeads([]);
+
+        const res = await safeApiCall(() => getMatchingLeads(deal._id));
+        if (!res.error && res.data) {
+            const data = (res.data as any).matchingLeads || (Array.isArray((res.data as any)?.data) ? (res.data as any).data : (Array.isArray(res.data) ? res.data : []));
+            setMatchingLeads(data);
+        } else {
+            Alert.alert("Match Failed", "Could not fetch matching leads.");
+        }
+        setFetchingMatches(false);
     };
 
     // Communication Logic with Multi-Contact Support for Deals
@@ -995,15 +1056,20 @@ export default function DealsScreen() {
 
     const askLocationShare = (dealToActOn: Deal, shareUnit: boolean) => {
         setTimeout(() => {
-            Alert.alert(
-                "Location Privacy",
-                "Share the exact House/Plot Number and Street publicly?",
-                [
-                    { text: "No, Keep Confidential", onPress: () => submitPublishData(dealToActOn, true, shareUnit, false) },
-                    { text: "Yes, Share", onPress: () => submitPublishData(dealToActOn, true, shareUnit, true) }
-                ],
-                { cancelable: true }
-            );
+            if (Platform.OS === 'web') {
+                 const shareLoc = window.confirm("Share the exact House/Plot Number and Street publicly?\n\nOK for Yes, Cancel for No");
+                 submitPublishData(dealToActOn, true, shareUnit, shareLoc);
+            } else {
+                Alert.alert(
+                    "Location Privacy",
+                    "Share the exact House/Plot Number and Street publicly?",
+                    [
+                        { text: "No, Keep Confidential", onPress: () => submitPublishData(dealToActOn, true, shareUnit, false) },
+                        { text: "Yes, Share", onPress: () => submitPublishData(dealToActOn, true, shareUnit, true) }
+                    ],
+                    { cancelable: true }
+                );
+            }
         }, 300);
     };
 
@@ -1016,25 +1082,35 @@ export default function DealsScreen() {
         closeHub();
 
         setTimeout(() => {
-            if (newStatus) {
-                Alert.alert(
-                    "Unit Privacy",
-                    "Share the Unit Number publicly on the website?",
-                    [
-                        { text: "No, Keep Confidential", onPress: () => askLocationShare(dealToActOn, false) },
-                        { text: "Yes, Share Unit No", onPress: () => askLocationShare(dealToActOn, true) }
-                    ],
-                    { cancelable: true }
-                );
+            if (Platform.OS === 'web') {
+                if (newStatus) {
+                    const shareUnit = window.confirm("Share the Unit Number publicly on the website?\n\nOK for Yes, Cancel for No");
+                    askLocationShare(dealToActOn, shareUnit);
+                } else {
+                    const confirmUnpublish = window.confirm("Remove this deal from the website?");
+                    if (confirmUnpublish) submitPublishData(dealToActOn, false, false, false);
+                }
             } else {
-                Alert.alert(
-                    "Unpublish",
-                    "Remove this deal from the website?",
-                    [
-                        { text: "Cancel", style: "cancel" },
-                        { text: "Unpublish", style: "destructive", onPress: () => submitPublishData(dealToActOn, false, false, false) }
-                    ]
-                );
+                if (newStatus) {
+                    Alert.alert(
+                        "Unit Privacy",
+                        "Share the Unit Number publicly on the website?",
+                        [
+                            { text: "No, Keep Confidential", onPress: () => askLocationShare(dealToActOn, false) },
+                            { text: "Yes, Share Unit No", onPress: () => askLocationShare(dealToActOn, true) }
+                        ],
+                        { cancelable: true }
+                    );
+                } else {
+                    Alert.alert(
+                        "Unpublish",
+                        "Remove this deal from the website?",
+                        [
+                            { text: "Cancel", style: "cancel" },
+                            { text: "Unpublish", style: "destructive", onPress: () => submitPublishData(dealToActOn, false, false, false) }
+                        ]
+                    );
+                }
             }
         }, 300); // Wait for modal to close
     };
@@ -1068,16 +1144,97 @@ export default function DealsScreen() {
         <GestureHandlerRootView style={[styles.container, { backgroundColor: theme.background }]}>
             {loading && page === 1 ? (
                 <View style={styles.center}><ActivityIndicator color="#2563EB" size="large" /></View>
+            ) : viewMode === 'map' ? (
+                <View style={{ flex: 1 }}>
+                    {renderHeader()}
+                    {Platform.OS === 'web' ? (
+                        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: theme.card }}>
+                            <Ionicons name="map-outline" size={48} color={theme.textMuted} />
+                            <Text style={{ color: theme.textMuted, marginTop: 16 }}>Map View is only available on Android/iOS natively.</Text>
+                        </View>
+                    ) : (
+                    <MapView
+                        style={{ flex: 1 }}
+                        userInterfaceStyle={isDark ? "dark" : "light"}
+                        initialRegion={{
+                            latitude: 28.6139,
+                            longitude: 77.2090,
+                            latitudeDelta: 0.5,
+                            longitudeDelta: 0.5,
+                        }}
+                    >
+                        {filteredDeals.filter(d => ((d as any).location?.coordinates && (d as any).location.coordinates.length === 2) || ((d as any).latitude && (d as any).longitude) || (typeof d.inventoryId === 'object' && (d.inventoryId as any)?.location?.coordinates)).map(deal => {
+                            let lat, lng;
+                            if ((deal as any).location?.coordinates && (deal as any).location.coordinates.length === 2) {
+                                lng = (deal as any).location.coordinates[0];
+                                lat = (deal as any).location.coordinates[1];
+                            } else if ((deal as any).latitude && (deal as any).longitude) {
+                                lat = Number((deal as any).latitude);
+                                lng = Number((deal as any).longitude);
+                            } else if (typeof deal.inventoryId === 'object' && (deal.inventoryId as any)?.location?.coordinates) {
+                                lng = (deal.inventoryId as any).location.coordinates[0];
+                                lat = (deal.inventoryId as any).location.coordinates[1];
+                            }
+                            if (!lat || !lng) return null;
+                            
+                            const unitNo = deal.unitNo || deal.unitNumber || (typeof deal.inventoryId === 'object' ? (deal.inventoryId?.unitNo || deal.inventoryId?.unitNumber) : "") || "N/A";
+                            const projectName = deal.projectName || (deal.projectId && typeof deal.projectId === 'object' ? (deal.projectId as any).name : "") || "Unnamed Project";
+                            const priceStr = deal.price ? formatPrice(deal.price) : "";
+                            
+                            return (
+                                <Marker
+                                    key={deal._id}
+                                    coordinate={{ latitude: lat, longitude: lng }}
+                                >
+                                    <View style={{ backgroundColor: theme.primary, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, borderWidth: 1, borderColor: '#fff' }}>
+                                        <Text style={{ color: '#fff', fontSize: 10, fontWeight: 'bold' }}>{priceStr || 'Details'}</Text>
+                                    </View>
+                                    <Callout onPress={() => {
+                                        router.push({
+                                            pathname: "/deal-detail",
+                                            params: { 
+                                                id: deal._id,
+                                                ghost_unitNo: unitNo,
+                                                ghost_projectName: projectName,
+                                                ghost_stage: resolveName(deal.stage, getLookupValue, findUser),
+                                                ghost_amount: (deal.price || deal.amount || 0).toString(),
+                                                ghost_associate: resolveName(deal.associatedContact, getLookupValue, findUser)
+                                            }
+                                        });
+                                    }}>
+                                        <View style={{ padding: 5, minWidth: 120 }}>
+                                            <Text style={{ fontWeight: 'bold', fontSize: 14 }}>{unitNo}</Text>
+                                            <Text style={{ fontSize: 12 }}>{projectName}</Text>
+                                            <Text style={{ fontSize: 12, color: theme.primary, marginTop: 4, fontWeight: '600' }}>{priceStr}</Text>
+                                        </View>
+                                    </Callout>
+                                </Marker>
+                            );
+                        })}
+                    </MapView>
+                    )}
+                </View>
             ) : (
                 <FlatList
                     data={filteredDeals}
                     keyExtractor={(item) => item._id}
-                    ListHeaderComponent={renderHeader}
+                    ListHeaderComponent={renderHeader()}
+                    onScrollBeginDrag={() => {
+                        if (activeRowRef.current) {
+                            activeRowRef.current.close();
+                            activeRowRef.current = null;
+                        }
+                    }}
                     renderItem={({ item, index }) => (
                         <DealCard
                             deal={item}
                             idx={index}
                             onPress={() => {
+                                if (activeRowRef.current) { 
+                                    activeRowRef.current.close(); 
+                                    activeRowRef.current = null; 
+                                    return; 
+                                }
                                 const unitNo = item.unitNo || item.unitNumber || (typeof item.inventoryId === 'object' ? (item.inventoryId?.unitNo || item.inventoryId?.unitNumber) : "") || "N/A";
                                 const projectName = item.projectName || (item.projectId && typeof item.projectId === 'object' ? (item.projectId as any).name : "") || "Unnamed Project";
                                 const stage = resolveName(item.stage, getLookupValue, findUser);
@@ -1112,6 +1269,7 @@ export default function DealsScreen() {
                             getLookupValue={getLookupValue}
                             findUser={findUser}
                             liveScore={dealScores[item._id]}
+                            onSwipeWillOpen={onSwipeableWillOpen}
                         />
                     )}
                     contentContainerStyle={styles.list}
@@ -1233,7 +1391,17 @@ export default function DealsScreen() {
                                     <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Edit</Text>
                                 </TouchableOpacity >
 
-                                <TouchableOpacity style={styles.actionItem} onPress={() => { router.push(`/match-lead?dealId=${selectedDeal?._id}`); closeHub(); }}>
+                                <TouchableOpacity style={styles.actionItem} onPress={() => {
+                                    if (selectedDeal) router.push(`/add-builtup-details?id=${selectedDeal._id}&type=Deal`);
+                                    closeHub();
+                                }}>
+                                    <View style={[styles.actionIcon, { backgroundColor: isDark ? 'rgba(245, 158, 11, 0.1)' : "#FEF3C7" }]}>
+                                        <Ionicons name="business" size={24} color="#F59E0B" />
+                                    </View>
+                                    <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Builtup</Text>
+                                </TouchableOpacity>
+
+                                <TouchableOpacity style={styles.actionItem} onPress={() => selectedDeal && handleRunMatch(selectedDeal)}>
                                     <View style={[styles.actionIcon, { backgroundColor: isDark ? 'rgba(219, 39, 119, 0.1)' : "#FDF2F8" }]}>
                                         <Ionicons name="git-compare" size={24} color="#DB2777" />
                                     </View>
@@ -1242,7 +1410,7 @@ export default function DealsScreen() {
 
                                 <TouchableOpacity style={styles.actionItem} onPress={() => { router.push(`/add-offer?dealId=${selectedDeal?._id}`); closeHub(); }}>
                                     <View style={[styles.actionIcon, { backgroundColor: isDark ? 'rgba(245, 158, 11, 0.15)' : "#FEF3C7" }]}>
-                                        <Ionicons name="handshake" size={24} color="#F59E0B" />
+                                        <Ionicons name={"handshake-outline" as any} size={24} color="#F59E0B" />
                                     </View>
                                     <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Offer</Text>
                                 </TouchableOpacity>
@@ -1269,7 +1437,7 @@ export default function DealsScreen() {
                                 </TouchableOpacity>
 
                                 <TouchableOpacity style={styles.actionItem} onPress={() => { 
-                                    const invId = selectedDeal?.inventoryId?._id || selectedDeal?.inventoryId;
+                                    const invId = (selectedDeal?.inventoryId as any)?._id || selectedDeal?.inventoryId;
                                     if (!invId || invId === "undefined") {
                                         Alert.alert("Missing Connection", "This deal is not linked to any inventory item. Media cannot be uploaded.");
                                         return;
@@ -1311,12 +1479,7 @@ export default function DealsScreen() {
                                     <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Tag</Text>
                                 </TouchableOpacity>
 
-                                <TouchableOpacity style={styles.actionItem} onPress={handleQuickDormant}>
-                                    <View style={[styles.actionIcon, { backgroundColor: isDark ? 'rgba(148, 163, 184, 0.15)' : "#F1F5F9" }]}>
-                                        <Ionicons name="moon" size={24} color={isDark ? '#94A3B8' : "#94A3B8"} />
-                                    </View>
-                                    <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Dormant</Text>
-                                </TouchableOpacity>
+
 
                                 <TouchableOpacity 
                                     style={styles.actionItem} 
@@ -1396,7 +1559,7 @@ export default function DealsScreen() {
                                                             assignedTo: u._id, 
                                                             owner: u._id,
                                                             assignmentNote: newTag.trim() || 'Direct transfer' 
-                                                        }));
+                                                        } as any));
                                                         if (!res.error) {
                                                             setNewTag("");
                                                             fetchDeals();
@@ -1489,6 +1652,60 @@ export default function DealsScreen() {
                                 </TouchableOpacity>
                             ))}
                         </View>
+                    </View>
+                </Pressable>
+            </Modal>
+
+            {/* Matches Modal */}
+            <Modal transparent visible={matchesVisible} animationType="slide" onRequestClose={() => setMatchesVisible(false)}>
+                <Pressable style={styles.modalOverlay} onPress={() => setMatchesVisible(false)}>
+                    <View style={[styles.contactPickerSheet, { backgroundColor: theme.card, maxHeight: '80%' }]}>
+                        <View style={[styles.sheetHandle, { backgroundColor: theme.border }]} />
+                        <Text style={[styles.sheetTitle, { color: theme.text }]}>Matched Leads</Text>
+                        <Text style={[styles.sheetSub, { color: theme.textLight }]}>{getDealTitle(matchesForDeal as Deal, getLookupValue, findUser)}</Text>
+
+                        {fetchingMatches ? (
+                            <View style={{ padding: 40, alignItems: 'center' }}>
+                                <ActivityIndicator size="large" color="#DB2777" />
+                                <Text style={{ marginTop: 12, color: theme.textLight }}>Finding best matches...</Text>
+                            </View>
+                        ) : (
+                            <ScrollView style={{ marginTop: 16 }} showsVerticalScrollIndicator={false}>
+                                {matchingLeads.length === 0 ? (
+                                    <View style={{ padding: 40, alignItems: 'center' }}>
+                                        <Ionicons name="sad-outline" size={48} color={theme.border} />
+                                        <Text style={{ marginTop: 12, color: theme.textLight, fontSize: 16, fontWeight: '600' }}>No perfect matches found</Text>
+                                    </View>
+                                ) : (
+                                    matchingLeads.map((lead, idx) => (
+                                        <TouchableOpacity
+                                            key={idx}
+                                            style={[styles.contactItem, { borderColor: theme.border }]}
+                                            onPress={() => {
+                                                setMatchesVisible(false);
+                                                router.push(`/lead-detail?id=${lead._id}`);
+                                            }}
+                                        >
+                                            <View style={styles.contactInfo}>
+                                                <View style={[styles.contactAvatar, { backgroundColor: '#DB277720' }]}>
+                                                    <Ionicons name="person" size={18} color="#DB2777" />
+                                                </View>
+                                                <View>
+                                                    <Text style={[styles.contactName, { color: theme.text }]}>{lead.firstName} {lead.lastName}</Text>
+                                                    <Text style={[styles.contactRole, { color: theme.textLight }]}>{resolveName(lead.location, getLookupValue)} • {resolveName(lead.intent, getLookupValue)}</Text>
+                                                </View>
+                                            </View>
+                                            <View style={{ alignItems: 'flex-end' }}>
+                                                {lead.matchScore && (
+                                                    <Text style={{ fontSize: 12, fontWeight: '800', color: '#DB2777' }}>{lead.matchScore}% Match</Text>
+                                                )}
+                                                <Ionicons name="chevron-forward" size={18} color="#CBD5E1" style={{ marginTop: 4 }} />
+                                            </View>
+                                        </TouchableOpacity>
+                                    ))
+                                )}
+                            </ScrollView>
+                        )}
                     </View>
                 </Pressable>
             </Modal>

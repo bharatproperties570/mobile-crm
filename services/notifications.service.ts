@@ -10,6 +10,8 @@ if (!isAndroidExpoGo) {
             shouldShowAlert: true,
             shouldPlaySound: true,
             shouldSetBadge: true,
+            shouldShowBanner: true,
+            shouldShowList: true,
         }),
     });
 }
@@ -42,7 +44,7 @@ export const scheduleActivityReminder = async (activity: any) => {
                 body: activity.subject,
                 data: { id: activity._id },
             },
-            trigger: reminderTime,
+            trigger: reminderTime as any,
         });
 
         return true;

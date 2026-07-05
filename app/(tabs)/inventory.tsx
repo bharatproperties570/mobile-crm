@@ -1,12 +1,12 @@
 import { useEffect, useState, useCallback, useMemo, memo, useRef } from "react";
 import {
     View, Text, StyleSheet, FlatList, TouchableOpacity, ScrollView,
-    TextInput, RefreshControl, ActivityIndicator, Dimensions, SafeAreaView, Alert, Linking, Animated, Modal, Pressable
+    TextInput, RefreshControl, ActivityIndicator, Dimensions, SafeAreaView, Alert, Linking, Animated, Modal, Pressable, Vibration
 } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Swipeable } from 'react-native-gesture-handler';
-import { getInventory, type Inventory } from "@/services/inventory.service";
+import { getInventory, type Inventory, updateInventory } from "@/services/inventory.service";
 import { lookupVal, safeApiCall, extractList } from "@/services/api.helpers";
 import { useCallTracking } from "@/context/CallTrackingContext";
 import { useLookup } from "@/context/LookupContext";
@@ -93,7 +93,7 @@ const TYPE_ICONS: Record<string, string> = {
     'Shop': 'cart'
 };
 
-const InventoryCard = memo(({ item, onPress, onCall, onWhatsApp, onSMS, onEmail, onMenuPress, viewMode }: {
+const InventoryCard = memo(({ item, onPress, onCall, onWhatsApp, onSMS, onEmail, onMenuPress, viewMode, onSwipeWillOpen }: {
     item: Inventory;
     onPress: () => void;
     onCall: () => void;
@@ -102,11 +102,13 @@ const InventoryCard = memo(({ item, onPress, onCall, onWhatsApp, onSMS, onEmail,
     onEmail: () => void;
     onMenuPress: () => void;
     viewMode: 'list' | 'grid';
+    onSwipeWillOpen?: (ref: any) => void;
 }) => {
     const { theme, isDarkMode } = useTheme();
     const { getLookupValue } = useLookup();
     const { findUser } = useUsers();
     const isDark = isDarkMode;
+    const swipeableRef = useRef<any>(null);
 
     const scaleAnim = useRef(new Animated.Value(1)).current;
 
@@ -156,11 +158,11 @@ const InventoryCard = memo(({ item, onPress, onCall, onWhatsApp, onSMS, onEmail,
 
     const renderRightActions = () => (
         <View style={styles.rightActions}>
-            <TouchableOpacity style={[styles.swipeAction, { backgroundColor: isDark ? '#1E3A8A' : '#3B82F6' }]} onPress={onCall}>
+            <TouchableOpacity style={[styles.swipeAction, { backgroundColor: isDark ? '#1E3A8A' : '#3B82F6' }]} onPress={() => { swipeableRef.current?.close(); onCall(); }}>
                 <Ionicons name="call" size={22} color="#fff" />
                 <Text style={styles.swipeLabel}>Call</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.swipeAction, { backgroundColor: isDark ? '#1E293B' : '#64748B' }]} onPress={onSMS}>
+            <TouchableOpacity style={[styles.swipeAction, { backgroundColor: isDark ? '#1E293B' : '#64748B' }]} onPress={() => { swipeableRef.current?.close(); onSMS(); }}>
                 <Ionicons name="chatbubble" size={20} color="#fff" />
                 <Text style={styles.swipeLabel}>SMS</Text>
             </TouchableOpacity>
@@ -169,11 +171,11 @@ const InventoryCard = memo(({ item, onPress, onCall, onWhatsApp, onSMS, onEmail,
 
     const renderLeftActions = () => (
         <View style={styles.leftActions}>
-            <TouchableOpacity style={[styles.swipeAction, { backgroundColor: isDark ? '#166534' : '#25D366' }]} onPress={onWhatsApp}>
+            <TouchableOpacity style={[styles.swipeAction, { backgroundColor: isDark ? '#166534' : '#25D366' }]} onPress={() => { swipeableRef.current?.close(); onWhatsApp(); }}>
                 <Ionicons name="logo-whatsapp" size={22} color="#fff" />
                 <Text style={styles.swipeLabel}>WhatsApp</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.swipeAction, { backgroundColor: isDark ? theme.success + '20' : '#BBF7D0' }]} onPress={onEmail}>
+            <TouchableOpacity style={[styles.swipeAction, { backgroundColor: isDark ? theme.success + '20' : '#BBF7D0' }]} onPress={() => { swipeableRef.current?.close(); onEmail(); }}>
                 <Ionicons name="mail" size={22} color={isDark ? theme.success : '#166534'} />
                 <Text style={[styles.swipeLabel, { color: isDark ? theme.success : '#166534' }]}>Email</Text>
             </TouchableOpacity>
@@ -208,7 +210,13 @@ const InventoryCard = memo(({ item, onPress, onCall, onWhatsApp, onSMS, onEmail,
     }
 
     return (
-        <Swipeable renderRightActions={renderRightActions} renderLeftActions={renderLeftActions} friction={2}>
+        <Swipeable 
+            ref={swipeableRef} 
+            renderRightActions={renderRightActions} 
+            renderLeftActions={renderLeftActions} 
+            friction={2}
+            onSwipeableWillOpen={() => onSwipeWillOpen && onSwipeWillOpen(swipeableRef.current)}
+        >
             <Pressable 
                 onPressIn={() => animatePress(0.97)}
                 onPressOut={() => animatePress(1)}
@@ -328,6 +336,15 @@ export default function InventoryScreen() {
     const [page, setPage] = useState(1);
     const [hasMore, setHasMore] = useState(true);
     const [loadingMore, setLoadingMore] = useState(false);
+    const activeRowRef = useRef<any>(null);
+
+    const onSwipeableWillOpen = useCallback((rowRef: any) => {
+        if (activeRowRef.current && activeRowRef.current !== rowRef) {
+            activeRowRef.current.close();
+        }
+        activeRowRef.current = rowRef;
+    }, []);
+
     const lastFetchTime = useRef<number>(0);
     const [activeQuickFilter, setActiveQuickFilter] = useState<'active' | 'inactive' | null>(null);
     const [sortVisible, setSortVisible] = useState(false);
@@ -425,7 +442,8 @@ export default function InventoryScreen() {
         const result = await safeApiCall<any>(() => getInventory({ 
             ...apiFilters, 
             page: String(pageNum), 
-            limit: "50",
+            limit: "20",           // 🚀 SENIOR: Reduced from 50→20. Inventory is the heaviest record type.
+            view: 'compact',       // 🚀 SENIOR: Skips PricingBenchmark + contact address hydration
             sortBy: sortConfig.by,
             sortOrder: String(sortConfig.order)
         }));
@@ -446,7 +464,7 @@ export default function InventoryScreen() {
 
                 // 2. Update Cache (only for first page)
                 if (pageNum === 1 && !shouldAppend) {
-                    AsyncStorage.setItem("@cache_inventory_list", JSON.stringify(filtered.slice(0, 50))).catch(() => {});
+                    AsyncStorage.setItem("@cache_inventory_list", JSON.stringify(filtered.slice(0, 20))).catch(() => {});
                     lastFetchTime.current = Date.now();
                 }
                 
@@ -455,7 +473,7 @@ export default function InventoryScreen() {
             
             setActiveCount(result.activeCount || 0);
             setInactiveCount(result.inactiveCount || 0);
-            setHasMore(newItems.length === 50);
+            setHasMore(newItems.length === 20); // ✅ Synced with limit=20
             setPage(pageNum);
         }
         setLoading(false);
@@ -756,29 +774,42 @@ export default function InventoryScreen() {
                     keyExtractor={(item) => item._id}
                     numColumns={viewMode === 'grid' ? 2 : 1}
                     columnWrapperStyle={viewMode === 'grid' ? styles.gridRow : undefined}
+                    onScrollBeginDrag={() => {
+                        if (activeRowRef.current) {
+                            activeRowRef.current.close();
+                            activeRowRef.current = null;
+                        }
+                    }}
                     renderItem={({ item }) => (
                             <MemoizedInventoryCard
                             item={item}
                             viewMode={viewMode}
-                            onPress={() => router.push({
-                                pathname: "/inventory-detail",
-                                params: { 
-                                    id: item._id,
-                                    // Passing basic data for instant "Ghost Hydration"
-                                    _unitNo: item.unitNumber || item.unitNo || "N/A",
-                                    _projectName: item.projectName || "N/A",
-                                    _status: typeof item.status === 'object' ? (item.status as any)._id : item.status
+                            onPress={() => {
+                                if (activeRowRef.current) { 
+                                    activeRowRef.current.close(); 
+                                    activeRowRef.current = null; 
+                                    return; 
                                 }
-                            })}
+                                router.push({
+                                    pathname: "/inventory-detail",
+                                    params: { 
+                                        id: item._id,
+                                        _unitNo: item.unitNumber || item.unitNo || "N/A",
+                                        _projectName: item.projectName || "N/A",
+                                        _status: typeof item.status === 'object' ? (item.status as any)._id : item.status
+                                    }
+                                });
+                            }}
                             onCall={() => handleCall(item)}
                             onWhatsApp={() => handleWhatsApp(item)}
                             onSMS={() => handleSMS(item)}
                             onEmail={() => handleEmail(item)}
                             onMenuPress={() => openHub(item)}
+                            onSwipeWillOpen={onSwipeableWillOpen}
                         />
                     )}
                     contentContainerStyle={styles.list}
-                    ListHeaderComponent={renderHeader}
+                    ListHeaderComponent={renderHeader()}
                     initialNumToRender={10}
                     maxToRenderPerBatch={10}
                     windowSize={5}
@@ -888,7 +919,7 @@ export default function InventoryScreen() {
                             <View style={styles.actionGrid}>
                                 {selectedInv?.owners?.[0]?.mobile && (
                                     <TouchableOpacity style={styles.actionItem} onPress={() => {
-                                        const phone = selectedInv.owners[0].mobile.replace(/\D/g, "");
+                                        const phone = selectedInv?.owners?.[0]?.mobile?.replace(/\D/g, "");
                                         Linking.openURL(`tel:${phone}`);
                                         closeHub();
                                     }}>
@@ -907,6 +938,16 @@ export default function InventoryScreen() {
                                     </View>
                                     <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Edit</Text>
                                 </TouchableOpacity >
+
+                                <TouchableOpacity style={styles.actionItem} onPress={() => {
+                                    if (selectedInv) router.push(`/add-builtup-details?id=${selectedInv._id}&type=Inventory`);
+                                    closeHub();
+                                }}>
+                                    <View style={[styles.actionIcon, { backgroundColor: isDark ? 'rgba(245, 158, 11, 0.1)' : "#FEF3C7" }]}>
+                                        <Ionicons name="business" size={24} color="#F59E0B" />
+                                    </View>
+                                    <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Builtup</Text>
+                                </TouchableOpacity>
 
                                 <TouchableOpacity style={styles.actionItem} onPress={() => {
                                     if (selectedInv) {
@@ -951,7 +992,7 @@ export default function InventoryScreen() {
                                     closeHub();
                                 }}>
                                     <View style={[styles.actionIcon, { backgroundColor: isDark ? 'rgba(14, 165, 233, 0.1)' : "#F0F9FF" }]}>
-                                        <Ionicons name="document-add" size={24} color="#0EA5E9" />
+                                        <Ionicons name="document" size={24} color="#0EA5E9" />
                                     </View>
                                     <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Add Doc</Text>
                                 </TouchableOpacity>
@@ -1053,28 +1094,7 @@ export default function InventoryScreen() {
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1 },
-    safeArea: { flex: 1 },
-    center: { flex: 1, justifyContent: "center", alignItems: "center" },
-    header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20, paddingTop: 12, paddingBottom: 16 },
-    headerTitle: { fontSize: 28, fontWeight: "900", letterSpacing: -0.5 },
-    headerActions: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-    mainAddBtn: { width: 44, height: 44, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
-    metricsFlowContainer: { flexDirection: 'row', height: 64, marginHorizontal: 20, marginBottom: 16, borderRadius: 14, overflow: 'hidden' },
-    flowSegment: { flex: 1, justifyContent: 'center', paddingHorizontal: 16, borderLeftWidth: 1, borderColor: 'transparent' },
-    segmentLabel: { fontSize: 10, fontWeight: "900", letterSpacing: 1, marginBottom: 4 },
-    segmentStats: { flexDirection: 'row', alignItems: 'baseline', gap: 4 },
-    segmentCount: { fontSize: 22, fontWeight: "900" },
-    segmentPercent: { fontSize: 11, fontWeight: "700" },
-    commandBar: { flexDirection: "row", alignItems: "center", marginHorizontal: 20, paddingHorizontal: 16, height: 50, borderRadius: 12, borderWidth: 1 },
-    commandInput: { flex: 1, marginLeft: 12, fontSize: 15, fontWeight: "600" },
-    searchRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-    viewModeBtn: { width: 34, height: 34, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
-    filterBtn: { width: 34, height: 34, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
-    filterBadge: { position: 'absolute', top: -4, right: -4, width: 14, height: 14, borderRadius: 7, justifyContent: 'center', alignItems: 'center' },
-    filterBadgeText: { color: '#fff', fontSize: 8, fontWeight: '900' },
-    list: { paddingBottom: 100 },
-    listCard: { flexDirection: "row", marginHorizontal: 0, marginBottom: 8, borderRadius: 18, overflow: "hidden", borderWidth: 1, elevation: 1, shadowOpacity: 0.02, shadowRadius: 10, shadowOffset: { width: 0, height: 5 } },
+
     container: { flex: 1 },
     safeArea: { flex: 1 },
     headerContainer: { paddingBottom: 16 },
@@ -1189,6 +1209,6 @@ const styles = StyleSheet.create({
     contactRole: { fontSize: 11, fontWeight: '600', marginTop: 2 },
     inactiveSelected: { borderWidth: 2 },
     activeSelected: { borderWidth: 2, borderColor: '#22C55E' },
-    emptyText: { marginTop: 16, fontSize: 16, fontWeight: "700", textAlign: 'center' },
+
     sortItem: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, borderRadius: 12, borderWidth: 1, borderColor: 'transparent' },
 });

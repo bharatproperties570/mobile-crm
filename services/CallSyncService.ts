@@ -103,7 +103,7 @@ class CallSyncService {
                 await SecureStore.setItemAsync('last_call_sync_ts', now);
                 console.log(`[CallSync] ✅ Successfully synced ${calls.length} calls.`);
                 this.isSyncing = false;
-                return { success: true, count: calls.length };
+                return { success: true, count: calls.length, pendingResolutions: response.data.pendingResolutions || [] } as any;
             } else {
                 throw new Error(response.data.error || 'Backend failed');
             }

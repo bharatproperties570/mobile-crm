@@ -45,7 +45,6 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       await Audio.setAudioModeAsync({
         playsInSilentModeIOS: true,
         staysActiveInBackground: false,
-        shouldDuckOthers: true,
       });
       const { sound } = await Audio.Sound.createAsync({ uri: NOTIF_SOUND_URL });
       soundRef.current = sound;
@@ -60,10 +59,10 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         await soundRef.current.replayAsync();
       } else {
         await loadSound();
-        await soundRef.current?.playAsync();
+        await (soundRef.current as any)?.playAsync();
       }
-    } catch (error) {
-      console.warn('Error playing notification sound', error);
+    } catch (error: any) {
+      console.log('Error playing notification sound:', error);
     }
   };
 
@@ -100,7 +99,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         knownIdsRef.current = new Set(currentIds);
         isInitialLoad.current = false;
       }
-    } catch (error) {
+    } catch (error: any) {
       console.warn('[Notifications] Polling failed:', error.message);
     } finally {
       if (!isSilent) setLoading(false);

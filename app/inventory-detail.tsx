@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import {
-    View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert, SafeAreaView, Animated, Linking, Dimensions
+    View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert, SafeAreaView, Animated, Linking, Dimensions, Share
 } from "react-native";
 import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -8,9 +8,11 @@ import { useTheme } from "@/context/ThemeContext";
 import api from "@/services/api";
 import { getActivities } from "@/services/activities.service";
 import { useLookup } from "@/context/LookupContext";
-import { getSizeLabel, formatSize } from "@/utils/format.utils";
+import { getSizeLabel, formatSize, formatPrice } from "@/utils/format.utils";
 import { useCallTracking } from "@/context/CallTrackingContext";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as Clipboard from 'expo-clipboard';
+import Toast from 'react-native-toast-message';
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const CACHE_KEY_PREFIX = "@cache_inventory_detail_";
@@ -84,6 +86,55 @@ export default function InventoryDetailScreen() {
         if (!val) return '';
         if (typeof val === 'object') return val.lookup_value || val.name || '';
         return getLookupValue('Status', val) || getLookupValue('InventoryStatus', val) || String(val);
+    };
+
+    const generateShareText = () => {
+        if (!inv) return "";
+        const uNo = lv(inv?.unitNumber || inv?.unitNo || _unitNo, getLookupValue);
+        const pName = lv(inv?.projectName || inv?.area || _projectName || "Unknown Project", getLookupValue);
+        const uType = lv(inv?.unitType, getLookupValue);
+        const sType = lv(inv?.subType, getLookupValue);
+        const dir = lv(inv?.direction, getLookupValue);
+        const fac = lv(inv?.facing, getLookupValue);
+        const price = inv?.expectedPrice ? formatPrice(inv.expectedPrice) : "Price on Request";
+        
+        let text = `*Property Available*\n\n`;
+        text += `*Project:* ${pName}\n`;
+        text += `*Unit:* ${uNo} ${uType !== "—" ? `(${uType})` : ""}\n`;
+        if (sType && sType !== "—") text += `*Type:* ${sType}\n`;
+        if (dir && dir !== "—") text += `*Direction:* ${dir}\n`;
+        if (fac && fac !== "—") text += `*Facing:* ${fac}\n`;
+        text += `*Price:* ${price}\n\n`;
+        
+        const sizeArea = lv(inv?.sizeArea || inv?.size, getLookupValue);
+        if (sizeArea !== "—") text += `*Size/Area:* ${formatSize(inv?.sizeArea || inv?.size, 'Sq.Ft.', getLookupValue)}\n`;
+        
+        text += `\nPlease contact me for more details!`;
+        return text;
+    };
+
+    const handleCopyDetails = async () => {
+        const text = generateShareText();
+        await Clipboard.setStringAsync(text);
+        Toast.show({ type: 'success', text1: 'Details Copied', text2: 'Property details copied to clipboard' });
+    };
+
+    const handleWhatsAppShare = async () => {
+        const text = generateShareText();
+        const encodedText = encodeURIComponent(text);
+        try {
+            await Linking.openURL(`whatsapp://send?text=${encodedText}`);
+        } catch (e) {
+            Alert.alert("Error", "WhatsApp is not installed on your device.");
+        }
+    };
+
+    const handleSystemShare = async () => {
+        try {
+            await Share.share({ message: generateShareText() });
+        } catch (e) {
+            console.error(e);
+        }
     };
 
     const tabScrollViewRef = useRef<ScrollView>(null);
@@ -296,10 +347,21 @@ export default function InventoryDetailScreen() {
                                         color="#F87171" 
                                         onPress={() => ownerEmail ? Linking.openURL(`mailto:${ownerEmail}`) : Alert.alert("No Email", "Owner email address not available")} 
                                     />
+                                    <View style={{ width: 1, backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : theme.border, height: 24, marginHorizontal: 8 }} />
                                     <RibbonButton 
-                                        icon="share-social" 
+                                        icon="copy-outline" 
+                                        color={isDark ? '#E2E8F0' : '#475569'} 
+                                        onPress={handleCopyDetails} 
+                                    />
+                                    <RibbonButton 
+                                        icon="logo-whatsapp" 
+                                        color="#25D366" 
+                                        onPress={handleWhatsAppShare} 
+                                    />
+                                    <RibbonButton 
+                                        icon="share-social-outline" 
                                         color="#64748B" 
-                                        onPress={() => Alert.alert("Share", `Sharing details for Unit ${unitNo} at ${projectName}`)} 
+                                        onPress={handleSystemShare} 
                                     />
                                 </>
                             );

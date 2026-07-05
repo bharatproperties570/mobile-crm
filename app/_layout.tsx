@@ -23,6 +23,7 @@ import * as SplashScreen from "expo-splash-screen";
 import { useCallMonitor } from "../utils/CallMonitor";
 import { useFonts } from "expo-font";
 import { Ionicons } from "@expo/vector-icons";
+import Toast from "react-native-toast-message";
 
 // ── Prevent native splash from auto-hiding ──────────────────────────────────
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -162,6 +163,7 @@ export default function RootLayout() {
                     </GestureHandlerRootView>
                 </SafeAreaProvider>
             </ErrorBoundary>
+            <Toast />
         </View>
     );
 }

@@ -342,7 +342,10 @@ export default function AddActivityScreen() {
         if (!formData.subject) return Alert.alert("Error", "Please enter a subject");
         if (!selectedEntity) return Alert.alert("Error", "Please select a related entity");
 
-        if (["Call", "Meeting", "Site Visit", "Email", "Task"].includes(formData.type) && !formData.details.purpose) {
+        const typeConfig = activityMasterFields?.activities?.find((a: any) => a.name === formData.type);
+        const hasPurposesConfigured = typeConfig?.purposes?.length > 0;
+
+        if (["Call", "Meeting", "Site Visit", "Email", "Task"].includes(formData.type) && hasPurposesConfigured && !formData.details.purpose) {
             const label = formData.type === 'Meeting' ? 'Agenda' : formData.type === 'Site Visit' ? 'Visit Type' : 'Purpose';
             return Alert.alert("Required", `Please select a ${formData.type} ${label}`);
         }
@@ -372,17 +375,20 @@ export default function AddActivityScreen() {
             };
 
             console.log("[AddActivity] Dispatching payload:", JSON.stringify(payload, null, 2));
-            const res = await safeApiCall(() => addActivity(payload));
+            const res = await safeApiCallSingle(() => addActivity(payload));
 
             if (!res.error) {
                 // Global Sync Dispatch
                 const { emitSyncEvent, SyncEvents } = require("@/utils/sync-events");
-                emitSyncEvent(SyncEvents.ACTIVITY_COMPLETED, { id: res.data?._id, entityId: selectedEntity.id });
+                const activityId = (res.data as any)?.data?._id || (res.data as any)?._id;
+                emitSyncEvent(SyncEvents.ACTIVITY_COMPLETED, { id: activityId, entityId: selectedEntity.id });
                 emitSyncEvent(SyncEvents.LEAD_UPDATED, { id: selectedEntity.id });
 
-                Alert.alert("Success", "Activity logged successfully", [
-                    { text: "OK", onPress: () => router.canGoBack() ? router.back() : router.replace("/(tabs)/activities") }
-                ]);
+                if (router.canGoBack()) {
+                    router.back();
+                } else {
+                    router.replace("/(tabs)/activities");
+                }
             } else {
                 Alert.alert("Save Failed", res.error || "The server rejected the activity record. Please check your inputs.");
             }
@@ -641,7 +647,7 @@ export default function AddActivityScreen() {
                                     <View style={{ flex: 1, marginRight: 8 }}>
                                         <Text style={styles.label}>Direction</Text>
                                         <View style={styles.toggleRow}>
-                                            {["Outgoing Call", "Incoming Call"].map(d => (
+                                            {["Outgoing Call", "Incoming Call", "Missed Call"].map(d => (
                                                 <TouchableOpacity
                                                     key={d}
                                                     style={[styles.toggleBtn, formData.details.direction === d && styles.activeToggle]}
@@ -710,7 +716,7 @@ export default function AddActivityScreen() {
 
 
                         <Text style={[styles.label, { marginTop: 12 }]}>Meeting Location</Text>
-                        <View style={styles.chipRow}>
+                        <View style={styles.chipGrid}>
                             {MEETING_TYPES.map(mt => (
                                 <TouchableOpacity
                                     key={mt}

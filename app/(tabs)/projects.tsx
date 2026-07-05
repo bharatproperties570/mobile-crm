@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useMemo, memo, useRef } from "react";
 import {
     View, Text, StyleSheet, SectionList, TouchableOpacity,
-    TextInput, RefreshControl, ActivityIndicator, Dimensions, Animated, Modal, Pressable, Alert
+    TextInput, RefreshControl, ActivityIndicator, Dimensions, Animated, Modal, Pressable, Alert, ScrollView
 } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -13,6 +13,7 @@ import { useLookup } from "@/context/LookupContext";
 import FilterModal, { FilterField } from "@/components/FilterModal";
 import { useUsers } from "@/context/UserContext";
 import { Vibration } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const PROJECT_FILTER_FIELDS: FilterField[] = [
     { key: "status", label: "Status", type: "lookup", lookupType: "ProjectStatus" },
@@ -239,28 +240,45 @@ export default function ProjectsScreen() {
 
     const fetchProjects = useCallback(async (pageNum = 1, shouldAppend = false) => {
         setLoading(true);
+        const cacheKey = `@projects_list_p${pageNum}_s${search.length}_f${Object.keys(filters).length}`;
+
+        if (pageNum === 1 && !shouldAppend) {
+            try {
+                const cached = await AsyncStorage.getItem(cacheKey);
+                if (cached) {
+                    const parsed = JSON.parse(cached);
+                    setProjects(parsed);
+                    setLoading(false);
+                }
+            } catch (e) {
+                console.error("Cache read error:", e);
+            }
+        }
+
         const result = await safeApiCall<any>(() => getProjects({ 
             page: String(pageNum), 
-            limit: "50",
+            limit: "20",
             sortBy: sortConfig.by,
-            sortOrder: String(sortConfig.order)
+            sortOrder: String(sortConfig.order),
+            view: "compact"
         }));
 
         if (!result.error && result.data) {
             const newRecords = extractList(result.data);
-            
-            setProjects(prev => {
-                const combined = shouldAppend ? [...prev, ...newRecords] : newRecords;
-                const seen = new Set();
-                return combined.filter((p: any) => {
-                    const id = p?._id || p?.id;
-                    if (!id || seen.has(id)) return false;
-                    seen.add(id);
-                    return true;
+            if (shouldAppend) {
+                setProjects(prev => {
+                    const existingIds = new Set(prev.map(p => p._id));
+                    const uniqueNew = newRecords.filter((p: any) => !existingIds.has(p._id));
+                    return [...prev, ...uniqueNew];
                 });
-            });
+            } else {
+                setProjects(newRecords);
+                if (pageNum === 1) {
+                    AsyncStorage.setItem(cacheKey, JSON.stringify(newRecords)).catch(console.error);
+                }
+            }
             
-            setHasMore(newRecords.length === 50);
+            setHasMore(pageNum < (result.data.totalPages || 1) && newRecords.length > 0);
             setPage(pageNum);
         } else if (result.error) {
             console.error("[Projects] Fetch error:", result.error);
@@ -379,6 +397,7 @@ export default function ProjectsScreen() {
                     onEndReached={loadMore}
                     onEndReachedThreshold={0.5}
                     refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />}
+                    ListHeaderComponent={renderHeader()}
                     ListFooterComponent={loading && page > 1 ? <ActivityIndicator color={theme.primary} style={{ marginVertical: 20 }} /> : null}
                     ListEmptyComponent={
                         <View style={styles.empty}>

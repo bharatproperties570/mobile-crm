@@ -4,7 +4,7 @@ import {
     RefreshControl, ActivityIndicator,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { getInventory, type InventoryUnit } from "@/services/inventory.service";
+import { getInventory, type Inventory } from "@/services/inventory.service";
 
 const STATUS_COLORS: Record<string, string> = {
     available: "#10B981", sold: "#EF4444", booked: "#F59E0B", "under construction": "#6366F1",
@@ -23,7 +23,7 @@ function formatPrice(price?: number): string {
     return `₹${price.toLocaleString("en-IN")}`;
 }
 
-function UnitCard({ unit, onPress }: { unit: InventoryUnit; onPress: () => void }) {
+function UnitCard({ unit, onPress }: { unit: Inventory; onPress: () => void }) {
     const statusStr = resolveName(unit.status).toLowerCase();
     const color = STATUS_COLORS[statusStr] ?? "#6366F1";
 
@@ -36,12 +36,12 @@ function UnitCard({ unit, onPress }: { unit: InventoryUnit; onPress: () => void 
             </View>
             <View style={styles.cardBody}>
                 <View style={styles.cardTop}>
-                    <Text style={styles.projectName} numberOfLines={1}>{resolveName(unit.project)}</Text>
+                    <Text style={styles.projectName} numberOfLines={1}>{resolveName((unit as any).project)}</Text>
                     <View style={[styles.badge, { backgroundColor: color + "18" }]}>
                         <Text style={[styles.badgeText, { color }]}>{resolveName(unit.status)}</Text>
                     </View>
                 </View>
-                <Text style={styles.blockText}>Block: {resolveName(unit.block)} {unit.floor != null ? `· Floor ${unit.floor}` : ""}</Text>
+                <Text style={styles.blockText}>Block: {resolveName(unit.block)} {(unit as any).floor != null ? `· Floor ${(unit as any).floor}` : ""}</Text>
                 <View style={styles.statsRow}>
                     {unit.size ? <Text style={styles.stat}>📐 {unit.size} sq.ft</Text> : null}
                     {unit.unitType ? <Text style={styles.stat}>🏠 {resolveName(unit.unitType)}</Text> : null}
@@ -54,8 +54,8 @@ function UnitCard({ unit, onPress }: { unit: InventoryUnit; onPress: () => void 
 
 export default function MoreScreen() {
     const router = useRouter();
-    const [inventory, setInventory] = useState<InventoryUnit[]>([]);
-    const [filtered, setFiltered] = useState<InventoryUnit[]>([]);
+    const [inventory, setInventory] = useState<Inventory[]>([]);
+    const [filtered, setFiltered] = useState<Inventory[]>([]);
     const [search, setSearch] = useState("");
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -63,7 +63,7 @@ export default function MoreScreen() {
     const fetchInventory = useCallback(async () => {
         try {
             const res = await getInventory();
-            const list: InventoryUnit[] = Array.isArray(res) ? res : (res?.records ?? res?.data ?? []);
+            const list: Inventory[] = Array.isArray(res) ? res : (res?.records ?? res?.data ?? []);
             setInventory(list);
             setFiltered(list);
         } catch (e) {
@@ -80,7 +80,7 @@ export default function MoreScreen() {
         const q = text.toLowerCase();
         setFiltered(inventory.filter((u) =>
             (u.unitNumber ?? "").toLowerCase().includes(q) ||
-            resolveName(u.project).toLowerCase().includes(q) ||
+            resolveName((u as any).project).toLowerCase().includes(q) ||
             resolveName(u.block).toLowerCase().includes(q)
         ));
     };

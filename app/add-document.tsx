@@ -81,7 +81,7 @@ export default function AddDocumentScreen() {
             setCategories(catRes?.data || []);
             setProjects(projRes?.data || (Array.isArray(projRes) ? projRes : []));
 
-            const data = entityRes?.data ?? entityRes;
+            const data = entityRes?.records?.[0] || entityRes?.data || entityRes?.[0] || entityRes;
             setEntityData(data);
             
             if (type === "Contact") {
@@ -112,20 +112,21 @@ export default function AddDocumentScreen() {
                 }
                 setPotentialContacts(contacts);
             }
-        } catch (error) {
-            console.error("Init error:", error);
-            Alert.alert("Error", "Failed to load initial data. Check your network.");
-        } finally {
-            setLoading(false);
+
             const cats = (catRes?.data || []);
             if (mode === "upload" && cats.length > 0) {
                 const mediaCat = cats.find((c: any) => c.lookup_value === "Media");
                 if (mediaCat) {
                     setSelectedCategory(mediaCat);
-                    const imageType = (mediaCat.subCategories || []).find((s: any) => s.lookup_value === "Images" || s.lookup_value === "Image");
+                    const imageType = ((mediaCat as any).subCategories || []).find((s: any) => s.lookup_value === "Images" || s.lookup_value === "Image");
                     if (imageType) setSelectedType(imageType);
                 }
             }
+        } catch (error) {
+            console.error("Init error:", error);
+            Alert.alert("Error", "Failed to load initial data. Check your network.");
+        } finally {
+            setLoading(false);
         }
     };
 

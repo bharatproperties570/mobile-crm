@@ -92,7 +92,7 @@ export default function ReviveLeadScreen() {
         }
         setSaving(true);
         try {
-            await updateLead(id, { ...formData });
+            await updateLead(id, { ...formData } as any);
             const activityPayload = {
                 type: "Call",
                 subject: "Lead Revival Call",

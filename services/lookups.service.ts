@@ -18,7 +18,7 @@ export const getLookups = async (type?: string, parentId?: string) => {
 
 export const getHierarchicalDocs = async () => {
     try {
-        const res = await api.get("/lookups", { params: { limit: 2000 } });
+        const res = await api.get("/lookups", { params: { limit: 2000, lookup_type: 'DocumentCategory,Document-Category,DocumentType,Document-Type' } });
         const allLookups = res.data?.data || (Array.isArray(res.data) ? res.data : []);
 
         const categories = allLookups.filter((item: any) =>

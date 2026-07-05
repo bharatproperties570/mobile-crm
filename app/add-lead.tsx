@@ -6,6 +6,7 @@ import {
 } from "react-native";
 
 import { useRouter, useLocalSearchParams } from "expo-router";
+import * as Contacts from 'expo-contacts';
 import { Ionicons } from "@expo/vector-icons";
 import api from "@/services/api";
 import GooglePlacesAutocomplete from "@/components/GooglePlacesAutocompleteFixed";
@@ -79,10 +80,10 @@ function SectionHeader({ title, icon, subtitle }: { title: string; icon: string;
     );
 }
 
-function Field({ label, required, children, helperText }: { label?: string; required?: boolean; children: React.ReactNode; helperText?: string }) {
+function Field({ label, required, children, helperText, style }: { label?: string; required?: boolean; children: React.ReactNode; helperText?: string; style?: any }) {
     const { theme } = useTheme();
     return (
-        <View style={styles.field}>
+        <View style={[styles.field, style]}>
             {label && (
                 <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>
                     {label}
@@ -265,6 +266,7 @@ function MultiSelectButton({
 
 export default function AddLead() {
     const { theme } = useTheme();
+    const isDark = theme.background === '#0F172A' || theme.background === '#121212';
     const router = useRouter();
     const params = useLocalSearchParams();
     const { getLookupValue, getLookupsByType, propertyConfig, leadMasterFields, refreshLookups, loading: loadingLookups } = useLookup();
@@ -312,6 +314,12 @@ export default function AddLead() {
     const [units, setUnits] = useState<any[]>([]);
     const [isLoadingUnits, setIsLoadingUnits] = useState(false);
     const [activeDropdown, setActiveDropdown] = useState<'unit' | 'teams' | null>(null);
+
+    const categoriesList = useMemo(() => {
+        return propertyConfig && Object.keys(propertyConfig).length > 0 
+            ? Object.keys(propertyConfig) 
+            : ['Residential', 'Commercial', 'Industrial', 'Agricultural', 'Institutional'];
+    }, [propertyConfig]);
 
     const allowedSubCategoryNames = useMemo(() => {
         if (!propertyConfig || !formData.propertyType || formData.propertyType.length === 0) return [];
@@ -439,12 +447,35 @@ function SearchableDropdown({
         });
         return [...new Set(names)];
     }, [propertyConfig, formData.subType, getLookupValue]);
-
     // Helper to resolve any value (ID or Name) to a name for UI consistency
     const resolveToName = useCallback((type: string, val: any) => {
         if (!val) return "";
         return getLookupValue(type, val);
     }, [getLookupValue]);
+
+    // Check for duplicate on the fly
+    const [duplicateWarn, setDuplicateWarn] = useState<any[]>([]);
+
+    const handleImportContact = async () => {
+        const { status } = await Contacts.requestPermissionsAsync();
+        if (status === 'granted') {
+            const { data } = await Contacts.presentContactPickerAsync();
+            if (data) {
+                const phone = data.phoneNumbers?.[0]?.number?.replace(/[^0-9+]/g, '') || '';
+                const email = data.emails?.[0]?.email || '';
+                setFormData(prev => ({
+                    ...prev,
+                    firstName: data.firstName || prev.firstName,
+                    lastName: data.lastName || prev.lastName,
+                    mobile: phone || prev.mobile,
+                    email: email || prev.email,
+                }));
+                Vibration.vibrate(20);
+            }
+        } else {
+            Alert.alert('Permission Denied', 'Please allow contacts access to use this feature.');
+        }
+    };
 
     const [duplicates, setDuplicates] = useState<any[]>([]);
     const [isBlocked, setIsBlocked] = useState(false);
@@ -698,8 +729,8 @@ function SearchableDropdown({
 
     const renderMultiSelect = (type: string, field: string, allowedNames?: string[]) => {
         let options: { label: string, value: string }[] = [];
-        if (type === "UnitType" && allowedNames && allowedNames.length > 0) {
-            // Special handling for UnitType to match what's in Settings > Configuration exactly
+        if ((type === "UnitType" || type === "Category" || type === "SubCategory") && allowedNames && allowedNames.length > 0) {
+            // Special handling to match what's in Settings > Configuration exactly
             options = allowedNames.map(name => ({ label: name, value: name }));
         } else {
             const list = getLookupsByType(type);
@@ -725,10 +756,10 @@ function SearchableDropdown({
             }
         }
 
-        // For UnitType, we need to ensure values in formData (which might be IDs) 
+        // For config-driven types, we need to ensure values in formData (which might be IDs) 
         // match the labels in options (which are clean names from config)
         const currentValues = (formData[field] || []).map((val: any) => 
-            type === "UnitType" ? resolveToName(type, val) : val
+            (type === "UnitType" || type === "Category" || type === "SubCategory") ? resolveToName(type, val) : val
         );
 
         return (
@@ -816,6 +847,36 @@ function SearchableDropdown({
         return <SelectButton value={formData[field]} options={options} onSelect={(val) => setFormData({ ...formData, [field]: val })} />;
     };
 
+    const renderLeadMasterMultiSelect = (masterKey: string, field: keyof typeof formData, lookupFallback?: string) => {
+        let options: {label: string, value: string}[] = [];
+
+        const globalLookups = lookupFallback ? getLookupsByType(lookupFallback) : [];
+
+        if (globalLookups.length > 0) {
+            if (leadMasterFields && leadMasterFields[masterKey] && leadMasterFields[masterKey].length > 0) {
+                options = globalLookups
+                    .filter(l => leadMasterFields[masterKey].includes(l.lookup_value))
+                    .map(l => ({ label: l.lookup_value, value: l._id }));
+            } else {
+                options = globalLookups.map(l => ({ label: l.lookup_value, value: l._id }));
+            }
+        } else if (leadMasterFields && leadMasterFields[masterKey] && leadMasterFields[masterKey].length > 0) {
+            options = leadMasterFields[masterKey].map((val: string) => ({ label: val, value: val }));
+        }
+
+        return (
+            <MultiSelectButton
+                values={formData[field]}
+                options={options}
+                onToggle={(val) => {
+                    const current = formData[field] || [];
+                    const newList = current.includes(val) ? current.filter((i: string) => i !== val) : [...current, val];
+                    setFormData({ ...formData, [field]: newList });
+                }}
+            />
+        );
+    };
+
     const renderDependentMultiSelect = (type: string, field: string, parentIds: string[]) => {
         let list = getLookupsByType(type);
         if (!Array.isArray(list) || !parentIds || parentIds.length === 0) return <Text style={{ color: theme.textMuted, fontSize: 13, fontStyle: 'italic', padding: 8 }}>Select parent field first</Text>;
@@ -848,7 +909,7 @@ function SearchableDropdown({
                             <Field label="Type" required>
                                 <SelectButton value={formData.requirement} options={["Buy", "Rent", "Lease"].map(r => ({ label: r, value: r }))} onSelect={(v) => setFormData({ ...formData, requirement: v })} />
                             </Field>
-                            <Field label="Category">{renderMultiSelect("Category", "propertyType")}</Field>
+                            <Field label="Category">{renderMultiSelect("Category", "propertyType", categoriesList)}</Field>
                             <Field label="Sub Category">
                                 {formData.propertyType.length > 0 
                                     ? renderMultiSelect("SubCategory", "subType", allowedSubCategoryNames)
@@ -930,8 +991,10 @@ function SearchableDropdown({
                                     </View>
                                 </FadeInView>
                             )}
-                            <Field label="Facing">{renderMultiSelect("Facing", "facing")}</Field>
-                            <Field label="Direction">{renderMultiSelect("Direction", "direction")}</Field>
+                            <Field label="Facing">{renderLeadMasterMultiSelect("facings", "facing", "Facing")}</Field>
+                            <Field label="Direction">{renderLeadMasterMultiSelect("directions", "direction", "Direction")}</Field>
+                            <Field label="Road Width">{renderLeadMasterMultiSelect("roadWidths", "roadWidth", "RoadWidth")}</Field>
+                            <Field label="Unit Type">{renderLeadMasterMultiSelect("unitTypes", "unitType", "UnitType")}</Field>
                             <Field label="Purpose"><SelectButton value={formData.purpose} options={["End Use", "Investment"].map(v => ({ label: v, value: v }))} onSelect={(v) => setFormData({ ...formData, purpose: v })} /></Field>
                             <View style={[styles.rowAlign, { paddingVertical: 12, borderTopWidth: 1, borderTopColor: theme.border, marginTop: 10 }]}>
                                 <Text style={[styles.fieldLabel, { color: theme.textSecondary, marginBottom: 0 }]}>NRI Status</Text>
@@ -944,15 +1007,17 @@ function SearchableDropdown({
                 return (
                     <FadeInView key="step1">
                         <SectionHeader title="Location & Project" icon="📍" subtitle="Preferred areas and developments" />
-                        <View style={[styles.card, { backgroundColor: theme.cardBg, borderColor: theme.border }]}>
-                            <Field label="Search Location">
-                                <View style={styles.googleSearchContainer}>
+                        <View style={[styles.card, { backgroundColor: theme.cardBg, borderColor: theme.border, zIndex: 9999, elevation: 999 }]}>
+                            <Field label="Search Location" style={{ zIndex: 9999, elevation: 999 }}>
+                                <View style={[styles.googleSearchContainer, { zIndex: 9999, elevation: 999 }]}>
                                     <GooglePlacesAutocomplete
                                         ref={googlePlacesRef}
                                         placeholder="Area, sector or city..."
                                         minLength={2}
                                         debounce={400}
                                         disableScroll={true}
+                                        fetchDetails={true}
+                                        keyboardShouldPersistTaps="handled"
                                         onPress={(data: any, details: any = null) => {
                                             if (details) {
                                                 const locObj = {
@@ -972,23 +1037,22 @@ function SearchableDropdown({
                                             types: "geocode" 
                                         }}
                                         styles={{
-                                            textInput: [styles.input, { color: theme.textPrimary, backgroundColor: theme.inputBg, borderRadius: 12, borderWidth: 1, borderColor: theme.border }],
-                                            container: { flex: 0 },
+                                            textInput: [styles.input, { color: theme.textPrimary, backgroundColor: theme.inputBg, borderRadius: 12, borderWidth: 1, borderColor: theme.border, height: 48, width: '100%' }],
+                                            container: { flex: 0, width: '100%', zIndex: 9999 },
                                             listView: { 
                                                 position: 'absolute', 
-                                                top: 50, 
+                                                top: 55, 
                                                 left: 0, 
                                                 right: 0, 
                                                 backgroundColor: theme.cardBg, 
                                                 borderRadius: 12, 
-                                                marginTop: 5, 
-                                                elevation: 5, 
-                                                zIndex: 1000, 
+                                                elevation: 10, 
+                                                zIndex: 99999, 
                                                 borderWidth: 1, 
                                                 borderColor: theme.border 
                                             }
                                         }}
-                                        fetchDetails={true}
+
                                         enablePoweredByContainer={false}
                                         textInputProps={{ placeholderTextColor: theme.textMuted }}
                                     />
@@ -1134,6 +1198,15 @@ function SearchableDropdown({
                                     ))}
                                 </View>
                             )}
+                            
+                            <TouchableOpacity 
+                                style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? 'rgba(59, 130, 246, 0.15)' : '#EFF6FF', padding: 12, borderRadius: 12, marginBottom: 16, borderWidth: 1, borderColor: isDark ? 'rgba(59, 130, 246, 0.3)' : '#BFDBFE' }}
+                                onPress={handleImportContact}
+                            >
+                                <Ionicons name="person-add" size={20} color={isDark ? '#60A5FA' : '#3B82F6'} style={{ marginRight: 8 }} />
+                                <Text style={{ color: isDark ? '#60A5FA' : '#3B82F6', fontWeight: '700', fontSize: 14 }}>Import from Device Contacts</Text>
+                            </TouchableOpacity>
+
                             <View style={styles.row}>
                                 <View style={{ width: 100 }}><Input label="Title" value={formData.salutation} onChangeText={v => setFormData({ ...formData, salutation: v })} /></View>
                                 <View style={{ flex: 1 }}><Input label="First Name" required value={formData.firstName} onChangeText={v => setFormData({ ...formData, firstName: v })} /></View>
@@ -1214,9 +1287,6 @@ function SearchableDropdown({
                                 
                                 <Text style={[styles.subLabel, { color: theme.textSecondary, marginTop: 16 }]}>Visibility Scope</Text>
                                 <SelectButton value={formData.visibleTo} options={[{ label: "Everyone", value: "Everyone" }, { label: "Team", value: "Team" }, { label: "Private", value: "Private" }]} onSelect={(v) => setFormData({ ...formData, visibleTo: v })} />
-                            </Field>
-                            <Field label="Stage" required>
-                                {renderSingleSelect("Stage", "stage")}
                             </Field>
                             <Input label="Internal Notes" multiline numberOfLines={4} value={formData.description} onChangeText={v => setFormData({ ...formData, description: v })} icon="create-outline" />
                         </View>

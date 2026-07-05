@@ -47,7 +47,8 @@ export interface Lead {
     notes?: any[];
 }
 
-export function leadName(lead: Lead): string {
+export function leadName(lead: Lead | null | undefined): string {
+    if (!lead) return "Unknown";
     const resolve = (val: any) => {
         if (!val) return "";
         if (typeof val === 'object') return val.lookup_value || val.fullName || val.name || "";

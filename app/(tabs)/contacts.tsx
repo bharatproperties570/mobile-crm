@@ -11,6 +11,7 @@ import {
     getContacts, contactFullName, contactPhone, contactEmail,
     lookupVal, updateContact, type Contact,
 } from "@/services/contacts.service";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { safeApiCall, extractList } from "@/services/api.helpers";
 import { useCallTracking } from "@/context/CallTrackingContext";
 import { getOrCreateCallActivity } from "@/services/activities.service";
@@ -22,8 +23,17 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
 
 const CONTACT_FILTER_FIELDS: FilterField[] = [
-    { key: "stage", label: "Stage", type: "lookup", lookupType: "Stage" },
     { key: "source", label: "Source", type: "lookup", lookupType: "Source" },
+    { key: "professionCategory", label: "Category", type: "lookup", lookupType: "ProfessionalCategory" },
+    { key: "professionSubCategory", label: "Sub-Category", type: "lookup", lookupType: "ProfessionalSubCategory" },
+    { key: "designation", label: "Designation", type: "lookup", lookupType: "ProfessionalDesignation" },
+    { key: "personalAddress.country", label: "Country", type: "lookup", lookupType: "Country" },
+    { key: "personalAddress.state", label: "State", type: "lookup", lookupType: "State" },
+    { key: "personalAddress.city", label: "City", type: "lookup", lookupType: "City" },
+    { key: "personalAddress.location", label: "Location", type: "lookup", lookupType: "Location" },
+    { key: "personalAddress.tehsil", label: "Tehsil", type: "lookup", lookupType: "Tehsil" },
+    { key: "personalAddress.postOffice", label: "Post Office", type: "lookup", lookupType: "PostOffice" },
+    { key: "personalAddress.pinCode", label: "Pin Code", type: "lookup", lookupType: "Pincode" },
 ];
 
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -57,7 +67,7 @@ function getInitials(c: Contact): string {
     return "?";
 }
 
-const ContactCard = memo(({ contact, idx, onPress, onMenuPress }: { contact: Contact; idx: number; onPress: () => void; onMenuPress: () => void }) => {
+const ContactCard = memo(({ contact, idx, onPress, onMenuPress, onSwipeWillOpen }: { contact: Contact; idx: number; onPress: () => void; onMenuPress: () => void; onSwipeWillOpen?: (ref: any) => void; }) => {
     const { theme } = useTheme();
     const { trackCall } = useCallTracking();
     const { getLookupValue } = useLookup();
@@ -70,6 +80,7 @@ const ContactCard = memo(({ contact, idx, onPress, onMenuPress }: { contact: Con
     const stage = (contact.stage || "new").toLowerCase();
     const stageColorMap = isDark ? STAGE_COLORS_DARK : STAGE_COLORS_LIGHT;
     const stageColor = stageColorMap[stage] ?? "#94A3B8";
+    const swipeableRef = useRef<any>(null);
     const fadeAnim = useRef(new Animated.Value(0)).current;
     const scaleValue = useRef(new Animated.Value(1)).current;
 
@@ -119,6 +130,7 @@ const ContactCard = memo(({ contact, idx, onPress, onMenuPress }: { contact: Con
                 activeOpacity={0.6}
                 style={[styles.swipeAction, { backgroundColor: "#2563EB" }]} 
                 onPress={() => {
+                    swipeableRef.current?.close();
                     if (!phone) return Alert.alert("No Number", "Cannot initiate call without a phone number.");
                     trackCall(phone, contact._id, "Contact", name);
                 }}
@@ -129,7 +141,7 @@ const ContactCard = memo(({ contact, idx, onPress, onMenuPress }: { contact: Con
             <TouchableOpacity 
                 activeOpacity={0.6}
                 style={[styles.swipeAction, { backgroundColor: "#F59E0B" }]} 
-                onPress={() => handleSMS(phone)}
+                onPress={() => { swipeableRef.current?.close(); handleSMS(phone); }}
             >
                 <Ionicons name="chatbubble" size={20} color="#fff" />
                 <Text style={styles.swipeLabel}>SMS</Text>
@@ -142,7 +154,7 @@ const ContactCard = memo(({ contact, idx, onPress, onMenuPress }: { contact: Con
             <TouchableOpacity 
                 activeOpacity={0.6}
                 style={[styles.swipeAction, { backgroundColor: "#10B981" }]} 
-                onPress={() => handleWhatsApp(phone)}
+                onPress={() => { swipeableRef.current?.close(); handleWhatsApp(phone); }}
             >
                 <Ionicons name="logo-whatsapp" size={20} color="#fff" />
                 <Text style={styles.swipeLabel}>WhatsApp</Text>
@@ -150,7 +162,7 @@ const ContactCard = memo(({ contact, idx, onPress, onMenuPress }: { contact: Con
             <TouchableOpacity 
                 activeOpacity={0.6}
                 style={[styles.swipeAction, { backgroundColor: "#6366F1" }]} 
-                onPress={() => handleEmail(email)}
+                onPress={() => { swipeableRef.current?.close(); handleEmail(email); }}
             >
                 <Ionicons name="mail" size={20} color="#fff" />
                 <Text style={styles.swipeLabel}>Email</Text>
@@ -159,10 +171,16 @@ const ContactCard = memo(({ contact, idx, onPress, onMenuPress }: { contact: Con
     );
 
     return (
-        <Swipeable renderRightActions={renderRightActions} renderLeftActions={renderLeftActions}>
+        <Swipeable 
+            ref={swipeableRef} 
+            renderRightActions={renderRightActions} 
+            renderLeftActions={renderLeftActions}
+            onSwipeableWillOpen={() => onSwipeWillOpen && onSwipeWillOpen(swipeableRef.current)}
+        >
             <Pressable 
                 onPressIn={() => animatePress(0.97)}
                 onPressOut={() => animatePress(1)}
+                delayPressIn={50}
                 onPress={onPress}
             >
                 <Animated.View style={[
@@ -177,6 +195,7 @@ const ContactCard = memo(({ contact, idx, onPress, onMenuPress }: { contact: Con
                             <Text style={[styles.cardName, { color: theme.text }]} numberOfLines={1}>{name}</Text>
                             <View style={[styles.stageDot, { backgroundColor: stageColor }]} />
                         </View>
+                        {name.toLowerCase().includes("salinder") && console.log("[DEBUG] Salinder Contact:", { designation: contact.designation, company: contact.company, profCat: contact.professionCategory })}
                         <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
                             {phone ? (
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
@@ -194,11 +213,21 @@ const ContactCard = memo(({ contact, idx, onPress, onMenuPress }: { contact: Con
                                 </View>
                             ) : null}
                         </View>
-                        <Text style={[styles.cardSubtitle, { color: theme.textMuted }]} numberOfLines={1}>
-                            {(getLookupValue("ProfessionalDesignation", contact.designation) && getLookupValue("ProfessionalDesignation", contact.designation) !== "—")
-                                ? `${getLookupValue("ProfessionalDesignation", contact.designation)} • `
-                                : ""}{contact.company || "Individual"}
-                        </Text>
+                        {(() => {
+                            const designationVal = getLookupValue("ProfessionalDesignation", contact.designation);
+                            const finalDesignation = designationVal && designationVal !== "—" && !/^[a-f0-9]{24}$/i.test(designationVal) ? designationVal : null;
+                            const companyName = contact.company ? contact.company.trim() : null;
+                            const subtitleParts = [finalDesignation, companyName].filter(Boolean);
+                            
+                            if (subtitleParts.length > 0) {
+                                return (
+                                    <Text style={[styles.cardSubtitle, { color: theme.textMuted }]} numberOfLines={1}>
+                                        {subtitleParts.join(" • ")}
+                                    </Text>
+                                );
+                            }
+                            return null;
+                        })()}
                     </View>
                     <TouchableOpacity style={styles.menuTrigger} onPress={(e) => { e.stopPropagation(); onMenuPress(); }}>
                         <Ionicons name="ellipsis-vertical" size={18} color={theme.textMuted} />
@@ -229,6 +258,14 @@ export default function ContactsScreen() {
     const [filters, setFilters] = useState<any>({});
     const [sortVisible, setSortVisible] = useState(false);
     const [sortConfig, setSortConfig] = useState({ label: 'Newest First', by: 'createdAt', order: -1, icon: 'time-outline' });
+
+    const activeRowRef = useRef<any>(null);
+    const onSwipeableWillOpen = useCallback((rowRef: any) => {
+        if (activeRowRef.current && activeRowRef.current !== rowRef) {
+            activeRowRef.current.close();
+        }
+        activeRowRef.current = rowRef;
+    }, []);
 
     // Action Hub State
     const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
@@ -267,9 +304,24 @@ export default function ContactsScreen() {
             return;
         }
         setLoading(true);
+        const cacheKey = `@contacts_list_p${pageNum}_s${search.length}`;
+
+        if (pageNum === 1 && !shouldAppend) {
+            try {
+                const cached = await AsyncStorage.getItem(cacheKey);
+                if (cached) {
+                    const parsed = JSON.parse(cached);
+                    setContacts(parsed);
+                    setLoading(false);
+                }
+            } catch (e) {
+                console.error("Cache read error:", e);
+            }
+        }
+
         const result = await safeApiCall<Contact>(() => getContacts({ 
             page: String(pageNum), 
-            limit: "50",
+            limit: "20",
             sortBy: sortConfig.by,
             sortOrder: String(sortConfig.order)
         }));
@@ -281,15 +333,19 @@ export default function ContactsScreen() {
                 const combined = shouldAppend ? [...prev, ...newContacts] : newContacts;
                 // Deduplicate by _id
                 const seen = new Set();
-                return combined.filter((c: any) => {
+                const unique = combined.filter((c: any) => {
                     const id = c?._id || c?.id;
                     if (!id || seen.has(id)) return false;
                     seen.add(id);
                     return true;
                 });
+                if (pageNum === 1 && !shouldAppend) {
+                    AsyncStorage.setItem(cacheKey, JSON.stringify(unique)).catch(console.error);
+                }
+                return unique;
             });
             
-            setHasMore(newContacts.length === 50);
+            setHasMore(pageNum * 20 < (result.total || 0));
             setPage(pageNum);
         }
         setLoading(false);
@@ -302,10 +358,10 @@ export default function ContactsScreen() {
     }, [fetchContacts]);
 
     const loadMore = useCallback(() => {
-        if (!loading && hasMore && contacts.length >= 50) {
+        if (!loading && hasMore) {
             fetchContacts(page + 1, true);
         }
-    }, [loading, hasMore, page, fetchContacts, contacts.length]);
+    }, [loading, hasMore, page, fetchContacts]);
 
     useFocusEffect(
         useCallback(() => {
@@ -404,24 +460,21 @@ export default function ContactsScreen() {
                     <Ionicons name="person-add" size={22} color="#fff" />
                 </TouchableOpacity>
             </View>
-
-            <View style={styles.commandBar}>
-                <View style={[styles.searchContainer, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#F1F5F9', flex: 1, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, borderRadius: 12, height: 44 }]}>
-                    <Ionicons name="search" size={20} color={theme.textMuted} />
+            <View style={{ paddingHorizontal: 16, paddingBottom: 16 }}>
+                <View style={[styles.searchBar, { backgroundColor: theme.background, borderColor: theme.border, borderWidth: 1, borderRadius: 12, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, height: 44 }]}>
+                    <Ionicons name="search" size={18} color={theme.textMuted} />
                     <TextInput
-                        style={[styles.searchInput, { color: theme.text }]}
-                        placeholder="Search relationships..."
+                        style={[styles.searchInput, { color: theme.text, flex: 1, marginLeft: 8 }]}
+                        placeholder="Search contacts..."
                         placeholderTextColor={theme.textMuted}
                         value={search}
                         onChangeText={setSearch}
                     />
-                    
-                    <TouchableOpacity onPress={() => setSortVisible(true)} style={[styles.filterBtn, { marginRight: 8 }]}>
+                    <TouchableOpacity onPress={() => setSortVisible(true)} style={[{ marginRight: 8 }]}>
                         <Ionicons name="swap-vertical" size={18} color={theme.primary} />
                     </TouchableOpacity>
-
-                    <TouchableOpacity onPress={() => setShowFilterModal(true)} style={styles.filterBtn}>
-                        <Ionicons name="filter" size={20} color={Object.keys(filters).length > 0 ? theme.primary : theme.textLight} />
+                    <TouchableOpacity onPress={() => setShowFilterModal(true)} style={[{ backgroundColor: Object.keys(filters).length > 0 ? theme.primary : 'transparent', padding: 4, borderRadius: 6 }]}>
+                        <Ionicons name="options" size={18} color={Object.keys(filters).length > 0 ? "#fff" : theme.textMuted} />
                     </TouchableOpacity>
                 </View>
             </View>
@@ -461,12 +514,26 @@ export default function ContactsScreen() {
                         stickySectionHeadersEnabled={true}
                         keyExtractor={(item) => item._id}
                         ListHeaderComponent={renderHeader}
+                        onScrollBeginDrag={() => {
+                            if (activeRowRef.current) {
+                                activeRowRef.current.close();
+                                activeRowRef.current = null;
+                            }
+                        }}
                         renderItem={({ item, index }) => (
                             <ContactCard
                                 contact={item}
                                 idx={index}
-                                onPress={() => router.push(`/contact-detail?id=${item._id}`)}
+                                onPress={() => {
+                                    if (activeRowRef.current) { 
+                                        activeRowRef.current.close(); 
+                                        activeRowRef.current = null; 
+                                        return; 
+                                    }
+                                    router.push(`/contact-detail?id=${item._id}`);
+                                }}
                                 onMenuPress={() => openHub(item)}
+                                onSwipeWillOpen={onSwipeableWillOpen}
                             />
                         )}
                         renderSectionHeader={({ section: { title } }) => (
@@ -474,12 +541,12 @@ export default function ContactsScreen() {
                                 <Text style={[styles.sectionTitle, { color: theme.primary }]}>{title}</Text>
                             </View>
                         )}
-                        initialNumToRender={15}
-                        maxToRenderPerBatch={20}
-                        windowSize={10}
-                        removeClippedSubviews={Platform.OS === 'android'}
+                        initialNumToRender={25}
+                        maxToRenderPerBatch={30}
+                        windowSize={15}
+                        removeClippedSubviews={true}
                         onEndReached={loadMore}
-                        onEndReachedThreshold={0.5}
+                        onEndReachedThreshold={0.8}
                         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />}
                         onScrollToIndexFailed={(info) => {
                             console.warn("[Contacts] Scroll to index failed, retrying...", info);

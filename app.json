@@ -4,11 +4,10 @@
     "slug": "bharat-properties-crm-mobile",
     "version": "1.0.4",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/custom-icon.png",
     "scheme": "bharatproperties",
     "userInterfaceStyle": "dark",
     "backgroundColor": "#121212",
-
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.bharatproperties.crm",
@@ -22,6 +21,11 @@
       "package": "com.bharatproperties.crm",
       "backgroundColor": "#121212",
       "softwareKeyboardLayoutMode": "resize",
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyBd2gdMJVt5C_tgYqWoRbBiatzmevYdB9U"
+        }
+      },
       "permissions": [
         "READ_CALL_LOG",
         "READ_PHONE_STATE",
@@ -31,10 +35,12 @@
         "CALL_PHONE",
         "android.permission.BIND_TELECOM_CONNECTION_SERVICE",
         "android.permission.READ_CALENDAR",
-        "android.permission.WRITE_CALENDAR"
+        "android.permission.WRITE_CALENDAR",
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
       ],
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
+        "foregroundImage": "./assets/images/custom-icon.png",
         "backgroundColor": "#121212"
       }
     },
@@ -51,6 +57,12 @@
           "calendarPermission": "Allow Bharat Properties to sync with your calendar."
         }
       ],
+      [
+        "expo-contacts",
+        {
+          "contactsPermission": "Allow Bharat Properties CRM to access your contacts to easily add leads."
+        }
+      ],
       "expo-font",
       "@react-native-community/datetimepicker",
       "expo-sharing",
@@ -65,9 +77,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "8a273a2e-193d-4d23-86b9-3e41ba6c398a"
+        "projectId": "e4f6775c-5192-495f-a493-6af01be6995c"
       }
     },
-    "owner": "bharatproperties"
+    "owner": "realdeal570"
   }
 }

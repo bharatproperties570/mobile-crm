@@ -182,7 +182,7 @@ export default function MarketingScreen() {
 
     const handleFileUpload = async () => {
         // Immediate UI feedback
-        setForm(prev => ({ ...prev, source: 'Excel' }));
+        setForm((prev: any) => ({ ...prev, source: 'Excel' }));
 
         try {
             const res = await DocumentPicker.getDocumentAsync({
@@ -243,7 +243,7 @@ export default function MarketingScreen() {
                     setImportHeaders(Object.keys(firstRow).filter(k => k !== 'originalType'));
                 }
                 setTempRecipients(result.recipients || []);
-                setForm(prev => ({
+                setForm((prev: any) => ({
                     ...prev,
                     source: 'Excel',
                     fileName: file.name,
@@ -373,7 +373,7 @@ export default function MarketingScreen() {
                 <Animated.View style={{ opacity: fadeAnim }}>
                     {/* Top Stats Ribbon */}
                     <View style={styles.kpiGrid}>
-                        {kpis.map((kpi, i) => (
+                        {kpis.map((kpi: any, i: number) => (
                             <View key={i} style={[styles.kpiCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
                                 <View style={[styles.kpiIconBox, { backgroundColor: kpi.color + '15' }]}>
                                     <Ionicons name={kpi.icon as any} size={14} color={kpi.color} />

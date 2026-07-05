@@ -23,6 +23,12 @@ const DEAL_LOOKUP_TYPES = [
 
 const FORM_STEPS = ["Property", "Financials", "Details", "System"];
 
+const formatPhone = (p: any) => {
+    if (!p) return null;
+    if (typeof p === 'object') return p.value ? `${p.unit || ''} ${p.value}`.trim() : null;
+    return String(p);
+};
+
 // ─── Reusable Components ──────────────────────────────────────────────────────
 
 function SectionTitle({ title, icon }: { title: string; icon: string }) {
@@ -114,7 +120,7 @@ export default function AddDealScreen() {
     const [step, setStep] = useState(0);
     const [loading, setLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
-    const { getLookupValue, getLookupsByType, leadMasterFields, refreshLookups, loading: loadingLookups } = useLookup();
+    const { getLookupValue, getLookupsByType, leadMasterFields, dealMasterFields, refreshLookups, loading: loadingLookups } = useLookup();
     const { users, teams, refreshUsers, loading: loadingUsers } = useUsers();
     const { projects, refreshProjects, loading: loadingProjects } = useProjects();
     const { theme } = useTheme();
@@ -493,7 +499,7 @@ export default function AddDealScreen() {
             if (!res.error) {
                 // Global Sync Dispatch
                 const { emitSyncEvent, SyncEvents } = require("@/utils/sync-events");
-                emitSyncEvent(SyncEvents.DEAL_UPDATED, { id: id || res.data?._id });
+                emitSyncEvent(SyncEvents.DEAL_UPDATED, { id: id || (res.data as any)?._id });
 
                 Alert.alert("✅ Success", `Deal ${id ? "updated" : "created"} successfully!`);
                 router.dismissAll();
@@ -600,7 +606,7 @@ export default function AddDealScreen() {
                                         <View style={{ flex: 1, marginLeft: 12 }}>
                                             <Text style={styles.partyLabel}>Owner {formData.unitOwners.length > 1 ? idx + 1 : ''}</Text>
                                             <Text style={styles.partyText}>{owner.name || owner.fullName || "—"}</Text>
-                                            {(owner.phone || owner.mobile) && <Text style={styles.partySubText}>{owner.phone || owner.mobile}</Text>}
+                                            {formatPhone(owner.phone || owner.mobile) && <Text style={styles.partySubText}>{formatPhone(owner.phone || owner.mobile)}</Text>}
                                         </View>
                                     </View>
                                 ))}
@@ -613,7 +619,7 @@ export default function AddDealScreen() {
                                         <View style={{ flex: 1, marginLeft: 12 }}>
                                             <Text style={[styles.partyLabel, { color: '#6366F1' }]}>Agent/Associate {formData.unitAssociates.length > 1 ? idx + 1 : ''}</Text>
                                             <Text style={styles.partyText}>{assoc.name || assoc.fullName || "—"}</Text>
-                                            {(assoc.phone || assoc.mobile) && <Text style={styles.partySubText}>{assoc.phone || assoc.mobile}</Text>}
+                                            {formatPhone(assoc.phone || assoc.mobile) && <Text style={styles.partySubText}>{formatPhone(assoc.phone || assoc.mobile)}</Text>}
                                         </View>
                                     </View>
                                 ))}
@@ -724,8 +730,7 @@ export default function AddDealScreen() {
                             </View>
                         )}
 
-                        <FormLabel label="Deal Probability (%)" />
-                        <TextInput style={styles.input} value={String(formData.dealProbability)} keyboardType="numeric" onChangeText={t => setFormData({ ...formData, dealProbability: t })} />
+
                     </View>
                 )}
 
@@ -736,21 +741,31 @@ export default function AddDealScreen() {
                         <View style={styles.row}>
                             <View style={{ flex: 1, marginRight: 8 }}>
                                 <FormLabel label="Deal Status" />
-                                <SelectButton value={formData.status} placeholder="Status" options={(leadMasterFields?.dealStatuses || []).map((s: string) => ({ label: s, value: s }))} onSelect={v => setFormData({ ...formData, status: v })} />
+                                <SelectButton 
+                                    value={formData.status} 
+                                    placeholder="Status" 
+                                    options={["Open", "Quote", "Negotiation", "Booked", "Won", "Lost"].map(s => ({ label: s, value: s }))} 
+                                    onSelect={v => setFormData({ ...formData, status: v })} 
+                                />
                             </View>
                             <View style={{ flex: 1 }}>
                                 <FormLabel label="Deal Type (Documentation)" />
                                 <SelectButton 
                                     value={formData.dealType} 
                                     placeholder="Type" 
-                                    options={(leadMasterFields?.dealTypes || []).map((s: string) => ({ label: s, value: s }))} 
+                                    options={(dealMasterFields?.dealTypes || []).map((s: string) => ({ label: s, value: s }))} 
                                     onSelect={v => setFormData({ ...formData, dealType: v })} 
                                 />
                             </View>
                         </View>
 
                         <FormLabel label="Transaction Type" />
-                        <SelectButton value={formData.transactionType} placeholder="Select" options={(leadMasterFields?.transactionTypes || []).map((s: string) => ({ label: s, value: s }))} onSelect={v => setFormData({ ...formData, transactionType: v })} />
+                        <SelectButton 
+                            value={formData.transactionType} 
+                            placeholder="Select" 
+                            options={["Full White", "Collector Rate", "Flexible"].map(s => ({ label: s, value: s }))} 
+                            onSelect={v => setFormData({ ...formData, transactionType: v })} 
+                        />
 
                         {formData.transactionType === "Flexible" && (
                             <View style={styles.sliderBox}>
@@ -774,7 +789,12 @@ export default function AddDealScreen() {
                         )}
 
                         <FormLabel label="Source" />
-                        <SelectButton value={formData.source} placeholder="Select Source" options={(leadMasterFields?.transactionSources || []).map((s: string) => ({ label: s, value: s }))} onSelect={v => setFormData({ ...formData, source: v })} />
+                        <SelectButton 
+                            value={formData.source} 
+                            placeholder="Select Source" 
+                            options={["Walk-in", "Newspaper", "99acres", "Social Media", "Cold Calling", "Own Website"].map(s => ({ label: s, value: s }))} 
+                            onSelect={v => setFormData({ ...formData, source: v })} 
+                        />
                     </View>
                 )}
 

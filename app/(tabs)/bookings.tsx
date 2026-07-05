@@ -9,6 +9,7 @@ import { useTheme } from "@/context/ThemeContext";
 import api from "@/services/api";
 import { safeApiCall } from "@/services/api.helpers";
 import * as Print from "expo-print";
+import PaymentScheduleDrawer from "./bookings/PaymentScheduleDrawer";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -76,6 +77,23 @@ function BookingCard({ booking, onPress, onQuickAction, onOpenDocs, theme }: { b
     const status = booking.status || booking.stage || 'Pending';
     const color = STATUS_COLORS[status] || theme.primary;
     
+    // Compute health based on due date proximity
+    const computeHealth = (dateStr?: string) => {
+        if (!dateStr) return { label: 'On Track', color: '#10B981', icon: 'checkmark-circle' as any };
+        const today = new Date();
+        const target = new Date(dateStr);
+        const diffDays = (target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24);
+        if (diffDays < 0) {
+            return { label: 'Critical', color: '#EF4444', icon: 'alert-circle' as any };
+        } else if (diffDays <= 7) {
+            return { label: 'At Risk', color: '#F59E0B', icon: 'warning' as any };
+        } else if (diffDays <= 14) {
+            return { label: 'Delayed', color: '#F97316', icon: 'time' as any };
+        }
+        return { label: 'On Track', color: '#10B981', icon: 'checkmark-circle' as any };
+    };
+    const { label: health, color: healthColor, icon: healthIcon } = computeHealth(booking.dealDate || booking.bookingDate);
+    
     const dealValue = booking.financials?.dealValue || booking.totalDealAmount || 0;
     const paidAmount = booking.financials?.totalPaidAmount || booking.totalPaidAmount || 0;
     const balanceAmount = booking.financials?.totalBalanceAmount || booking.totalBalanceAmount || (dealValue - paidAmount);
@@ -99,8 +117,14 @@ function BookingCard({ booking, onPress, onQuickAction, onOpenDocs, theme }: { b
                     </View>
                     <Text style={[styles.projectName, { color: theme.textLight }]}>{project}</Text>
                 </View>
-                <View style={[styles.statusBadge, { backgroundColor: color + "15" }]}>
-                    <Text style={[styles.statusText, { color: color }]}>{status.toUpperCase()}</Text>
+                <View style={{ alignItems: 'flex-end', gap: 6 }}>
+                    <View style={[styles.statusBadge, { backgroundColor: color + "15" }]}>
+                        <Text style={[styles.statusText, { color: color }]}>{status.toUpperCase()}</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: healthColor + '15', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                        <Ionicons name={healthIcon as any} size={10} color={healthColor} />
+                        <Text style={{ fontSize: 9, fontWeight: '800', color: healthColor, textTransform: 'uppercase' }}>{health}</Text>
+                    </View>
                 </View>
             </View>
 
@@ -201,6 +225,10 @@ export default function BookingsScreen() {
     const [paymentPurpose, setPaymentPurpose] = useState('Part Payment');
     const [isSubmitting, setIsSubmitting] = useState(false);
 
+    // New Drawer State
+    const [isDrawerVisible, setDrawerVisible] = useState(false);
+    const [selectedBookingForDrawer, setSelectedBookingForDrawer] = useState<any>(null);
+
     // Document Modal State
     const [isDocModalVisible, setDocModalVisible] = useState(false);
 
@@ -211,12 +239,14 @@ export default function BookingsScreen() {
         try {
             const result = await safeApiCall<any>(() => api.get("/bookings?limit=50"));
             if (!result.error && result.data) {
-                setBookings(result.data.data || result.data.records || result.data || []);
+                const resData: any = result.data;
+                setBookings(resData?.data || resData?.records || resData || []);
             }
 
             const statsResult = await safeApiCall<any>(() => api.get("/bookings/dashboard/stats"));
             if (!statsResult.error && statsResult.data) {
-                setStats(statsResult.data.data || statsResult.data);
+                const sData: any = statsResult.data;
+                setStats(sData?.data || sData);
             }
             
             Animated.timing(fadeAnim, { toValue: 1, duration: 600, useNativeDriver: true }).start();
@@ -236,7 +266,8 @@ export default function BookingsScreen() {
         try {
             const res = await safeApiCall<any>(() => api.get(`/bookings/${bookingId}`));
             if (!res.error && res.data) {
-                setLedgerData(res.data.data || res.data);
+                const lData: any = res.data;
+                setLedgerData(lData?.data || lData);
             }
         } catch (e) {
             console.error("Failed to fetch ledger", e);
@@ -390,7 +421,7 @@ export default function BookingsScreen() {
                                 booking={item}
                                 theme={theme}
                                 onPress={() => { setSelectedBookingForLedger(item); fetchLedger(item._id || item.id); }}
-                                onQuickAction={() => { setSelectedBookingForLedger(item); setPaymentModalVisible(true); }}
+                                onQuickAction={() => { setSelectedBookingForDrawer(item); setDrawerVisible(true); }}
                                 onOpenDocs={() => { setSelectedBookingForLedger(item); setDocModalVisible(true); }}
                             />
                         )}
@@ -601,6 +632,12 @@ export default function BookingsScreen() {
                     </View>
                 </KeyboardAvoidingView>
             </Modal>
+        <PaymentScheduleDrawer
+          booking={selectedBookingForDrawer}
+          visible={isDrawerVisible}
+          onClose={() => setDrawerVisible(false)}
+          onUpdate={fetchData}
+        />
         </View>
     );
 }

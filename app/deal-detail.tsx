@@ -20,6 +20,7 @@ import { getDealHealth } from "@/services/stageEngine.service";
 import { formatSize, getSizeLabel } from "@/utils/format.utils";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { safeApiCall } from "@/services/api.helpers";
+import DealPriceJourneyCard from "./components/DealPriceJourneyCard";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const CACHE_KEY_PREFIX = "@cache_deal_detail_";
@@ -262,7 +263,7 @@ export default function DealDetailScreen() {
 
     const fetchAnalytics = async () => {
         const res = await safeApiCall(() => getDealAnalytics(id as string));
-        if (!res.error) setAnalytics(res.data?.data);
+        if (!res.error) setAnalytics((res.data as any)?.data);
     };
 
     useEffect(() => {
@@ -274,8 +275,8 @@ export default function DealDetailScreen() {
     const handleSanitize = async () => {
         setSanitizing(true);
         const res = await safeApiCall(() => sanitizeDeal(id as string));
-        if (!res.error && res.data?.success) {
-            setDeal({ ...deal, broadcastMetadata: res.data.data, shareableId: res.data.shareableId });
+        if (!res.error && (res.data as any)?.success) {
+            setDeal({ ...deal, broadcastMetadata: (res.data as any).data, shareableId: (res.data as any).shareableId } as Deal);
             Alert.alert("Success", "Deal has been sanitized and is ready for broadcast.");
         }
         setSanitizing(false);
@@ -578,14 +579,14 @@ export default function DealDetailScreen() {
                             {Array.isArray(deal.teams) && deal.teams.length > 0 ? (
                                 deal.teams.map((t: any, i: number) => (
                                     <View key={i} style={{ backgroundColor: isDark ? 'rgba(129, 140, 248, 0.15)' : '#6366F110', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
-                                        <Text style={{ fontSize: 9, fontWeight: '800', color: isDark ? '#C7D2FE' : '#6366F1' }}>{lv(t, getLookupValue, users).toUpperCase()}</Text>
+                                        <Text style={{ fontSize: 9, fontWeight: '800', color: isDark ? '#C7D2FE' : '#6366F1' }}>{lv(t, getLookupValue, findUser).toUpperCase()}</Text>
                                     </View>
                                 ))
                             ) : (
                                 <>
                                     <Ionicons name="people-outline" size={12} color={isDark ? '#818CF8' : "#6366F1"} />
                                     <Text style={[styles.strategyValue, { color: theme.text }]} numberOfLines={1}>
-                                        {lv(deal.team, getLookupValue, users)}
+                                        {lv(deal.team, getLookupValue, findUser)}
                                     </Text>
                                 </>
                             )}
@@ -766,11 +767,13 @@ export default function DealDetailScreen() {
                 <View style={[styles.tabContent, { width: SCREEN_WIDTH }]}>
                     <ScrollView contentContainerStyle={styles.innerScroll}>
 
+                        <DealPriceJourneyCard dealId={id as string} deal={deal} />
+
                         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
                             <Text style={[styles.cardTitle, { color: theme.text }]}>Pricing Architecture</Text>
                             <InfoRow label="Estimated Value" value={fmt(deal.price)} icon="cash-outline" accent />
                             <InfoRow label="Quoted Amount" value={fmt(deal.quotePrice)} icon="pricetag-outline" />
-                            <InfoRow label="Transaction Flow" value={lv(deal.transactionType, getLookupValue, users)} icon="swap-horizontal-outline" />
+                            <InfoRow label="Transaction Flow" value={lv(deal.transactionType, getLookupValue, findUser)} icon="swap-horizontal-outline" />
                             <InfoRow label="Flexible Portion" value={deal.flexiblePercentage ? `${deal.flexiblePercentage}%` : "—"} icon="pie-chart-outline" />
                         </View>
 
@@ -844,7 +847,7 @@ export default function DealDetailScreen() {
                                             </View>
                                             <Text style={{ fontSize: 11, color: theme.textMuted, fontStyle: 'italic' }}>By: {round.offerBy || "Prospect"}</Text>
                                         </View>
-                                        {round.notes && (
+                                        {!!round.notes && (
                                             <Text style={{ fontSize: 12, color: theme.textSecondary, marginTop: 8, padding: 8, backgroundColor: theme.background, borderRadius: 8 }}>
                                                 {round.notes}
                                             </Text>
@@ -973,9 +976,9 @@ export default function DealDetailScreen() {
                     <ScrollView contentContainerStyle={styles.innerScroll}>
                         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
                             <Text style={[styles.cardTitle, { color: theme.text }]}>Property Configuration</Text>
-                            <InfoRow label="Category" value={lv(deal.category || deal.inventoryId?.category, getLookupValue, users)} icon="list-outline" />
-                            <InfoRow label="Sub-Category" value={lv(deal.subCategory || deal.inventoryId?.subCategory, getLookupValue, users)} icon="layers-outline" />
-                            <InfoRow label="Direction" value={lv(deal.direction || deal.inventoryId?.direction, getLookupValue, users)} icon="compass-outline" />
+                            <InfoRow label="Category" value={lv(deal.category || deal.inventoryId?.category, getLookupValue, findUser)} icon="list-outline" />
+                            <InfoRow label="Sub-Category" value={lv(deal.subCategory || deal.inventoryId?.subCategory, getLookupValue, findUser)} icon="layers-outline" />
+                            <InfoRow label="Direction" value={lv(deal.direction || deal.inventoryId?.direction, getLookupValue, findUser)} icon="compass-outline" />
                         </View>
 
                         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
@@ -1096,7 +1099,7 @@ export default function DealDetailScreen() {
                                             >
                                                 <Text style={[styles.matchUnit, { color: theme.text }]}>{lead.firstName} {lead.lastName}</Text>
                                                 <Text style={{ fontSize: 11, color: theme.textLight, fontWeight: '600' }}>{lead.mobile || lead.email || "No contact info"}</Text>
-                                                {lead.lastDispatch && (
+                                                {!!lead.lastDispatch && (
                                                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6, backgroundColor: '#10B98115', borderColor: '#10B98130', borderWidth: 1, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, alignSelf: 'flex-start' }}>
                                                         <Ionicons name="checkmark-done-circle" size={12} color="#10B981" />
                                                         <Text style={{ fontSize: 9, color: '#10B981', fontWeight: '800' }}>
@@ -1123,7 +1126,7 @@ export default function DealDetailScreen() {
                             ) : (
                                 deal.inventoryId.owners.map((owner: any, idx: number) => (
                                     <View key={idx} style={[styles.partyCard, { backgroundColor: theme.background, marginBottom: 10 }]}>
-                                        <Text style={[styles.matchUnit, { color: theme.text }]}>{lv(owner, getLookupValue, users)}</Text>
+                                        <Text style={[styles.matchUnit, { color: theme.text }]}>{lv(owner, getLookupValue, findUser)}</Text>
                                     </View>
                                 ))
                             )}
@@ -1155,7 +1158,7 @@ export default function DealDetailScreen() {
                                                             <Text style={styles.timelineDate}>{new Date(h.date).toLocaleDateString()}</Text>
                                                         </View>
                                                     </View>
-                                                    {contactNo && (
+                                                    {!!contactNo && (
                                                         <TouchableOpacity 
                                                             onPress={() => Linking.openURL(`tel:${contactNo.replace(/\D/g, "")}`)}
                                                             style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: theme.primary + '15', justifyContent: 'center', alignItems: 'center' }}
@@ -1196,7 +1199,7 @@ export default function DealDetailScreen() {
                                             <Text style={[styles.docName, { color: theme.text }]}>{doc.documentType || "Document"}</Text>
                                             <Text style={[styles.docMeta, { color: theme.textLight }]}>{doc.documentNo}</Text>
                                         </View>
-                                        {doc.url && <TouchableOpacity onPress={() => Linking.openURL(doc.url)}><Ionicons name="eye-outline" size={20} color={theme.primary} /></TouchableOpacity>}
+                                        {!!doc.url && <TouchableOpacity onPress={() => Linking.openURL(doc.url)}><Ionicons name="eye-outline" size={20} color={theme.primary} /></TouchableOpacity>}
                                     </View>
                                 ))
                             )}
@@ -1414,7 +1417,10 @@ const styles = StyleSheet.create({
     headerTitleContainer: { flex: 1 },
     headerNamePremium: { fontSize: 24, fontWeight: '900', letterSpacing: -0.5 },
     headerBadgeRow: { flexDirection: 'row', gap: 6, marginTop: 4 },
-    miniBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+    intentBadgeHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
+    intentDot: { width: 8, height: 8, borderRadius: 4 },
+    intentTextHeader: { fontSize: 11, fontWeight: '800', textTransform: 'uppercase' },
+    miniBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
     miniBadgeText: { fontSize: 10, fontWeight: '800' },
 
     // Score/Insight Ring
@@ -1438,15 +1444,7 @@ const styles = StyleSheet.create({
     marketingText: { fontSize: 11, fontWeight: '800' },
 
     // Action Ribbon
-    actionRibbonContainer: { 
-        marginHorizontal: 20, 
-        marginTop: 15, 
-        borderRadius: 22, 
-        borderWidth: 1, 
-        overflow: 'hidden',
-        paddingVertical: 14,
-        paddingHorizontal: 10
-    },
+    // Duplicate actionRibbonContainer removed (kept later definition)
     enterpriseArrow: { 
         width: 135, 
         padding: 14, 
@@ -1602,7 +1600,7 @@ const styles = StyleSheet.create({
     sendMatchBtn: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
     
     // Dispatch Modal
-    msgModal: { width: '90%', alignSelf: 'center', borderRadius: 28, padding: 24, shadowOpacity: 0.1, shadowRadius: 20, elevation: 10, marginContent: 'center', marginTop: 'auto', marginBottom: 'auto' },
+    msgModal: { width: '90%', alignSelf: 'center', borderRadius: 28, padding: 24, shadowOpacity: 0.1, shadowRadius: 20, elevation: 10, marginTop: 'auto', marginBottom: 'auto' },
     msgTitle: { fontSize: 20, fontWeight: '900', marginBottom: 4 },
     msgSub: { fontSize: 13, fontWeight: '600', marginBottom: 20 },
     sortItem: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, borderRadius: 12, borderWidth: 1, borderColor: 'transparent' },
@@ -1664,41 +1662,7 @@ const styles = StyleSheet.create({
         paddingVertical: 14,
         paddingHorizontal: 10
     },
-    actionRibbonScroll: { 
-        flexGrow: 1,
-        justifyContent: 'center', 
-        gap: 20, 
-        paddingHorizontal: 15 
-    },
-    ribbonBtn: { 
-        width: 44,
-        height: 44,
-        borderRadius: 14,
-        justifyContent: 'center',
-        alignItems: 'center',
-        elevation: 2,
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        shadowOffset: { width: 0, height: 2 }
-    },
-    enterpriseArrow: {
-        padding: 15,
-        borderRadius: 18,
-        borderWidth: 1,
-        width: 130,
-        position: 'relative',
-        overflow: 'hidden'
-    },
-    pulseDot: {
-        width: 6,
-        height: 6,
-        borderRadius: 3,
-        position: 'absolute',
-        top: 10,
-        right: 10,
-    },
-    docItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, gap: 12 },
+    docItem: { paddingVertical: 12, borderBottomWidth: 1, flexDirection: 'row', alignItems: 'center', gap: 12 },
     docInfo: { flex: 1 },
-    docName: { fontSize: 14, fontWeight: '700' },
-    docMeta: { fontSize: 11, marginTop: 2 },
+    docMeta: { fontSize: 12 }
 });

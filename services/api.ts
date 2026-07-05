@@ -10,14 +10,17 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 // On Native (Expo Go on phone): use the Mac's LAN IP
 // The env var EXPO_PUBLIC_API_BASE_URL can override this.
 // ============================================================
-const MACHINE_IP = "192.168.1.8";
+const MACHINE_IP = "192.168.1.13";
 const BACKEND_PORT = "4000";
 
 const WEB_URL = `http://localhost:${BACKEND_PORT}/api`;
 const PROD_URL = "https://api.bharatproperties.co/api";
-const TUNNEL_URL = "https://bharat-properties-crm-v3.loca.lt/api";
+export const TUNNEL_URL = "https://bharat-properties-crm-v3.loca.lt/api";
 const LAN_URL = `http://${MACHINE_IP}:${BACKEND_PORT}/api`;
-const NATIVE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || PROD_URL;
+// Choose base URL:
+// - If EXPO_PUBLIC_API_BASE_URL is set, use it (allows explicit override).
+// - Otherwise, default to LAN for native (development) and keep PROD for web.
+const NATIVE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || LAN_URL;
 const BASE_URL = Platform.OS === "web" ? WEB_URL : NATIVE_URL;
 
 console.log(`[API] Configuration Initialized:`);
@@ -45,7 +48,10 @@ axiosRetry(api, {
   }
 });
 
-// --- Request Interceptor: attach JWT token ---
+// Duplicate setApiBaseUrl removed – using later definition
+// Removed duplicate
+// Removed duplicate
+// End of removed duplicate
 api.interceptors.request.use(
   async (config) => {
     try {
@@ -62,9 +68,9 @@ api.interceptors.request.use(
 
 // --- Silent Token Refresh Implementation ---
 let isRefreshing = false;
-let refreshSubscribers: ((token: string) => void)[] = [];
+let refreshSubscribers: ((token: string | null, error?: any) => void)[] = [];
 
-const subscribeTokenRefresh = (cb: (token: string) => void) => {
+const subscribeTokenRefresh = (cb: (token: string | null, error?: any) => void) => {
   refreshSubscribers.push(cb);
 };
 
@@ -134,8 +140,21 @@ api.interceptors.response.use(
 
     const status = error?.response?.status;
     const url = error?.config?.url || "";
-    const msg = error?.response?.data?.message || error?.message || "Unknown error";
+    let msg = error?.response?.data?.message || error?.message || "Unknown error";
+    
+    // Normalize Network & Timeout Errors
+    if (isTimeout || msg.includes('timeout') || msg.includes('secureConnect')) {
+        msg = "Server is unreachable. Please check your connection or try again later.";
+    } else if (isNetworkError) {
+        msg = "Network Error. Please ensure you are connected to the internet.";
+    }
+    
     console.warn(`[API] ❌ ${status || "NO_RESPONSE"} ${url} — ${msg}`);
+    
+    // Inject the normalized message back into the error object so components can use it
+    if (!error.response) {
+        error.response = { data: { message: msg } };
+    }
 
     if (status === 401 && !error.config._retry) {
       // 1. If the refresh call itself fails, we must logout
@@ -149,8 +168,9 @@ api.interceptors.response.use(
 
       // 2. Queue simultaneous requests while refreshing
       if (isRefreshing) {
-        return new Promise((resolve) => {
-          subscribeTokenRefresh((newToken) => {
+        return new Promise((resolve, reject) => {
+          subscribeTokenRefresh((newToken, err) => {
+            if (err) return reject(err);
             error.config.headers.Authorization = `Bearer ${newToken}`;
             resolve(api(error.config));
           });
@@ -192,8 +212,12 @@ api.interceptors.response.use(
           error.config.headers.Authorization = `Bearer ${newToken}`;
           return api(error.config);
         }
-      } catch (refreshErr) {
+      } catch (refreshErr: any) {
         isRefreshing = false;
+        
+        // Reject all queued promises so they don't hang forever
+        refreshSubscribers.map((cb) => cb(null, refreshErr));
+        refreshSubscribers = [];
         
         const status = refreshErr.response?.status;
         const isExpired = refreshErr.message === 'SESSION_EXPIRED' || 
@@ -220,5 +244,13 @@ api.interceptors.response.use(
     return Promise.reject(error);
   }
 );
+
+// Helper to dynamically update base URL (e.g., fallback to tunnel)
+export const setApiBaseUrl = (newBaseUrl: string) => {
+  if (newBaseUrl) {
+    api.defaults.baseURL = newBaseUrl;
+    console.log(`[API] Base URL dynamically set to ${newBaseUrl}`);
+  }
+};
 
 export default api;

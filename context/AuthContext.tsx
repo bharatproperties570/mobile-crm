@@ -123,17 +123,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const inAuthGroup = group === "(auth)";
         const isAtRoot = !segments || segments.length === 0;
 
-        if (!token) {
-            if (!inAuthGroup) {
-                console.log("[AuthContext] Redirect → /(auth)/login");
-                router.replace("/(auth)/login");
+        // In production on Android, imperative routing during mount can cause black screens.
+        // A short timeout ensures the navigation container is fully settled.
+        setTimeout(() => {
+            if (!token) {
+                if (!inAuthGroup) {
+                    console.log("[AuthContext] Redirect → /(auth)/login");
+                    router.replace("/(auth)/login");
+                }
+            } else {
+                if (isAtRoot || inAuthGroup) {
+                    console.log("[AuthContext] Redirect → /(tabs)");
+                    router.replace("/(tabs)");
+                }
             }
-        } else {
-            if (isAtRoot || inAuthGroup) {
-                console.log("[AuthContext] Redirect → /(tabs)");
-                router.replace("/(tabs)");
-            }
-        }
+        }, 50);
     }, [token, loading, rootNavigationState?.key, segments]);
     // NOTE: Intentionally NOT including `segments` in deps — it causes loop
     // when navigating. token+loading is the correct minimal dependency set.

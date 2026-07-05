@@ -331,7 +331,8 @@ export default function AddProjectScreen() {
 
             const usersRes = await safeApiCall<any>(() => api.get("/users?limit=1000"));
             if (!usersRes.error) {
-                const userList = (usersRes.data?.data || usersRes.data || []) as any[];
+                const dataAny = usersRes.data as any;
+                const userList = (dataAny?.data || dataAny || []) as any[];
                 setUsers(userList.map((u: any) => ({ label: u.fullName || u.name, value: u._id, team: u.team?._id || u.team })));
             }
         };
@@ -358,8 +359,8 @@ export default function AddProjectScreen() {
                                 status: (b.status as any)?.lookup_value || b.status || "",
                                 parkingType: (b.parkingType as any)?.lookup_value || b.parkingType || "",
                             })),
-                            teams: Array.isArray(p.teams) ? p.teams.map((t: any) => t._id || t) : (p.team ? [p.team._id || p.team] : []),
-                            assignedTo: Array.isArray(p.assign) ? p.assign.map((u: any) => u._id || u) : [],
+                            teams: Array.isArray(p.teams) ? p.teams.map((t: any) => (t as any)?._id || t) : (p.team ? [(p.team as any)?._id || p.team] : []),
+                            assignedTo: Array.isArray(p.assign) ? p.assign.map((u: any) => (u as any)?._id || u) : [],
                         });
                     }
                 } catch (e) {
@@ -847,7 +848,7 @@ function BlockStep({ data, update, lookups }: any) {
             <SectionHeader title="Project Blocks" icon="🧊" subtitle="Manage individual building blocks" />
 
             <View style={[styles.card, { backgroundColor: theme.cardBg, borderColor: theme.primary + '30', borderWidth: 2 }]}>
-                <Text style={[styles.cardTitle, { color: theme.textPrimary, marginBottom: 12 }]}>{editingIndex !== null ? "Edit Block" : "Add Block"}</Text>
+                <Text style={[styles.sectionTitle, { color: theme.textPrimary, marginBottom: 12 }]}>{editingIndex !== null ? "Edit Block" : "Add Block"}</Text>
 
                 <Field label="Block Name" required>
                     <Input placeholder="Block A" value={blockForm.name} onChangeText={t => setBlockForm({ ...blockForm, name: t })} />

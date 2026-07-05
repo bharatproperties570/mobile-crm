@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import {
     View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity,
-    ActivityIndicator, Alert, SafeAreaView, Switch, Dimensions, Modal, Share, Linking
+    ActivityIndicator, Alert, SafeAreaView, Switch, Dimensions, Modal, Share, Linking, Platform
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -14,7 +14,7 @@ import * as Sharing from 'expo-sharing';
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 export default function AddQuote() {
-    const { theme, isDark } = useTheme();
+    const { theme } = useTheme();
     const router = useRouter();
     const { dealId } = useLocalSearchParams<{ dealId: string }>();
     const { getLookupValue } = useLookup();
@@ -578,7 +578,7 @@ export default function AddQuote() {
                 </View>
 
                 {/* 4. Total Calculation Summary */}
-                <View style={[styles.summaryCard, { backgroundColor: isDark ? '#1E293B' : '#F8FAFC', borderColor: theme.primary + '30' }]}>
+                <View style={[styles.summaryCard, { backgroundColor: theme.card, borderColor: theme.primary + '30' }]}>
                     <View style={styles.summaryHeader}>
                         <Ionicons name="receipt-outline" size={24} color={theme.primary} />
                         <Text style={[styles.summaryTitle, { color: theme.text }]}>Net Landed Cost</Text>

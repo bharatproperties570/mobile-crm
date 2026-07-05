@@ -26,6 +26,10 @@ export function extractList(res: any): any[] {
     if (res.data && Array.isArray(res.data)) return res.data;
     // { success, data: { records: [] } }
     if (res.data?.records && Array.isArray(res.data.records)) return res.data.records;
+    // { success, matchingLeads: [] }
+    if (res.matchingLeads && Array.isArray(res.matchingLeads)) return res.matchingLeads;
+    // { success, matchingDeals: [] }
+    if (res.matchingDeals && Array.isArray(res.matchingDeals)) return res.matchingDeals;
     // { success, data: { data: [] } }
     if (res.data?.data && Array.isArray(res.data.data)) return res.data.data;
 

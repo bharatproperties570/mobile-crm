@@ -5,8 +5,10 @@ import {
     Animated, Pressable, Modal, FlatList
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import * as Contacts from 'expo-contacts';
 import { Ionicons } from "@expo/vector-icons";
-import api from "@/services/api";
+import { Vibration } from "react-native";
+import api, { TUNNEL_URL, setApiBaseUrl } from "@/services/api";
 import { useTheme, SPACING } from "@/context/ThemeContext";
 import { MultiSearchableDropdown } from "@/components/MultiSearchableDropdown";
 import { getTeams } from "@/services/teams.service";
@@ -186,8 +188,8 @@ interface ContactForm {
     phones: { number: string; type: string }[];
     emails: { address: string; type: string }[];
     description: string;
-    category: string;
-    subCategory: string;
+    professionCategory: string;
+    professionSubCategory: string;
     designation: string;
     company: string;
     source: string;
@@ -199,8 +201,8 @@ interface ContactForm {
     owner: string;
     visibleTo: string;
     // Addresses
-    personalAddress: { hNo: string; street: string; city: string; state: string; pinCode: string; country: string };
-    correspondenceAddress: { hNo: string; street: string; city: string; state: string; pinCode: string; country: string };
+    personalAddress: { hNo: string; street: string; city: string; state: string; pinCode: string; country: string; location?: string; tehsil?: string; postOffice?: string };
+    correspondenceAddress: { hNo: string; street: string; city: string; state: string; pinCode: string; country: string; location?: string; tehsil?: string; postOffice?: string };
     // Personal
     gender: string;
     maritalStatus: string;
@@ -213,11 +215,11 @@ const INITIAL: ContactForm = {
     phones: [{ number: "", type: "Mobile" }],
     emails: [{ address: "", type: "Personal" }],
     description: "",
-    category: "", subCategory: "", designation: "", company: "",
+    professionCategory: "", professionSubCategory: "", designation: "", company: "",
     source: "", subSource: "", tags: [],
     team: "", teams: [], owner: "", visibleTo: "Everyone",
-    personalAddress: { hNo: "", street: "", city: "", state: "", pinCode: "", country: "India" },
-    correspondenceAddress: { hNo: "", street: "", city: "", state: "", pinCode: "", country: "India" },
+    personalAddress: { hNo: "", street: "", city: "", state: "", pinCode: "", country: "India", location: "", tehsil: "", postOffice: "" },
+    correspondenceAddress: { hNo: "", street: "", city: "", state: "", pinCode: "", country: "India", location: "", tehsil: "", postOffice: "" },
     gender: "", maritalStatus: "", birthDate: "", anniversaryDate: "",
 };
 
@@ -274,15 +276,48 @@ export default function AddContactScreen() {
     const { id, companyId, dealId } = useLocalSearchParams<{ id?: string, companyId?: string, dealId?: string }>();
     const router = useRouter();
     const { theme } = useTheme();
+    const isDark = theme.background === '#0F172A' || theme.background === '#121212';
     const { getLookupsByType, leadMasterFields, refreshLookups, loading: loadingLookups } = useLookup();
     const { users, refreshUsers, loading: loadingUsers } = useUsers();
     
     const [saving, setSaving] = useState(false);
+    
+    const handleImportContact = async () => {
+        const { status } = await Contacts.requestPermissionsAsync();
+        if (status === 'granted') {
+            const { data } = await Contacts.presentContactPickerAsync();
+            if (data) {
+                const phone = data.phoneNumbers?.[0]?.number?.replace(/[^0-9+]/g, '') || '';
+                const email = data.emails?.[0]?.email || '';
+                
+                setForm(prev => {
+                    const newPhones = [...prev.phones];
+                    if (phone) newPhones[0] = { ...newPhones[0], number: phone };
+                    
+                    const newEmails = [...prev.emails];
+                    if (email) newEmails[0] = { ...newEmails[0], address: email };
+
+                    return {
+                        ...prev,
+                        firstName: data.firstName || prev.firstName,
+                        lastName: data.lastName || prev.lastName,
+                        phones: newPhones,
+                        emails: newEmails,
+                    };
+                });
+                Vibration.vibrate(20);
+            }
+        } else {
+            Alert.alert('Permission Denied', 'Please allow contacts access to use this feature.');
+        }
+    };
+    
     const [loadingContact, setLoadingContact] = useState(false);
     const [form, setForm] = useState<ContactForm>(INITIAL);
     const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
     const [localTeams, setLocalTeams] = useState<any[]>([]); 
     const [localUsers, setLocalUsers] = useState<any[]>([]);
+    // Address lookups handled by getLookupsByType
 
     useEffect(() => {
         if (id) {
@@ -309,8 +344,8 @@ export default function AddContactScreen() {
                             phones: Array.isArray(c.phones) && c.phones.length > 0 ? c.phones : [{ number: "", type: "Mobile" }],
                             emails: Array.isArray(c.emails) && c.emails.length > 0 ? c.emails : [{ address: "", type: "Personal" }],
                             description: c.description || "",
-                            category: typeof c.category === 'object' ? c.category?._id : c.category || "",
-                            subCategory: typeof c.subCategory === 'object' ? c.subCategory?._id : c.subCategory || "",
+                            professionCategory: typeof c.professionCategory === 'object' ? c.professionCategory?._id : c.professionCategory || "",
+                            professionSubCategory: typeof c.professionSubCategory === 'object' ? c.professionSubCategory?._id : c.professionSubCategory || "",
                             designation: typeof c.designation === 'object' ? c.designation?._id : c.designation || "",
                             company: typeof c.company === 'object' ? (c.company?._id || c.company?.id) : c.company || "",
                             source: typeof c.source === 'object' ? c.source?._id : c.source || "",
@@ -339,22 +374,7 @@ export default function AddContactScreen() {
         }
     }, [id]);
 
-    useEffect(() => {
-        if (!id) {
-            const loadLookups = async () => {
-                refreshLookups();
-                refreshUsers();
 
-                const [teamsRes, usersRes] = await Promise.all([
-                    getTeams(),
-                    api.get("/users?limit=1000")
-                ]);
-                setLocalTeams(teamsRes.data || []);
-                setLocalUsers(usersRes.data?.data || []);
-            };
-            loadLookups();
-        }
-    }, [id]);
 
     const resolveId = (type: string, value: string) => {
         if (!value) return null;
@@ -385,8 +405,8 @@ export default function AddContactScreen() {
                 phones: form.phones.filter(p => p.number),
                 emails: form.emails.filter(e => e.address),
                 description: form.description || undefined,
-                category: form.category || undefined,
-                subCategory: form.subCategory || undefined,
+                professionCategory: form.professionCategory || undefined,
+                professionSubCategory: form.professionSubCategory || undefined,
                 designation: form.designation || undefined,
                 company: form.company || companyId || undefined,
                 source: form.source || undefined,
@@ -486,6 +506,15 @@ export default function AddContactScreen() {
                 <ScrollView style={styles.content} contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
                     <SectionHeader title="Basic Details" icon="👤" subtitle="Primary identity information" />
                     <View style={[styles.card, { backgroundColor: theme.cardBg, borderColor: theme.border }]}>
+                        
+                        <TouchableOpacity 
+                            style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? 'rgba(59, 130, 246, 0.15)' : '#EFF6FF', padding: 12, borderRadius: 12, marginBottom: 16, borderWidth: 1, borderColor: isDark ? 'rgba(59, 130, 246, 0.3)' : '#BFDBFE' }}
+                            onPress={handleImportContact}
+                        >
+                            <Ionicons name="person-add" size={20} color={isDark ? '#60A5FA' : '#3B82F6'} style={{ marginRight: 8 }} />
+                            <Text style={{ color: isDark ? '#60A5FA' : '#3B82F6', fontWeight: '700', fontSize: 14 }}>Import from Device Contacts</Text>
+                        </TouchableOpacity>
+
                         <View style={styles.row}>
                             <View style={{ width: 100 }}>
                                 <Field label="Title" required>
@@ -552,38 +581,46 @@ export default function AddContactScreen() {
                         </Field>
                     </View>
 
-                    <SectionHeader title="Professional Info" icon="💼" subtitle="Work and industry details" />
-                    <View style={[styles.card, { backgroundColor: theme.cardBg, borderColor: theme.border }]}>
-                        <Field label="Category">
-                            <SelectButton value={form.category} options={getLookupsByType('ProfessionalCategory').map(l => ({ label: l.lookup_value, value: l._id }))} onSelect={set("category")} />
-                        </Field>
-                        <Field label="Sub-Category">
-                            <SelectButton value={form.subCategory} options={getLookupsByType('ProfessionalSubCategory').map(l => ({ label: l.lookup_value, value: l._id }))} onSelect={set("subCategory")} />
-                        </Field>
-                        <Field label="Designation">
-                            <SelectButton value={form.designation} options={getLookupsByType('ProfessionalDesignation').map(l => ({ label: l.lookup_value, value: l._id }))} onSelect={set("designation")} />
-                        </Field>
-                        <Input label="Company" value={form.company} onChangeText={set("company")} placeholder="e.g. Google" icon="business-outline" />
-                    </View>
-
                     <SectionHeader title="Address Details" icon="📍" subtitle="Residential & Correspondence" />
                     <View style={[styles.card, { backgroundColor: theme.cardBg, borderColor: theme.border }]}>
                         <Text style={[styles.subSectionTitle, { color: theme.textPrimary }]}>Personal Address</Text>
+                        <Field label="Country">
+                            <SelectButton value={form.personalAddress.country} options={getLookupsByType('Country').map(l => ({ label: l.lookup_value, value: l._id }))} onSelect={v => setForm(f => ({ ...f, personalAddress: { ...f.personalAddress, country: v, state: "", city: "", location: "", tehsil: "", postOffice: "", pinCode: "" } }))} />
+                        </Field>
+                        <Field label="State">
+                            <SelectButton value={form.personalAddress.state} options={getLookupsByType('State', form.personalAddress.country).map(l => ({ label: l.lookup_value, value: l._id }))} onSelect={v => setForm(f => ({ ...f, personalAddress: { ...f.personalAddress, state: v, city: "", location: "", tehsil: "", postOffice: "", pinCode: "" } }))} />
+                        </Field>
+                        <Field label="City">
+                            <SelectButton value={form.personalAddress.city} options={getLookupsByType('City', form.personalAddress.state).map(l => ({ label: l.lookup_value, value: l._id }))} onSelect={v => setForm(f => ({ ...f, personalAddress: { ...f.personalAddress, city: v, location: "", tehsil: "", postOffice: "", pinCode: "" } }))} />
+                        </Field>
+                        <Field label="Location/Area">
+                            <SelectButton value={form.personalAddress.location} options={getLookupsByType('Location', form.personalAddress.city).map(l => ({ label: l.lookup_value, value: l._id }))} onSelect={v => setForm(f => ({ ...f, personalAddress: { ...f.personalAddress, location: v } }))} />
+                        </Field>
+                        <Field label="Tehsil">
+                            <SelectButton value={form.personalAddress.tehsil} options={getLookupsByType('Tehsil', form.personalAddress.city).map(l => ({ label: l.lookup_value, value: l._id }))} onSelect={v => setForm(f => ({ ...f, personalAddress: { ...f.personalAddress, tehsil: v } }))} />
+                        </Field>
+                        <Field label="Post Office">
+                            <SelectButton value={form.personalAddress.postOffice} options={getLookupsByType('PostOffice', form.personalAddress.city).map(l => ({ label: l.lookup_value, value: l._id }))} onSelect={v => setForm(f => ({ ...f, personalAddress: { ...f.personalAddress, postOffice: v, pinCode: "" } }))} />
+                        </Field>
+                        <Field label="Pin Code">
+                            <SelectButton value={form.personalAddress.pinCode} options={getLookupsByType('Pincode', form.personalAddress.postOffice || form.personalAddress.city).map(l => ({ label: l.lookup_value, value: l._id }))} onSelect={v => setForm(f => ({ ...f, personalAddress: { ...f.personalAddress, pinCode: v } }))} />
+                        </Field>
                         <Input label="House No" value={form.personalAddress.hNo} onChangeText={v => setForm(f => ({ ...f, personalAddress: { ...f.personalAddress, hNo: v } }))} />
                         <Input label="Street" value={form.personalAddress.street} onChangeText={v => setForm(f => ({ ...f, personalAddress: { ...f.personalAddress, street: v } }))} />
-                        <View style={styles.row}>
-                            <View style={{ flex: 1 }}><Input label="City" value={form.personalAddress.city} onChangeText={v => setForm(f => ({ ...f, personalAddress: { ...f.personalAddress, city: v } }))} /></View>
-                            <View style={{ flex: 1 }}><Input label="Pin" value={form.personalAddress.pinCode} onChangeText={v => setForm(f => ({ ...f, personalAddress: { ...f.personalAddress, pinCode: v } }))} /></View>
-                        </View>
+                    </View>
 
-                        <View style={{ height: 24 }} />
-                        <Text style={[styles.subSectionTitle, { color: theme.textPrimary }]}>Correspondence Address</Text>
-                        <Input label="House No" value={form.correspondenceAddress.hNo} onChangeText={v => setForm(f => ({ ...f, correspondenceAddress: { ...f.correspondenceAddress, hNo: v } }))} />
-                        <Input label="Street" value={form.correspondenceAddress.street} onChangeText={v => setForm(f => ({ ...f, correspondenceAddress: { ...f.correspondenceAddress, street: v } }))} />
-                        <View style={styles.row}>
-                            <View style={{ flex: 1 }}><Input label="City" value={form.correspondenceAddress.city} onChangeText={v => setForm(f => ({ ...f, correspondenceAddress: { ...f.correspondenceAddress, city: v } }))} /></View>
-                            <View style={{ flex: 1 }}><Input label="Pin" value={form.correspondenceAddress.pinCode} onChangeText={v => setForm(f => ({ ...f, correspondenceAddress: { ...f.correspondenceAddress, pinCode: v } }))} /></View>
-                        </View>
+                    <SectionHeader title="Professional Info" icon="💼" subtitle="Work and industry details" />
+                    <View style={[styles.card, { backgroundColor: theme.cardBg, borderColor: theme.border }]}>
+                        <Field label="Category">
+                            <SelectButton value={form.professionCategory} options={getLookupsByType('ProfessionalCategory').map(l => ({ label: l.lookup_value, value: l._id }))} onSelect={v => setForm(f => ({ ...f, professionCategory: v, professionSubCategory: "", designation: "" }))} />
+                        </Field>
+                        <Field label="Sub-Category">
+                            <SelectButton value={form.professionSubCategory} options={getLookupsByType('ProfessionalSubCategory', form.professionCategory).map(l => ({ label: l.lookup_value, value: l._id }))} onSelect={v => setForm(f => ({ ...f, professionSubCategory: v, designation: "" }))} />
+                        </Field>
+                        <Field label="Designation">
+                            <SelectButton value={form.designation} options={getLookupsByType('ProfessionalDesignation', form.professionSubCategory).map(l => ({ label: l.lookup_value, value: l._id }))} onSelect={set("designation")} />
+                        </Field>
+                        <Input label="Company" value={form.company} onChangeText={set("company")} placeholder="e.g. Google" icon="business-outline" />
                     </View>
 
                     <SectionHeader title="Personal & System" icon="🛡️" subtitle="Internal system details" />
@@ -627,12 +664,7 @@ export default function AddContactScreen() {
                             <SelectButton value={form.visibleTo} options={[{ label: "Everyone", value: "Everyone" }, { label: "Team", value: "Team" }, { label: "Private", value: "Private" }]} onSelect={set("visibleTo")} />
                         </Field>
                         
-                        <Field label="Priority Tags">
-                            <MultiSelectButton values={form.tags} options={[{ label: "High Priority", value: "High Priority" }, { label: "Medium", value: "Medium" }, { label: "Standard", value: "Standard" }]} onToggle={(v) => {
-                                const newTags = form.tags.includes(v) ? form.tags.filter(t => t !== v) : [...form.tags, v];
-                                setForm(f => ({ ...f, tags: newTags }));
-                            }} />
-                        </Field>
+
                     </View>
 
                     <TouchableOpacity
